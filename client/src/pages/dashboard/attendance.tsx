@@ -23,7 +23,34 @@ export default function Attendance() {
 
   const createReport = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("POST", `/api/departments/${department?.id}/attendance`, data);
+      // Format the data to match the schema
+      const formattedData = {
+        departmentId: department?.id,
+        month: parseInt(data.month),
+        year: parseInt(data.year),
+        status: "draft"
+      };
+
+      // Create the report first
+      const response = await apiRequest(
+        "POST", 
+        `/api/departments/${department?.id}/attendance`, 
+        formattedData
+      );
+
+      const report = await response.json();
+
+      // Then create entries for the report
+      await Promise.all(
+        data.entries.map((entry: any) =>
+          apiRequest("POST", `/api/attendance/${report.id}/entries`, {
+            reportId: report.id,
+            employeeId: entry.employeeId,
+            days: entry.days,
+            remarks: entry.remarks || ""
+          })
+        )
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
@@ -33,11 +60,11 @@ export default function Attendance() {
         description: "Attendance report created successfully",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create attendance report",
+        description: error.message || "Failed to create attendance report",
       });
     },
   });
@@ -65,7 +92,7 @@ export default function Attendance() {
       case "draft":
         return "default";
       case "submitted":
-        return "success";
+        return "secondary";
       default:
         return "default";
     }
@@ -134,7 +161,6 @@ export default function Attendance() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            // Print functionality would go here
                             toast({
                               title: "Print",
                               description: "Printing report...",
