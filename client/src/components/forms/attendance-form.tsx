@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -139,7 +139,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
   };
 
   // Remove employee entries when unselected
-  React.useEffect(() => {
+  useEffect(() => {
     const currentEntries = form.getValues("entries") || [];
     const filteredEntries = currentEntries.filter(entry => includedEmployees.has(entry.employeeId));
     form.setValue("entries", filteredEntries);
