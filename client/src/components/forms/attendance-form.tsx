@@ -8,6 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import React from 'react';
 
@@ -38,6 +39,7 @@ interface AttendanceFormProps {
 
 export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormProps) {
   const department = getCurrentDepartment();
+  const [includedEmployees, setIncludedEmployees] = React.useState<Set<number>>(new Set());
 
   const { data: employees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
@@ -53,20 +55,24 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
     },
   });
 
-  // Update entries when employees data is loaded
+  // Update entries when employees data is loaded or included employees change
   React.useEffect(() => {
     if (employees.length > 0) {
       const currentMonth = parseInt(form.getValues("month"));
       const currentYear = parseInt(form.getValues("year"));
       const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 
-      form.setValue("entries", employees.map((employee: any) => ({
-        employeeId: employee.id,
-        days: daysInMonth,
-        remarks: "",
-      })));
+      const entries = employees
+        .filter((employee: any) => includedEmployees.has(employee.id))
+        .map((employee: any) => ({
+          employeeId: employee.id,
+          days: daysInMonth,
+          remarks: "",
+        }));
+
+      form.setValue("entries", entries);
     }
-  }, [employees, form]);
+  }, [employees, includedEmployees, form]);
 
   if (loadingEmployees) {
     return (
@@ -86,11 +92,23 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
       ...data,
       entries: data.entries.map(entry => ({
         employeeId: entry.employeeId,
-        days: Math.min(Math.max(0, entry.days), daysInMonth), // Ensure days is within valid range
+        days: Math.min(Math.max(0, entry.days), daysInMonth),
         remarks: entry.remarks || "",
       })),
     };
     await onSubmit(cleanData);
+  };
+
+  const toggleEmployee = (employeeId: number) => {
+    setIncludedEmployees(prev => {
+      const next = new Set(prev);
+      if (next.has(employeeId)) {
+        next.delete(employeeId);
+      } else {
+        next.add(employeeId);
+      }
+      return next;
+    });
   };
 
   return (
@@ -181,6 +199,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">Include</TableHead>
                 <TableHead>Employee ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
@@ -191,6 +210,13 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
             <TableBody>
               {employees.map((employee: any, index: number) => (
                 <TableRow key={employee.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={includedEmployees.has(employee.id)}
+                      onCheckedChange={() => toggleEmployee(employee.id)}
+                      disabled={isLoading}
+                    />
+                  </TableCell>
                   <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
@@ -204,14 +230,18 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                         const value = parseInt(e.target.value) || 0;
                         const entries = form.getValues("entries");
                         const newEntries = [...entries];
-                        newEntries[index] = {
-                          employeeId: employee.id,
-                          days: Math.min(Math.max(0, value), daysInMonth),
-                          remarks: entries[index]?.remarks || "",
-                        };
-                        form.setValue("entries", newEntries);
+                        const entryIndex = newEntries.findIndex(entry => entry.employeeId === employee.id);
+
+                        if (entryIndex !== -1) {
+                          newEntries[entryIndex] = {
+                            employeeId: employee.id,
+                            days: Math.min(Math.max(0, value), daysInMonth),
+                            remarks: newEntries[entryIndex].remarks || "",
+                          };
+                          form.setValue("entries", newEntries);
+                        }
                       }}
-                      disabled={isLoading}
+                      disabled={isLoading || !includedEmployees.has(employee.id)}
                     />
                   </TableCell>
                   <TableCell>
@@ -219,14 +249,18 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                       onChange={(e) => {
                         const entries = form.getValues("entries");
                         const newEntries = [...entries];
-                        newEntries[index] = {
-                          employeeId: employee.id,
-                          days: entries[index]?.days || daysInMonth,
-                          remarks: e.target.value,
-                        };
-                        form.setValue("entries", newEntries);
+                        const entryIndex = newEntries.findIndex(entry => entry.employeeId === employee.id);
+
+                        if (entryIndex !== -1) {
+                          newEntries[entryIndex] = {
+                            employeeId: employee.id,
+                            days: newEntries[entryIndex].days,
+                            remarks: e.target.value,
+                          };
+                          form.setValue("entries", newEntries);
+                        }
                       }}
-                      disabled={isLoading}
+                      disabled={isLoading || !includedEmployees.has(employee.id)}
                     />
                   </TableCell>
                 </TableRow>
@@ -235,7 +269,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
           </Table>
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button type="submit" className="w-full" disabled={isLoading || includedEmployees.size === 0}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
