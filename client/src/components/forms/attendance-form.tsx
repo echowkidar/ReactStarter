@@ -77,25 +77,6 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  // Update entries when employees data is loaded or included employees change
-  React.useEffect(() => {
-    if (employees.length > 0) {
-      const entries = employees
-        .filter((employee: any) => includedEmployees.has(employee.id))
-        .map((employee: any) => ({
-          employeeId: employee.id,
-          periods: [{
-            fromDate: formatDate(defaultStartDate),
-            toDate: formatDate(defaultEndDate),
-            days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
-            remarks: "",
-          }],
-        }));
-
-      form.setValue("entries", entries);
-    }
-  }, [employees, includedEmployees, form, selectedMonth, selectedYear]);
-
   const toggleEmployee = (employeeId: number) => {
     setIncludedEmployees(prev => {
       const next = new Set(prev);
@@ -103,37 +84,76 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
         next.delete(employeeId);
       } else {
         next.add(employeeId);
+        // Initialize entry when adding employee
+        const currentEntries = form.getValues("entries") || [];
+        const newEntry = {
+          employeeId,
+          periods: [{
+            fromDate: formatDate(defaultStartDate),
+            toDate: formatDate(defaultEndDate),
+            days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+            remarks: "",
+          }],
+        };
+        form.setValue("entries", [...currentEntries, newEntry]);
       }
       return next;
     });
   };
 
   const addPeriod = (employeeId: number) => {
-    const entries = form.getValues("entries");
-    const entryIndex = entries.findIndex(entry => entry.employeeId === employeeId);
+    const currentEntries = form.getValues("entries") || [];
+    const entryIndex = currentEntries.findIndex(entry => entry.employeeId === employeeId);
 
-    if (entryIndex !== -1) {
-      const newEntries = [...entries];
-      newEntries[entryIndex].periods.push({
-        fromDate: formatDate(defaultStartDate),
-        toDate: formatDate(defaultEndDate),
-        days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
-        remarks: "",
-      });
-      form.setValue("entries", newEntries);
+    if (entryIndex === -1) {
+      return; // Employee not found in entries
     }
+
+    const newEntries = [...currentEntries];
+    newEntries[entryIndex] = {
+      ...newEntries[entryIndex],
+      periods: [
+        ...(newEntries[entryIndex].periods || []),
+        {
+          fromDate: formatDate(defaultStartDate),
+          toDate: formatDate(defaultEndDate),
+          days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+          remarks: "",
+        },
+      ],
+    };
+
+    form.setValue("entries", newEntries);
   };
 
   const removePeriod = (employeeId: number, periodIndex: number) => {
-    const entries = form.getValues("entries");
-    const entryIndex = entries.findIndex(entry => entry.employeeId === employeeId);
+    const currentEntries = form.getValues("entries");
+    const entryIndex = currentEntries.findIndex(entry => entry.employeeId === employeeId);
 
-    if (entryIndex !== -1 && entries[entryIndex].periods.length > 1) {
-      const newEntries = [...entries];
-      newEntries[entryIndex].periods.splice(periodIndex, 1);
+    if (entryIndex !== -1 && currentEntries[entryIndex].periods.length > 1) {
+      const newEntries = [...currentEntries];
+      newEntries[entryIndex] = {
+        ...newEntries[entryIndex],
+        periods: newEntries[entryIndex].periods.filter((_, index) => index !== periodIndex),
+      };
       form.setValue("entries", newEntries);
     }
   };
+
+  // Remove employee entries when unselected
+  React.useEffect(() => {
+    const currentEntries = form.getValues("entries") || [];
+    const filteredEntries = currentEntries.filter(entry => includedEmployees.has(entry.employeeId));
+    form.setValue("entries", filteredEntries);
+  }, [includedEmployees, form]);
+
+  if (loadingEmployees) {
+    return (
+      <div className="flex justify-center p-4">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <Form {...form}>
@@ -147,21 +167,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                 <FormLabel>Month</FormLabel>
                 <Select
                   disabled={isLoading}
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    const daysInNewMonth = new Date(selectedYear, parseInt(value) - 1, 0).getDate();
-                    const currentEntries = form.getValues("entries");
-                    form.setValue(
-                      "entries",
-                      currentEntries.map((entry) => ({
-                        ...entry,
-                        periods: entry.periods.map(period => ({
-                          ...period,
-                          days: Math.min(period.days, daysInNewMonth),
-                        }))
-                      }))
-                    );
-                  }}
+                  onValueChange={field.onChange}
                   value={field.value}
                 >
                   <FormControl>
@@ -189,21 +195,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                 <FormLabel>Year</FormLabel>
                 <Select
                   disabled={isLoading}
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    const daysInNewMonth = new Date(parseInt(value), selectedMonth - 1, 0).getDate();
-                    const currentEntries = form.getValues("entries");
-                    form.setValue(
-                      "entries",
-                      currentEntries.map((entry) => ({
-                        ...entry,
-                        periods: entry.periods.map(period => ({
-                          ...period,
-                          days: Math.min(period.days, daysInNewMonth),
-                        }))
-                      }))
-                    );
-                  }}
+                  onValueChange={field.onChange}
                   value={field.value}
                 >
                   <FormControl>
@@ -252,8 +244,8 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                   <TableCell>
                     <div className="space-y-2">
                       {form.getValues("entries")
-                        .find(entry => entry.employeeId === employee.id)
-                        ?.periods.map((period, periodIndex) => (
+                        ?.find(entry => entry.employeeId === employee.id)
+                        ?.periods?.map((period, periodIndex) => (
                           <div key={periodIndex} className="flex items-center gap-2">
                             <Input
                               type="date"
