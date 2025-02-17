@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
+import React from 'react';
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -28,26 +29,48 @@ const attendanceSchema = z.object({
   })),
 });
 
+type AttendanceFormData = z.infer<typeof attendanceSchema>;
+
 interface AttendanceFormProps {
-  onSubmit: (data: z.infer<typeof attendanceSchema>) => Promise<void>;
+  onSubmit: (data: AttendanceFormData) => Promise<void>;
   isLoading?: boolean;
 }
 
 export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormProps) {
   const department = getCurrentDepartment();
 
-  const { data: employees, isLoading: loadingEmployees } = useQuery({
+  const { data: employees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
+    select: (data: any) => data || [],
   });
 
-  const form = useForm<z.infer<typeof attendanceSchema>>({
+  const form = useForm<AttendanceFormData>({
     resolver: zodResolver(attendanceSchema),
     defaultValues: {
       month: String(new Date().getMonth() + 1),
       year: String(currentYear),
-      entries: [],
+      entries: employees.map((employee: any) => ({
+        employeeId: employee.id,
+        days: new Date(currentYear, new Date().getMonth() + 1, 0).getDate(),
+        remarks: "",
+      })),
     },
   });
+
+  // Update entries when employees data is loaded
+  React.useEffect(() => {
+    if (employees.length > 0) {
+      const currentMonth = parseInt(form.getValues("month"));
+      const currentYear = parseInt(form.getValues("year"));
+      const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+
+      form.setValue("entries", employees.map((employee: any) => ({
+        employeeId: employee.id,
+        days: daysInMonth,
+        remarks: "",
+      })));
+    }
+  }, [employees, form]);
 
   if (loadingEmployees) {
     return (
@@ -73,7 +96,18 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                 <FormLabel>Month</FormLabel>
                 <Select
                   disabled={isLoading}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    const daysInNewMonth = new Date(selectedYear, parseInt(value, 10) -1, 0).getDate();
+                    const currentEntries = form.getValues("entries");
+                    form.setValue(
+                      "entries",
+                      currentEntries.map((entry) => ({
+                        ...entry,
+                        days: daysInNewMonth,
+                      }))
+                    );
+                  }}
                   value={field.value}
                 >
                   <FormControl>
@@ -101,7 +135,18 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                 <FormLabel>Year</FormLabel>
                 <Select
                   disabled={isLoading}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    const daysInNewMonth = new Date(parseInt(value, 10), selectedMonth -1, 0).getDate();
+                    const currentEntries = form.getValues("entries");
+                    form.setValue(
+                      "entries",
+                      currentEntries.map((entry) => ({
+                        ...entry,
+                        days: daysInNewMonth,
+                      }))
+                    );
+                  }}
                   value={field.value}
                 >
                   <FormControl>
@@ -130,12 +175,12 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                 <TableHead>Employee ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
-                <TableHead>Days Present</TableHead>
+                <TableHead>Days Present (max: {daysInMonth})</TableHead>
                 <TableHead>Remarks</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees?.map((employee: any, index: number) => (
+              {employees.map((employee: any, index: number) => (
                 <TableRow key={employee.id}>
                   <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
@@ -148,12 +193,13 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                       defaultValue={daysInMonth}
                       onChange={(e) => {
                         const entries = form.getValues("entries");
-                        entries[index] = {
+                        const newEntries = [...entries];
+                        newEntries[index] = {
                           employeeId: employee.id,
-                          days: parseInt(e.target.value),
+                          days: parseInt(e.target.value, 10) || 0,
                           remarks: entries[index]?.remarks || "",
                         };
-                        form.setValue("entries", entries);
+                        form.setValue("entries", newEntries);
                       }}
                       disabled={isLoading}
                     />
@@ -162,12 +208,13 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                     <Input
                       onChange={(e) => {
                         const entries = form.getValues("entries");
-                        entries[index] = {
+                        const newEntries = [...entries];
+                        newEntries[index] = {
                           employeeId: employee.id,
                           days: entries[index]?.days || daysInMonth,
                           remarks: e.target.value,
                         };
-                        form.setValue("entries", entries);
+                        form.setValue("entries", newEntries);
                       }}
                       disabled={isLoading}
                     />
