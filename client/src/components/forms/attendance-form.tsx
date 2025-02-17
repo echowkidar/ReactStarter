@@ -1,0 +1,194 @@
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
+import { getCurrentDepartment } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Loader2 } from "lucide-react";
+
+const months = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+
+const attendanceSchema = z.object({
+  month: z.string().min(1),
+  year: z.string().min(1),
+  entries: z.array(z.object({
+    employeeId: z.number(),
+    days: z.number().min(0).max(31),
+    remarks: z.string().optional(),
+  })),
+});
+
+interface AttendanceFormProps {
+  onSubmit: (data: z.infer<typeof attendanceSchema>) => Promise<void>;
+  isLoading?: boolean;
+}
+
+export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormProps) {
+  const department = getCurrentDepartment();
+
+  const { data: employees, isLoading: loadingEmployees } = useQuery({
+    queryKey: [`/api/departments/${department?.id}/employees`],
+  });
+
+  const form = useForm<z.infer<typeof attendanceSchema>>({
+    resolver: zodResolver(attendanceSchema),
+    defaultValues: {
+      month: String(new Date().getMonth() + 1),
+      year: String(currentYear),
+      entries: [],
+    },
+  });
+
+  if (loadingEmployees) {
+    return (
+      <div className="flex justify-center p-4">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  const selectedMonth = parseInt(form.watch("month"));
+  const selectedYear = parseInt(form.watch("year"));
+  const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="month"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Month</FormLabel>
+                <Select
+                  disabled={isLoading}
+                  onValueChange={field.onChange}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {months.map((month, index) => (
+                      <SelectItem key={month} value={String(index + 1)}>
+                        {month}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="year"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Year</FormLabel>
+                <Select
+                  disabled={isLoading}
+                  onValueChange={field.onChange}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {years.map((year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee ID</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Designation</TableHead>
+                <TableHead>Days Present</TableHead>
+                <TableHead>Remarks</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {employees?.map((employee: any, index: number) => (
+                <TableRow key={employee.id}>
+                  <TableCell>{employee.employeeId}</TableCell>
+                  <TableCell>{employee.name}</TableCell>
+                  <TableCell>{employee.designation}</TableCell>
+                  <TableCell className="w-32">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={daysInMonth}
+                      defaultValue={daysInMonth}
+                      onChange={(e) => {
+                        const entries = form.getValues("entries");
+                        entries[index] = {
+                          employeeId: employee.id,
+                          days: parseInt(e.target.value),
+                          remarks: entries[index]?.remarks || "",
+                        };
+                        form.setValue("entries", entries);
+                      }}
+                      disabled={isLoading}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      onChange={(e) => {
+                        const entries = form.getValues("entries");
+                        entries[index] = {
+                          employeeId: employee.id,
+                          days: entries[index]?.days || daysInMonth,
+                          remarks: e.target.value,
+                        };
+                        form.setValue("entries", entries);
+                      }}
+                      disabled={isLoading}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            "Create Report"
+          )}
+        </Button>
+      </form>
+    </Form>
+  );
+}
