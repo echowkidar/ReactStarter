@@ -11,6 +11,8 @@ import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
 import { Plus, Printer, FileCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
+
 
 export default function Attendance() {
   const { toast } = useToast();
@@ -23,9 +25,12 @@ export default function Attendance() {
     queryKey: [`/api/departments/${department?.id}/attendance`],
   });
 
-  const { data: entries = {} } = useQuery({
+  const { data: entries = [], isLoading: loadingEntries } = useQuery({
     queryKey: [`/api/attendance/${selectedReport}/entries`],
     enabled: !!selectedReport,
+    select: (data: any) => {
+      return Array.isArray(data) ? data : [];
+    }
   });
 
   const createReport = useMutation({
@@ -38,8 +43,8 @@ export default function Attendance() {
       };
 
       const response = await apiRequest(
-        "POST", 
-        `/api/departments/${department?.id}/attendance`, 
+        "POST",
+        `/api/departments/${department?.id}/attendance`,
         formattedData
       );
 
@@ -102,7 +107,7 @@ export default function Attendance() {
     }
   };
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -122,6 +127,14 @@ export default function Attendance() {
       onClose();
       window.print();
     };
+
+    if (loadingEntries) {
+      return (
+        <div className="flex justify-center p-4">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-6 p-6">
@@ -145,15 +158,15 @@ export default function Attendance() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {entries?.map((entry: any) => (
+              {entries.map((entry: any) => (
                 <TableRow key={entry.id}>
                   <TableCell>{entry.employee?.employeeId}</TableCell>
                   <TableCell>{entry.employee?.name}</TableCell>
                   <TableCell>
-                    {formatDate(new Date(report.year, report.month - 1, 1).toISOString())}
+                    {formatDate(new Date(report.year, report.month - 1, 1))}
                   </TableCell>
                   <TableCell>
-                    {formatDate(new Date(report.year, report.month, 0).toISOString())}
+                    {formatDate(new Date(report.year, report.month, 0))}
                   </TableCell>
                   <TableCell>{entry.days}</TableCell>
                   <TableCell>{entry.remarks || "-"}</TableCell>

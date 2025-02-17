@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import React from 'react';
 
 const months = [
@@ -25,8 +26,12 @@ const attendanceSchema = z.object({
   year: z.string().min(1),
   entries: z.array(z.object({
     employeeId: z.number(),
-    days: z.number().min(0).max(31),
-    remarks: z.string().optional(),
+    periods: z.array(z.object({
+      fromDate: z.string(),
+      toDate: z.string(),
+      days: z.number().min(0).max(31),
+      remarks: z.string().optional(),
+    })).min(1),
   })).min(1, "At least one employee entry is required"),
 });
 
@@ -39,7 +44,7 @@ interface AttendanceFormProps {
 
 export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormProps) {
   const department = getCurrentDepartment();
-  const [includedEmployees, setIncludedEmployees] = React.useState<Set<number>>(new Set());
+  const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
 
   const { data: employees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
@@ -58,16 +63,18 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
   // Calculate period dates
   const selectedMonth = parseInt(form.watch("month"));
   const selectedYear = parseInt(form.watch("year"));
-  const startDate = new Date(selectedYear, selectedMonth - 1, 1);
-  const endDate = new Date(selectedYear, selectedMonth, 0);
-  const daysInMonth = endDate.getDate();
+  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    return date.toISOString().split('T')[0];
+  };
+
+  const calculateDays = (fromDate: string, toDate: string) => {
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
   // Update entries when employees data is loaded or included employees change
@@ -77,26 +84,17 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
         .filter((employee: any) => includedEmployees.has(employee.id))
         .map((employee: any) => ({
           employeeId: employee.id,
-          days: daysInMonth,
-          remarks: "",
+          periods: [{
+            fromDate: formatDate(defaultStartDate),
+            toDate: formatDate(defaultEndDate),
+            days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+            remarks: "",
+          }],
         }));
 
       form.setValue("entries", entries);
     }
-  }, [employees, includedEmployees, form, daysInMonth]);
-
-  const handleSubmit = async (data: AttendanceFormData) => {
-    // Validate and clean up the data before submission
-    const cleanData = {
-      ...data,
-      entries: data.entries.map(entry => ({
-        employeeId: entry.employeeId,
-        days: Math.min(Math.max(0, entry.days), daysInMonth),
-        remarks: entry.remarks || "",
-      })),
-    };
-    await onSubmit(cleanData);
-  };
+  }, [employees, includedEmployees, form, selectedMonth, selectedYear]);
 
   const toggleEmployee = (employeeId: number) => {
     setIncludedEmployees(prev => {
@@ -110,9 +108,36 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
     });
   };
 
+  const addPeriod = (employeeId: number) => {
+    const entries = form.getValues("entries");
+    const entryIndex = entries.findIndex(entry => entry.employeeId === employeeId);
+
+    if (entryIndex !== -1) {
+      const newEntries = [...entries];
+      newEntries[entryIndex].periods.push({
+        fromDate: formatDate(defaultStartDate),
+        toDate: formatDate(defaultEndDate),
+        days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+        remarks: "",
+      });
+      form.setValue("entries", newEntries);
+    }
+  };
+
+  const removePeriod = (employeeId: number, periodIndex: number) => {
+    const entries = form.getValues("entries");
+    const entryIndex = entries.findIndex(entry => entry.employeeId === employeeId);
+
+    if (entryIndex !== -1 && entries[entryIndex].periods.length > 1) {
+      const newEntries = [...entries];
+      newEntries[entryIndex].periods.splice(periodIndex, 1);
+      form.setValue("entries", newEntries);
+    }
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
@@ -130,7 +155,10 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                       "entries",
                       currentEntries.map((entry) => ({
                         ...entry,
-                        days: Math.min(entry.days, daysInNewMonth),
+                        periods: entry.periods.map(period => ({
+                          ...period,
+                          days: Math.min(period.days, daysInNewMonth),
+                        }))
                       }))
                     );
                   }}
@@ -169,7 +197,10 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                       "entries",
                       currentEntries.map((entry) => ({
                         ...entry,
-                        days: Math.min(entry.days, daysInNewMonth),
+                        periods: entry.periods.map(period => ({
+                          ...period,
+                          days: Math.min(period.days, daysInNewMonth),
+                        }))
                       }))
                     );
                   }}
@@ -202,14 +233,11 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                 <TableHead>Employee ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
-                <TableHead>From</TableHead>
-                <TableHead>To</TableHead>
-                <TableHead>Days Present (max: {daysInMonth})</TableHead>
-                <TableHead>Remarks</TableHead>
+                <TableHead>Attendance Periods</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.map((employee: any, index: number) => (
+              {employees.map((employee: any) => (
                 <TableRow key={employee.id}>
                   <TableCell>
                     <Checkbox
@@ -221,50 +249,85 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                   <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
-                  <TableCell>{formatDate(startDate)}</TableCell>
-                  <TableCell>{formatDate(endDate)}</TableCell>
-                  <TableCell className="w-32">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={daysInMonth}
-                      defaultValue={daysInMonth}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value) || 0;
-                        const entries = form.getValues("entries");
-                        const newEntries = [...entries];
-                        const entryIndex = newEntries.findIndex(entry => entry.employeeId === employee.id);
-
-                        if (entryIndex !== -1) {
-                          newEntries[entryIndex] = {
-                            employeeId: employee.id,
-                            days: Math.min(Math.max(0, value), daysInMonth),
-                            remarks: newEntries[entryIndex].remarks || "",
-                          };
-                          form.setValue("entries", newEntries);
-                        }
-                      }}
-                      disabled={isLoading || !includedEmployees.has(employee.id)}
-                    />
-                  </TableCell>
                   <TableCell>
-                    <Input
-                      onChange={(e) => {
-                        const entries = form.getValues("entries");
-                        const newEntries = [...entries];
-                        const entryIndex = newEntries.findIndex(entry => entry.employeeId === employee.id);
-
-                        if (entryIndex !== -1) {
-                          newEntries[entryIndex] = {
-                            employeeId: employee.id,
-                            days: newEntries[entryIndex].days,
-                            remarks: e.target.value,
-                          };
-                          form.setValue("entries", newEntries);
-                        }
-                      }}
-                      disabled={isLoading || !includedEmployees.has(employee.id)}
-                    />
+                    <div className="space-y-2">
+                      {form.getValues("entries")
+                        .find(entry => entry.employeeId === employee.id)
+                        ?.periods.map((period, periodIndex) => (
+                          <div key={periodIndex} className="flex items-center gap-2">
+                            <Input
+                              type="date"
+                              value={period.fromDate}
+                              onChange={(e) => {
+                                const entries = form.getValues("entries");
+                                const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                if (entryIndex !== -1) {
+                                  const newEntries = [...entries];
+                                  newEntries[entryIndex].periods[periodIndex].fromDate = e.target.value;
+                                  newEntries[entryIndex].periods[periodIndex].days = 
+                                    calculateDays(e.target.value, period.toDate);
+                                  form.setValue("entries", newEntries);
+                                }
+                              }}
+                              disabled={isLoading || !includedEmployees.has(employee.id)}
+                            />
+                            <Input
+                              type="date"
+                              value={period.toDate}
+                              onChange={(e) => {
+                                const entries = form.getValues("entries");
+                                const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                if (entryIndex !== -1) {
+                                  const newEntries = [...entries];
+                                  newEntries[entryIndex].periods[periodIndex].toDate = e.target.value;
+                                  newEntries[entryIndex].periods[periodIndex].days = 
+                                    calculateDays(period.fromDate, e.target.value);
+                                  form.setValue("entries", newEntries);
+                                }
+                              }}
+                              disabled={isLoading || !includedEmployees.has(employee.id)}
+                            />
+                            <div className="w-20 text-center">
+                              {period.days} days
+                            </div>
+                            <Input
+                              placeholder="Remarks"
+                              value={period.remarks}
+                              onChange={(e) => {
+                                const entries = form.getValues("entries");
+                                const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                if (entryIndex !== -1) {
+                                  const newEntries = [...entries];
+                                  newEntries[entryIndex].periods[periodIndex].remarks = e.target.value;
+                                  form.setValue("entries", newEntries);
+                                }
+                              }}
+                              disabled={isLoading || !includedEmployees.has(employee.id)}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removePeriod(employee.id, periodIndex)}
+                              disabled={isLoading || !includedEmployees.has(employee.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      {includedEmployees.has(employee.id) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addPeriod(employee.id)}
+                          disabled={isLoading}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Period
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
