@@ -26,7 +26,7 @@ const attendanceSchema = z.object({
     employeeId: z.number(),
     days: z.number().min(0).max(31),
     remarks: z.string().optional(),
-  })),
+  })).min(1, "At least one employee entry is required"),
 });
 
 type AttendanceFormData = z.infer<typeof attendanceSchema>;
@@ -49,11 +49,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
     defaultValues: {
       month: String(new Date().getMonth() + 1),
       year: String(currentYear),
-      entries: employees.map((employee: any) => ({
-        employeeId: employee.id,
-        days: new Date(currentYear, new Date().getMonth() + 1, 0).getDate(),
-        remarks: "",
-      })),
+      entries: [],
     },
   });
 
@@ -84,9 +80,22 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
   const selectedYear = parseInt(form.watch("year"));
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
+  const handleSubmit = async (data: AttendanceFormData) => {
+    // Validate and clean up the data before submission
+    const cleanData = {
+      ...data,
+      entries: data.entries.map(entry => ({
+        employeeId: entry.employeeId,
+        days: Math.min(Math.max(0, entry.days), daysInMonth), // Ensure days is within valid range
+        remarks: entry.remarks || "",
+      })),
+    };
+    await onSubmit(cleanData);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
@@ -98,13 +107,13 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                   disabled={isLoading}
                   onValueChange={(value) => {
                     field.onChange(value);
-                    const daysInNewMonth = new Date(selectedYear, parseInt(value, 10) -1, 0).getDate();
+                    const daysInNewMonth = new Date(selectedYear, parseInt(value) - 1, 0).getDate();
                     const currentEntries = form.getValues("entries");
                     form.setValue(
                       "entries",
                       currentEntries.map((entry) => ({
                         ...entry,
-                        days: daysInNewMonth,
+                        days: Math.min(entry.days, daysInNewMonth),
                       }))
                     );
                   }}
@@ -137,13 +146,13 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                   disabled={isLoading}
                   onValueChange={(value) => {
                     field.onChange(value);
-                    const daysInNewMonth = new Date(parseInt(value, 10), selectedMonth -1, 0).getDate();
+                    const daysInNewMonth = new Date(parseInt(value), selectedMonth - 1, 0).getDate();
                     const currentEntries = form.getValues("entries");
                     form.setValue(
                       "entries",
                       currentEntries.map((entry) => ({
                         ...entry,
-                        days: daysInNewMonth,
+                        days: Math.min(entry.days, daysInNewMonth),
                       }))
                     );
                   }}
@@ -192,11 +201,12 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                       max={daysInMonth}
                       defaultValue={daysInMonth}
                       onChange={(e) => {
+                        const value = parseInt(e.target.value) || 0;
                         const entries = form.getValues("entries");
                         const newEntries = [...entries];
                         newEntries[index] = {
                           employeeId: employee.id,
-                          days: parseInt(e.target.value, 10) || 0,
+                          days: Math.min(Math.max(0, value), daysInMonth),
                           remarks: entries[index]?.remarks || "",
                         };
                         form.setValue("entries", newEntries);
