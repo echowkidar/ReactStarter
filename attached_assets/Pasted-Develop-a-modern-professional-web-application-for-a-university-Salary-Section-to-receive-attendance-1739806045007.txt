@@ -1,0 +1,77 @@
+Develop a modern, professional web application for a university Salary Section to receive attendance reports electronically. The web app should have a clean, user-friendly interface, responsive design, and smooth user experience. It should be built using React (or another modern frontend framework) without a backend. The app should provide the following functionality:
+1. User Registration & Authentication
+•	Allow departments to create an account by selecting their department from a predefined list of 350 departments.
+•	Select the name of Head of Department (HOD) from the list (Chairperson / Director / Principal / Dean / Coordinator / Provost / Member-in-Charge).
+•	Fields for user email and password for authentication.
+•	Implement secure sign-in and sign-out functionality.
+2. Employee Management
+•	Provide a form to add employees to a department. Fields include:
+o	Employee ID
+o	Employee Name
+o	PAN Number (with file upload option for PAN Number)
+o	Bank Account Details (with file upload option for Bank Passbook)
+o	Adhar Card (with file upload option for Adhar Card)
+o	Employment Details
+Provide a sub form to add Employment Details. Fields include:
+	Designation
+	Employment Status (Permanent / Probation / Temporary)
+	If Probation or Temporary, mention Term of Appointment (date of expiry of term).
+	Office Memo No. & Date (with file upload option)
+	Date of Joining (FN/AN) (with file upload option for Joining Report)
+	Salary Register No.
+3. Attendance Report Generation
+•	Create Attendance Report button.
+•	Select Month & Year for the attendance report.
+•	Add employees to the report with the following auto-filled fields:
+o	Employee ID
+o	Employee Name
+o	Designation
+o	Register Number
+o	Date From (First date of the selected month)
+o	Date To (Last date of the selected month)
+o	Days Calculation based on the period
+o	Employment Status (Latest status of the employee)
+o	Term of Appointment
+o	All fields should be editable before submission.
+4. Submission Workflow
+•	After entering the data, users can save the report.
+•	Upon clicking "Print Report" a Transaction Number should be generated and added to the print out and hide on the dashboard until Final Submit.
+•	Users can continue editing until they click "Final Submit".
+•	On Final Submit, the system should:
+o	Prompt for Transaction Number.
+o	Prompt for Despatch No. and Date.
+o	Provide an option to upload a signed copy.
+o	After verification of the Transaction Number, Lock the report from further edits.
+5. Dashboard & Report Visibility
+•	Department Dashboard should display:
+o	Employees with all details (Add / Edit / Delete)
+o	All final submitted reports alongwith Uploaded signed documents.
+o	
+•	Salary Section Dashboard (Admin) should display:
+o	Attendance reports submitted by all departments after final submission.
+o	Departments with their staff & staff details.
+6. Database should be use mysql (phpMyAdmin)
+7. Report Format
+HOD [Name]  
+Department: [Department Name]  
+
+Despatch No.________  Dated : ________  
+
+To,  
+Assistant Finance Officer (Salary)  
+Aligarh Muslim University, Aligarh  
+
+Subject: Attendance report for the month of ________, year ______.  
+
+S.No. | Emp ID | Name | Designation | Reg. No. | Date From | Date To | Days | Emp. Status | Remarks  
+------------------------------------------------------------  
+[Data Table]  
+
+HOD Signature  
+Transaction ID: [Generated ID]  
+Design & UX Guidelines
+•	Modern UI/UX with a clean dashboard layout.
+•	Intuitive navigation with department-wise role-based access.
+•	Responsive design for desktop and mobile usage.
+•	Smooth animations and transitions for a professional feel.
+•	Dark & light mode options for better accessibility.
