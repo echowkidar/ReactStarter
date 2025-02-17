@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, X } from "lucide-react";
-import React from 'react';
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -60,7 +59,6 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
     },
   });
 
-  // Calculate period dates
   const selectedMonth = parseInt(form.watch("month"));
   const selectedYear = parseInt(form.watch("year"));
   const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
@@ -82,6 +80,9 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
       const next = new Set(prev);
       if (next.has(employeeId)) {
         next.delete(employeeId);
+        // Remove employee entries when unchecked
+        const currentEntries = form.getValues("entries") || [];
+        form.setValue("entries", currentEntries.filter(entry => entry.employeeId !== employeeId));
       } else {
         next.add(employeeId);
         // Initialize entry when adding employee
@@ -105,22 +106,19 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
     const currentEntries = form.getValues("entries") || [];
     const entryIndex = currentEntries.findIndex(entry => entry.employeeId === employeeId);
 
-    if (entryIndex === -1) {
-      return; // Employee not found in entries
-    }
+    if (entryIndex === -1) return;
 
     const newEntries = [...currentEntries];
+    const newPeriod = {
+      fromDate: formatDate(defaultStartDate),
+      toDate: formatDate(defaultEndDate),
+      days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+      remarks: "",
+    };
+
     newEntries[entryIndex] = {
       ...newEntries[entryIndex],
-      periods: [
-        ...(newEntries[entryIndex].periods || []),
-        {
-          fromDate: formatDate(defaultStartDate),
-          toDate: formatDate(defaultEndDate),
-          days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
-          remarks: "",
-        },
-      ],
+      periods: [...newEntries[entryIndex].periods, newPeriod],
     };
 
     form.setValue("entries", newEntries);
@@ -255,9 +253,10 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                                 const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
                                 if (entryIndex !== -1) {
                                   const newEntries = [...entries];
-                                  newEntries[entryIndex].periods[periodIndex].fromDate = e.target.value;
+                                  const newFromDate = e.target.value;
+                                  newEntries[entryIndex].periods[periodIndex].fromDate = newFromDate;
                                   newEntries[entryIndex].periods[periodIndex].days = 
-                                    calculateDays(e.target.value, period.toDate);
+                                    calculateDays(newFromDate, period.toDate);
                                   form.setValue("entries", newEntries);
                                 }
                               }}
@@ -271,9 +270,10 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                                 const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
                                 if (entryIndex !== -1) {
                                   const newEntries = [...entries];
-                                  newEntries[entryIndex].periods[periodIndex].toDate = e.target.value;
+                                  const newToDate = e.target.value;
+                                  newEntries[entryIndex].periods[periodIndex].toDate = newToDate;
                                   newEntries[entryIndex].periods[periodIndex].days = 
-                                    calculateDays(period.fromDate, e.target.value);
+                                    calculateDays(period.fromDate, newToDate);
                                   form.setValue("entries", newEntries);
                                 }
                               }}

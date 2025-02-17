@@ -137,46 +137,66 @@ export default function Attendance() {
     }
 
     return (
-      <div className="space-y-6 p-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold">Attendance Report</h2>
-          <p className="text-muted-foreground">
-            {department?.name} - {formatPeriod(report.year, report.month)}
-          </p>
-        </div>
+      <div className="space-y-6 p-6 @print:p-0">
+        <style type="text/css" media="print">{`
+          @page { size: auto; margin: 20mm; }
+          @media print {
+            body * { visibility: hidden; }
+            .print-content, .print-content * { visibility: visible; }
+            .print-content { position: absolute; left: 0; top: 0; }
+          }
+        `}</style>
 
-        <div className="border rounded-md">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>From</TableHead>
-                <TableHead>To</TableHead>
-                <TableHead>Days Present</TableHead>
-                <TableHead>Remarks</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entries.map((entry: any) => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.employee?.employeeId}</TableCell>
-                  <TableCell>{entry.employee?.name}</TableCell>
-                  <TableCell>
-                    {formatDate(new Date(report.year, report.month - 1, 1))}
-                  </TableCell>
-                  <TableCell>
-                    {formatDate(new Date(report.year, report.month, 0))}
-                  </TableCell>
-                  <TableCell>{entry.days}</TableCell>
-                  <TableCell>{entry.remarks || "-"}</TableCell>
+        <div className="print-content w-full space-y-6">
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-bold">Attendance Report</h2>
+            <p className="text-muted-foreground">
+              {department?.name} - {formatPeriod(report.year, report.month)}
+            </p>
+          </div>
+
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>From</TableHead>
+                  <TableHead>To</TableHead>
+                  <TableHead>Days Present</TableHead>
+                  <TableHead>Remarks</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {entries.map((entry: any) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>{entry.employee?.employeeId}</TableCell>
+                    <TableCell>{entry.employee?.name}</TableCell>
+                    <TableCell>
+                      {formatDate(new Date(report.year, report.month - 1, 1))}
+                    </TableCell>
+                    <TableCell>
+                      {formatDate(new Date(report.year, report.month, 0))}
+                    </TableCell>
+                    <TableCell>{entry.days}</TableCell>
+                    <TableCell>{entry.remarks || "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="mt-12 space-y-4 text-right">
+            <p>Certified that the above attendance report is correct.</p>
+            <div className="space-y-1">
+              <p>{department?.hodTitle}</p>
+              <p>{department?.hodName}</p>
+              <p>{department?.name}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex justify-end space-x-2">
+        <div className="flex justify-end space-x-2 @print:hidden">
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
