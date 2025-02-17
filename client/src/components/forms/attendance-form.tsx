@@ -55,13 +55,24 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
     },
   });
 
+  // Calculate period dates
+  const selectedMonth = parseInt(form.watch("month"));
+  const selectedYear = parseInt(form.watch("year"));
+  const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const endDate = new Date(selectedYear, selectedMonth, 0);
+  const daysInMonth = endDate.getDate();
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
   // Update entries when employees data is loaded or included employees change
   React.useEffect(() => {
     if (employees.length > 0) {
-      const currentMonth = parseInt(form.getValues("month"));
-      const currentYear = parseInt(form.getValues("year"));
-      const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-
       const entries = employees
         .filter((employee: any) => includedEmployees.has(employee.id))
         .map((employee: any) => ({
@@ -72,19 +83,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
 
       form.setValue("entries", entries);
     }
-  }, [employees, includedEmployees, form]);
-
-  if (loadingEmployees) {
-    return (
-      <div className="flex justify-center p-4">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
-    );
-  }
-
-  const selectedMonth = parseInt(form.watch("month"));
-  const selectedYear = parseInt(form.watch("year"));
-  const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+  }, [employees, includedEmployees, form, daysInMonth]);
 
   const handleSubmit = async (data: AttendanceFormData) => {
     // Validate and clean up the data before submission
@@ -203,6 +202,8 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                 <TableHead>Employee ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
+                <TableHead>From</TableHead>
+                <TableHead>To</TableHead>
                 <TableHead>Days Present (max: {daysInMonth})</TableHead>
                 <TableHead>Remarks</TableHead>
               </TableRow>
@@ -220,6 +221,8 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                   <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
+                  <TableCell>{formatDate(startDate)}</TableCell>
+                  <TableCell>{formatDate(endDate)}</TableCell>
                   <TableCell className="w-32">
                     <Input
                       type="number"

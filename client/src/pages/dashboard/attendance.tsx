@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -16,14 +16,20 @@ export default function Attendance() {
   const { toast } = useToast();
   const department = getCurrentDepartment();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<number | null>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   const { data: reports, isLoading } = useQuery({
     queryKey: [`/api/departments/${department?.id}/attendance`],
   });
 
+  const { data: entries = {} } = useQuery({
+    queryKey: [`/api/attendance/${selectedReport}/entries`],
+    enabled: !!selectedReport,
+  });
+
   const createReport = useMutation({
     mutationFn: async (data: any) => {
-      // Format the data to match the schema
       const formattedData = {
         departmentId: department?.id,
         month: parseInt(data.month),
@@ -31,7 +37,6 @@ export default function Attendance() {
         status: "draft"
       };
 
-      // Create the report first
       const response = await apiRequest(
         "POST", 
         `/api/departments/${department?.id}/attendance`, 
@@ -40,7 +45,6 @@ export default function Attendance() {
 
       const report = await response.json();
 
-      // Then create entries for the report
       await Promise.all(
         data.entries.map((entry: any) =>
           apiRequest("POST", `/api/attendance/${report.id}/entries`, {
@@ -102,7 +106,74 @@ export default function Attendance() {
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
+      day: "numeric",
     });
+  };
+
+  const formatPeriod = (year: number, month: number) => {
+    return new Date(year, month - 1).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+    });
+  };
+
+  const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
+    const handlePrint = () => {
+      onClose();
+      window.print();
+    };
+
+    return (
+      <div className="space-y-6 p-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold">Attendance Report</h2>
+          <p className="text-muted-foreground">
+            {department?.name} - {formatPeriod(report.year, report.month)}
+          </p>
+        </div>
+
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee ID</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>From</TableHead>
+                <TableHead>To</TableHead>
+                <TableHead>Days Present</TableHead>
+                <TableHead>Remarks</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entries?.map((entry: any) => (
+                <TableRow key={entry.id}>
+                  <TableCell>{entry.employee?.employeeId}</TableCell>
+                  <TableCell>{entry.employee?.name}</TableCell>
+                  <TableCell>
+                    {formatDate(new Date(report.year, report.month - 1, 1).toISOString())}
+                  </TableCell>
+                  <TableCell>
+                    {formatDate(new Date(report.year, report.month, 0).toISOString())}
+                  </TableCell>
+                  <TableCell>{entry.days}</TableCell>
+                  <TableCell>{entry.remarks || "-"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          <Button onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -157,19 +228,36 @@ export default function Attendance() {
                   <TableCell className="space-x-2">
                     {report.status === "draft" && (
                       <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            toast({
-                              title: "Print",
-                              description: "Printing report...",
-                            });
-                          }}
-                        >
-                          <Printer className="h-4 w-4 mr-2" />
-                          Print
-                        </Button>
+                        <Dialog open={showPrintPreview && selectedReport === report.id} onOpenChange={(open) => {
+                          setShowPrintPreview(open);
+                          if (!open) setSelectedReport(null);
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedReport(report.id);
+                                setShowPrintPreview(true);
+                              }}
+                            >
+                              <Printer className="h-4 w-4 mr-2" />
+                              Print
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl">
+                            <DialogHeader>
+                              <DialogTitle>Print Preview</DialogTitle>
+                            </DialogHeader>
+                            <PrintPreview
+                              report={report}
+                              onClose={() => {
+                                setShowPrintPreview(false);
+                                setSelectedReport(null);
+                              }}
+                            />
+                          </DialogContent>
+                        </Dialog>
                         <Button
                           size="sm"
                           onClick={() => {
