@@ -59,7 +59,15 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
     defaultValues: {
       month: String(new Date().getMonth() + 1),
       year: String(currentYear),
-      entries: [],
+      entries: [{
+        employeeId: 0,
+        periods: [{
+          fromDate: formatDate(defaultStartDate),
+          toDate: formatDate(defaultEndDate),
+          days: 0,
+          remarks: ""
+        }]
+      }],
     },
   });
 
