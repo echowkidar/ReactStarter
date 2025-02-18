@@ -33,6 +33,12 @@ export default function Attendance() {
     }
   });
 
+  const { data: employees, isLoading: loadingEmployees } = useQuery({
+    queryKey: ['/api/employees'], // Assuming an endpoint to fetch employees
+    enabled: !!selectedReport // Only fetch if a report is selected
+  })
+
+
   const createReport = useMutation({
     mutationFn: async (data: any) => {
       const formattedData = {
@@ -99,7 +105,7 @@ export default function Attendance() {
     },
   });
 
-  if (isLoading) return <Loading />;
+  if (isLoading || loadingEntries || loadingEmployees) return <Loading />;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -128,6 +134,20 @@ export default function Attendance() {
   };
 
   const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
+    const department = getCurrentDepartment();
+    const { data: employees = [] } = useQuery({
+      queryKey: [`/api/departments/${department?.id}/employees`],
+      select: (data: any) => data || [],
+    });
+
+    const { data: entries = [], isLoading: loadingEntries } = useQuery({
+      queryKey: [`/api/attendance/${report.id}/entries`],
+      enabled: !!report.id,
+      select: (data: any) => {
+        return Array.isArray(data) ? data : [];
+      }
+    });
+
     const handlePrint = () => {
       onClose();
       window.print();
@@ -173,22 +193,18 @@ export default function Attendance() {
               </TableHeader>
               <TableBody>
                 {entries.map((entry: any) => {
-                  // Parse the periods JSON string
                   const periods = entry.periods ? JSON.parse(entry.periods) : [];
-
-                  // Log for debugging
-                  console.log('Entry:', entry);
-                  console.log('Parsed periods:', periods);
+                  const employee = employees?.find((emp: any) => emp.id === entry.employeeId);
 
                   return periods.map((period: any, periodIndex: number) => (
                     <TableRow key={`${entry.id}-${periodIndex}`}>
                       {periodIndex === 0 && (
                         <>
                           <TableCell className="align-middle" rowSpan={periods.length}>
-                            {entry.employeeId}
+                            {employee?.employeeId}
                           </TableCell>
                           <TableCell className="align-middle" rowSpan={periods.length}>
-                            {entry.employee?.name}
+                            {employee?.name}
                           </TableCell>
                         </>
                       )}
