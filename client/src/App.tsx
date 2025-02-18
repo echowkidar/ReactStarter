@@ -10,6 +10,7 @@ import Employees from "@/pages/dashboard/employees";
 import Attendance from "@/pages/dashboard/attendance";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
+import ReportDetails from "@/pages/admin/report-details";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/dashboard/attendance" component={Attendance} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/admin/reports/:id" component={ReportDetails} />
       <Route component={NotFound} />
     </Switch>
   );
