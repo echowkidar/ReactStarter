@@ -94,13 +94,15 @@ export async function registerRoutes(app: Express) {
   app.post("/api/attendance/:reportId/entries", async (req, res) => {
     try {
       const entryData = insertAttendanceEntrySchema.parse({
-        ...req.body,
-        reportId: Number(req.params.reportId)
+        reportId: Number(req.params.reportId),
+        employeeId: Number(req.body.employeeId),
+        days: Number(req.body.days),
+        remarks: req.body.remarks
       });
       const entry = await storage.createAttendanceEntry(entryData);
       res.status(201).json(entry);
     } catch (error) {
-      res.status(400).json({ message: "Invalid entry data" });
+      res.status(400).json({ message: "Invalid entry data", error: String(error) });
     }
   });
 
