@@ -67,20 +67,23 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
 
     if (entryIndex === -1) return;
 
+    const today = new Date();
     const newPeriod = {
-      fromDate: formatDate(new Date()),
-      toDate: formatDate(new Date()),
+      fromDate: formatDate(today),
+      toDate: formatDate(today),
       days: 1,
       remarks: "",
     };
 
-    const newEntries = [...currentEntries];
-    newEntries[entryIndex] = {
-      ...newEntries[entryIndex],
-      periods: [...newEntries[entryIndex].periods, newPeriod],
+    const updatedEntry = {
+      ...currentEntries[entryIndex],
+      periods: [...currentEntries[entryIndex].periods, newPeriod],
     };
 
-    form.setValue("entries", newEntries);
+    const newEntries = [...currentEntries];
+    newEntries[entryIndex] = updatedEntry;
+
+    form.setValue("entries", newEntries, { shouldValidate: true });
   };
 
   const toggleEmployee = (employeeId: number) => {
