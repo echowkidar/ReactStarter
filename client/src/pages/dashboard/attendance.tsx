@@ -55,8 +55,8 @@ export default function Attendance() {
           apiRequest("POST", `/api/attendance/${report.id}/entries`, {
             reportId: report.id,
             employeeId: entry.employeeId,
-            days: entry.days,
-            remarks: entry.remarks || ""
+            days: entry.periods.reduce((total: number, period: any) => total + period.days, 0),
+            remarks: entry.periods.map((p: any) => p.remarks).filter(Boolean).join("; ") || ""
           })
         )
       );
