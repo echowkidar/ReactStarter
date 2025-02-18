@@ -15,40 +15,26 @@
 /* Print styles */
 @media print {
   @page {
-    size: A4;
-    margin: 1cm;
-    marks: none;
+    margin: 0.5cm;
   }
 
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    min-height: 0 !important;
-    width: 100% !important;
-    height: auto !important;
+  body {
+    margin: 0;
+    padding: 0;
   }
 
-  /* Force the root div to start from the top */
+  /* Reset any fixed positions or transforms that might affect positioning */
+  * {
+    position: static !important;
+    transform: none !important;
+  }
+
+  /* Ensure content starts from top */
   #root {
-    margin: 0 !important;
-    padding: 0 !important;
-    min-height: 0 !important;
-    height: auto !important;
-    position: relative !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-  }
-
-  /* Reset all container margins and paddings */
-  .container, main, div {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    page-break-before: avoid !important;
-    page-break-after: avoid !important;
-    page-break-inside: avoid !important;
+    margin: 0;
+    padding: 0;
+    height: auto;
+    min-height: 0;
   }
 
   /* Hide unnecessary elements in print */
@@ -67,26 +53,9 @@
     page-break-after: auto;
   }
 
-  /* Specific styles for attendance report */
-  .attendance-report {
-    display: block !important;
-    break-before: avoid !important;
-    break-after: avoid !important;
-  }
-
-  .attendance-report h1 {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-  }
-
-  /* Remove any background colors and shadows */
+  /* Remove any background colors and shadows for better printing */
   * {
     background-color: transparent !important;
     box-shadow: none !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    float: none !important;
-    position: static !important;
-    overflow: visible !important;
   }
 }
