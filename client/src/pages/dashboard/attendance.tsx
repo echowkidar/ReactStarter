@@ -50,18 +50,17 @@ export default function Attendance() {
 
       const report = await response.json();
 
-      await Promise.all(
-        data.entries.map((entry: any) =>
-          apiRequest("POST", `/api/attendance/${report.id}/entries`, {
-            reportId: report.id,
-            employeeId: entry.employeeId,
-            days: entry.periods.reduce((total: number, period: any) => total + period.days, 0),
-            fromDate: entry.periods[0]?.fromDate,
-            toDate: entry.periods[entry.periods.length - 1]?.toDate,
-            remarks: entry.periods.map((p: any) => p.remarks).filter(Boolean).join("; ") || ""
-          })
-        )
-      );
+      for (const entry of data.entries) {
+        if (!entry.periods || entry.periods.length === 0) continue;
+        
+        await apiRequest("POST", `/api/attendance/${report.id}/entries`, {
+          employeeId: entry.employeeId,
+          fromDate: entry.periods[0].fromDate,
+          toDate: entry.periods[entry.periods.length - 1].toDate,
+          days: entry.periods.reduce((total, period) => total + period.days, 0),
+          remarks: entry.periods.map(p => p.remarks).filter(Boolean).join("; ")
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
