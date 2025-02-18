@@ -244,7 +244,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]">Include</TableHead>
-                <TableHead>Employee ID</TableHead>
+                <TableHead>EPID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
                 <TableHead>Attendance Periods</TableHead>

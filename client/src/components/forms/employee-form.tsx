@@ -56,7 +56,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
             name="employeeId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Employee ID</FormLabel>
+                <FormLabel>EPID</FormLabel>
                 <FormControl>
                   <Input {...field} disabled={isLoading} />
                 </FormControl>

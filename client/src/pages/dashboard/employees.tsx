@@ -4,7 +4,7 @@ import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
@@ -95,7 +95,7 @@ export default function Employees() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employee ID</TableHead>
+                <TableHead>EPID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
                 <TableHead>Status</TableHead>
