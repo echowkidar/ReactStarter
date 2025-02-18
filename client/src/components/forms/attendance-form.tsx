@@ -105,12 +105,11 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
   };
 
   const addPeriod = (employeeId: number) => {
-    const currentEntries = form.getValues("entries") || [];
+    const currentEntries = [...form.getValues("entries")] || [];
     const entryIndex = currentEntries.findIndex(entry => entry.employeeId === employeeId);
 
     if (entryIndex === -1) return;
 
-    const newEntries = [...currentEntries];
     const newPeriod = {
       fromDate: formatDate(defaultStartDate),
       toDate: formatDate(defaultEndDate),
@@ -118,13 +117,24 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
       remarks: "",
     };
 
-    newEntries[entryIndex] = {
-      ...newEntries[entryIndex],
-      periods: [...newEntries[entryIndex].periods, newPeriod],
+    const updatedPeriods = [...currentEntries[entryIndex].periods, newPeriod];
+    currentEntries[entryIndex] = {
+      ...currentEntries[entryIndex],
+      periods: updatedPeriods,
     };
 
-    form.setValue("entries", newEntries);
+    form.setValue("entries", currentEntries, { shouldDirty: true });
+    form.trigger("entries");
   };
+
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name?.includes('entries')) {
+        form.trigger('entries');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const removePeriod = (employeeId: number, periodIndex: number) => {
     const currentEntries = form.getValues("entries");
