@@ -186,6 +186,7 @@ export default function Attendance() {
                 <TableRow>
                   <TableHead>Employee ID</TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Designation</TableHead>
                   <TableHead>Period</TableHead>
                   <TableHead>Days Present</TableHead>
                   <TableHead>Remarks</TableHead>
@@ -205,6 +206,9 @@ export default function Attendance() {
                           </TableCell>
                           <TableCell className="align-middle" rowSpan={periods.length}>
                             {employee?.name}
+                          </TableCell>
+                          <TableCell className="align-middle" rowSpan={periods.length}>
+                            {employee?.designation}
                           </TableCell>
                         </>
                       )}
