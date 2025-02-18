@@ -11,3 +11,51 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* Print styles */
+@media print {
+  @page {
+    margin: 0.5cm;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Reset any fixed positions or transforms that might affect positioning */
+  * {
+    position: static !important;
+    transform: none !important;
+  }
+
+  /* Ensure content starts from top */
+  #root {
+    margin: 0;
+    padding: 0;
+    height: auto;
+    min-height: 0;
+  }
+
+  /* Hide unnecessary elements in print */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Ensure tables and content fill width appropriately */
+  table {
+    width: 100% !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  /* Remove any background colors and shadows for better printing */
+  * {
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+}
