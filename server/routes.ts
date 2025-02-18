@@ -177,5 +177,26 @@ export async function registerRoutes(app: Express) {
     res.json(reportsWithDepartments);
   });
 
+  // Add this new endpoint after the existing admin routes
+  app.get("/api/admin/attendance/:id", async (req, res) => {
+    try {
+      const report = await storage.getAttendanceReport(Number(req.params.id));
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      const department = await storage.getDepartment(report.departmentId);
+      const entries = await storage.getAttendanceEntriesByReport(report.id);
+
+      res.json({
+        ...report,
+        department,
+        entries
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch report details" });
+    }
+  });
+
   return httpServer;
 }

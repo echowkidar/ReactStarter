@@ -5,10 +5,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { AttendanceReport, AttendanceEntry, Department } from "@shared/schema";
+import { AttendanceReport, AttendanceEntry, Department, Employee } from "@shared/schema";
 
 interface ExtendedAttendanceReport extends AttendanceReport {
   department?: Department;
+  entries?: AttendanceEntry[];
 }
 
 export default function ReportDetails() {
@@ -16,21 +17,24 @@ export default function ReportDetails() {
   const reportId = params?.id;
 
   const { data: report, isLoading: isLoadingReport } = useQuery<ExtendedAttendanceReport>({
-    queryKey: ["/api/admin/attendance", reportId],
+    queryKey: [`/api/admin/attendance/${reportId}`],
     enabled: !!reportId,
   });
 
-  const { data: entries, isLoading: isLoadingEntries } = useQuery<AttendanceEntry[]>({
-    queryKey: ["/api/attendance", reportId, "entries"],
-    enabled: !!reportId,
-  });
-
-  if (isLoadingReport || isLoadingEntries) {
+  if (isLoadingReport) {
     return <LoadingSkeleton />;
   }
 
   if (!report) {
-    return <div>Report not found</div>;
+    return (
+      <div className="container mx-auto py-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">Report not found</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -80,16 +84,19 @@ export default function ReportDetails() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {entries?.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.employeeId}</TableCell>
-                  <TableCell>
-                    {entry.fromDate} - {entry.toDate}
-                  </TableCell>
-                  <TableCell>{entry.days}</TableCell>
-                  <TableCell>{entry.remarks || "-"}</TableCell>
-                </TableRow>
-              ))}
+              {report.entries?.map((entry) => {
+                const periods = JSON.parse(entry.periods);
+                return periods.map((period: any, periodIndex: number) => (
+                  <TableRow key={`${entry.id}-${periodIndex}`}>
+                    <TableCell>{entry.employeeId}</TableCell>
+                    <TableCell>
+                      {period.fromDate} - {period.toDate}
+                    </TableCell>
+                    <TableCell>{period.days}</TableCell>
+                    <TableCell>{period.remarks || "-"}</TableCell>
+                  </TableRow>
+                ));
+              })}
             </TableBody>
           </Table>
         </CardContent>
