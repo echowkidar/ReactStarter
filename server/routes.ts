@@ -6,6 +6,25 @@ import { insertDepartmentSchema, insertEmployeeSchema, insertAttendanceReportSch
 export async function registerRoutes(app: Express) {
   const httpServer = createServer(app);
 
+  // Admin auth routes
+  app.post("/api/auth/admin/login", async (req, res) => {
+    const { email, password } = req.body;
+
+    // For demonstration purposes, using hardcoded admin credentials
+    // In production, this should be stored securely in a database
+    const ADMIN_EMAIL = "admin@amu.ac.in";
+    const ADMIN_PASSWORD = "admin123";
+
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      return res.json({ 
+        role: "admin",
+        message: "Admin logged in successfully" 
+      });
+    }
+
+    return res.status(401).json({ message: "Invalid admin credentials" });
+  });
+
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
