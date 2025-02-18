@@ -41,6 +41,18 @@ export default function ReportDetails() {
     );
   }
 
+  const formatPeriod = (year: number, month: number) => {
+    return new Date(year, month - 1).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+    });
+  };
+
+  const formatShortDate = (date: string | Date) => {
+    const d = new Date(date);
+    return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <Card>
@@ -50,7 +62,7 @@ export default function ReportDetails() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <InfoItem label="Department" value={report.department?.name} />
-            <InfoItem label="Month/Year" value={`${report.month}/${report.year}`} />
+            <InfoItem label="Month/Year" value={formatPeriod(report.year, report.month)} />
             <InfoItem label="Transaction ID" value={report.transactionId || '-'} />
             <InfoItem 
               label="Status" 
@@ -98,7 +110,7 @@ export default function ReportDetails() {
                     <TableCell>{entry.employee?.name}</TableCell>
                     <TableCell>{entry.employee?.designation}</TableCell>
                     <TableCell>
-                      {period.fromDate} - {period.toDate}
+                      {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
                     </TableCell>
                     <TableCell>{period.days}</TableCell>
                     <TableCell>{period.remarks || "-"}</TableCell>
