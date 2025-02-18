@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentDepartment } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, X } from "lucide-react";
+import { apiRequest } from "@/lib/api";
+
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -39,9 +41,11 @@ type AttendanceFormData = z.infer<typeof attendanceSchema>;
 interface AttendanceFormProps {
   onSubmit: (data: AttendanceFormData) => Promise<void>;
   isLoading?: boolean;
+  reportId?: string | null;
 }
 
-export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormProps) {
+export default function AttendanceForm({ onSubmit, isLoading, reportId }: AttendanceFormProps) {
+  const queryClient = useQueryClient();
   const department = getCurrentDepartment();
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
 
@@ -267,7 +271,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                                   const newEntries = [...entries];
                                   const newFromDate = e.target.value;
                                   newEntries[entryIndex].periods[periodIndex].fromDate = newFromDate;
-                                  newEntries[entryIndex].periods[periodIndex].days = 
+                                  newEntries[entryIndex].periods[periodIndex].days =
                                     calculateDays(newFromDate, period.toDate);
                                   form.setValue("entries", newEntries);
                                 }
@@ -284,7 +288,7 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
                                   const newEntries = [...entries];
                                   const newToDate = e.target.value;
                                   newEntries[entryIndex].periods[periodIndex].toDate = newToDate;
-                                  newEntries[entryIndex].periods[periodIndex].days = 
+                                  newEntries[entryIndex].periods[periodIndex].days =
                                     calculateDays(period.fromDate, newToDate);
                                   form.setValue("entries", newEntries);
                                 }
