@@ -94,19 +94,22 @@ export async function registerRoutes(app: Express) {
   app.post("/api/attendance/:reportId/entries", async (req, res) => {
     try {
       const reportId = Number(req.params.reportId);
-      const periods = req.body.periods;
+      const { employeeId, periods } = req.body;
       
-      // Calculate total days and combine remarks
-      const totalDays = periods.reduce((sum: number, period: any) => sum + period.days, 0);
-      const remarks = periods.map((p: any) => p.remarks).filter(Boolean).join("; ");
+      if (!periods || !Array.isArray(periods)) {
+        return res.status(400).json({ message: "Invalid periods data" });
+      }
+      
+      const totalDays = periods.reduce((sum, period) => sum + (period.days || 0), 0);
+      const remarks = periods.map(p => p.remarks).filter(Boolean).join("; ");
       
       const entryData = insertAttendanceEntrySchema.parse({
         reportId: reportId,
-        employeeId: Number(req.body.employeeId),
+        employeeId: Number(employeeId),
         days: totalDays,
         fromDate: periods[0].fromDate,
         toDate: periods[periods.length - 1].toDate,
-        remarks: remarks
+        remarks: remarks || ""
       });
       
       const entry = await storage.createAttendanceEntry(entryData);
