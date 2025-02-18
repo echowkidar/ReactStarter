@@ -45,15 +45,20 @@ export const attendanceEntries = pgTable("attendance_entries", {
   reportId: integer("report_id").notNull(),
   employeeId: integer("employee_id").notNull(),
   days: integer("days").notNull(),
-  fromDate: date("from_date").notNull(),
-  toDate: date("to_date").notNull(),
+  fromDate: text("from_date").notNull(),
+  toDate: text("to_date").notNull(),
   remarks: text("remarks"),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
 export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({ id: true, createdAt: true });
-export const insertAttendanceEntrySchema = createInsertSchema(attendanceEntries).omit({ id: true });
+export const insertAttendanceEntrySchema = createInsertSchema(attendanceEntries)
+  .omit({ id: true })
+  .extend({
+    fromDate: z.string(),
+    toDate: z.string()
+  });
 
 export type Department = typeof departments.$inferSelect;
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;

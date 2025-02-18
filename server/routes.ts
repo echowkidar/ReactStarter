@@ -103,7 +103,7 @@ export async function registerRoutes(app: Express) {
       const totalDays = periods.reduce((sum, period) => sum + (period.days || 0), 0);
       const remarks = periods.map(p => p.remarks).filter(Boolean).join("; ");
 
-      // Parse dates to ensure they're in the correct format
+      // Get the first and last period dates
       const firstPeriod = periods[0];
       const lastPeriod = periods[periods.length - 1];
 
@@ -111,8 +111,8 @@ export async function registerRoutes(app: Express) {
         reportId: reportId,
         employeeId: Number(employeeId),
         days: totalDays,
-        fromDate: new Date(firstPeriod.fromDate),
-        toDate: new Date(lastPeriod.toDate),
+        fromDate: firstPeriod.fromDate, 
+        toDate: lastPeriod.toDate, 
         remarks: remarks || ""
       });
 
