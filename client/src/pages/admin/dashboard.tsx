@@ -1,13 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import Loading from "@/components/layout/loading";
-import { FileCheck } from "lucide-react";
+import { FileCheck, LogOut } from "lucide-react";
 
 export default function AdminDashboard() {
+  const [, setLocation] = useLocation();
   const { data: reports, isLoading } = useQuery({
     queryKey: ["/api/admin/attendance"],
   });
+
+  const handleLogout = () => {
+    setLocation("/admin/login");
+  };
 
   if (isLoading) return <Loading />;
 
@@ -22,11 +29,21 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Attendance Reports</h1>
-        <Badge variant="outline" className="text-lg">
-          <FileCheck className="h-4 w-4 mr-2" />
-          Salary Section
-        </Badge>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">Attendance Reports</h1>
+          <Badge variant="outline" className="text-lg">
+            <FileCheck className="h-4 w-4 mr-2" />
+            Salary Section
+          </Badge>
+        </div>
+        <Button 
+          variant="outline"
+          onClick={handleLogout}
+          className="flex items-center gap-2"
+        >
+          <LogOut className="h-4 w-4" />
+          Logout
+        </Button>
       </div>
 
       <div className="rounded-md border">
@@ -42,7 +59,7 @@ export default function AdminDashboard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {reports?.map((report: any) => (
+            {reports?.map((report) => (
               <TableRow key={report.id}>
                 <TableCell className="font-medium">
                   {report.department?.name}
@@ -60,7 +77,7 @@ export default function AdminDashboard() {
                 </TableCell>
                 <TableCell>
                   <Badge
-                    variant={report.status === "submitted" ? "success" : "default"}
+                    variant={report.status === "submitted" ? "default" : "secondary"}
                   >
                     {report.status}
                   </Badge>
