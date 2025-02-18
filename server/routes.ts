@@ -93,14 +93,22 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/attendance/:reportId/entries", async (req, res) => {
     try {
+      const reportId = Number(req.params.reportId);
+      const periods = req.body.periods;
+      
+      // Calculate total days and combine remarks
+      const totalDays = periods.reduce((sum: number, period: any) => sum + period.days, 0);
+      const remarks = periods.map((p: any) => p.remarks).filter(Boolean).join("; ");
+      
       const entryData = insertAttendanceEntrySchema.parse({
-        reportId: Number(req.params.reportId),
+        reportId: reportId,
         employeeId: Number(req.body.employeeId),
-        days: Number(req.body.days),
-        fromDate: req.body.fromDate,
-        toDate: req.body.toDate,
-        remarks: req.body.remarks
+        days: totalDays,
+        fromDate: periods[0].fromDate,
+        toDate: periods[periods.length - 1].toDate,
+        remarks: remarks
       });
+      
       const entry = await storage.createAttendanceEntry(entryData);
       res.status(201).json(entry);
     } catch (error) {
