@@ -4,7 +4,7 @@ import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
@@ -17,7 +17,7 @@ export default function Employees() {
   const department = getCurrentDepartment();
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
 
-  const { data: employees, isLoading } = useQuery({
+  const { data: employees = [], isLoading } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
   });
 
@@ -103,7 +103,7 @@ export default function Employees() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees?.map((employee: any) => (
+              {employees.map((employee: any) => (
                 <TableRow key={employee.id}>
                   <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
