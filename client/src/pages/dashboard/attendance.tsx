@@ -4,7 +4,7 @@ import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
@@ -166,23 +166,32 @@ export default function Attendance() {
                 <TableRow>
                   <TableHead>Employee ID</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>From</TableHead>
-                  <TableHead>To</TableHead>
+                  <TableHead>Period</TableHead>
                   <TableHead>Days Present</TableHead>
                   <TableHead>Remarks</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry: any) => (
-                  <TableRow key={entry.id}>
-                    <TableCell>{entry.employee?.employeeId}</TableCell>
-                    <TableCell>{entry.employee?.name}</TableCell>
-                    <TableCell>{entry.fromDate ? formatDate(entry.fromDate) : formatDate(new Date(report.year, report.month - 1, 1))}</TableCell>
-                    <TableCell>{entry.toDate ? formatDate(entry.toDate) : formatDate(new Date(report.year, report.month, 0))}</TableCell>
-                    <TableCell>{entry.days}</TableCell>
-                    <TableCell>{entry.remarks || "-"}</TableCell>
-                  </TableRow>
-                ))}
+                {entries.map((entry: any) => {
+                  // Parse the periods JSON string
+                  const periods = entry.periods ? JSON.parse(entry.periods) : [];
+
+                  return periods.map((period: any, periodIndex: number) => (
+                    <TableRow key={`${entry.id}-${periodIndex}`}>
+                      {periodIndex === 0 && (
+                        <>
+                          <TableCell rowSpan={periods.length}>{entry.employee?.employeeId}</TableCell>
+                          <TableCell rowSpan={periods.length}>{entry.employee?.name}</TableCell>
+                        </>
+                      )}
+                      <TableCell>
+                        {formatDate(period.fromDate)} to {formatDate(period.toDate)}
+                      </TableCell>
+                      <TableCell>{period.days}</TableCell>
+                      <TableCell>{period.remarks || "-"}</TableCell>
+                    </TableRow>
+                  ));
+                })}
               </TableBody>
             </Table>
           </div>
