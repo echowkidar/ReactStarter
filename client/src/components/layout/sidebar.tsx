@@ -8,6 +8,7 @@ import {
   ClipboardList,
   LogOut,
   Menu,
+  Wallet,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -17,6 +18,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Employees", href: "/dashboard/employees", icon: Users },
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
+  { name: "Salary", href: "/dashboard/salary", icon: Wallet },
 ];
 
 interface SidebarProps {
