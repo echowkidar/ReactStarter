@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -99,6 +99,16 @@ export default function AdminLogin() {
             </form>
           </Form>
         </CardContent>
+        <CardFooter className="flex justify-center">
+          <Button
+            variant="ghost"
+            onClick={() => setLocation("/")}
+            disabled={isLoading}
+            className="text-sm text-muted-foreground hover:text-primary"
+          >
+            Switch to Department Login
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   );
