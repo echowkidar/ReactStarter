@@ -5,10 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/layout/loading";
 import { FileCheck, LogOut } from "lucide-react";
+import { AttendanceReport, Department } from "@shared/schema";
+
+type ReportWithDepartment = AttendanceReport & {
+  department?: Department;
+};
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
-  const { data: reports, isLoading } = useQuery({
+  const { data: reports, isLoading } = useQuery<ReportWithDepartment[]>({
     queryKey: ["/api/admin/attendance"],
   });
 
@@ -62,7 +67,7 @@ export default function AdminDashboard() {
             {reports?.map((report) => (
               <TableRow key={report.id}>
                 <TableCell className="font-medium">
-                  {report.department?.name}
+                  {report.department?.name || "N/A"}
                 </TableCell>
                 <TableCell>
                   {new Date(report.year, report.month - 1).toLocaleDateString("en-US", {
@@ -71,7 +76,7 @@ export default function AdminDashboard() {
                   })}
                 </TableCell>
                 <TableCell>{report.transactionId}</TableCell>
-                <TableCell>{report.despatchNo}</TableCell>
+                <TableCell>{report.despatchNo || "-"}</TableCell>
                 <TableCell>
                   {report.despatchDate ? formatDate(report.despatchDate) : "-"}
                 </TableCell>

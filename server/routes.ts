@@ -165,7 +165,16 @@ export async function registerRoutes(app: Express) {
   // Admin routes
   app.get("/api/admin/attendance", async (req, res) => {
     const reports = await storage.getAllAttendanceReports();
-    res.json(reports);
+    const reportsWithDepartments = await Promise.all(
+      reports.map(async (report) => {
+        const department = await storage.getDepartment(report.departmentId);
+        return {
+          ...report,
+          department
+        };
+      })
+    );
+    res.json(reportsWithDepartments);
   });
 
   return httpServer;
