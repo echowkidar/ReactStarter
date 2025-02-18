@@ -87,16 +87,18 @@ export default function AttendanceForm({ onSubmit, isLoading }: AttendanceFormPr
         next.add(employeeId);
         // Initialize entry when adding employee
         const currentEntries = form.getValues("entries") || [];
-        const newEntry = {
-          employeeId,
-          periods: [{
-            fromDate: formatDate(defaultStartDate),
-            toDate: formatDate(defaultEndDate),
-            days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
-            remarks: "",
-          }],
-        };
-        form.setValue("entries", [...currentEntries, newEntry]);
+        form.setValue("entries", [
+          ...currentEntries,
+          {
+            employeeId,
+            periods: [{
+              fromDate: formatDate(defaultStartDate),
+              toDate: formatDate(defaultEndDate),
+              days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+              remarks: "",
+            }],
+          },
+        ]);
       }
       return next;
     });
