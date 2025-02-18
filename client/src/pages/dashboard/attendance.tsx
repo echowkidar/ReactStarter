@@ -281,12 +281,10 @@ export default function Attendance() {
                                   data.entries.map((entry) =>
                                     apiRequest("POST", `/api/attendance/${report.id}/entries`, {
                                       employeeId: entry.employeeId,
-                                      periods: entry.periods.map(p => ({
-                                        fromDate: p.fromDate,
-                                        toDate: p.toDate,
-                                        days: p.days,
-                                        remarks: p.remarks || ""
-                                      }))
+                                      fromDate: entry.periods[0].fromDate,
+                                      toDate: entry.periods[entry.periods.length - 1].toDate,
+                                      days: entry.periods.reduce((total, period) => total + period.days, 0),
+                                      remarks: entry.periods.map(p => p.remarks).filter(Boolean).join("; ") || ""
                                     })
                                   )
                                 );
