@@ -258,6 +258,39 @@ export default function Attendance() {
                   </TableCell>
                   <TableCell className="space-x-2">
                     {report.status === "draft" && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            Edit
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl">
+                          <DialogHeader>
+                            <DialogTitle>Edit Attendance Report</DialogTitle>
+                          </DialogHeader>
+                          <AttendanceForm
+                            reportId={report.id}
+                            initialData={{
+                              month: String(report.month),
+                              year: String(report.year),
+                              entries: entries
+                            }}
+                            onSubmit={async (data) => {
+                              await Promise.all(
+                                data.entries.map((entry) =>
+                                  apiRequest("PATCH", `/api/attendance/${report.id}/entries/${entry.id}`, {
+                                    days: entry.periods.reduce((total: number, period: any) => total + period.days, 0),
+                                    remarks: entry.periods.map((p: any) => p.remarks).filter(Boolean).join("; ") || ""
+                                  })
+                                )
+                              );
+                              queryClient.invalidateQueries([`/api/departments/${department?.id}/attendance`]);
+                              queryClient.invalidateQueries([`/api/attendance/${report.id}/entries`]);
+                            }}
+                            isLoading={false}
+                          />
+                        </DialogContent>
+                      </Dialog>
                       <>
                         <Dialog open={showPrintPreview && selectedReport === report.id} onOpenChange={(open) => {
                           setShowPrintPreview(open);

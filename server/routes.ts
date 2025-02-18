@@ -108,6 +108,18 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  app.patch("/api/attendance/:reportId/entries/:entryId", async (req, res) => {
+    try {
+      const entry = await storage.updateAttendanceEntry(
+        Number(req.params.entryId), 
+        { days: req.body.days, remarks: req.body.remarks }
+      );
+      res.json(entry);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid entry update" });
+    }
+  });
+
   // Admin routes
   app.get("/api/admin/attendance", async (req, res) => {
     const reports = await storage.getAllAttendanceReports();

@@ -147,6 +147,14 @@ export class MemStorage implements IStorage {
       e => e.reportId === reportId
     );
   }
+
+  async updateAttendanceEntry(id: number, updates: Partial<AttendanceEntry>): Promise<AttendanceEntry> {
+    const entry = this.attendanceEntries.get(id);
+    if (!entry) throw new Error("Entry not found");
+    const updatedEntry = { ...entry, ...updates };
+    this.attendanceEntries.set(id, updatedEntry);
+    return updatedEntry;
+  }
 }
 
 export const storage = new MemStorage();
