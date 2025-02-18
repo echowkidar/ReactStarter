@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
-import { Plus, Printer, FileCheck, Eye } from "lucide-react";
+import { Plus, Printer, FileCheck, Eye, Upload } from "lucide-react";
 import { Loader2 } from "lucide-react";
+import * as XLSX from 'xlsx';
+import { AttendanceReport } from "@shared/schema";
 
 export default function Attendance() {
   const { toast } = useToast();
@@ -20,24 +22,18 @@ export default function Attendance() {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [, setLocation] = useLocation();
-  const { data: reports, isLoading } = useQuery({
+
+  const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
     queryKey: [`/api/departments/${department?.id}/attendance`],
   });
 
   const { data: entries = [], isLoading: loadingEntries } = useQuery({
     queryKey: [`/api/attendance/${selectedReport}/entries`],
     enabled: !!selectedReport,
-    select: (data: any) => {
-      return Array.isArray(data) ? data : [];
-    }
+    select: (data: any) => Array.isArray(data) ? data : []
   });
-
-  const { data: employees, isLoading: loadingEmployees } = useQuery({
-    queryKey: ['/api/employees'],
-    enabled: !!selectedReport
-  })
-
 
   const createReport = useMutation({
     mutationFn: async (data: any) => {
@@ -59,7 +55,7 @@ export default function Attendance() {
       for (const entry of data.entries) {
         if (!entry.periods || entry.periods.length === 0) continue;
 
-        const periods = entry.periods.map(period => ({
+        const periods = entry.periods.map((period: any) => ({
           fromDate: period.fromDate,
           toDate: period.toDate,
           days: period.days,
@@ -105,7 +101,7 @@ export default function Attendance() {
     },
   });
 
-  if (isLoading || loadingEntries || loadingEmployees) return <Loading />;
+  if (isLoading || loadingEntries) return <Loading />;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -126,147 +122,60 @@ export default function Attendance() {
     });
   };
 
-  const formatPeriod = (year: number, month: number) => {
-    return new Date(year, month - 1).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-    });
-  };
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  const formatShortDate = (date: string | Date) => {
-    const d = new Date(date);
-    return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
-  };
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-  const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
-    const department = getCurrentDepartment();
-    const { data: employees = [] } = useQuery({
-      queryKey: [`/api/departments/${department?.id}/employees`],
-      select: (data: any) => data || [],
-    });
+        // Skip header row and empty rows
+        const rows = jsonData.slice(1).filter((row: any) => row.length > 0);
 
-    const { data: entries = [], isLoading: loadingEntries } = useQuery({
-      queryKey: [`/api/attendance/${report.id}/entries`],
-      enabled: !!report.id,
-      select: (data: any) => {
-        return Array.isArray(data) ? data : [];
-      }
-    });
+        if (rows.length === 0) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No data found in the Excel file",
+          });
+          return;
+        }
 
-    const handlePrint = () => {
-      onClose();
-      window.print();
-    };
+        // Process rows and create attendance report
+        const attendanceData = {
+          month: new Date().getMonth() + 1,
+          year: new Date().getFullYear(),
+          entries: rows.map((row: any) => ({
+            employeeId: row[0],
+            periods: [{
+              fromDate: row[3] || new Date().toISOString().split('T')[0],
+              toDate: row[4] || new Date().toISOString().split('T')[0],
+              days: row[5] || 0,
+              remarks: row[6] || ""
+            }]
+          }))
+        };
 
-    if (loadingEntries) {
-      return (
-        <div className="flex justify-center p-4">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </div>
-      );
+        await createReport.mutateAsync(attendanceData);
+
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to process Excel file",
+      });
     }
-
-    return (
-      <div className="space-y-6 p-6 @print:p-0">
-        <style type="text/css" media="print">{`
-            @page { 
-              size: auto;
-              margin: 10mm 15mm;
-            }
-            @media print {
-              body { 
-                visibility: hidden;
-                margin: 0;
-                padding: 0;
-              }
-              .print-content { 
-                visibility: visible;
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                margin: 0;
-                padding: 0;
-              }
-              .print-content * { 
-                visibility: visible;
-              }
-            }
-          `}</style>
-
-        <div className="print-content w-full space-y-4">
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-bold">Attendance Report</h2>
-            <p className="text-muted-foreground">
-              {department?.name} - {formatPeriod(report.year, report.month)}
-            </p>
-          </div>
-
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Days Present</TableHead>
-                  <TableHead>Remarks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((entry: any) => {
-                  const periods = entry.periods ? JSON.parse(entry.periods) : [];
-                  const employee = employees?.find((emp: any) => emp.id === entry.employeeId);
-
-                  return periods.map((period: any, periodIndex: number) => (
-                    <TableRow key={`${entry.id}-${periodIndex}`}>
-                      {periodIndex === 0 && (
-                        <>
-                          <TableCell className="align-middle" rowSpan={periods.length}>
-                            {employee?.employeeId}
-                          </TableCell>
-                          <TableCell className="align-middle" rowSpan={periods.length}>
-                            {employee?.name}
-                          </TableCell>
-                          <TableCell className="align-middle" rowSpan={periods.length}>
-                            {employee?.designation}
-                          </TableCell>
-                        </>
-                      )}
-                      <TableCell>
-                        {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
-                      </TableCell>
-                      <TableCell>{period.days}</TableCell>
-                      <TableCell>{period.remarks || "-"}</TableCell>
-                    </TableRow>
-                  ));
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="mt-8 space-y-4 text-right">
-            <p>Certified that the above attendance report is correct.</p>
-            <div className="space-y-1">
-              <p>{department?.hodTitle}</p>
-              <p>{department?.hodName}</p>
-              <p>{department?.name}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end space-x-2 @print:hidden">
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-          <Button onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -275,25 +184,38 @@ export default function Attendance() {
       <main className="flex-1 p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Attendance Reports</h1>
-          <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Report
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl">
-              <DialogHeader>
-                <DialogTitle>Create Attendance Report</DialogTitle>
-              </DialogHeader>
-              <AttendanceForm
-                onSubmit={async (data) => {
-                  await createReport.mutateAsync(data);
-                }}
-                isLoading={createReport.isPending}
-              />
-            </DialogContent>
-          </Dialog>
+          <div className="space-x-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".xlsx,.xls"
+              className="hidden"
+            />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Excel
+            </Button>
+            <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Report
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle>Create Attendance Report</DialogTitle>
+                </DialogHeader>
+                <AttendanceForm
+                  onSubmit={async (data) => {
+                    await createReport.mutateAsync(data);
+                  }}
+                  isLoading={createReport.isPending}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <div className="rounded-md border">
@@ -307,7 +229,7 @@ export default function Attendance() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {reports?.map((report: any) => (
+              {reports.map((report) => (
                 <TableRow key={report.id}>
                   <TableCell>
                     {formatDate(new Date(report.year, report.month - 1).toISOString())}
@@ -321,74 +243,6 @@ export default function Attendance() {
                   <TableCell className="space-x-2">
                     {report.status === "draft" ? (
                       <div className="space-x-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl">
-                            <DialogHeader>
-                              <DialogTitle>Edit Attendance Report</DialogTitle>
-                            </DialogHeader>
-                            <AttendanceForm
-                              reportId={report.id}
-                              initialData={{
-                                month: String(report.month),
-                                year: String(report.year),
-                                entries: entries
-                              }}
-                              onSubmit={async (data) => {
-                                await Promise.all(
-                                  data.entries.map((entry) =>
-                                    apiRequest("POST", `/api/attendance/${report.id}/entries`, {
-                                      employeeId: entry.employeeId,
-                                      periods: entry.periods.map(period => ({
-                                        fromDate: period.fromDate,
-                                        toDate: period.toDate,
-                                        days: period.days,
-                                        remarks: period.remarks || ""
-                                      }))
-                                    })
-                                  )
-                                );
-                                queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
-                                queryClient.invalidateQueries({ queryKey: [`/api/attendance/${report.id}/entries`] });
-                              }}
-                              isLoading={false}
-                            />
-                          </DialogContent>
-                        </Dialog>
-                        <Dialog open={showPrintPreview && selectedReport === report.id} onOpenChange={(open) => {
-                          setShowPrintPreview(open);
-                          if (!open) setSelectedReport(null);
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedReport(report.id);
-                                setShowPrintPreview(true);
-                              }}
-                            >
-                              <Printer className="h-4 w-4 mr-2" />
-                              Print
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl">
-                            <DialogHeader>
-                              <DialogTitle>Print Preview</DialogTitle>
-                            </DialogHeader>
-                            <PrintPreview
-                              report={report}
-                              onClose={() => {
-                                setShowPrintPreview(false);
-                                setSelectedReport(null);
-                              }}
-                            />
-                          </DialogContent>
-                        </Dialog>
                         <Button
                           size="sm"
                           onClick={() => {
