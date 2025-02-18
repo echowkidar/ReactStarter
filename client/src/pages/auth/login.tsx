@@ -96,13 +96,21 @@ export default function Login() {
             </form>
           </Form>
         </CardContent>
-        <CardFooter className="justify-center">
+        <CardFooter className="flex flex-col space-y-2">
           <Button
             variant="link"
             onClick={() => setLocation("/register")}
             disabled={isLoading}
           >
             Don't have an account? Register
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setLocation("/admin/login")}
+            disabled={isLoading}
+            className="text-sm text-muted-foreground hover:text-primary"
+          >
+            Admin Login
           </Button>
         </CardFooter>
       </Card>
