@@ -56,6 +56,8 @@ export default function Attendance() {
             reportId: report.id,
             employeeId: entry.employeeId,
             days: entry.periods.reduce((total: number, period: any) => total + period.days, 0),
+            fromDate: entry.periods[0]?.fromDate,
+            toDate: entry.periods[entry.periods.length - 1]?.toDate,
             remarks: entry.periods.map((p: any) => p.remarks).filter(Boolean).join("; ") || ""
           })
         )
@@ -172,12 +174,8 @@ export default function Attendance() {
                   <TableRow key={entry.id}>
                     <TableCell>{entry.employee?.employeeId}</TableCell>
                     <TableCell>{entry.employee?.name}</TableCell>
-                    <TableCell>
-                      {formatDate(new Date(report.year, report.month - 1, 1))}
-                    </TableCell>
-                    <TableCell>
-                      {formatDate(new Date(report.year, report.month, 0))}
-                    </TableCell>
+                    <TableCell>{entry.fromDate ? formatDate(entry.fromDate) : formatDate(new Date(report.year, report.month - 1, 1))}</TableCell>
+                    <TableCell>{entry.toDate ? formatDate(entry.toDate) : formatDate(new Date(report.year, report.month, 0))}</TableCell>
                     <TableCell>{entry.days}</TableCell>
                     <TableCell>{entry.remarks || "-"}</TableCell>
                   </TableRow>

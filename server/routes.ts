@@ -97,6 +97,8 @@ export async function registerRoutes(app: Express) {
         reportId: Number(req.params.reportId),
         employeeId: Number(req.body.employeeId),
         days: Number(req.body.days),
+        fromDate: req.body.fromDate,
+        toDate: req.body.toDate,
         remarks: req.body.remarks
       });
       const entry = await storage.createAttendanceEntry(entryData);
