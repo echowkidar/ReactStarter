@@ -99,7 +99,15 @@ export default function AdminLogin() {
             </form>
           </Form>
         </CardContent>
-        <CardFooter className="flex justify-center">
+        <CardFooter className="flex flex-col space-y-2">
+          <Button
+            variant="link"
+            onClick={() => setLocation("/admin/forgot-password")}
+            disabled={isLoading}
+            className="text-sm text-muted-foreground hover:text-primary"
+          >
+            Forgot Password?
+          </Button>
           <Button
             variant="ghost"
             onClick={() => setLocation("/")}

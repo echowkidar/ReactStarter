@@ -105,6 +105,14 @@ export default function Login() {
             Don't have an account? Register
           </Button>
           <Button
+            variant="link"
+            onClick={() => setLocation("/forgot-password")}
+            disabled={isLoading}
+            className="text-sm text-muted-foreground hover:text-primary"
+          >
+            Forgot Password?
+          </Button>
+          <Button
             variant="ghost"
             onClick={() => setLocation("/admin/login")}
             disabled={isLoading}
