@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
+import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,51 +62,74 @@ export default function ReportDetails() {
   };
 
   const handleDownload = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
 
-    // Create print content
-    const content = document.querySelector('.print-content')?.cloneNode(true);
-    if (!content) return;
+    // Add report header information
+    const headerData = [
+      ['Attendance Report'],
+      [''],
+      ['Department:', report.department?.name],
+      ['Month/Year:', formatPeriod(report.year, report.month)],
+      ['Transaction ID:', report.transactionId || '-'],
+      ['Status:', report.status],
+      ['Despatch No:', report.despatchNo || '-'],
+      ['Despatch Date:', report.despatchDate ? format(new Date(report.despatchDate), "dd MMM yyyy") : '-'],
+      ['']
+    ];
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Attendance Report - ${formatPeriod(report.year, report.month)}</title>
-          <style>
-            body { 
-              font-family: system-ui, -apple-system, sans-serif;
-              padding: 20px;
-              max-width: 1200px;
-              margin: 0 auto;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 20px 0;
-            }
-            th, td {
-              border: 1px solid #ddd;
-              padding: 8px;
-              text-align: left;
-            }
-            th {
-              background-color: #f5f5f5;
-            }
-          </style>
-        </head>
-        <body>
-          ${content.outerHTML}
-        </body>
-      </html>
-    `);
+    // Create attendance entries data
+    const attendanceData = [
+      ['Employee ID', 'Name', 'Designation', 'Period', 'Days', 'Remarks']
+    ];
 
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 250);
+    report.entries?.forEach(entry => {
+      const periods = JSON.parse(entry.periods);
+      periods.forEach((period: any) => {
+        attendanceData.push([
+          entry.employee?.employeeId,
+          entry.employee?.name,
+          entry.employee?.designation,
+          `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
+          period.days,
+          period.remarks || '-'
+        ]);
+      });
+    });
+
+    // Add certification text
+    const certificationData = [
+      [''],
+      ['Certified that the above attendance report is correct.'],
+      [''],
+      [report.department?.hodTitle || ''],
+      [report.department?.hodName || ''],
+      [report.department?.name || '']
+    ];
+
+    // Combine all data
+    const wsData = [...headerData, ...attendanceData, ...certificationData];
+
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Set column widths
+    const colWidths = [
+      { wch: 15 }, // Employee ID
+      { wch: 20 }, // Name
+      { wch: 20 }, // Designation
+      { wch: 25 }, // Period
+      { wch: 10 }, // Days
+      { wch: 30 }  // Remarks
+    ];
+    ws['!cols'] = colWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
+
+    // Generate Excel file
+    const fileName = `attendance_report_${report.department?.name}_${report.year}_${report.month}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   };
 
   return (
@@ -137,7 +161,7 @@ export default function ReportDetails() {
         <div className="space-x-2">
           <Button variant="outline" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />
-            Download
+            Download Excel
           </Button>
           <Button variant="outline" onClick={handlePrint}>
             <Printer className="h-4 w-4 mr-2" />
