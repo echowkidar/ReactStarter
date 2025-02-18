@@ -13,7 +13,6 @@ import AttendanceForm from "@/components/forms/attendance-form";
 import { Plus, Printer, FileCheck } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
-
 export default function Attendance() {
   const { toast } = useToast();
   const department = getCurrentDepartment();
@@ -130,6 +129,14 @@ export default function Attendance() {
     return `${month.toString().padStart(2, '0')}/${year}`;
   };
 
+  const formatShortDate = (date: string | Date) => {
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "2-digit",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  };
+
   const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
     const department = getCurrentDepartment();
     const { data: employees = [] } = useQuery({
@@ -230,7 +237,7 @@ export default function Attendance() {
                         </>
                       )}
                       <TableCell>
-                        {formatDate(period.fromDate)} to {formatDate(period.toDate)}
+                        {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
                       </TableCell>
                       <TableCell>{period.days}</TableCell>
                       <TableCell>{period.remarks || "-"}</TableCell>
