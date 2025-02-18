@@ -31,6 +31,7 @@ export interface IStorage {
 
   createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry>;
   getAttendanceEntriesByReport(reportId: number): Promise<AttendanceEntry[]>;
+  updateAttendanceEntry(id: number, updates: Partial<AttendanceEntry>): Promise<AttendanceEntry>;
 }
 
 export class MemStorage implements IStorage {
@@ -136,7 +137,9 @@ export class MemStorage implements IStorage {
     const newEntry = { 
       ...entry, 
       id,
-      remarks: entry.remarks || null
+      remarks: entry.remarks || null,
+      fromDate: entry.fromDate,
+      toDate: entry.toDate
     };
     this.attendanceEntries.set(id, newEntry);
     return newEntry;

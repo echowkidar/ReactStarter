@@ -11,11 +11,11 @@ export async function registerRoutes(app: Express) {
     try {
       const departmentData = insertDepartmentSchema.parse(req.body);
       const existingDepartment = await storage.getDepartmentByEmail(departmentData.email);
-      
+
       if (existingDepartment) {
         return res.status(400).json({ message: "Email already registered" });
       }
-      
+
       const department = await storage.createDepartment(departmentData);
       res.status(201).json(department);
     } catch (error) {
@@ -26,11 +26,11 @@ export async function registerRoutes(app: Express) {
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
     const department = await storage.getDepartmentByEmail(email);
-    
+
     if (!department || department.password !== password) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-    
+
     res.json(department);
   });
 
@@ -95,26 +95,31 @@ export async function registerRoutes(app: Express) {
     try {
       const reportId = Number(req.params.reportId);
       const { employeeId, periods } = req.body;
-      
+
       if (!periods || !Array.isArray(periods)) {
         return res.status(400).json({ message: "Invalid periods data" });
       }
-      
+
       const totalDays = periods.reduce((sum, period) => sum + (period.days || 0), 0);
       const remarks = periods.map(p => p.remarks).filter(Boolean).join("; ");
-      
+
+      // Parse dates to ensure they're in the correct format
+      const firstPeriod = periods[0];
+      const lastPeriod = periods[periods.length - 1];
+
       const entryData = insertAttendanceEntrySchema.parse({
         reportId: reportId,
         employeeId: Number(employeeId),
         days: totalDays,
-        fromDate: periods[0].fromDate,
-        toDate: periods[periods.length - 1].toDate,
+        fromDate: new Date(firstPeriod.fromDate),
+        toDate: new Date(lastPeriod.toDate),
         remarks: remarks || ""
       });
-      
+
       const entry = await storage.createAttendanceEntry(entryData);
       res.status(201).json(entry);
     } catch (error) {
+      console.error('Error creating attendance entry:', error);
       res.status(400).json({ message: "Invalid entry data", error: String(error) });
     }
   });
@@ -122,7 +127,7 @@ export async function registerRoutes(app: Express) {
   app.patch("/api/attendance/:reportId/entries/:entryId", async (req, res) => {
     try {
       const entry = await storage.updateAttendanceEntry(
-        Number(req.params.entryId), 
+        Number(req.params.entryId),
         { days: req.body.days, remarks: req.body.remarks }
       );
       res.json(entry);
