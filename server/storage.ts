@@ -138,9 +138,13 @@ export class MemStorage implements IStorage {
       ...entry, 
       id,
       remarks: entry.remarks || null,
-      fromDate: entry.fromDate,
-      toDate: entry.toDate
+      fromDate: entry.fromDate || null,
+      toDate: entry.toDate || null
     };
+
+    // Log the entry being created
+    console.log('Creating attendance entry:', newEntry);
+
     this.attendanceEntries.set(id, newEntry);
     return newEntry;
   }
@@ -154,6 +158,7 @@ export class MemStorage implements IStorage {
   async updateAttendanceEntry(id: number, updates: Partial<AttendanceEntry>): Promise<AttendanceEntry> {
     const entry = this.attendanceEntries.get(id);
     if (!entry) throw new Error("Entry not found");
+
     const updatedEntry = { ...entry, ...updates };
     this.attendanceEntries.set(id, updatedEntry);
     return updatedEntry;

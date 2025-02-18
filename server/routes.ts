@@ -100,6 +100,7 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid periods data" });
       }
 
+      // Calculate total days and combine remarks
       const totalDays = periods.reduce((sum, period) => sum + (period.days || 0), 0);
       const remarks = periods.map(p => p.remarks).filter(Boolean).join("; ");
 
@@ -107,12 +108,17 @@ export async function registerRoutes(app: Express) {
       const firstPeriod = periods[0];
       const lastPeriod = periods[periods.length - 1];
 
+      // Log the received data for debugging
+      console.log('Received periods:', periods);
+      console.log('First period:', firstPeriod);
+      console.log('Last period:', lastPeriod);
+
       const entryData = insertAttendanceEntrySchema.parse({
         reportId: reportId,
         employeeId: Number(employeeId),
         days: totalDays,
-        fromDate: firstPeriod.fromDate, 
-        toDate: lastPeriod.toDate, 
+        fromDate: firstPeriod?.fromDate || "", 
+        toDate: lastPeriod?.toDate || "", 
         remarks: remarks || ""
       });
 
