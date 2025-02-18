@@ -52,7 +52,7 @@ export default function Attendance() {
 
       for (const entry of data.entries) {
         if (!entry.periods || entry.periods.length === 0) continue;
-        
+
         const periods = entry.periods.map(period => ({
           fromDate: period.fromDate,
           toDate: period.toDate,
@@ -176,12 +176,20 @@ export default function Attendance() {
                   // Parse the periods JSON string
                   const periods = entry.periods ? JSON.parse(entry.periods) : [];
 
+                  // Log for debugging
+                  console.log('Entry:', entry);
+                  console.log('Parsed periods:', periods);
+
                   return periods.map((period: any, periodIndex: number) => (
                     <TableRow key={`${entry.id}-${periodIndex}`}>
                       {periodIndex === 0 && (
                         <>
-                          <TableCell rowSpan={periods.length}>{entry.employee?.employeeId}</TableCell>
-                          <TableCell rowSpan={periods.length}>{entry.employee?.name}</TableCell>
+                          <TableCell className="align-middle" rowSpan={periods.length}>
+                            {entry.employeeId}
+                          </TableCell>
+                          <TableCell className="align-middle" rowSpan={periods.length}>
+                            {entry.employee?.name}
+                          </TableCell>
                         </>
                       )}
                       <TableCell>
