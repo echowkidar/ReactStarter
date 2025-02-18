@@ -33,8 +33,8 @@ export default function Attendance() {
   });
 
   const { data: employees, isLoading: loadingEmployees } = useQuery({
-    queryKey: ['/api/employees'], 
-    enabled: !!selectedReport 
+    queryKey: ['/api/employees'],
+    enabled: !!selectedReport
   })
 
 
@@ -168,35 +168,32 @@ export default function Attendance() {
     return (
       <div className="space-y-6 p-6 @print:p-0">
         <style type="text/css" media="print">{`
-          @page { 
-            size: auto; 
-            margin: 20mm;
-          }
-          @media print {
-            body { 
-              visibility: hidden;
-              margin: 0;
-              padding: 0;
+            @page { 
+              size: auto;
+              margin: 10mm 15mm;
             }
-            .print-content { 
-              visibility: visible;
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: 100%;
-              padding: 20mm;
+            @media print {
+              body { 
+                visibility: hidden;
+                margin: 0;
+                padding: 0;
+              }
+              .print-content { 
+                visibility: visible;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+              }
+              .print-content * { 
+                visibility: visible;
+              }
             }
-            .print-content * { 
-              visibility: visible;
-            }
-            @page {
-              size: A4;
-              margin: 20mm;
-            }
-          }
-        `}</style>
+          `}</style>
 
-        <div className="print-content w-full space-y-6">
+        <div className="print-content w-full space-y-4">
           <div className="text-center space-y-2">
             <h2 className="text-2xl font-bold">Attendance Report</h2>
             <p className="text-muted-foreground">
@@ -248,7 +245,7 @@ export default function Attendance() {
             </Table>
           </div>
 
-          <div className="mt-12 space-y-4 text-right">
+          <div className="mt-8 space-y-4 text-right">
             <p>Certified that the above attendance report is correct.</p>
             <div className="space-y-1">
               <p>{department?.hodTitle}</p>
