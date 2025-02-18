@@ -51,8 +51,16 @@ export const attendanceEntries = pgTable("attendance_entries", {
   remarks: text("remarks"),
 });
 
+// Update the employee schema to enforce EPID format
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
-export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true });
+export const insertEmployeeSchema = createInsertSchema(employees)
+  .omit({ id: true })
+  .extend({
+    employeeId: z.string().refine(
+      (val) => val.startsWith('EPID'),
+      { message: "Employee ID must start with 'EPID'" }
+    )
+  });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({ id: true, createdAt: true });
 
 const periodSchema = z.object({
