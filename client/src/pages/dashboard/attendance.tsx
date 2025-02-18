@@ -279,9 +279,14 @@ export default function Attendance() {
                               onSubmit={async (data) => {
                                 await Promise.all(
                                   data.entries.map((entry) =>
-                                    apiRequest("PATCH", `/api/attendance/${report.id}/entries/${entry.id}`, {
-                                      days: entry.periods.reduce((total: number, period: any) => total + period.days, 0),
-                                      remarks: entry.periods.map((p: any) => p.remarks).filter(Boolean).join("; ") || ""
+                                    apiRequest("POST", `/api/attendance/${report.id}/entries`, {
+                                      employeeId: entry.employeeId,
+                                      periods: entry.periods.map(p => ({
+                                        fromDate: p.fromDate,
+                                        toDate: p.toDate,
+                                        days: p.days,
+                                        remarks: p.remarks || ""
+                                      }))
                                     })
                                   )
                                 );
