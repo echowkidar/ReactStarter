@@ -340,7 +340,7 @@ export default function Attendance() {
                           <FileCheck className="h-4 w-4 mr-2" />
                           Finalize
                         </Button>
-                      </>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>
