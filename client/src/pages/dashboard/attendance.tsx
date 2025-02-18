@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
-import { Plus, Printer, FileCheck } from "lucide-react";
+import { Plus, Printer, FileCheck, Eye } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
 export default function Attendance() {
@@ -19,7 +20,7 @@ export default function Attendance() {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
-
+  const [, setLocation] = useLocation();
   const { data: reports, isLoading } = useQuery({
     queryKey: [`/api/departments/${department?.id}/attendance`],
   });
@@ -318,7 +319,7 @@ export default function Attendance() {
                     </Badge>
                   </TableCell>
                   <TableCell className="space-x-2">
-                    {report.status === "draft" && (
+                    {report.status === "draft" ? (
                       <div className="space-x-2">
                         <Dialog>
                           <DialogTrigger asChild>
@@ -351,8 +352,8 @@ export default function Attendance() {
                                     })
                                   )
                                 );
-                                queryClient.invalidateQueries([`/api/departments/${department?.id}/attendance`]);
-                                queryClient.invalidateQueries([`/api/attendance/${report.id}/entries`]);
+                                queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+                                queryClient.invalidateQueries({ queryKey: [`/api/attendance/${report.id}/entries`] });
                               }}
                               isLoading={false}
                             />
@@ -407,6 +408,16 @@ export default function Attendance() {
                           Finalize
                         </Button>
                       </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                        className="flex items-center gap-2"
+                      >
+                        <Eye className="h-4 w-4" />
+                        View Details
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>

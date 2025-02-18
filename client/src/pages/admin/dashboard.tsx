@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/layout/loading";
-import { FileCheck, LogOut } from "lucide-react";
+import { FileCheck, LogOut, Eye } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 
 type ReportWithDepartment = AttendanceReport & {
@@ -61,6 +61,7 @@ export default function AdminDashboard() {
               <TableHead>Despatch No.</TableHead>
               <TableHead>Despatch Date</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -86,6 +87,17 @@ export default function AdminDashboard() {
                   >
                     {report.status}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                    className="flex items-center gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    View Details
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
