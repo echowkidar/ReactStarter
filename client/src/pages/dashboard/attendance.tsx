@@ -53,12 +53,16 @@ export default function Attendance() {
       for (const entry of data.entries) {
         if (!entry.periods || entry.periods.length === 0) continue;
         
+        const periods = entry.periods.map(period => ({
+          fromDate: period.fromDate,
+          toDate: period.toDate,
+          days: period.days,
+          remarks: period.remarks || ""
+        }));
+
         await apiRequest("POST", `/api/attendance/${report.id}/entries`, {
           employeeId: entry.employeeId,
-          fromDate: entry.periods[0].fromDate,
-          toDate: entry.periods[entry.periods.length - 1].toDate,
-          days: entry.periods.reduce((total, period) => total + period.days, 0),
-          remarks: entry.periods.map(p => p.remarks).filter(Boolean).join("; ")
+          periods
         });
       }
     },
