@@ -47,17 +47,27 @@ export const attendanceEntries = pgTable("attendance_entries", {
   days: integer("days").notNull(),
   fromDate: text("from_date").notNull(),
   toDate: text("to_date").notNull(),
+  periods: text("periods").notNull(), 
   remarks: text("remarks"),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
 export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({ id: true, createdAt: true });
+
+const periodSchema = z.object({
+  fromDate: z.string(),
+  toDate: z.string(),
+  days: z.number(),
+  remarks: z.string().optional()
+});
+
 export const insertAttendanceEntrySchema = createInsertSchema(attendanceEntries)
   .omit({ id: true })
   .extend({
     fromDate: z.string(),
-    toDate: z.string()
+    toDate: z.string(),
+    periods: z.string() 
   });
 
 export type Department = typeof departments.$inferSelect;

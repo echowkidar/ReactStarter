@@ -117,8 +117,9 @@ export async function registerRoutes(app: Express) {
         reportId: reportId,
         employeeId: Number(employeeId),
         days: totalDays,
-        fromDate: firstPeriod?.fromDate || "", 
-        toDate: lastPeriod?.toDate || "", 
+        fromDate: firstPeriod?.fromDate || "",
+        toDate: lastPeriod?.toDate || "",
+        periods: JSON.stringify(periods), // Store all periods as JSON string
         remarks: remarks || ""
       });
 

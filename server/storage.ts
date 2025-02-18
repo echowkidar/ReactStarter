@@ -138,8 +138,9 @@ export class MemStorage implements IStorage {
       ...entry, 
       id,
       remarks: entry.remarks || null,
-      fromDate: entry.fromDate || null,
-      toDate: entry.toDate || null
+      fromDate: entry.fromDate || "",
+      toDate: entry.toDate || "",
+      periods: entry.periods
     };
 
     // Log the entry being created
