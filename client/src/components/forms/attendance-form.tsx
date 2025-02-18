@@ -54,11 +54,20 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
     select: (data: any) => data || [],
   });
 
+  const selectedMonth = parseInt(String(new Date().getMonth() + 1));
+  const selectedYear = currentYear;
+  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
+
+  const formatDate = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
   const form = useForm<AttendanceFormData>({
     resolver: zodResolver(attendanceSchema),
     defaultValues: {
-      month: String(new Date().getMonth() + 1),
-      year: String(currentYear),
+      month: String(selectedMonth),
+      year: String(selectedYear),
       entries: [{
         employeeId: 0,
         periods: [{
@@ -70,15 +79,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
       }],
     },
   });
-
-  const selectedMonth = parseInt(form.watch("month"));
-  const selectedYear = parseInt(form.watch("year"));
-  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
-  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
-
-  const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
-  };
 
   const calculateDays = (fromDate: string, toDate: string) => {
     const start = new Date(fromDate);
