@@ -34,8 +34,8 @@ export default function Attendance() {
   });
 
   const { data: employees, isLoading: loadingEmployees } = useQuery({
-    queryKey: ['/api/employees'], // Assuming an endpoint to fetch employees
-    enabled: !!selectedReport // Only fetch if a report is selected
+    queryKey: ['/api/employees'], 
+    enabled: !!selectedReport 
   })
 
 
@@ -127,10 +127,7 @@ export default function Attendance() {
   };
 
   const formatPeriod = (year: number, month: number) => {
-    return new Date(year, month - 1).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-    });
+    return `${month.toString().padStart(2, '0')}/${year}`;
   };
 
   const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
@@ -164,11 +161,31 @@ export default function Attendance() {
     return (
       <div className="space-y-6 p-6 @print:p-0">
         <style type="text/css" media="print">{`
-          @page { size: auto; margin: 20mm; }
+          @page { 
+            size: auto; 
+            margin: 20mm;
+          }
           @media print {
-            body * { visibility: hidden; }
-            .print-content, .print-content * { visibility: visible; }
-            .print-content { position: absolute; left: 0; top: 0; }
+            body { 
+              visibility: hidden;
+              margin: 0;
+              padding: 0;
+            }
+            .print-content { 
+              visibility: visible;
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              padding: 20mm;
+            }
+            .print-content * { 
+              visibility: visible;
+            }
+            @page {
+              size: A4;
+              margin: 20mm;
+            }
           }
         `}</style>
 
