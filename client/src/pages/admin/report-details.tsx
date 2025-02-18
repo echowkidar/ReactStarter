@@ -7,9 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { AttendanceReport, AttendanceEntry, Department, Employee } from "@shared/schema";
 
+interface ExtendedAttendanceEntry extends AttendanceEntry {
+  employee?: Employee;
+}
+
 interface ExtendedAttendanceReport extends AttendanceReport {
   department?: Department;
-  entries?: AttendanceEntry[];
+  entries?: ExtendedAttendanceEntry[];
 }
 
 export default function ReportDetails() {
@@ -78,6 +82,8 @@ export default function ReportDetails() {
             <TableHeader>
               <TableRow>
                 <TableHead>Employee ID</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Designation</TableHead>
                 <TableHead>Period</TableHead>
                 <TableHead>Days</TableHead>
                 <TableHead>Remarks</TableHead>
@@ -88,7 +94,9 @@ export default function ReportDetails() {
                 const periods = JSON.parse(entry.periods);
                 return periods.map((period: any, periodIndex: number) => (
                   <TableRow key={`${entry.id}-${periodIndex}`}>
-                    <TableCell>{entry.employeeId}</TableCell>
+                    <TableCell>{entry.employee?.employeeId}</TableCell>
+                    <TableCell>{entry.employee?.name}</TableCell>
+                    <TableCell>{entry.employee?.designation}</TableCell>
                     <TableCell>
                       {period.fromDate} - {period.toDate}
                     </TableCell>

@@ -188,10 +188,20 @@ export async function registerRoutes(app: Express) {
       const department = await storage.getDepartment(report.departmentId);
       const entries = await storage.getAttendanceEntriesByReport(report.id);
 
+      // Fetch all employees for this department
+      const employees = await storage.getEmployeesByDepartment(report.departmentId);
+      const employeesMap = new Map(employees.map(emp => [emp.id, emp]));
+
+      // Add employee details to entries
+      const entriesWithEmployeeDetails = entries.map(entry => ({
+        ...entry,
+        employee: employeesMap.get(entry.employeeId)
+      }));
+
       res.json({
         ...report,
         department,
-        entries
+        entries: entriesWithEmployeeDetails
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch report details" });
