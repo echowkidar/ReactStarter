@@ -126,15 +126,15 @@ export default function Attendance() {
   };
 
   const formatPeriod = (year: number, month: number) => {
-    return `${month.toString().padStart(2, '0')}/${year}`;
+    return new Date(year, month - 1).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+    });
   };
 
   const formatShortDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "2-digit",
-      month: "2-digit",
-      day: "2-digit",
-    });
+    const d = new Date(date);
+    return `${d.getDate().toString().padStart(2, '0')}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getFullYear().toString().slice(-2)}`;
   };
 
   const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
