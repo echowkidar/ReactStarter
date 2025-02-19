@@ -52,9 +52,15 @@ export default function ReportDetails() {
     });
   };
 
-  const formatShortDate = (date: string | Date) => {
-    const d = new Date(date);
-    return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
+  const formatShortDate = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+
+    return `${day}-${month}-${year.slice(-2)}`;
   };
 
   const handlePrint = () => {
@@ -62,10 +68,8 @@ export default function ReportDetails() {
   };
 
   const handleDownload = () => {
-    // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
 
-    // Add report header information
     const headerData = [
       ['Attendance Report'],
       [''],
@@ -78,7 +82,6 @@ export default function ReportDetails() {
       ['']
     ];
 
-    // Create attendance entries data
     const attendanceData = [
       ['Employee ID', 'Name', 'Designation', 'Period', 'Days', 'Remarks']
     ];
@@ -97,7 +100,6 @@ export default function ReportDetails() {
       });
     });
 
-    // Add certification text
     const certificationData = [
       [''],
       ['Certified that the above attendance report is correct.'],
@@ -107,27 +109,22 @@ export default function ReportDetails() {
       [report.department?.name || '']
     ];
 
-    // Combine all data
     const wsData = [...headerData, ...attendanceData, ...certificationData];
 
-    // Create worksheet
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    // Set column widths
     const colWidths = [
-      { wch: 15 }, // Employee ID
-      { wch: 20 }, // Name
-      { wch: 20 }, // Designation
-      { wch: 25 }, // Period
-      { wch: 10 }, // Days
-      { wch: 30 }  // Remarks
+      { wch: 15 }, 
+      { wch: 20 }, 
+      { wch: 20 }, 
+      { wch: 25 }, 
+      { wch: 10 }, 
+      { wch: 30 }  
     ];
     ws['!cols'] = colWidths;
 
-    // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
 
-    // Generate Excel file
     const fileName = `attendance_report_${report.department?.name}_${report.year}_${report.month}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
@@ -223,19 +220,27 @@ export default function ReportDetails() {
               </TableHeader>
               <TableBody>
                 {report.entries?.map((entry) => {
-                  const periods = JSON.parse(entry.periods);
-                  return periods.map((period: any, periodIndex: number) => (
-                    <TableRow key={`${entry.id}-${periodIndex}`}>
-                      <TableCell>{entry.employee?.employeeId}</TableCell>
-                      <TableCell>{entry.employee?.name}</TableCell>
-                      <TableCell>{entry.employee?.designation}</TableCell>
-                      <TableCell>
-                        {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
-                      </TableCell>
-                      <TableCell>{period.days}</TableCell>
-                      <TableCell>{period.remarks || "-"}</TableCell>
-                    </TableRow>
-                  ));
+                  try {
+                    const periods = typeof entry.periods === 'string' 
+                      ? JSON.parse(entry.periods) 
+                      : entry.periods;
+
+                    return periods.map((period: any, periodIndex: number) => (
+                      <TableRow key={`${entry.id}-${periodIndex}`}>
+                        <TableCell>{entry.employee?.employeeId}</TableCell>
+                        <TableCell>{entry.employee?.name}</TableCell>
+                        <TableCell>{entry.employee?.designation}</TableCell>
+                        <TableCell>
+                          {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
+                        </TableCell>
+                        <TableCell>{period.days}</TableCell>
+                        <TableCell>{period.remarks || "-"}</TableCell>
+                      </TableRow>
+                    ));
+                  } catch (error) {
+                    console.error('Error parsing periods:', error);
+                    return null;
+                  }
                 })}
               </TableBody>
             </Table>

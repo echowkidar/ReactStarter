@@ -149,9 +149,15 @@ export default function Attendance() {
     });
   };
 
-  const formatShortDate = (date: string | Date) => {
-    const d = new Date(date);
-    return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
+  const formatShortDate = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+
+    return `${day}-${month}-${year.slice(-2)}`;
   };
 
   const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
@@ -232,31 +238,36 @@ export default function Attendance() {
               </TableHeader>
               <TableBody>
                 {entries.map((entry: any) => {
-                  const periods = entry.periods ? JSON.parse(entry.periods) : [];
-                  const employee = employees?.find((emp: any) => emp.id === entry.employeeId);
+                  try {
+                    const periods = typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods;
+                    const employee = employees?.find((emp: any) => emp.id === entry.employeeId);
 
-                  return periods.map((period: any, periodIndex: number) => (
-                    <TableRow key={`${entry.id}-${periodIndex}`}>
-                      {periodIndex === 0 && (
-                        <>
-                          <TableCell className="align-middle" rowSpan={periods.length}>
-                            {employee?.employeeId}
-                          </TableCell>
-                          <TableCell className="align-middle" rowSpan={periods.length}>
-                            {employee?.name}
-                          </TableCell>
-                          <TableCell className="align-middle" rowSpan={periods.length}>
-                            {employee?.designation}
-                          </TableCell>
-                        </>
-                      )}
-                      <TableCell>
-                        {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
-                      </TableCell>
-                      <TableCell>{period.days}</TableCell>
-                      <TableCell>{period.remarks || "-"}</TableCell>
-                    </TableRow>
-                  ));
+                    return periods.map((period: any, periodIndex: number) => (
+                      <TableRow key={`${entry.id}-${periodIndex}`}>
+                        {periodIndex === 0 && (
+                          <>
+                            <TableCell className="align-middle" rowSpan={periods.length}>
+                              {employee?.employeeId}
+                            </TableCell>
+                            <TableCell className="align-middle" rowSpan={periods.length}>
+                              {employee?.name}
+                            </TableCell>
+                            <TableCell className="align-middle" rowSpan={periods.length}>
+                              {employee?.designation}
+                            </TableCell>
+                          </>
+                        )}
+                        <TableCell>
+                          {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
+                        </TableCell>
+                        <TableCell>{period.days}</TableCell>
+                        <TableCell>{period.remarks || "-"}</TableCell>
+                      </TableRow>
+                    ));
+                  } catch (error) {
+                    console.error('Error parsing periods:', error);
+                    return null;
+                  }
                 })}
               </TableBody>
             </Table>
