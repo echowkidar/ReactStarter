@@ -401,79 +401,61 @@ export default function Attendance() {
                       {report.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="space-x-2">
-                    {report.status === "draft" ? (
-                      <div className="space-x-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl">
-                            <DialogHeader>
-                              <DialogTitle>Edit Attendance Report</DialogTitle>
-                            </DialogHeader>
-                            <AttendanceForm
-                              reportId={report.id}
-                              initialData={{
-                                month: String(report.month),
-                                year: String(report.year),
-                                entries: entries
-                              }}
-                              onSubmit={async (data) => {
-                                await Promise.all(
-                                  data.entries.map((entry) =>
-                                    apiRequest("POST", `/api/attendance/${report.id}/entries`, {
-                                      employeeId: entry.employeeId,
-                                      periods: entry.periods.map(period => ({
-                                        fromDate: period.fromDate,
-                                        toDate: period.toDate,
-                                        days: period.days,
-                                        remarks: period.remarks || ""
-                                      }))
-                                    })
-                                  )
-                                );
-                                queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
-                                queryClient.invalidateQueries({ queryKey: [`/api/attendance/${report.id}/entries`] });
-                              }}
-                              isLoading={false}
-                            />
-                          </DialogContent>
-                        </Dialog>
-                        <Dialog open={showPrintPreview && selectedReport === report.id} onOpenChange={(open) => {
-                          setShowPrintPreview(open);
-                          if (!open) setSelectedReport(null);
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedReport(report.id);
-                                setShowPrintPreview(true);
-                              }}
-                            >
-                              <Printer className="h-4 w-4 mr-2" />
-                              Print
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl">
-                            <DialogHeader>
-                              <DialogTitle>Print Preview</DialogTitle>
-                            </DialogHeader>
-                            <PrintPreview
-                              report={report}
-                              onClose={() => {
-                                setShowPrintPreview(false);
-                                setSelectedReport(null);
-                              }}
-                            />
-                          </DialogContent>
-                        </Dialog>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {report.status === "draft" ? (
+                        <>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                Edit
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl">
+                              <DialogHeader>
+                                <DialogTitle>Edit Attendance Report</DialogTitle>
+                              </DialogHeader>
+                              <AttendanceForm
+                                reportId={report.id}
+                                initialData={{
+                                  month: String(report.month),
+                                  year: String(report.year),
+                                  entries: entries
+                                }}
+                                onSubmit={async (data) => {
+                                  await Promise.all(
+                                    data.entries.map((entry) =>
+                                      apiRequest("POST", `/api/attendance/${report.id}/entries`, {
+                                        employeeId: entry.employeeId,
+                                        periods: entry.periods.map(period => ({
+                                          fromDate: period.fromDate,
+                                          toDate: period.toDate,
+                                          days: period.days,
+                                          remarks: period.remarks || ""
+                                        }))
+                                      })
+                                    )
+                                  );
+                                  queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+                                  queryClient.invalidateQueries({ queryKey: [`/api/attendance/${report.id}/entries`] });
+                                }}
+                                isLoading={false}
+                              />
+                            </DialogContent>
+                          </Dialog>
 
-                        <div className="space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedReport(report.id);
+                              setShowPrintPreview(true);
+                            }}
+                          >
+                            <Printer className="h-4 w-4 mr-2" />
+                            Print
+                          </Button>
+
                           <Button variant="outline" size="sm" className="relative">
                             <Input
                               type="file"
@@ -489,61 +471,27 @@ export default function Attendance() {
                             <Upload className="h-4 w-4 mr-2" />
                             Upload
                           </Button>
-                          <Dialog open={showPdfPreview && selectedReport === report.id} onOpenChange={(open) => {
-                            setShowPdfPreview(open);
-                            if (!open) setSelectedReport(null);
-                          }}>
-                            <DialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                onClick={() => handleFinalize(report)}
-                              >
-                                <FileCheck className="h-4 w-4 mr-2" />
-                                Finalize
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-4xl">
-                              <DialogHeader>
-                                <DialogTitle>Review PDF Before Finalizing</DialogTitle>
-                              </DialogHeader>
-                              {uploadedPdfUrl && (
-                                <PdfPreview
-                                  pdfUrl={uploadedPdfUrl}
-                                  onClose={() => {
-                                    setShowPdfPreview(false);
-                                    setSelectedReport(null);
-                                  }}
-                                  onFinalize={() => {
-                                    const despatchNo = prompt("Enter Despatch No:");
-                                    if (despatchNo) {
-                                      finalizeReport.mutate({
-                                        id: report.id,
-                                        data: {
-                                          despatchNo,
-                                          despatchDate: new Date().toISOString(),
-                                        },
-                                      });
-                                      setShowPdfPreview(false);
-                                      setSelectedReport(null);
-                                    }
-                                  }}
-                                />
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation(`/admin/reports/${report.id}`)}
-                        className="flex items-center gap-2"
-                      >
-                        <Eye className="h-4 w-4" />
-                        View Details
-                      </Button>
-                    )}
+
+                          <Button
+                            size="sm"
+                            onClick={() => handleFinalize(report)}
+                          >
+                            <FileCheck className="h-4 w-4 mr-2" />
+                            Finalize
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                          className="flex items-center gap-2"
+                        >
+                          <Eye className="h-4 w-4" />
+                          View Details
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
