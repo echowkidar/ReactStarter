@@ -56,8 +56,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
 
   const selectedMonth = parseInt(String(new Date().getMonth() + 1));
   const selectedYear = currentYear;
-  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
-  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
+
+  // Calculate the last day of previous month
+  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 0);
+
+  // Calculate one day before the last day of current month
+  const lastDayOfCurrentMonth = new Date(selectedYear, selectedMonth, 0);
+  const defaultEndDate = new Date(selectedYear, selectedMonth, lastDayOfCurrentMonth.getDate() - 1);
 
   const formatDate = (date: Date) => {
     return date.toISOString().split('T')[0];
