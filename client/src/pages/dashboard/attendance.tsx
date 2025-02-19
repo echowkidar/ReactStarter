@@ -242,7 +242,7 @@ export default function Attendance() {
 
           <div className="border rounded-md">
             <Table>
-              <TableHeader>
+              <thead>
                 <TableRow>
                   <TableHead>Employee ID</TableHead>
                   <TableHead>Name</TableHead>
@@ -251,7 +251,7 @@ export default function Attendance() {
                   <TableHead>Days Present</TableHead>
                   <TableHead>Remarks</TableHead>
                 </TableRow>
-              </TableHeader>
+              </thead>
               <TableBody>
                 {entries.map((entry: any) => {
                   try {
@@ -422,7 +422,7 @@ export default function Attendance() {
 
         <div className="rounded-md border">
           <Table>
-            <TableHeader>
+            <thead>
               <TableRow>
                 <TableHead>Period</TableHead>
                 <TableHead>Transaction ID</TableHead>
@@ -430,7 +430,7 @@ export default function Attendance() {
                 <TableHead>Despatch Details</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
-            </TableHeader>
+            </thead>
             <TableBody>
               {reports?.map((report: any) => (
                 <TableRow key={report.id}>
