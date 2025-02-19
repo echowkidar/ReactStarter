@@ -96,10 +96,6 @@ export default function Attendance() {
 
   const finalizeReport = useMutation({
     mutationFn: async (report: any) => {
-      if (!report.fileUrl) {
-        throw new Error("Please upload a PDF file first");
-      }
-
       await apiRequest("PATCH", `/api/attendance/${report.id}`, {
         status: "submitted"
       });
@@ -355,15 +351,6 @@ export default function Attendance() {
   };
 
   const handleFinalize = (report: any) => {
-    if (!report.fileUrl) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please upload a PDF file first",
-      });
-      return;
-    }
-
     finalizeReport.mutate(report);
   };
 
@@ -445,7 +432,34 @@ export default function Attendance() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {report.status === "draft" ? (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload PDF
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Upload PDF Report</DialogTitle>
+                            <DialogDescription>
+                              Upload the signed PDF version of this attendance report.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <Input
+                            type="file"
+                            accept=".pdf"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleUpload(file, report.id);
+                              }
+                            }}
+                          />
+                        </DialogContent>
+                      </Dialog>
+
+                      {report.status === "draft" && (
                         <>
                           <Dialog>
                             <DialogTrigger asChild>
@@ -470,7 +484,6 @@ export default function Attendance() {
                                   onClick={async () => {
                                     try {
                                       await deleteReport.mutateAsync(report.id);
-                                      // Close dialog after successful deletion
                                       const closeButton = document.querySelector('[data-dialog-close]');
                                       if (closeButton instanceof HTMLButtonElement) {
                                         closeButton.click();
@@ -494,46 +507,6 @@ export default function Attendance() {
                             </DialogContent>
                           </Dialog>
 
-                          <Dialog open={selectedReportForPrint === report.id} onOpenChange={(open) => !open && setSelectedReportForPrint(null)}>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setSelectedReportForPrint(report.id)}
-                              >
-                                <Printer className="h-4 w-4 mr-2" />
-                                Print
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-4xl">
-                              <DialogHeader>
-                                <DialogTitle>Print Preview</DialogTitle>
-                              </DialogHeader>
-                              {selectedReportForPrint === report.id && (
-                                <PrintPreview
-                                  report={report}
-                                  onClose={() => setSelectedReportForPrint(null)}
-                                />
-                              )}
-                            </DialogContent>
-                          </Dialog>
-
-                          <Button variant="outline" size="sm" className="relative">
-                            <Input
-                              type="file"
-                              accept=".pdf"
-                              className="absolute inset-0 opacity-0 cursor-pointer"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  handleUpload(file, report.id);
-                                }
-                              }}
-                            />
-                            <Upload className="h-4 w-4 mr-2" />
-                            Upload
-                          </Button>
-
                           <Button
                             size="sm"
                             onClick={() => handleFinalize(report)}
@@ -547,7 +520,9 @@ export default function Attendance() {
                             Finalize
                           </Button>
                         </>
-                      ) : (
+                      )}
+
+                      {report.status !== "draft" && (
                         <Button
                           variant="outline"
                           size="sm"
