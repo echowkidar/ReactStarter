@@ -475,14 +475,10 @@ export default function Attendance() {
                             <Upload className="h-4 w-4 mr-2" />
                             Upload
                           </Button>
-
-                          <Dialog 
-                            open={showPdfPreview && selectedReport === report.id} 
-                            onOpenChange={(open) => {
-                              setShowPdfPreview(open);
-                              if (!open) setSelectedReport(null);
-                            }}
-                          >
+                          <Dialog open={showPdfPreview && selectedReport === report.id} onOpenChange={(open) => {
+                            setShowPdfPreview(open);
+                            if (!open) setSelectedReport(null);
+                          }}>
                             <DialogTrigger asChild>
                               <Button
                                 size="sm"
