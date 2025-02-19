@@ -436,9 +436,7 @@ export default function Attendance() {
                     {formatPeriod(report.year, report.month)}
                   </TableCell>
                   <TableCell>
-                    {report.status === "draft"
-                      ? "*****"
-                      : (report.transactionId || "Not generated")}
+                    {report.transactionId || "Not generated"}
                   </TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(report.status)}>
