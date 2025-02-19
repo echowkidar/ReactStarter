@@ -325,16 +325,34 @@ export default function Attendance() {
   };
 
   const PdfPreview = ({ pdfUrl, onClose, onFinalize }: { pdfUrl: string, onClose: () => void, onFinalize: () => void }) => {
+    const [previewError, setPreviewError] = useState(false);
+
+    // Ensure the URL is absolute
+    const fullPdfUrl = pdfUrl.startsWith('http') ? pdfUrl : `${window.location.origin}${pdfUrl}`;
+
     return (
       <div className="space-y-6">
-        <div className="w-full h-[600px] border rounded-lg overflow-hidden">
-          <object
-            data={pdfUrl}
-            type="application/pdf"
-            className="w-full h-full"
-          >
-            <p>Unable to display PDF. <a href={pdfUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
-          </object>
+        <div className="w-full h-[600px] border rounded-lg overflow-hidden bg-white">
+          {!previewError ? (
+            <iframe
+              src={fullPdfUrl}
+              className="w-full h-full border-0"
+              onError={() => setPreviewError(true)}
+              title="PDF Preview"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full p-6 space-y-4">
+              <p className="text-muted-foreground">Unable to display PDF preview.</p>
+              <a
+                href={fullPdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Click here to download or view in a new tab
+              </a>
+            </div>
+          )}
         </div>
         <div className="flex justify-end space-x-2">
           <Button variant="outline" onClick={onClose}>
