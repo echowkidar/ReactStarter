@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getCurrentDepartment } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, X } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -20,6 +19,38 @@ const months = [
 
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+
+// Utility function to format date to DD-MM-YY
+const formatDateForDisplay = (date: Date): string => {
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear().toString().slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
+// Utility function to convert DD-MM-YY to YYYY-MM-DD for input type="date"
+const formatDateForInput = (dateStr: string): string => {
+  const [day, month, year] = dateStr.split('-').map(Number);
+  return `20${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+};
+
+// Utility function to convert YYYY-MM-DD to DD-MM-YY
+const formatDateFromInput = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  return formatDateForDisplay(date);
+};
+
+const calculateDays = (fromDate: string, toDate: string): number => {
+  // Parse DD-MM-YY format
+  const [fromDay, fromMonth, fromYear] = fromDate.split('-').map(Number);
+  const [toDay, toMonth, toYear] = toDate.split('-').map(Number);
+
+  const start = new Date(2000 + fromYear, fromMonth - 1, fromDay);
+  const end = new Date(2000 + toYear, toMonth - 1, toDay);
+
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+};
 
 const attendanceSchema = z.object({
   month: z.string().min(1),
@@ -44,7 +75,6 @@ interface AttendanceFormProps {
 }
 
 export default function AttendanceForm({ onSubmit, isLoading, reportId }: AttendanceFormProps) {
-  const queryClient = useQueryClient();
   const department = getCurrentDepartment();
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
 
@@ -60,24 +90,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
   const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
   const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
 
-  const formatDate = (date: Date) => {
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear().toString().slice(-2);
-    return `${day}-${month}-${year}`; // Using DD-MM-YY format
-  };
-
-  const calculateDays = (fromDate: string, toDate: string) => {
-    // Parse DD-MM-YY format to Date objects
-    const [fromDay, fromMonth, fromYear] = fromDate.split('-').map(Number);
-    const [toDay, toMonth, toYear] = toDate.split('-').map(Number);
-
-    const start = new Date(2000 + fromYear, fromMonth - 1, fromDay);
-    const end = new Date(2000 + toYear, toMonth - 1, toDay);
-
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  };
 
   const form = useForm<AttendanceFormData>({
     resolver: zodResolver(attendanceSchema),
@@ -87,9 +99,12 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
       entries: [{
         employeeId: 0,
         periods: [{
-          fromDate: formatDate(defaultStartDate),
-          toDate: formatDate(defaultEndDate),
-          days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+          fromDate: formatDateForDisplay(defaultStartDate),
+          toDate: formatDateForDisplay(defaultEndDate),
+          days: calculateDays(
+            formatDateForDisplay(defaultStartDate),
+            formatDateForDisplay(defaultEndDate)
+          ),
           remarks: ""
         }],
       }],
@@ -113,9 +128,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
           {
             employeeId,
             periods: [{
-              fromDate: formatDate(defaultStartDate),
-              toDate: formatDate(defaultEndDate),
-              days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+              fromDate: formatDateForDisplay(defaultStartDate),
+              toDate: formatDateForDisplay(defaultEndDate),
+              days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
               remarks: "",
             }],
           },
@@ -132,9 +147,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
     if (entryIndex === -1) return;
 
     const newPeriod = {
-      fromDate: formatDate(defaultStartDate),
-      toDate: formatDate(defaultEndDate),
-      days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
+      fromDate: formatDateForDisplay(defaultStartDate),
+      toDate: formatDateForDisplay(defaultEndDate),
+      days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
       remarks: "",
     };
 
@@ -280,13 +295,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
                           <div key={periodIndex} className="flex items-center gap-2">
                             <Input
                               type="date"
-                              value={period.fromDate}
+                              value={formatDateForInput(period.fromDate)}
                               onChange={(e) => {
                                 const entries = form.getValues("entries");
                                 const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
                                 if (entryIndex !== -1) {
                                   const newEntries = [...entries];
-                                  const newFromDate = e.target.value;
+                                  const newFromDate = formatDateFromInput(e.target.value);
                                   newEntries[entryIndex].periods[periodIndex].fromDate = newFromDate;
                                   newEntries[entryIndex].periods[periodIndex].days =
                                     calculateDays(newFromDate, period.toDate);
@@ -297,13 +312,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
                             />
                             <Input
                               type="date"
-                              value={period.toDate}
+                              value={formatDateForInput(period.toDate)}
                               onChange={(e) => {
                                 const entries = form.getValues("entries");
                                 const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
                                 if (entryIndex !== -1) {
                                   const newEntries = [...entries];
-                                  const newToDate = e.target.value;
+                                  const newToDate = formatDateFromInput(e.target.value);
                                   newEntries[entryIndex].periods[periodIndex].toDate = newToDate;
                                   newEntries[entryIndex].periods[periodIndex].days =
                                     calculateDays(period.fromDate, newToDate);
