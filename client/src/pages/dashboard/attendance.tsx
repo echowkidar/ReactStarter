@@ -21,7 +21,6 @@ export default function Attendance() {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const [selectedReportForPrint, setSelectedReportForPrint] = useState<any>(null);
@@ -102,7 +101,6 @@ export default function Attendance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
-      setShowPdfPreview(false);
       toast({
         title: "Success",
         description: "Report finalized successfully",
@@ -328,7 +326,6 @@ export default function Attendance() {
       const data = await response.json();
       setUploadedPdfUrl(data.fileUrl);
       setSelectedReport(reportId);
-      setShowPdfPreview(true);
 
       const updatedReports = reports?.map(report =>
         report.id === reportId
@@ -500,27 +497,53 @@ export default function Attendance() {
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button variant="outline" size="sm">
-                                <Upload className="h-4 w-4 mr-2" />
-                                Upload PDF
+                                {report.fileUrl ? (
+                                  <>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View PDF
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    Upload PDF
+                                  </>
+                                )}
                               </Button>
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Upload PDF Report</DialogTitle>
+                                <DialogTitle>
+                                  {report.fileUrl ? "View PDF Report" : "Upload PDF Report"}
+                                </DialogTitle>
                                 <DialogDescription>
-                                  Upload the signed PDF version of this attendance report.
+                                  {report.fileUrl
+                                    ? "Review the uploaded PDF report"
+                                    : "Upload the signed PDF version of this attendance report."
+                                  }
                                 </DialogDescription>
                               </DialogHeader>
-                              <Input
-                                type="file"
-                                accept=".pdf"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleUpload(file, report.id);
-                                  }
-                                }}
-                              />
+                              {report.fileUrl ? (
+                                <div className="w-full h-[600px] border rounded-lg overflow-hidden">
+                                  <object
+                                    data={report.fileUrl}
+                                    type="application/pdf"
+                                    className="w-full h-full"
+                                  >
+                                    <p>Unable to display PDF. <a href={report.fileUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
+                                  </object>
+                                </div>
+                              ) : (
+                                <Input
+                                  type="file"
+                                  accept=".pdf"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      handleUpload(file, report.id);
+                                    }
+                                  }}
+                                />
+                              )}
                             </DialogContent>
                           </Dialog>
 
@@ -543,29 +566,6 @@ export default function Attendance() {
           </Table>
         </div>
       </main>
-
-      <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Review Report</DialogTitle>
-            <DialogDescription>
-              Please review the uploaded report before finalizing.
-            </DialogDescription>
-          </DialogHeader>
-          {uploadedPdfUrl && selectedReport && (
-            <PdfPreview
-              pdfUrl={uploadedPdfUrl}
-              onClose={() => setShowPdfPreview(false)}
-              onFinalize={() => {
-                const report = reports?.find((r: any) => r.id === selectedReport);
-                if (report) {
-                  handleFinalize(report);
-                }
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
