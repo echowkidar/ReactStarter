@@ -21,7 +21,10 @@ export default function Attendance() {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
+
   const { data: reports, isLoading } = useQuery({
     queryKey: [`/api/departments/${department?.id}/attendance`],
   });
@@ -270,6 +273,68 @@ export default function Attendance() {
     );
   };
 
+  const handleUpload = async (file: File, reportId: number) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await apiRequest(
+        "POST",
+        `/api/attendance/${reportId}/upload`,
+        formData,
+        { 'Content-Type': 'multipart/form-data' }
+      );
+      const data = await response.json();
+      setUploadedPdfUrl(data.fileUrl);
+      toast({
+        title: "Success",
+        description: "File uploaded successfully",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to upload file",
+      });
+    }
+  };
+
+  const handleFinalize = (report: any) => {
+    if (!uploadedPdfUrl) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please upload a PDF file first",
+      });
+      return;
+    }
+
+    setSelectedReport(report.id);
+    setShowPdfPreview(true);
+  };
+
+  const PdfPreview = ({ pdfUrl, onClose, onFinalize }: { pdfUrl: string, onClose: () => void, onFinalize: () => void }) => {
+    return (
+      <div className="space-y-6">
+        <div className="w-full h-[600px]">
+          <iframe
+            src={pdfUrl}
+            className="w-full h-full border-0"
+            title="PDF Preview"
+          />
+        </div>
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          <Button onClick={onFinalize}>
+            <FileCheck className="h-4 w-4 mr-2" />
+            Confirm & Finalize
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex min-h-screen">
       <Sidebar className="w-64 border-r" />
@@ -396,29 +461,10 @@ export default function Attendance() {
                             type="file"
                             accept=".pdf"
                             className="absolute inset-0 opacity-0 cursor-pointer"
-                            onChange={async (e) => {
+                            onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) {
-                                const formData = new FormData();
-                                formData.append('file', file);
-                                try {
-                                  await apiRequest(
-                                    "POST",
-                                    `/api/attendance/${report.id}/upload`,
-                                    formData,
-                                    { 'Content-Type': 'multipart/form-data' }
-                                  );
-                                  toast({
-                                    title: "Success",
-                                    description: "File uploaded successfully",
-                                  });
-                                } catch (error) {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Error",
-                                    description: "Failed to upload file",
-                                  });
-                                }
+                                handleUpload(file, report.id);
                               }
                             }}
                           />
@@ -426,24 +472,51 @@ export default function Attendance() {
                           Upload
                         </Button>
 
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            const despatchNo = prompt("Enter Despatch No:");
-                            if (despatchNo) {
-                              finalizeReport.mutate({
-                                id: report.id,
-                                data: {
-                                  despatchNo,
-                                  despatchDate: new Date().toISOString(),
-                                },
-                              });
-                            }
+                        <Dialog 
+                          open={showPdfPreview && selectedReport === report.id} 
+                          onOpenChange={(open) => {
+                            setShowPdfPreview(open);
+                            if (!open) setSelectedReport(null);
                           }}
                         >
-                          <FileCheck className="h-4 w-4 mr-2" />
-                          Finalize
-                        </Button>
+                          <DialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              onClick={() => handleFinalize(report)}
+                            >
+                              <FileCheck className="h-4 w-4 mr-2" />
+                              Finalize
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl">
+                            <DialogHeader>
+                              <DialogTitle>Review PDF Before Finalizing</DialogTitle>
+                            </DialogHeader>
+                            {uploadedPdfUrl && (
+                              <PdfPreview
+                                pdfUrl={uploadedPdfUrl}
+                                onClose={() => {
+                                  setShowPdfPreview(false);
+                                  setSelectedReport(null);
+                                }}
+                                onFinalize={() => {
+                                  const despatchNo = prompt("Enter Despatch No:");
+                                  if (despatchNo) {
+                                    finalizeReport.mutate({
+                                      id: report.id,
+                                      data: {
+                                        despatchNo,
+                                        despatchDate: new Date().toISOString(),
+                                      },
+                                    });
+                                    setShowPdfPreview(false);
+                                    setSelectedReport(null);
+                                  }
+                                }}
+                              />
+                            )}
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     ) : (
                       <Button
