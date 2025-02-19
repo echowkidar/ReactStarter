@@ -11,13 +11,15 @@ import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import EmployeeForm from "@/components/forms/employee-form";
 import { Plus, Trash2 } from "lucide-react";
+import { Employee } from "@shared/schema";
+import { format } from "date-fns";
 
 export default function Employees() {
   const { toast } = useToast();
   const department = getCurrentDepartment();
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
 
-  const { data: employees = [], isLoading } = useQuery({
+  const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],
   });
 
@@ -99,16 +101,26 @@ export default function Employees() {
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Term Expiry</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.map((employee: any) => (
+              {employees.map((employee) => (
                 <TableRow key={employee.id}>
                   <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
                   <TableCell>{employee.employmentStatus}</TableCell>
+                  <TableCell>
+                    {(employee.employmentStatus === "Probation" || 
+                      employee.employmentStatus === "Temporary") && 
+                      employee.termExpiry ? (
+                        format(new Date(employee.termExpiry), "dd MMM yyyy")
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
                   <TableCell>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
