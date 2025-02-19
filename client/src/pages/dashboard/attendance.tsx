@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
-import { Plus, Printer, FileCheck, Eye } from "lucide-react";
+import { Plus, Printer, FileCheck, Eye, Upload } from "lucide-react";
 import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export default function Attendance() {
   const { toast } = useToast();
@@ -389,6 +390,42 @@ export default function Attendance() {
                             />
                           </DialogContent>
                         </Dialog>
+
+                        <Button variant="outline" size="sm" className="relative">
+                          <Input
+                            type="file"
+                            accept=".pdf"
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                try {
+                                  await apiRequest(
+                                    "POST",
+                                    `/api/attendance/${report.id}/upload`,
+                                    formData,
+                                    { 'Content-Type': 'multipart/form-data' }
+                                  );
+                                  toast({
+                                    title: "Success",
+                                    description: "File uploaded successfully",
+                                  });
+                                } catch (error) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Error",
+                                    description: "Failed to upload file",
+                                  });
+                                }
+                              }
+                            }}
+                          />
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload
+                        </Button>
+
                         <Button
                           size="sm"
                           onClick={() => {
