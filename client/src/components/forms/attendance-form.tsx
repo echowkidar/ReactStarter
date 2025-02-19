@@ -206,13 +206,17 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     form.setValue("entries", filteredEntries);
   }, [includedEmployees, form]);
 
-  // Initialize includedEmployees from initialData if provided
+  // Update the useEffect for initialData
   useEffect(() => {
     if (initialData?.entries) {
+      // Set included employees
       const employeeIds = new Set(initialData.entries.map(entry => entry.employeeId));
       setIncludedEmployees(employeeIds);
+
+      // Update form with initial data
+      form.reset(initialData);
     }
-  }, [initialData]);
+  }, [initialData, form]);
 
   if (loadingEmployees) {
     return (
