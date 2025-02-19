@@ -268,5 +268,16 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Add this new route after the existing attendance routes
+  app.delete("/api/attendance/:id", async (req, res) => {
+    try {
+      await storage.deleteAttendanceReport(Number(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting attendance report:', error);
+      res.status(500).json({ message: "Failed to delete attendance report" });
+    }
+  });
+
   return httpServer;
 }

@@ -28,6 +28,7 @@ export interface IStorage {
   getAttendanceReportsByDepartment(departmentId: number): Promise<AttendanceReport[]>;
   getAllAttendanceReports(): Promise<AttendanceReport[]>;
   updateAttendanceReport(id: number, updates: Partial<AttendanceReport>): Promise<AttendanceReport>;
+  deleteAttendanceReport(id: number): Promise<void>;
 
   createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry>;
   getAttendanceEntriesByReport(reportId: number): Promise<AttendanceEntry[]>;
@@ -130,6 +131,17 @@ export class MemStorage implements IStorage {
     const updatedReport = { ...report, ...updates };
     this.attendanceReports.set(id, updatedReport);
     return updatedReport;
+  }
+
+  async deleteAttendanceReport(id: number): Promise<void> {
+    // Delete associated entries first
+    const entries = await this.getAttendanceEntriesByReport(id);
+    entries.forEach(entry => {
+      this.attendanceEntries.delete(entry.id);
+    });
+
+    // Then delete the report
+    this.attendanceReports.delete(id);
   }
 
   async createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry> {
