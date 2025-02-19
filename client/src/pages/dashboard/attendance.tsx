@@ -142,6 +142,14 @@ export default function Attendance() {
     return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
   };
 
+  const maskTransactionId = (transactionId: string | null, status: string): string => {
+    if (!transactionId) return "Not generated";
+    if (status === "draft") {
+      return "*".repeat(transactionId.length);
+    }
+    return transactionId;
+  };
+
   const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
     const department = getCurrentDepartment();
     const { data: employees = [] } = useQuery({
@@ -395,7 +403,7 @@ export default function Attendance() {
                       month: "long",
                     })}
                   </TableCell>
-                  <TableCell>{report.transactionId || "Not generated"}</TableCell>
+                  <TableCell>{maskTransactionId(report.transactionId, report.status)}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(report.status)}>
                       {report.status}
