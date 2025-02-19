@@ -13,7 +13,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
-
 const months = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"
@@ -59,7 +58,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
 
   // Calculate first and last day of current month
   const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
-  const defaultEndDate = new Date(selectedYear, selectedMonth, 0); // This will give us the last day of the month
+  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
 
   const formatDate = (date: Date) => {
     const day = date.getDate().toString().padStart(2, '0');
@@ -68,12 +67,16 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
     return `${day}-${month}-${year}`; // Using DD-MM-YY format
   };
 
-  const displayDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear().toString().slice(-2);
-    return `${day}-${month}-${year}`; // Display format DD-MM-YY
+  const calculateDays = (fromDate: string, toDate: string) => {
+    // Parse DD-MM-YY format to Date objects
+    const [fromDay, fromMonth, fromYear] = fromDate.split('-').map(Number);
+    const [toDay, toMonth, toYear] = toDate.split('-').map(Number);
+
+    const start = new Date(2000 + fromYear, fromMonth - 1, fromDay);
+    const end = new Date(2000 + toYear, toMonth - 1, toDay);
+
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
   const form = useForm<AttendanceFormData>({
@@ -92,13 +95,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
       }],
     },
   });
-
-  const calculateDays = (fromDate: string, toDate: string) => {
-    const start = new Date(fromDate);
-    const end = new Date(toDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  };
 
   const toggleEmployee = (employeeId: number) => {
     setIncludedEmployees(prev => {
