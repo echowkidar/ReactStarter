@@ -72,9 +72,22 @@ interface AttendanceFormProps {
   onSubmit: (data: AttendanceFormData) => Promise<void>;
   isLoading?: boolean;
   reportId?: string | null;
+  initialData?: {
+    month: string;
+    year: string;
+    entries: Array<{
+      employeeId: number;
+      periods: Array<{
+        fromDate: string;
+        toDate: string;
+        days: number;
+        remarks?: string;
+      }>;
+    }>;
+  };
 }
 
-export default function AttendanceForm({ onSubmit, isLoading, reportId }: AttendanceFormProps) {
+export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData }: AttendanceFormProps) {
   const department = getCurrentDepartment();
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
 
@@ -83,17 +96,17 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
     select: (data: any) => data || [],
   });
 
-  const selectedMonth = parseInt(String(new Date().getMonth() + 1));
-  const selectedYear = currentYear;
+  const selectedMonth = parseInt(initialData?.month || String(new Date().getMonth() + 1));
+  const selectedYear = parseInt(initialData?.year || String(currentYear));
 
-  // Calculate first and last day of current month
+  // Calculate first and last day of selected month
   const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
   const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
 
 
   const form = useForm<AttendanceFormData>({
     resolver: zodResolver(attendanceSchema),
-    defaultValues: {
+    defaultValues: initialData || {
       month: String(selectedMonth),
       year: String(selectedYear),
       entries: [{
@@ -192,6 +205,14 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
     const filteredEntries = currentEntries.filter(entry => includedEmployees.has(entry.employeeId));
     form.setValue("entries", filteredEntries);
   }, [includedEmployees, form]);
+
+  // Initialize includedEmployees from initialData if provided
+  useEffect(() => {
+    if (initialData?.entries) {
+      const employeeIds = new Set(initialData.entries.map(entry => entry.employeeId));
+      setIncludedEmployees(employeeIds);
+    }
+  }, [initialData]);
 
   if (loadingEmployees) {
     return (

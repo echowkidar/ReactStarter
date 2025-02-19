@@ -441,15 +441,27 @@ export default function Attendance() {
                             <DialogContent className="max-w-4xl">
                               <DialogHeader>
                                 <DialogTitle>Edit Attendance Report</DialogTitle>
+                                <DialogDescription>
+                                  Modify the attendance report details below.
+                                </DialogDescription>
                               </DialogHeader>
                               <AttendanceForm
                                 reportId={report.id}
                                 initialData={{
                                   month: String(report.month),
                                   year: String(report.year),
-                                  entries: entries
+                                  entries: entries.map(entry => ({
+                                    employeeId: entry.employeeId,
+                                    periods: typeof entry.periods === 'string'
+                                      ? JSON.parse(entry.periods)
+                                      : entry.periods
+                                  }))
                                 }}
                                 onSubmit={async (data) => {
+                                  // First, delete existing entries
+                                  await apiRequest("DELETE", `/api/attendance/${report.id}/entries`);
+
+                                  // Then create new entries
                                   await Promise.all(
                                     data.entries.map((entry) =>
                                       apiRequest("POST", `/api/attendance/${report.id}/entries`, {
@@ -463,8 +475,16 @@ export default function Attendance() {
                                       })
                                     )
                                   );
+
+                                  // Update the queries to reflect changes
                                   queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
                                   queryClient.invalidateQueries({ queryKey: [`/api/attendance/${report.id}/entries`] });
+
+                                  // Close the dialog
+                                  const dialogTrigger = document.querySelector('[aria-label="Close"]');
+                                  if (dialogTrigger instanceof HTMLButtonElement) {
+                                    dialogTrigger.click();
+                                  }
                                 }}
                                 isLoading={false}
                               />
