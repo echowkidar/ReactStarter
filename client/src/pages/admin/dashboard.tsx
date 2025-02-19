@@ -4,11 +4,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/layout/loading";
-import { FileCheck, LogOut, Eye } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type ReportWithDepartment = AttendanceReport & {
   department?: Department;
+};
+
+const PdfPreview = ({ pdfUrl }: { pdfUrl: string }) => {
+  return (
+    <div className="space-y-6">
+      <div className="w-full h-[600px] border rounded-lg overflow-hidden">
+        <object
+          data={pdfUrl}
+          type="application/pdf"
+          className="w-full h-full"
+        >
+          <p>Unable to display PDF. <a href={pdfUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
+        </object>
+      </div>
+    </div>
+  );
 };
 
 export default function AdminDashboard() {
@@ -16,6 +34,8 @@ export default function AdminDashboard() {
   const { data: reports, isLoading } = useQuery<ReportWithDepartment[]>({
     queryKey: ["/api/admin/attendance"],
   });
+  const [selectedReport, setSelectedReport] = useState<number | null>(null);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   const handleLogout = () => {
     setLocation("/admin/login");
@@ -41,7 +61,7 @@ export default function AdminDashboard() {
             Salary Section
           </Badge>
         </div>
-        <Button 
+        <Button
           variant="outline"
           onClick={handleLogout}
           className="flex items-center gap-2"
@@ -77,8 +97,8 @@ export default function AdminDashboard() {
                   })}
                 </TableCell>
                 <TableCell>
-                  {report.status === "draft" 
-                    ? "*****" 
+                  {report.status === "draft"
+                    ? "*****"
                     : (report.transactionId || "Not generated")}
                 </TableCell>
                 <TableCell>{report.despatchNo || "-"}</TableCell>
@@ -93,21 +113,52 @@ export default function AdminDashboard() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLocation(`/admin/reports/${report.id}`)}
-                    className="flex items-center gap-2"
-                  >
-                    <Eye className="h-4 w-4" />
-                    View Details
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {report.fileUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedReport(report.id);
+                          setShowPdfPreview(true);
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        View PDF
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                      className="flex items-center gap-2"
+                    >
+                      <Eye className="h-4 w-4" />
+                      View Details
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+      <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>View Report PDF</DialogTitle>
+            <DialogDescription>
+              Review the submitted report PDF.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedReport && reports?.find(r => r.id === selectedReport)?.fileUrl && (
+            <PdfPreview
+              pdfUrl={reports.find(r => r.id === selectedReport)!.fileUrl!}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

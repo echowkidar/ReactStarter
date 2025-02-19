@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -311,6 +311,8 @@ export default function Attendance() {
 
       const data = await response.json();
       setUploadedPdfUrl(data.fileUrl);
+      setSelectedReport(reportId);
+      setShowPdfPreview(true);
 
       const updatedReports = reports?.map(report =>
         report.id === reportId
@@ -321,7 +323,7 @@ export default function Attendance() {
 
       toast({
         title: "Success",
-        description: "File uploaded successfully",
+        description: "File uploaded successfully. Please review before finalizing.",
       });
     } catch (error) {
       toast({
@@ -545,7 +547,10 @@ export default function Attendance() {
       <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Confirm Report</DialogTitle>
+            <DialogTitle>Review Report</DialogTitle>
+            <DialogDescription>
+              Please review the uploaded report before finalizing.
+            </DialogDescription>
           </DialogHeader>
           {uploadedPdfUrl && selectedReport && (
             <PdfPreview

@@ -30,13 +30,22 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  const upload = multer({ storage: fileStorage });
+  const upload = multer({ 
+    storage: fileStorage,
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+      } else {
+        cb(null, false);
+      }
+    }
+  });
 
   // Add this new endpoint for file uploads
   app.post("/api/attendance/:reportId/upload", upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
+        return res.status(400).json({ message: "No file uploaded or invalid file type" });
       }
 
       // Generate the file URL
