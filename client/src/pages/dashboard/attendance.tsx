@@ -5,7 +5,7 @@ import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
@@ -312,7 +312,7 @@ export default function Attendance() {
     );
   };
 
-  const handleUpload = async (file: File, reportId: number) => {
+  const handleUpload = async (file: File, reportId: number, despatchDetails?: { despatchNo: string, despatchDate: string }) => {
     const formData = new FormData();
     formData.append('file', file);
     try {
@@ -329,16 +329,24 @@ export default function Attendance() {
       setUploadedPdfUrl(data.fileUrl);
       setSelectedReport(reportId);
 
-      // Update status to "sent" after successful PDF upload
+      // Update status to "sent" after successful PDF upload along with despatch details
       await apiRequest("PATCH", `/api/attendance/${reportId}`, {
         status: "sent",
-        fileUrl: data.fileUrl
+        fileUrl: data.fileUrl,
+        despatchNo: despatchDetails?.despatchNo,
+        despatchDate: despatchDetails?.despatchDate
       });
 
       // Update local state
       const updatedReports = reports?.map(report =>
         report.id === reportId
-          ? { ...report, fileUrl: data.fileUrl, status: "sent" }
+          ? {
+              ...report,
+              fileUrl: data.fileUrl,
+              status: "sent",
+              despatchNo: despatchDetails?.despatchNo,
+              despatchDate: despatchDetails?.despatchDate
+            }
           : report
       );
       queryClient.setQueryData([`/api/departments/${department?.id}/attendance`], updatedReports);
@@ -419,6 +427,7 @@ export default function Attendance() {
                 <TableHead>Period</TableHead>
                 <TableHead>Transaction ID</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Despatch Details</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -435,6 +444,16 @@ export default function Attendance() {
                     <Badge variant={getStatusColor(report.status)} className={`${report.status === 'sent' ? 'font-bold text-green-600' : ''}`}>
                       {report.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {report.status === 'sent' && report.despatchNo ? (
+                      <div className="text-sm">
+                        <p><span className="font-medium">No:</span> {report.despatchNo}</p>
+                        <p><span className="font-medium">Date:</span> {formatDate(report.despatchDate)}</p>
+                      </div>
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -527,31 +546,89 @@ export default function Attendance() {
                                 <DialogDescription>
                                   {report.fileUrl
                                     ? "Review the uploaded PDF report"
-                                    : "Upload the signed PDF version of this attendance report."
+                                    : "Upload the signed PDF version of this attendance report and provide despatch details."
                                   }
                                 </DialogDescription>
                               </DialogHeader>
                               {report.fileUrl ? (
-                                <div className="w-full h-[600px] border rounded-lg overflow-hidden">
-                                  <object
-                                    data={report.fileUrl}
-                                    type="application/pdf"
-                                    className="w-full h-full"
-                                  >
-                                    <p>Unable to display PDF. <a href={report.fileUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
-                                  </object>
-                                </div>
+                                <>
+                                  <div className="space-y-2">
+                                    <div className="text-sm text-muted-foreground">
+                                      <p><strong>Despatch No:</strong> {report.despatchNo}</p>
+                                      <p><strong>Despatch Date:</strong> {formatDate(report.despatchDate)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="w-full h-[600px] border rounded-lg overflow-hidden">
+                                    <object
+                                      data={report.fileUrl}
+                                      type="application/pdf"
+                                      className="w-full h-full"
+                                    >
+                                      <p>Unable to display PDF. <a href={report.fileUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
+                                    </object>
+                                  </div>
+                                </>
                               ) : (
-                                <Input
-                                  type="file"
-                                  accept=".pdf"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      handleUpload(file, report.id);
-                                    }
-                                  }}
-                                />
+                                <div className="space-y-4">
+                                  <div className="grid gap-4">
+                                    <div className="space-y-2">
+                                      <label htmlFor="despatchNo" className="text-sm font-medium">Despatch No</label>
+                                      <Input
+                                        id="despatchNo"
+                                        placeholder="Enter despatch number"
+                                        onChange={(e) => {
+                                          const form = e.target.closest('form');
+                                          if (form) {
+                                            form.querySelector<HTMLInputElement>('#despatchNo')!.value = e.target.value;
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label htmlFor="despatchDate" className="text-sm font-medium">Despatch Date</label>
+                                      <Input
+                                        id="despatchDate"
+                                        type="date"
+                                        onChange={(e) => {
+                                          const form = e.target.closest('form');
+                                          if (form) {
+                                            form.querySelector<HTMLInputElement>('#despatchDate')!.value = e.target.value;
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label htmlFor="pdfFile" className="text-sm font-medium">PDF File</label>
+                                      <Input
+                                        id="pdfFile"
+                                        type="file"
+                                        accept=".pdf"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          const form = e.target.closest('form');
+                                          if (file && form) {
+                                            const despatchNo = form.querySelector<HTMLInputElement>('#despatchNo')?.value;
+                                            const despatchDate = form.querySelector<HTMLInputElement>('#despatchDate')?.value;
+
+                                            if (!despatchNo || !despatchDate) {
+                                              toast({
+                                                variant: "destructive",
+                                                title: "Error",
+                                                description: "Please fill in both Despatch No and Despatch Date",
+                                              });
+                                              return;
+                                            }
+
+                                            handleUpload(file, report.id, {
+                                              despatchNo,
+                                              despatchDate
+                                            });
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
                               )}
                             </DialogContent>
                           </Dialog>
