@@ -4,14 +4,14 @@ import { useLocation } from "wouter";
 import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
-import { Plus, Printer, FileCheck, Eye, Upload } from "lucide-react";
+import { Plus, Printer, FileCheck, Eye, Upload, Trash2 } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -117,6 +117,26 @@ export default function Attendance() {
         variant: "destructive",
         title: "Error",
         description: error.message || "Failed to finalize report",
+      });
+    },
+  });
+
+  const deleteReport = useMutation({
+    mutationFn: async (reportId: number) => {
+      await apiRequest("DELETE", `/api/attendance/${reportId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      toast({
+        title: "Success",
+        description: "Report deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to delete report",
       });
     },
   });
@@ -413,10 +433,7 @@ export default function Attendance() {
               {reports?.map((report: any) => (
                 <TableRow key={report.id}>
                   <TableCell>
-                    {new Date(report.year, report.month - 1).toLocaleDateString("en-US", {
-                      year: "numeric",
-                      month: "long",
-                    })}
+                    {formatPeriod(report.year, report.month)}
                   </TableCell>
                   <TableCell>
                     {report.status === "draft"
@@ -434,77 +451,35 @@ export default function Attendance() {
                         <>
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                Edit
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl">
+                            <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Edit Attendance Report</DialogTitle>
+                                <DialogTitle>Delete Report</DialogTitle>
                                 <DialogDescription>
-                                  Modify the attendance report details below.
+                                  Are you sure you want to delete this attendance report? This action cannot be undone.
                                 </DialogDescription>
                               </DialogHeader>
-                              <AttendanceForm
-                                reportId={report.id}
-                                initialData={{
-                                  month: String(report.month),
-                                  year: String(report.year),
-                                  entries: entries?.map(entry => {
-                                    try {
-                                      const periods = typeof entry.periods === 'string'
-                                        ? JSON.parse(entry.periods)
-                                        : entry.periods;
-
-                                      return {
-                                        employeeId: entry.employeeId,
-                                        periods: Array.isArray(periods) ? periods.map(period => ({
-                                          fromDate: period.fromDate,
-                                          toDate: period.toDate,
-                                          days: period.days,
-                                          remarks: period.remarks || ''
-                                        })) : []
-                                      };
-                                    } catch (error) {
-                                      console.error('Error parsing periods:', error);
-                                      return {
-                                        employeeId: entry.employeeId,
-                                        periods: []
-                                      };
+                              <DialogFooter>
+                                <DialogClose asChild>
+                                  <Button variant="outline">Cancel</Button>
+                                </DialogClose>
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => {
+                                    deleteReport.mutate(report.id);
+                                    const closeButton = document.querySelector('[aria-label="Close"]');
+                                    if (closeButton instanceof HTMLButtonElement) {
+                                      closeButton.click();
                                     }
-                                  }) || []
-                                }}
-                                onSubmit={async (data) => {
-                                  // First, delete existing entries
-                                  await apiRequest("DELETE", `/api/attendance/${report.id}/entries`);
-
-                                  // Then create new entries
-                                  await Promise.all(
-                                    data.entries.map((entry) =>
-                                      apiRequest("POST", `/api/attendance/${report.id}/entries`, {
-                                        employeeId: entry.employeeId,
-                                        periods: entry.periods.map(period => ({
-                                          fromDate: period.fromDate,
-                                          toDate: period.toDate,
-                                          days: period.days,
-                                          remarks: period.remarks || ""
-                                        }))
-                                      })
-                                    )
-                                  );
-
-                                  // Update the queries to reflect changes
-                                  queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
-                                  queryClient.invalidateQueries({ queryKey: [`/api/attendance/${report.id}/entries`] });
-
-                                  // Close the dialog
-                                  const dialogTrigger = document.querySelector('[aria-label="Close"]');
-                                  if (dialogTrigger instanceof HTMLButtonElement) {
-                                    dialogTrigger.click();
-                                  }
-                                }}
-                                isLoading={false}
-                              />
+                                  }}
+                                >
+                                  Delete Report
+                                </Button>
+                              </DialogFooter>
                             </DialogContent>
                           </Dialog>
 
