@@ -54,12 +54,8 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Serve uploaded files statically with proper headers
-  app.use('/uploads', (req, res, next) => {
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline');
-    next();
-  }, express.static(path.join(__dirname, '../uploads')));
+  // Serve uploaded files statically
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
