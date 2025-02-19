@@ -432,33 +432,6 @@ export default function Attendance() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Upload className="h-4 w-4 mr-2" />
-                            Upload PDF
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Upload PDF Report</DialogTitle>
-                            <DialogDescription>
-                              Upload the signed PDF version of this attendance report.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <Input
-                            type="file"
-                            accept=".pdf"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                handleUpload(file, report.id);
-                              }
-                            }}
-                          />
-                        </DialogContent>
-                      </Dialog>
-
                       {report.status === "draft" && (
                         <>
                           <Dialog>
@@ -523,15 +496,44 @@ export default function Attendance() {
                       )}
 
                       {report.status !== "draft" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
-                          className="flex items-center gap-2"
-                        >
-                          <Eye className="h-4 w-4" />
-                          View Details
-                        </Button>
+                        <>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload PDF
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Upload PDF Report</DialogTitle>
+                                <DialogDescription>
+                                  Upload the signed PDF version of this attendance report.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <Input
+                                type="file"
+                                accept=".pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleUpload(file, report.id);
+                                  }
+                                }}
+                              />
+                            </DialogContent>
+                          </Dialog>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
+                            className="flex items-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Details
+                          </Button>
+                        </>
                       )}
                     </div>
                   </TableCell>
