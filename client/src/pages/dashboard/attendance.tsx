@@ -569,19 +569,13 @@ export default function Attendance() {
                                   </div>
                                 </>
                               ) : (
-                                <div className="space-y-4">
+                                <form className="space-y-4">
                                   <div className="grid gap-4">
                                     <div className="space-y-2">
                                       <label htmlFor="despatchNo" className="text-sm font-medium">Despatch No</label>
                                       <Input
                                         id="despatchNo"
                                         placeholder="Enter despatch number"
-                                        onChange={(e) => {
-                                          const form = e.target.closest('form');
-                                          if (form) {
-                                            form.querySelector<HTMLInputElement>('#despatchNo')!.value = e.target.value;
-                                          }
-                                        }}
                                       />
                                     </div>
                                     <div className="space-y-2">
@@ -589,12 +583,6 @@ export default function Attendance() {
                                       <Input
                                         id="despatchDate"
                                         type="date"
-                                        onChange={(e) => {
-                                          const form = e.target.closest('form');
-                                          if (form) {
-                                            form.querySelector<HTMLInputElement>('#despatchDate')!.value = e.target.value;
-                                          }
-                                        }}
                                       />
                                     </div>
                                     <div className="space-y-2">
@@ -603,32 +591,43 @@ export default function Attendance() {
                                         id="pdfFile"
                                         type="file"
                                         accept=".pdf"
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          const form = e.target.closest('form');
-                                          if (file && form) {
-                                            const despatchNo = form.querySelector<HTMLInputElement>('#despatchNo')?.value;
-                                            const despatchDate = form.querySelector<HTMLInputElement>('#despatchDate')?.value;
-
-                                            if (!despatchNo || !despatchDate) {
-                                              toast({
-                                                variant: "destructive",
-                                                title: "Error",
-                                                description: "Please fill in both Despatch No and Despatch Date",
-                                              });
-                                              return;
-                                            }
-
-                                            handleUpload(file, report.id, {
-                                              despatchNo,
-                                              despatchDate
-                                            });
-                                          }
-                                        }}
                                       />
                                     </div>
                                   </div>
-                                </div>
+                                  <DialogFooter>
+                                    <DialogClose asChild>
+                                      <Button variant="outline">Cancel</Button>
+                                    </DialogClose>
+                                    <Button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        const form = e.currentTarget.closest('form');
+                                        if (form) {
+                                          const file = form.querySelector<HTMLInputElement>('#pdfFile')?.files?.[0];
+                                          const despatchNo = form.querySelector<HTMLInputElement>('#despatchNo')?.value;
+                                          const despatchDate = form.querySelector<HTMLInputElement>('#despatchDate')?.value;
+
+                                          if (!file || !despatchNo || !despatchDate) {
+                                            toast({
+                                              variant: "destructive",
+                                              title: "Error",
+                                              description: "Please fill in all fields",
+                                            });
+                                            return;
+                                          }
+
+                                          handleUpload(file, report.id, {
+                                            despatchNo,
+                                            despatchDate
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      Submit
+                                    </Button>
+                                  </DialogFooter>
+                                </form>
                               )}
                             </DialogContent>
                           </Dialog>
