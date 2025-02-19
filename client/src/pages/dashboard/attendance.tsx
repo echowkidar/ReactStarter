@@ -469,15 +469,28 @@ export default function Attendance() {
                                 </DialogClose>
                                 <Button
                                   variant="destructive"
-                                  onClick={() => {
-                                    deleteReport.mutate(report.id);
-                                    const closeButton = document.querySelector('[aria-label="Close"]');
-                                    if (closeButton instanceof HTMLButtonElement) {
-                                      closeButton.click();
+                                  onClick={async () => {
+                                    try {
+                                      await deleteReport.mutateAsync(report.id);
+                                      // Close dialog after successful deletion
+                                      const closeButton = document.querySelector('[data-dialog-close]');
+                                      if (closeButton instanceof HTMLButtonElement) {
+                                        closeButton.click();
+                                      }
+                                    } catch (error) {
+                                      console.error('Failed to delete report:', error);
                                     }
                                   }}
+                                  disabled={deleteReport.isPending}
                                 >
-                                  Delete Report
+                                  {deleteReport.isPending ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Deleting...
+                                    </>
+                                  ) : (
+                                    'Delete Report'
+                                  )}
                                 </Button>
                               </DialogFooter>
                             </DialogContent>
