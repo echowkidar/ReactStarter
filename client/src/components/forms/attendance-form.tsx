@@ -213,8 +213,21 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       const employeeIds = new Set(initialData.entries.map(entry => entry.employeeId));
       setIncludedEmployees(employeeIds);
 
-      // Update form with initial data
-      form.reset(initialData);
+      // Update form with initial data, ensuring periods are properly set
+      const formattedData = {
+        ...initialData,
+        entries: initialData.entries.map(entry => ({
+          employeeId: entry.employeeId,
+          periods: entry.periods.map(period => ({
+            fromDate: period.fromDate,
+            toDate: period.toDate,
+            days: calculateDays(period.fromDate, period.toDate),
+            remarks: period.remarks || ''
+          }))
+        }))
+      };
+
+      form.reset(formattedData);
     }
   }, [initialData, form]);
 

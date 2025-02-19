@@ -450,19 +450,23 @@ export default function Attendance() {
                                 initialData={{
                                   month: String(report.month),
                                   year: String(report.year),
-                                  entries: entries?.map(entry => ({
-                                    employeeId: entry.employeeId,
-                                    periods: typeof entry.periods === 'string'
+                                  entries: entries?.map(entry => {
+                                    const periods = typeof entry.periods === 'string'
                                       ? JSON.parse(entry.periods)
                                       : Array.isArray(entry.periods)
                                         ? entry.periods
-                                        : [{
-                                            fromDate: entry.fromDate,
-                                            toDate: entry.toDate,
-                                            days: entry.days,
-                                            remarks: entry.remarks || ''
-                                          }]
-                                  })) || []
+                                        : [];
+
+                                    return {
+                                      employeeId: entry.employeeId,
+                                      periods: periods.map((period: any) => ({
+                                        fromDate: period.fromDate,
+                                        toDate: period.toDate,
+                                        days: period.days,
+                                        remarks: period.remarks || ''
+                                      }))
+                                    };
+                                  }) || []
                                 }}
                                 onSubmit={async (data) => {
                                   // First, delete existing entries
