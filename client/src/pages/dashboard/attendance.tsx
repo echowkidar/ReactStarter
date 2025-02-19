@@ -416,7 +416,11 @@ export default function Attendance() {
                       month: "long",
                     })}
                   </TableCell>
-                  <TableCell>{report.transactionId || "Not generated"}</TableCell>
+                  <TableCell>
+                    {report.status === "draft"
+                      ? "*****"
+                      : (report.transactionId || "Not generated")}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(report.status)}>
                       {report.status}

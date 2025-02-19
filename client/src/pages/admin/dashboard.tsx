@@ -76,7 +76,11 @@ export default function AdminDashboard() {
                     month: "long",
                   })}
                 </TableCell>
-                <TableCell>{report.transactionId}</TableCell>
+                <TableCell>
+                  {report.status === "draft" 
+                    ? "*****" 
+                    : (report.transactionId || "Not generated")}
+                </TableCell>
                 <TableCell>{report.despatchNo || "-"}</TableCell>
                 <TableCell>
                   {report.despatchDate ? formatDate(report.despatchDate) : "-"}
