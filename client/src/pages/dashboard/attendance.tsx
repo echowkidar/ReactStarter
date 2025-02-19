@@ -325,18 +325,16 @@ export default function Attendance() {
   };
 
   const PdfPreview = ({ pdfUrl, onClose, onFinalize }: { pdfUrl: string, onClose: () => void, onFinalize: () => void }) => {
-    // Ensure the URL is absolute
-    const absolutePdfUrl = pdfUrl.startsWith('http') ? pdfUrl : `${window.location.origin}${pdfUrl}`;
-
     return (
       <div className="space-y-6">
-        <div className="w-full h-[600px] border rounded-lg overflow-hidden bg-white">
-          <iframe
-            src={absolutePdfUrl}
+        <div className="w-full h-[600px] border rounded-lg overflow-hidden">
+          <object
+            data={pdfUrl}
+            type="application/pdf"
             className="w-full h-full"
-            style={{ border: 'none' }}
-            title="PDF Preview"
-          />
+          >
+            <p>Unable to display PDF. <a href={pdfUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
+          </object>
         </div>
         <div className="flex justify-end space-x-2">
           <Button variant="outline" onClick={onClose}>
