@@ -2,9 +2,60 @@ import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
 import { insertDepartmentSchema, insertEmployeeSchema, insertAttendanceReportSchema, insertAttendanceEntrySchema } from "@shared/schema";
+import multer from "multer";
+import path from "path";
+import { fileURLToPath } from 'url';
+import fs from "fs";
+import express from 'express';
+
+// Fix for __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export async function registerRoutes(app: Express) {
   const httpServer = createServer(app);
+
+  // Configure multer for file uploads
+  const fileStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      const uploadDir = path.join(__dirname, '../uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, 'attendance-' + uniqueSuffix + '.pdf');
+    }
+  });
+
+  const upload = multer({ storage: fileStorage });
+
+  // Add this new endpoint for file uploads
+  app.post("/api/attendance/:reportId/upload", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      // Generate the file URL
+      const fileUrl = `/uploads/${req.file.filename}`;
+
+      // Update the report with the file URL if needed
+      await storage.updateAttendanceReport(Number(req.params.reportId), {
+        fileUrl: fileUrl
+      });
+
+      res.json({ fileUrl });
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      res.status(500).json({ message: "Failed to upload file" });
+    }
+  });
+
+  // Serve uploaded files statically
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
