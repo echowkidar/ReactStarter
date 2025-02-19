@@ -451,21 +451,27 @@ export default function Attendance() {
                                   month: String(report.month),
                                   year: String(report.year),
                                   entries: entries?.map(entry => {
-                                    const periods = typeof entry.periods === 'string'
-                                      ? JSON.parse(entry.periods)
-                                      : Array.isArray(entry.periods)
-                                        ? entry.periods
-                                        : [];
+                                    try {
+                                      const periods = typeof entry.periods === 'string'
+                                        ? JSON.parse(entry.periods)
+                                        : entry.periods;
 
-                                    return {
-                                      employeeId: entry.employeeId,
-                                      periods: periods.map((period: any) => ({
-                                        fromDate: period.fromDate,
-                                        toDate: period.toDate,
-                                        days: period.days,
-                                        remarks: period.remarks || ''
-                                      }))
-                                    };
+                                      return {
+                                        employeeId: entry.employeeId,
+                                        periods: Array.isArray(periods) ? periods.map(period => ({
+                                          fromDate: period.fromDate,
+                                          toDate: period.toDate,
+                                          days: period.days,
+                                          remarks: period.remarks || ''
+                                        })) : []
+                                      };
+                                    } catch (error) {
+                                      console.error('Error parsing periods:', error);
+                                      return {
+                                        employeeId: entry.employeeId,
+                                        periods: []
+                                      };
+                                    }
                                   }) || []
                                 }}
                                 onSubmit={async (data) => {
