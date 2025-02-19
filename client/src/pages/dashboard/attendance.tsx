@@ -143,6 +143,8 @@ export default function Attendance() {
         return "default";
       case "submitted":
         return "secondary";
+      case "sent":
+        return "success";
       default:
         return "default";
     }
@@ -327,16 +329,23 @@ export default function Attendance() {
       setUploadedPdfUrl(data.fileUrl);
       setSelectedReport(reportId);
 
+      // Update status to "sent" after successful PDF upload
+      await apiRequest("PATCH", `/api/attendance/${reportId}`, {
+        status: "sent",
+        fileUrl: data.fileUrl
+      });
+
+      // Update local state
       const updatedReports = reports?.map(report =>
         report.id === reportId
-          ? { ...report, fileUrl: data.fileUrl }
+          ? { ...report, fileUrl: data.fileUrl, status: "sent" }
           : report
       );
       queryClient.setQueryData([`/api/departments/${department?.id}/attendance`], updatedReports);
 
       toast({
         title: "Success",
-        description: "File uploaded successfully. Please review before finalizing.",
+        description: "File uploaded successfully",
       });
     } catch (error) {
       toast({
@@ -423,7 +432,7 @@ export default function Attendance() {
                     {report.transactionId || "Not generated"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getStatusColor(report.status)}>
+                    <Badge variant={getStatusColor(report.status)} className={`${report.status === 'sent' ? 'font-bold text-green-600' : ''}`}>
                       {report.status}
                     </Badge>
                   </TableCell>
