@@ -24,6 +24,7 @@ export default function Attendance() {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
+  const [selectedReportForPrint, setSelectedReportForPrint] = useState<any>(null);
 
   const { data: reports, isLoading } = useQuery({
     queryKey: [`/api/departments/${department?.id}/attendance`],
@@ -94,17 +95,28 @@ export default function Attendance() {
   });
 
   const finalizeReport = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      await apiRequest("PATCH", `/api/attendance/${id}`, {
-        ...data,
-        status: "submitted",
+    mutationFn: async (report: any) => {
+      if (!report.fileUrl) {
+        throw new Error("Please upload a PDF file first");
+      }
+
+      await apiRequest("PATCH", `/api/attendance/${report.id}`, {
+        status: "submitted"
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      setShowPdfPreview(false);
       toast({
         title: "Success",
         description: "Report finalized successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to finalize report",
       });
     },
   });
@@ -319,9 +331,7 @@ export default function Attendance() {
       return;
     }
 
-    setSelectedReport(report.id);
-    setUploadedPdfUrl(report.fileUrl);
-    setShowPdfPreview(true);
+    finalizeReport.mutate(report);
   };
 
   const PdfPreview = ({ pdfUrl, onClose, onFinalize }: { pdfUrl: string, onClose: () => void, onFinalize: () => void }) => {
@@ -444,17 +454,29 @@ export default function Attendance() {
                             </DialogContent>
                           </Dialog>
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedReport(report.id);
-                              setShowPrintPreview(true);
-                            }}
-                          >
-                            <Printer className="h-4 w-4 mr-2" />
-                            Print
-                          </Button>
+                          <Dialog open={selectedReportForPrint === report.id} onOpenChange={(open) => !open && setSelectedReportForPrint(null)}>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedReportForPrint(report.id)}
+                              >
+                                <Printer className="h-4 w-4 mr-2" />
+                                Print
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl">
+                              <DialogHeader>
+                                <DialogTitle>Print Preview</DialogTitle>
+                              </DialogHeader>
+                              {selectedReportForPrint === report.id && (
+                                <PrintPreview
+                                  report={report}
+                                  onClose={() => setSelectedReportForPrint(null)}
+                                />
+                              )}
+                            </DialogContent>
+                          </Dialog>
 
                           <Button variant="outline" size="sm" className="relative">
                             <Input
@@ -475,8 +497,13 @@ export default function Attendance() {
                           <Button
                             size="sm"
                             onClick={() => handleFinalize(report)}
+                            disabled={finalizeReport.isPending}
                           >
-                            <FileCheck className="h-4 w-4 mr-2" />
+                            {finalizeReport.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <FileCheck className="h-4 w-4 mr-2" />
+                            )}
                             Finalize
                           </Button>
                         </>
@@ -499,6 +526,26 @@ export default function Attendance() {
           </Table>
         </div>
       </main>
+
+      <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Confirm Report</DialogTitle>
+          </DialogHeader>
+          {uploadedPdfUrl && selectedReport && (
+            <PdfPreview
+              pdfUrl={uploadedPdfUrl}
+              onClose={() => setShowPdfPreview(false)}
+              onFinalize={() => {
+                const report = reports?.find((r: any) => r.id === selectedReport);
+                if (report) {
+                  handleFinalize(report);
+                }
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
