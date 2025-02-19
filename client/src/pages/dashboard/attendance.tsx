@@ -277,12 +277,15 @@ export default function Attendance() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const response = await apiRequest(
-        "POST",
-        `/api/attendance/${reportId}/upload`,
-        formData,
-        { 'Content-Type': 'multipart/form-data' }
-      );
+      const response = await fetch(`/api/attendance/${reportId}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
       const data = await response.json();
       setUploadedPdfUrl(data.fileUrl);
       toast({
@@ -456,67 +459,69 @@ export default function Attendance() {
                           </DialogContent>
                         </Dialog>
 
-                        <Button variant="outline" size="sm" className="relative">
-                          <Input
-                            type="file"
-                            accept=".pdf"
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                handleUpload(file, report.id);
-                              }
-                            }}
-                          />
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload
-                        </Button>
+                        <div className="space-x-2">
+                          <Button variant="outline" size="sm" className="relative">
+                            <Input
+                              type="file"
+                              accept=".pdf"
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  handleUpload(file, report.id);
+                                }
+                              }}
+                            />
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload
+                          </Button>
 
-                        <Dialog 
-                          open={showPdfPreview && selectedReport === report.id} 
-                          onOpenChange={(open) => {
-                            setShowPdfPreview(open);
-                            if (!open) setSelectedReport(null);
-                          }}
-                        >
-                          <DialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              onClick={() => handleFinalize(report)}
-                            >
-                              <FileCheck className="h-4 w-4 mr-2" />
-                              Finalize
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl">
-                            <DialogHeader>
-                              <DialogTitle>Review PDF Before Finalizing</DialogTitle>
-                            </DialogHeader>
-                            {uploadedPdfUrl && (
-                              <PdfPreview
-                                pdfUrl={uploadedPdfUrl}
-                                onClose={() => {
-                                  setShowPdfPreview(false);
-                                  setSelectedReport(null);
-                                }}
-                                onFinalize={() => {
-                                  const despatchNo = prompt("Enter Despatch No:");
-                                  if (despatchNo) {
-                                    finalizeReport.mutate({
-                                      id: report.id,
-                                      data: {
-                                        despatchNo,
-                                        despatchDate: new Date().toISOString(),
-                                      },
-                                    });
+                          <Dialog 
+                            open={showPdfPreview && selectedReport === report.id} 
+                            onOpenChange={(open) => {
+                              setShowPdfPreview(open);
+                              if (!open) setSelectedReport(null);
+                            }}
+                          >
+                            <DialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                onClick={() => handleFinalize(report)}
+                              >
+                                <FileCheck className="h-4 w-4 mr-2" />
+                                Finalize
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl">
+                              <DialogHeader>
+                                <DialogTitle>Review PDF Before Finalizing</DialogTitle>
+                              </DialogHeader>
+                              {uploadedPdfUrl && (
+                                <PdfPreview
+                                  pdfUrl={uploadedPdfUrl}
+                                  onClose={() => {
                                     setShowPdfPreview(false);
                                     setSelectedReport(null);
-                                  }
-                                }}
-                              />
-                            )}
-                          </DialogContent>
-                        </Dialog>
+                                  }}
+                                  onFinalize={() => {
+                                    const despatchNo = prompt("Enter Despatch No:");
+                                    if (despatchNo) {
+                                      finalizeReport.mutate({
+                                        id: report.id,
+                                        data: {
+                                          despatchNo,
+                                          despatchDate: new Date().toISOString(),
+                                        },
+                                      });
+                                      setShowPdfPreview(false);
+                                      setSelectedReport(null);
+                                    }
+                                  }}
+                                />
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       </div>
                     ) : (
                       <Button
