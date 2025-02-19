@@ -37,6 +37,7 @@ export const attendanceReports = pgTable("attendance_reports", {
   despatchNo: text("despatch_no"),
   despatchDate: date("despatch_date"),
   status: text("status").notNull().default("draft"),
+  fileUrl: text("file_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
