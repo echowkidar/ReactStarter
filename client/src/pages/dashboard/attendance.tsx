@@ -522,7 +522,7 @@ export default function Attendance() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                          onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
                           className="flex items-center gap-2"
                         >
                           <Eye className="h-4 w-4" />

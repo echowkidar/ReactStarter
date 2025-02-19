@@ -8,9 +8,10 @@ import Register from "@/pages/auth/register";
 import Dashboard from "@/pages/dashboard";
 import Employees from "@/pages/dashboard/employees";
 import Attendance from "@/pages/dashboard/attendance";
+import ReportDetails from "@/pages/dashboard/report-details";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
-import ReportDetails from "@/pages/admin/report-details";
+import AdminReportDetails from "@/pages/admin/report-details";
 
 function Router() {
   return (
@@ -20,9 +21,10 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/dashboard/employees" component={Employees} />
       <Route path="/dashboard/attendance" component={Attendance} />
+      <Route path="/dashboard/reports/:id" component={ReportDetails} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
-      <Route path="/admin/reports/:id" component={ReportDetails} />
+      <Route path="/admin/reports/:id" component={AdminReportDetails} />
       <Route component={NotFound} />
     </Switch>
   );
