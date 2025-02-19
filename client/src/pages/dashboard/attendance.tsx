@@ -390,7 +390,10 @@ export default function Attendance() {
               {reports?.map((report: any) => (
                 <TableRow key={report.id}>
                   <TableCell>
-                    {formatDate(new Date(report.year, report.month - 1).toISOString())}
+                    {new Date(report.year, report.month - 1).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                    })}
                   </TableCell>
                   <TableCell>{report.transactionId || "Not generated"}</TableCell>
                   <TableCell>
