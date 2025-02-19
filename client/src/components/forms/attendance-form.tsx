@@ -58,11 +58,22 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
   const selectedYear = currentYear;
 
   // Calculate first and last day of current month
-  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);  // First day of month
-  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);  // Last day of month
+  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const defaultEndDate = new Date(selectedYear, selectedMonth, 0); // This will give us the last day of the month
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(-2);
+    return `${day}-${month}-${year}`; // Using DD-MM-YY format
+  };
+
+  const displayDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(-2);
+    return `${day}-${month}-${year}`; // Display format DD-MM-YY
   };
 
   const form = useForm<AttendanceFormData>({
@@ -75,9 +86,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId }: Attend
         periods: [{
           fromDate: formatDate(defaultStartDate),
           toDate: formatDate(defaultEndDate),
-          days: 0,
+          days: calculateDays(formatDate(defaultStartDate), formatDate(defaultEndDate)),
           remarks: ""
-        }]
+        }],
       }],
     },
   });
