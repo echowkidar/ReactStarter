@@ -307,8 +307,10 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
               <TableRow>
                 <TableHead className="w-[50px]">Include</TableHead>
                 <TableHead>EPID</TableHead>
+                <TableHead>Employee ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
+                <TableHead>Reg No.</TableHead>
                 <TableHead>Attendance Periods</TableHead>
               </TableRow>
             </TableHeader>
@@ -323,8 +325,10 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                     />
                   </TableCell>
                   <TableCell>{employee.employeeId}</TableCell>
+                  <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
+                  <TableCell>{employee.salaryRegisterNo || '-'}</TableCell>
                   <TableCell>
                     <div className="space-y-2">
                       {form.getValues("entries")
