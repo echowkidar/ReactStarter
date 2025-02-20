@@ -163,9 +163,13 @@ export default function Attendance() {
         receiptDate: new Date().toISOString(),
       });
 
+      if (!updateResponse.ok) {
+        throw new Error("Failed to update report status");
+      }
+
       const updatedData = await updateResponse.json();
 
-      // Update local state with the new receipt number from the backend
+      // Update local state with the new receipt number from the backend response
       const updatedReports = reports?.map((report) =>
         report.id === reportId
           ? {
@@ -175,7 +179,7 @@ export default function Attendance() {
               despatchNo: despatchDetails?.despatchNo,
               despatchDate: despatchDetails?.despatchDate,
               receiptDate: new Date().toISOString(),
-              receiptNo: updatedData.receiptNo, // Use the receipt number from the backend response
+              receiptNo: updatedData.receiptNo, // Use the receipt number from the response
             }
           : report,
       );
