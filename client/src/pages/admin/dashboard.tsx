@@ -11,7 +11,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -20,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
-import { FileCheck, LogOut, Eye, Download, Search, FileDown } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { useState, useMemo } from "react";
 import {
@@ -29,10 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import * as XLSX from 'xlsx';
 
 type ReportWithDepartment = AttendanceReport & {
   department?: Department;
@@ -60,12 +56,6 @@ const PdfPreview = ({ pdfUrl }: { pdfUrl: string }) => {
   );
 };
 
-interface ColumnOption {
-  id: string;
-  label: string;
-  checked: boolean;
-}
-
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { data: reports, isLoading } = useQuery<ReportWithDepartment[]>({
@@ -77,75 +67,6 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [monthFilter, setMonthFilter] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "", direction: "asc" });
-  const [showExportDialog, setShowExportDialog] = useState(false);
-  const [columns, setColumns] = useState<ColumnOption[]>([
-    { id: "receiptNo", label: "Receipt No.", checked: true },
-    { id: "receiptDate", label: "Receipt Date", checked: true },
-    { id: "department", label: "Department", checked: true },
-    { id: "month", label: "Month", checked: true },
-    { id: "transactionId", label: "Transaction ID", checked: true },
-    { id: "despatchNo", label: "Despatch No.", checked: true },
-    { id: "despatchDate", label: "Despatch Date", checked: true },
-    { id: "status", label: "Status", checked: true },
-  ]);
-
-  const handleExport = () => {
-    if (!reports) return;
-
-    const selectedColumns = columns.filter(col => col.checked);
-
-    // Prepare data for export
-    const data = filteredAndSortedReports.map(report => {
-      const row: { [key: string]: any } = {};
-
-      selectedColumns.forEach(col => {
-        switch(col.id) {
-          case "receiptNo":
-            row["Receipt No."] = report.receiptNo || "-";
-            break;
-          case "receiptDate":
-            row["Receipt Date"] = formatDate(report.receiptDate);
-            break;
-          case "department":
-            row["Department"] = report.department?.name || "N/A";
-            break;
-          case "month":
-            row["Month"] = new Date(report.year, report.month - 1).toLocaleDateString(
-              "en-US",
-              { year: "numeric", month: "long" }
-            );
-            break;
-          case "transactionId":
-            row["Transaction ID"] = report.status === "draft" ? "*****" : report.transactionId || "Not generated";
-            break;
-          case "despatchNo":
-            row["Despatch No."] = report.despatchNo || "-";
-            break;
-          case "despatchDate":
-            row["Despatch Date"] = formatDate(report.despatchDate);
-            break;
-          case "status":
-            row["Status"] = report.status;
-            break;
-        }
-      });
-
-      return row;
-    });
-
-    // Create workbook
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance Reports");
-
-    // Generate filename with current month/year
-    const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const filename = `attendance_reports_${currentMonth.toLowerCase().replace(' ', '_')}.xlsx`;
-
-    // Download file
-    XLSX.writeFile(wb, filename);
-    setShowExportDialog(false);
-  };
 
   // Get unique months from reports
   const availableMonths = useMemo(() => {
@@ -180,7 +101,7 @@ export default function AdminDashboard() {
 
     let filtered = reports.filter(report => {
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch =
+      const matchesSearch = 
         report.department?.name?.toLowerCase().includes(searchLower) ||
         report.receiptNo?.toString().includes(searchLower) ||
         report.transactionId?.toLowerCase().includes(searchLower);
@@ -188,7 +109,7 @@ export default function AdminDashboard() {
       const matchesStatus = statusFilter === "all" || report.status === statusFilter;
 
       // Add month filtering
-      const matchesMonth = monthFilter === "all" ||
+      const matchesMonth = monthFilter === "all" || 
         `${report.year}-${report.month - 1}` === monthFilter;
 
       return matchesSearch && matchesStatus && matchesMonth;
@@ -289,21 +210,13 @@ export default function AdminDashboard() {
             <SelectItem value="sent">Sent</SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          variant="outline"
-          onClick={() => setShowExportDialog(true)}
-          className="flex items-center gap-2"
-        >
-          <FileDown className="h-4 w-4" />
-          Export to Excel
-        </Button>
       </div>
 
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead
+              <TableHead 
                 className="cursor-pointer"
                 onClick={() => handleSort("receiptNo")}
               >
@@ -314,7 +227,7 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </TableHead>
-              <TableHead
+              <TableHead 
                 className="cursor-pointer"
                 onClick={() => handleSort("receiptDate")}
               >
@@ -325,7 +238,7 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </TableHead>
-              <TableHead
+              <TableHead 
                 className="cursor-pointer"
                 onClick={() => handleSort("month")}
               >
@@ -336,7 +249,7 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </TableHead>
-              <TableHead
+              <TableHead 
                 className="cursor-pointer"
                 onClick={() => handleSort("department")}
               >
@@ -350,7 +263,7 @@ export default function AdminDashboard() {
               <TableHead>Transaction ID</TableHead>
               <TableHead>Despatch No.</TableHead>
               <TableHead>Despatch Date</TableHead>
-              <TableHead
+              <TableHead 
                 className="cursor-pointer"
                 onClick={() => handleSort("status")}
               >
@@ -427,44 +340,6 @@ export default function AdminDashboard() {
           </TableBody>
         </Table>
       </div>
-      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Export to Excel</DialogTitle>
-            <DialogDescription>
-              Select the columns you want to include in the export
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {columns.map((column) => (
-              <div key={column.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={column.id}
-                  checked={column.checked}
-                  onCheckedChange={(checked) => {
-                    setColumns(cols =>
-                      cols.map(col =>
-                        col.id === column.id
-                          ? { ...col, checked: checked as boolean }
-                          : col
-                      )
-                    );
-                  }}
-                />
-                <Label htmlFor={column.id}>{column.label}</Label>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleExport}>
-              Download Excel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
