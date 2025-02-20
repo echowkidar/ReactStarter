@@ -389,19 +389,133 @@ export default function Attendance() {
                       )}
                       {report.status !== "draft" && (
                         <>
-                          <Button variant="outline" size="sm">
-                            {report.fileUrl ? (
-                              <>
-                                <Eye className="h-4 w-4 mr-2" />
-                                View PDF
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="h-4 w-4 mr-2" />
-                                Upload PDF
-                              </>
-                            )}
-                          </Button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                {report.fileUrl ? (
+                                  <>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View PDF
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    Upload PDF
+                                  </>
+                                )}
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>
+                                  {report.fileUrl ? "View PDF Report" : "Upload PDF Report"}
+                                </DialogTitle>
+                                <DialogDescription>
+                                  {report.fileUrl
+                                    ? "Review the uploaded PDF report"
+                                    : "Upload the signed PDF version of this attendance report and provide despatch details."}
+                                </DialogDescription>
+                              </DialogHeader>
+                              {report.fileUrl ? (
+                                <>
+                                  <div className="space-y-2">
+                                    <div className="text-sm text-muted-foreground">
+                                      <p>
+                                        <strong>Despatch No:</strong> {report.despatchNo}
+                                      </p>
+                                      <p>
+                                        <strong>Despatch Date:</strong>{" "}
+                                        {formatDate(report.despatchDate!)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="w-full h-[600px] border rounded-lg overflow-hidden">
+                                    <object
+                                      data={report.fileUrl}
+                                      type="application/pdf"
+                                      className="w-full h-full"
+                                    >
+                                      <p>
+                                        Unable to display PDF.{" "}
+                                        <a
+                                          href={report.fileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Click here to download
+                                        </a>
+                                      </p>
+                                    </object>
+                                  </div>
+                                </>
+                              ) : (
+                                <form className="space-y-4">
+                                  <div className="grid gap-4">
+                                    <div className="space-y-2">
+                                      <label htmlFor="despatchNo" className="text-sm font-medium">
+                                        Despatch No
+                                      </label>
+                                      <Input
+                                        id="despatchNo"
+                                        placeholder="Enter despatch number"
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label htmlFor="despatchDate" className="text-sm font-medium">
+                                        Despatch Date
+                                      </label>
+                                      <Input id="despatchDate" type="date" />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label htmlFor="pdfFile" className="text-sm font-medium">
+                                        PDF File
+                                      </label>
+                                      <Input id="pdfFile" type="file" accept=".pdf" />
+                                    </div>
+                                  </div>
+                                  <DialogFooter>
+                                    <DialogClose asChild>
+                                      <Button variant="outline">Cancel</Button>
+                                    </DialogClose>
+                                    <Button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        const form = e.currentTarget.closest("form");
+                                        if (form) {
+                                          const file = (form.querySelector("#pdfFile") as HTMLInputElement)?.files?.[0];
+                                          const despatchNo = (form.querySelector("#despatchNo") as HTMLInputElement)?.value;
+                                          const despatchDate = (form.querySelector("#despatchDate") as HTMLInputElement)?.value;
+
+                                          if (!file || !despatchNo || !despatchDate) {
+                                            toast({
+                                              variant: "destructive",
+                                              title: "Error",
+                                              description: "Please fill in all fields",
+                                            });
+                                            return;
+                                          }
+
+                                          handleUpload(file, report.id, {
+                                            despatchNo,
+                                            despatchDate,
+                                          });
+
+                                          // Close the dialog after successful upload
+                                          const closeButton = document.querySelector("[data-dialog-close]");
+                                          if (closeButton instanceof HTMLButtonElement) {
+                                            closeButton.click();
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      Submit
+                                    </Button>
+                                  </DialogFooter>
+                                </form>
+                              )}
+                            </DialogContent>
+                          </Dialog>
                           <Button
                             variant="outline"
                             size="sm"
