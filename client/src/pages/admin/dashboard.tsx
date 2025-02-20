@@ -90,20 +90,22 @@ export default function AdminDashboard() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Department</TableHead>
-              <TableHead>Month</TableHead>
-              <TableHead>Receipt No.</TableHead>
-              <TableHead>Receipt Date</TableHead>
-              <TableHead>Transaction ID</TableHead>
-              <TableHead>Despatch No.</TableHead>
-              <TableHead>Despatch Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
+                <TableHead>Receipt No.</TableHead>
+                <TableHead>Receipt Date</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Month</TableHead>
+                <TableHead>Transaction ID</TableHead>
+                <TableHead>Despatch No.</TableHead>
+                <TableHead>Despatch Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
           </TableHeader>
           <TableBody>
             {reports?.map((report) => (
               <TableRow key={report.id}>
+                <TableCell>{report.receiptNo || "-"}</TableCell>
+                <TableCell>{formatDate(report.receiptDate)}</TableCell>
                 <TableCell className="font-medium">
                   {report.department?.name || "N/A"}
                 </TableCell>
@@ -116,8 +118,6 @@ export default function AdminDashboard() {
                     },
                   )}
                 </TableCell>
-                <TableCell>{report.receiptNo || "-"}</TableCell>
-                <TableCell>{formatDate(report.receiptDate)}</TableCell>
                 <TableCell>
                   {report.status === "draft"
                     ? "*****"
