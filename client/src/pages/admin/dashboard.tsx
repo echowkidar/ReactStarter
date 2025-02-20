@@ -1,13 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/layout/loading";
 import { FileCheck, LogOut, Eye, Download } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 type ReportWithDepartment = AttendanceReport & {
   department?: Department;
@@ -17,12 +30,13 @@ const PdfPreview = ({ pdfUrl }: { pdfUrl: string }) => {
   return (
     <div className="space-y-6">
       <div className="w-full h-[600px] border rounded-lg overflow-hidden">
-        <object
-          data={pdfUrl}
-          type="application/pdf"
-          className="w-full h-full"
-        >
-          <p>Unable to display PDF. <a href={pdfUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
+        <object data={pdfUrl} type="application/pdf" className="w-full h-full">
+          <p>
+            Unable to display PDF.{" "}
+            <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+              Click here to download
+            </a>
+          </p>
         </object>
       </div>
     </div>
@@ -76,7 +90,7 @@ export default function AdminDashboard() {
           <TableHeader>
             <TableRow>
               <TableHead>Department</TableHead>
-              <TableHead>Period</TableHead>
+              <TableHead>Month</TableHead>
               <TableHead>Transaction ID</TableHead>
               <TableHead>Despatch No.</TableHead>
               <TableHead>Despatch Date</TableHead>
@@ -91,15 +105,18 @@ export default function AdminDashboard() {
                   {report.department?.name || "N/A"}
                 </TableCell>
                 <TableCell>
-                  {new Date(report.year, report.month - 1).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                  })}
+                  {new Date(report.year, report.month - 1).toLocaleDateString(
+                    "en-US",
+                    {
+                      year: "numeric",
+                      month: "long",
+                    },
+                  )}
                 </TableCell>
                 <TableCell>
                   {report.status === "draft"
                     ? "*****"
-                    : (report.transactionId || "Not generated")}
+                    : report.transactionId || "Not generated"}
                 </TableCell>
                 <TableCell>{report.despatchNo || "-"}</TableCell>
                 <TableCell>
@@ -107,7 +124,9 @@ export default function AdminDashboard() {
                 </TableCell>
                 <TableCell>
                   <Badge
-                    variant={report.status === "submitted" ? "default" : "secondary"}
+                    variant={
+                      report.status === "submitted" ? "default" : "secondary"
+                    }
                   >
                     {report.status}
                   </Badge>
@@ -152,11 +171,12 @@ export default function AdminDashboard() {
               Review the submitted report PDF.
             </DialogDescription>
           </DialogHeader>
-          {selectedReport && reports?.find(r => r.id === selectedReport)?.fileUrl && (
-            <PdfPreview
-              pdfUrl={reports.find(r => r.id === selectedReport)!.fileUrl!}
-            />
-          )}
+          {selectedReport &&
+            reports?.find((r) => r.id === selectedReport)?.fileUrl && (
+              <PdfPreview
+                pdfUrl={reports.find((r) => r.id === selectedReport)!.fileUrl!}
+              />
+            )}
         </DialogContent>
       </Dialog>
     </div>

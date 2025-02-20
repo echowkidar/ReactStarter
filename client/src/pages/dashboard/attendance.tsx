@@ -4,8 +4,23 @@ import { useLocation } from "wouter";
 import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
@@ -23,7 +38,8 @@ export default function Attendance() {
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
-  const [selectedReportForPrint, setSelectedReportForPrint] = useState<any>(null);
+  const [selectedReportForPrint, setSelectedReportForPrint] =
+    useState<any>(null);
 
   const { data: reports, isLoading } = useQuery({
     queryKey: [`/api/departments/${department?.id}/attendance`],
@@ -34,14 +50,13 @@ export default function Attendance() {
     enabled: !!selectedReport,
     select: (data: any) => {
       return Array.isArray(data) ? data : [];
-    }
+    },
   });
 
   const { data: employees, isLoading: loadingEmployees } = useQuery({
-    queryKey: ['/api/employees'],
-    enabled: !!selectedReport
-  })
-
+    queryKey: ["/api/employees"],
+    enabled: !!selectedReport,
+  });
 
   const createReport = useMutation({
     mutationFn: async (data: any) => {
@@ -49,13 +64,13 @@ export default function Attendance() {
         departmentId: department?.id,
         month: parseInt(data.month),
         year: parseInt(data.year),
-        status: "draft"
+        status: "draft",
       };
 
       const response = await apiRequest(
         "POST",
         `/api/departments/${department?.id}/attendance`,
-        formattedData
+        formattedData,
       );
 
       const report = await response.json();
@@ -63,21 +78,23 @@ export default function Attendance() {
       for (const entry of data.entries) {
         if (!entry.periods || entry.periods.length === 0) continue;
 
-        const periods = entry.periods.map(period => ({
+        const periods = entry.periods.map((period) => ({
           fromDate: period.fromDate,
           toDate: period.toDate,
           days: period.days,
-          remarks: period.remarks || ""
+          remarks: period.remarks || "",
         }));
 
         await apiRequest("POST", `/api/attendance/${report.id}/entries`, {
           employeeId: entry.employeeId,
-          periods
+          periods,
         });
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/departments/${department?.id}/attendance`],
+      });
       setIsCreatingReport(false);
       toast({
         title: "Success",
@@ -96,11 +113,13 @@ export default function Attendance() {
   const finalizeReport = useMutation({
     mutationFn: async (report: any) => {
       await apiRequest("PATCH", `/api/attendance/${report.id}`, {
-        status: "submitted"
+        status: "submitted",
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/departments/${department?.id}/attendance`],
+      });
       toast({
         title: "Success",
         description: "Report finalized successfully",
@@ -120,7 +139,9 @@ export default function Attendance() {
       await apiRequest("DELETE", `/api/attendance/${reportId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/departments/${department?.id}/attendance`],
+      });
       toast({
         title: "Success",
         description: "Report deleted successfully",
@@ -166,17 +187,23 @@ export default function Attendance() {
   };
 
   const formatShortDate = (dateStr: string) => {
-    const parts = dateStr.split('-');
+    const parts = dateStr.split("-");
     if (parts.length !== 3) return dateStr;
 
-    const day = parts[0].padStart(2, '0');
-    const month = parts[1].padStart(2, '0');
+    const day = parts[0].padStart(2, "0");
+    const month = parts[1].padStart(2, "0");
     const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
 
     return `${day}-${month}-${year.slice(-2)}`;
   };
 
-  const PrintPreview = ({ report, onClose }: { report: any; onClose: () => void }) => {
+  const PrintPreview = ({
+    report,
+    onClose,
+  }: {
+    report: any;
+    onClose: () => void;
+  }) => {
     const department = getCurrentDepartment();
     const { data: employees = [] } = useQuery({
       queryKey: [`/api/departments/${department?.id}/employees`],
@@ -188,7 +215,7 @@ export default function Attendance() {
       enabled: !!report.id,
       select: (data: any) => {
         return Array.isArray(data) ? data : [];
-      }
+      },
     });
 
     const handlePrint = () => {
@@ -255,33 +282,48 @@ export default function Attendance() {
               <TableBody>
                 {entries.map((entry: any) => {
                   try {
-                    const periods = typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods;
-                    const employee = employees?.find((emp: any) => emp.id === entry.employeeId);
+                    const periods =
+                      typeof entry.periods === "string"
+                        ? JSON.parse(entry.periods)
+                        : entry.periods;
+                    const employee = employees?.find(
+                      (emp: any) => emp.id === entry.employeeId,
+                    );
 
                     return periods.map((period: any, periodIndex: number) => (
                       <TableRow key={`${entry.id}-${periodIndex}`}>
                         {periodIndex === 0 && (
                           <>
-                            <TableCell className="align-middle" rowSpan={periods.length}>
+                            <TableCell
+                              className="align-middle"
+                              rowSpan={periods.length}
+                            >
                               {employee?.employeeId}
                             </TableCell>
-                            <TableCell className="align-middle" rowSpan={periods.length}>
+                            <TableCell
+                              className="align-middle"
+                              rowSpan={periods.length}
+                            >
                               {employee?.name}
                             </TableCell>
-                            <TableCell className="align-middle" rowSpan={periods.length}>
+                            <TableCell
+                              className="align-middle"
+                              rowSpan={periods.length}
+                            >
                               {employee?.designation}
                             </TableCell>
                           </>
                         )}
                         <TableCell>
-                          {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
+                          {formatShortDate(period.fromDate)} to{" "}
+                          {formatShortDate(period.toDate)}
                         </TableCell>
                         <TableCell>{period.days}</TableCell>
                         <TableCell>{period.remarks || "-"}</TableCell>
                       </TableRow>
                     ));
                   } catch (error) {
-                    console.error('Error parsing periods:', error);
+                    console.error("Error parsing periods:", error);
                     return null;
                   }
                 })}
@@ -312,17 +354,21 @@ export default function Attendance() {
     );
   };
 
-  const handleUpload = async (file: File, reportId: number, despatchDetails?: { despatchNo: string, despatchDate: string }) => {
+  const handleUpload = async (
+    file: File,
+    reportId: number,
+    despatchDetails?: { despatchNo: string; despatchDate: string },
+  ) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     try {
       const response = await fetch(`/api/attendance/${reportId}/upload`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        throw new Error("Upload failed");
       }
 
       const data = await response.json();
@@ -334,22 +380,25 @@ export default function Attendance() {
         status: "sent",
         fileUrl: data.fileUrl,
         despatchNo: despatchDetails?.despatchNo,
-        despatchDate: despatchDetails?.despatchDate
+        despatchDate: despatchDetails?.despatchDate,
       });
 
       // Update local state
-      const updatedReports = reports?.map(report =>
+      const updatedReports = reports?.map((report) =>
         report.id === reportId
           ? {
               ...report,
               fileUrl: data.fileUrl,
               status: "sent",
               despatchNo: despatchDetails?.despatchNo,
-              despatchDate: despatchDetails?.despatchDate
+              despatchDate: despatchDetails?.despatchDate,
             }
-          : report
+          : report,
       );
-      queryClient.setQueryData([`/api/departments/${department?.id}/attendance`], updatedReports);
+      queryClient.setQueryData(
+        [`/api/departments/${department?.id}/attendance`],
+        updatedReports,
+      );
 
       toast({
         title: "Success",
@@ -368,7 +417,15 @@ export default function Attendance() {
     finalizeReport.mutate(report);
   };
 
-  const PdfPreview = ({ pdfUrl, onClose, onFinalize }: { pdfUrl: string, onClose: () => void, onFinalize: () => void }) => {
+  const PdfPreview = ({
+    pdfUrl,
+    onClose,
+    onFinalize,
+  }: {
+    pdfUrl: string;
+    onClose: () => void;
+    onFinalize: () => void;
+  }) => {
     return (
       <div className="space-y-6">
         <div className="w-full h-[600px] border rounded-lg overflow-hidden">
@@ -377,7 +434,12 @@ export default function Attendance() {
             type="application/pdf"
             className="w-full h-full"
           >
-            <p>Unable to display PDF. <a href={pdfUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
+            <p>
+              Unable to display PDF.{" "}
+              <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                Click here to download
+              </a>
+            </p>
           </object>
         </div>
         <div className="flex justify-end space-x-2">
@@ -441,15 +503,24 @@ export default function Attendance() {
                     {report.transactionId || "Not generated"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getStatusColor(report.status)} className={`${report.status === 'sent' ? 'font-bold text-green-600' : ''}`}>
+                    <Badge
+                      variant={getStatusColor(report.status)}
+                      className={`${report.status === "sent" ? "font-bold text-green-600" : ""}`}
+                    >
                       {report.status}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {report.status === 'sent' && report.despatchNo ? (
+                    {report.status === "sent" && report.despatchNo ? (
                       <div className="text-sm">
-                        <p><span className="font-medium">No:</span> {report.despatchNo}</p>
-                        <p><span className="font-medium">Date:</span> {formatDate(report.despatchDate)}</p>
+                        <p>
+                          <span className="font-medium">No:</span>{" "}
+                          {report.despatchNo}
+                        </p>
+                        <p>
+                          <span className="font-medium">Date:</span>{" "}
+                          {formatDate(report.despatchDate)}
+                        </p>
                       </div>
                     ) : (
                       "-"
@@ -470,7 +541,9 @@ export default function Attendance() {
                               <DialogHeader>
                                 <DialogTitle>Delete Report</DialogTitle>
                                 <DialogDescription>
-                                  Are you sure you want to delete this attendance report? This action cannot be undone.
+                                  Are you sure you want to delete this
+                                  attendance report? This action cannot be
+                                  undone.
                                 </DialogDescription>
                               </DialogHeader>
                               <DialogFooter>
@@ -482,12 +555,20 @@ export default function Attendance() {
                                   onClick={async () => {
                                     try {
                                       await deleteReport.mutateAsync(report.id);
-                                      const closeButton = document.querySelector('[data-dialog-close]');
-                                      if (closeButton instanceof HTMLButtonElement) {
+                                      const closeButton =
+                                        document.querySelector(
+                                          "[data-dialog-close]",
+                                        );
+                                      if (
+                                        closeButton instanceof HTMLButtonElement
+                                      ) {
                                         closeButton.click();
                                       }
                                     } catch (error) {
-                                      console.error('Failed to delete report:', error);
+                                      console.error(
+                                        "Failed to delete report:",
+                                        error,
+                                      );
                                     }
                                   }}
                                   disabled={deleteReport.isPending}
@@ -498,7 +579,7 @@ export default function Attendance() {
                                       Deleting...
                                     </>
                                   ) : (
-                                    'Delete Report'
+                                    "Delete Report"
                                   )}
                                 </Button>
                               </DialogFooter>
@@ -541,21 +622,28 @@ export default function Attendance() {
                             <DialogContent>
                               <DialogHeader>
                                 <DialogTitle>
-                                  {report.fileUrl ? "View PDF Report" : "Upload PDF Report"}
+                                  {report.fileUrl
+                                    ? "View PDF Report"
+                                    : "Upload PDF Report"}
                                 </DialogTitle>
                                 <DialogDescription>
                                   {report.fileUrl
                                     ? "Review the uploaded PDF report"
-                                    : "Upload the signed PDF version of this attendance report and provide despatch details."
-                                  }
+                                    : "Upload the signed PDF version of this attendance report and provide despatch details."}
                                 </DialogDescription>
                               </DialogHeader>
                               {report.fileUrl ? (
                                 <>
                                   <div className="space-y-2">
                                     <div className="text-sm text-muted-foreground">
-                                      <p><strong>Despatch No:</strong> {report.despatchNo}</p>
-                                      <p><strong>Despatch Date:</strong> {formatDate(report.despatchDate)}</p>
+                                      <p>
+                                        <strong>Despatch No:</strong>{" "}
+                                        {report.despatchNo}
+                                      </p>
+                                      <p>
+                                        <strong>Despatch Date:</strong>{" "}
+                                        {formatDate(report.despatchDate)}
+                                      </p>
                                     </div>
                                   </div>
                                   <div className="w-full h-[600px] border rounded-lg overflow-hidden">
@@ -564,7 +652,16 @@ export default function Attendance() {
                                       type="application/pdf"
                                       className="w-full h-full"
                                     >
-                                      <p>Unable to display PDF. <a href={report.fileUrl} target="_blank" rel="noopener noreferrer">Click here to download</a></p>
+                                      <p>
+                                        Unable to display PDF.{" "}
+                                        <a
+                                          href={report.fileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Click here to download
+                                        </a>
+                                      </p>
                                     </object>
                                   </div>
                                 </>
@@ -572,21 +669,33 @@ export default function Attendance() {
                                 <form className="space-y-4">
                                   <div className="grid gap-4">
                                     <div className="space-y-2">
-                                      <label htmlFor="despatchNo" className="text-sm font-medium">Despatch No</label>
+                                      <label
+                                        htmlFor="despatchNo"
+                                        className="text-sm font-medium"
+                                      >
+                                        Despatch No
+                                      </label>
                                       <Input
                                         id="despatchNo"
                                         placeholder="Enter despatch number"
                                       />
                                     </div>
                                     <div className="space-y-2">
-                                      <label htmlFor="despatchDate" className="text-sm font-medium">Despatch Date</label>
-                                      <Input
-                                        id="despatchDate"
-                                        type="date"
-                                      />
+                                      <label
+                                        htmlFor="despatchDate"
+                                        className="text-sm font-medium"
+                                      >
+                                        Despatch Date
+                                      </label>
+                                      <Input id="despatchDate" type="date" />
                                     </div>
                                     <div className="space-y-2">
-                                      <label htmlFor="pdfFile" className="text-sm font-medium">PDF File</label>
+                                      <label
+                                        htmlFor="pdfFile"
+                                        className="text-sm font-medium"
+                                      >
+                                        PDF File
+                                      </label>
                                       <Input
                                         id="pdfFile"
                                         type="file"
@@ -602,24 +711,39 @@ export default function Attendance() {
                                       type="button"
                                       onClick={(e) => {
                                         e.preventDefault();
-                                        const form = e.currentTarget.closest('form');
+                                        const form =
+                                          e.currentTarget.closest("form");
                                         if (form) {
-                                          const file = form.querySelector<HTMLInputElement>('#pdfFile')?.files?.[0];
-                                          const despatchNo = form.querySelector<HTMLInputElement>('#despatchNo')?.value;
-                                          const despatchDate = form.querySelector<HTMLInputElement>('#despatchDate')?.value;
+                                          const file =
+                                            form.querySelector<HTMLInputElement>(
+                                              "#pdfFile",
+                                            )?.files?.[0];
+                                          const despatchNo =
+                                            form.querySelector<HTMLInputElement>(
+                                              "#despatchNo",
+                                            )?.value;
+                                          const despatchDate =
+                                            form.querySelector<HTMLInputElement>(
+                                              "#despatchDate",
+                                            )?.value;
 
-                                          if (!file || !despatchNo || !despatchDate) {
+                                          if (
+                                            !file ||
+                                            !despatchNo ||
+                                            !despatchDate
+                                          ) {
                                             toast({
                                               variant: "destructive",
                                               title: "Error",
-                                              description: "Please fill in all fields",
+                                              description:
+                                                "Please fill in all fields",
                                             });
                                             return;
                                           }
 
                                           handleUpload(file, report.id, {
                                             despatchNo,
-                                            despatchDate
+                                            despatchDate,
                                           });
                                         }
                                       }}
@@ -635,7 +759,9 @@ export default function Attendance() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
+                            onClick={() =>
+                              setLocation(`/dashboard/reports/${report.id}`)
+                            }
                             className="flex items-center gap-2"
                           >
                             <Eye className="h-4 w-4" />
