@@ -65,7 +65,29 @@ export default function AdminDashboard() {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [monthFilter, setMonthFilter] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "", direction: "asc" });
+
+  // Get unique months from reports
+  const availableMonths = useMemo(() => {
+    if (!reports) return [];
+    const uniqueMonths = new Set();
+    reports.forEach(report => {
+      const date = new Date(report.year, report.month - 1);
+      const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+      uniqueMonths.add(monthKey);
+    });
+    return Array.from(uniqueMonths).map(monthKey => {
+      const [year, month] = (monthKey as string).split('-');
+      return {
+        value: monthKey as string,
+        label: new Date(parseInt(year), parseInt(month)).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long'
+        })
+      };
+    }).sort((a, b) => b.value.localeCompare(a.value)); // Sort in descending order
+  }, [reports]);
 
   const handleSort = (key: keyof ReportWithDepartment) => {
     setSortConfig(current => ({
@@ -86,7 +108,11 @@ export default function AdminDashboard() {
 
       const matchesStatus = statusFilter === "all" || report.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      // Add month filtering
+      const matchesMonth = monthFilter === "all" || 
+        `${report.year}-${report.month - 1}` === monthFilter;
+
+      return matchesSearch && matchesStatus && matchesMonth;
     });
 
     if (sortConfig.key) {
@@ -108,7 +134,7 @@ export default function AdminDashboard() {
     }
 
     return filtered;
-  }, [reports, searchTerm, statusFilter, sortConfig]);
+  }, [reports, searchTerm, statusFilter, monthFilter, sortConfig]);
 
   const handleLogout = () => {
     setLocation("/admin/login");
@@ -155,6 +181,22 @@ export default function AdminDashboard() {
             className="pl-8"
           />
         </div>
+        <Select
+          value={monthFilter}
+          onValueChange={setMonthFilter}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Months</SelectItem>
+            {availableMonths.map(({ value, label }) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select
           value={statusFilter}
           onValueChange={setStatusFilter}
@@ -246,7 +288,7 @@ export default function AdminDashboard() {
                     {
                       year: "numeric",
                       month: "long",
-                    },
+                    }
                   )}
                 </TableCell>
                 <TableCell className="font-medium">
@@ -258,14 +300,10 @@ export default function AdminDashboard() {
                     : report.transactionId || "Not generated"}
                 </TableCell>
                 <TableCell>{report.despatchNo || "-"}</TableCell>
-                <TableCell>
-                  {report.despatchDate ? formatDate(report.despatchDate) : "-"}
-                </TableCell>
+                <TableCell>{formatDate(report.despatchDate)}</TableCell>
                 <TableCell>
                   <Badge
-                    variant={
-                      report.status === "submitted" ? "default" : "secondary"
-                    }
+                    variant={report.status === "submitted" ? "default" : "secondary"}
                   >
                     {report.status}
                   </Badge>
