@@ -92,8 +92,8 @@ export default function AdminDashboard() {
             <TableRow>
                 <TableHead>Receipt No.</TableHead>
                 <TableHead>Receipt Date</TableHead>
-                <TableHead>Department</TableHead>
                 <TableHead>Month</TableHead>
+                <TableHead>Department</TableHead>
                 <TableHead>Transaction ID</TableHead>
                 <TableHead>Despatch No.</TableHead>
                 <TableHead>Despatch Date</TableHead>
@@ -106,9 +106,6 @@ export default function AdminDashboard() {
               <TableRow key={report.id}>
                 <TableCell>{report.receiptNo || "-"}</TableCell>
                 <TableCell>{formatDate(report.receiptDate)}</TableCell>
-                <TableCell className="font-medium">
-                  {report.department?.name || "N/A"}
-                </TableCell>
                 <TableCell>
                   {new Date(report.year, report.month - 1).toLocaleDateString(
                     "en-US",
@@ -117,6 +114,9 @@ export default function AdminDashboard() {
                       month: "long",
                     },
                   )}
+                </TableCell>
+                <TableCell className="font-medium">
+                  {report.department?.name || "N/A"}
                 </TableCell>
                 <TableCell>
                   {report.status === "draft"
