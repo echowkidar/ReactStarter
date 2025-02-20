@@ -155,16 +155,17 @@ export default function Attendance() {
       setSelectedReport(reportId);
 
       // Update status to "sent" after successful PDF upload along with receipt and despatch details
-      await apiRequest("PATCH", `/api/attendance/${reportId}`, {
+      const updateResponse = await apiRequest("PATCH", `/api/attendance/${reportId}`, {
         status: "sent",
         fileUrl: data.fileUrl,
         despatchNo: despatchDetails?.despatchNo,
         despatchDate: despatchDetails?.despatchDate,
-        receiptDate: new Date().toISOString(), // Add current date as receipt date
-        receiptNo: data.receiptNo, // This will come from the backend
+        receiptDate: new Date().toISOString(),
       });
 
-      // Update local state
+      const updatedData = await updateResponse.json();
+
+      // Update local state with the new receipt number from the backend
       const updatedReports = reports?.map((report) =>
         report.id === reportId
           ? {
@@ -174,7 +175,7 @@ export default function Attendance() {
               despatchNo: despatchDetails?.despatchNo,
               despatchDate: despatchDetails?.despatchDate,
               receiptDate: new Date().toISOString(),
-              receiptNo: data.receiptNo,
+              receiptNo: updatedData.receiptNo, // Use the receipt number from the backend response
             }
           : report,
       );
