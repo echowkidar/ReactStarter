@@ -105,8 +105,11 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       status: report.status || "draft",
       transactionId: uuid().slice(0, 8).toUpperCase(),
+      receiptNo: null,
+      receiptDate: null,
       despatchNo: null,
-      despatchDate: null
+      despatchDate: null,
+      fileUrl: null
     };
     this.attendanceReports.set(id, newReport);
     return newReport;
@@ -134,6 +137,7 @@ export class MemStorage implements IStorage {
     if (updates.status === "sent" && !report.receiptNo) {
       this.lastReceiptNo++;
       updates.receiptNo = this.lastReceiptNo;
+      updates.receiptDate = new Date();
     }
 
     const updatedReport = { ...report, ...updates };

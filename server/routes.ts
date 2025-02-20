@@ -247,14 +247,17 @@ export async function registerRoutes(app: Express) {
         const department = await storage.getDepartment(report.departmentId);
         return {
           ...report,
-          department
+          department,
+          // Ensure these fields are included in the response
+          receiptNo: report.receiptNo,
+          receiptDate: report.receiptDate,
         };
       })
     );
     res.json(reportsWithDepartments);
   });
 
-  // Add this new endpoint after the existing admin routes
+  // Add receipt details to single report endpoint
   app.get("/api/admin/attendance/:id", async (req, res) => {
     try {
       const report = await storage.getAttendanceReport(Number(req.params.id));
@@ -278,14 +281,16 @@ export async function registerRoutes(app: Express) {
       res.json({
         ...report,
         department,
-        entries: entriesWithEmployeeDetails
+        entries: entriesWithEmployeeDetails,
+        // Ensure these fields are included
+        receiptNo: report.receiptNo,
+        receiptDate: report.receiptDate,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch report details" });
     }
   });
 
-  // Add this new route after the existing attendance routes
   app.delete("/api/attendance/:id", async (req, res) => {
     try {
       await storage.deleteAttendanceReport(Number(req.params.id));
