@@ -41,6 +41,7 @@ export class MemStorage implements IStorage {
   private attendanceReports: Map<number, AttendanceReport>;
   private attendanceEntries: Map<number, AttendanceEntry>;
   private currentId: { [key: string]: number };
+  private lastReceiptNo: number;
 
   constructor() {
     this.departments = new Map();
@@ -53,6 +54,7 @@ export class MemStorage implements IStorage {
       report: 1,
       entry: 1,
     };
+    this.lastReceiptNo = 0; // Initialize receipt number counter
   }
 
   async getDepartment(id: number): Promise<Department | undefined> {
@@ -127,6 +129,12 @@ export class MemStorage implements IStorage {
   async updateAttendanceReport(id: number, updates: Partial<AttendanceReport>): Promise<AttendanceReport> {
     const report = await this.getAttendanceReport(id);
     if (!report) throw new Error("Report not found");
+
+    // If status is changing to "sent" and there's no receipt number yet
+    if (updates.status === "sent" && !report.receiptNo) {
+      this.lastReceiptNo++;
+      updates.receiptNo = this.lastReceiptNo;
+    }
 
     const updatedReport = { ...report, ...updates };
     this.attendanceReports.set(id, updatedReport);

@@ -158,9 +158,26 @@ export async function registerRoutes(app: Express) {
 
   app.patch("/api/attendance/:id", async (req, res) => {
     try {
-      const report = await storage.updateAttendanceReport(Number(req.params.id), req.body);
+      const reportId = Number(req.params.id);
+      const updates = req.body;
+
+      // If status is being changed to "sent", set receipt details
+      if (updates.status === "sent") {
+        const report = await storage.getAttendanceReport(reportId);
+        if (!report) {
+          return res.status(404).json({ message: "Report not found" });
+        }
+
+        // Only set receipt details if they haven't been set yet
+        if (!report.receiptDate) {
+          updates.receiptDate = new Date();
+        }
+      }
+
+      const report = await storage.updateAttendanceReport(reportId, updates);
       res.json(report);
     } catch (error) {
+      console.error('Error updating attendance report:', error);
       res.status(400).json({ message: "Invalid report update" });
     }
   });
