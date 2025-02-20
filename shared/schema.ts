@@ -33,6 +33,8 @@ export const attendanceReports = pgTable("attendance_reports", {
   departmentId: integer("department_id").notNull(),
   month: integer("month").notNull(),
   year: integer("year").notNull(),
+  receiptNo: serial("receipt_no"),  // Added: Auto-incrementing receipt number
+  receiptDate: timestamp("receipt_date"),  // Added: Receipt date field
   transactionId: text("transaction_id"),
   despatchNo: text("despatch_no"),
   despatchDate: date("despatch_date"),
@@ -54,7 +56,12 @@ export const attendanceEntries = pgTable("attendance_entries", {
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
 export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true });
-export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({ id: true, createdAt: true });
+export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({ 
+  id: true, 
+  createdAt: true,
+  receiptNo: true, // Omit receipt number as it's auto-generated
+  receiptDate: true // Omit receipt date as it's set when status changes to sent
+});
 
 const periodSchema = z.object({
   fromDate: z.string(),

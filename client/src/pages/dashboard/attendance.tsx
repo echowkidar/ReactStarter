@@ -27,7 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
-import { Plus, Printer, FileCheck, Eye, Upload, Trash2, Loader2 } from "lucide-react";
+import { Plus, Eye, Upload, Trash2, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 // Types
@@ -41,7 +41,7 @@ interface AttendanceReport {
   fileUrl?: string;
   despatchNo?: string;
   despatchDate?: string;
-  receiptNo?: string;
+  receiptNo?: number;
   receiptDate?: string;
 }
 
@@ -251,7 +251,6 @@ export default function Attendance() {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to finalize report" });
     },
   });
-
 
   if (isLoading || loadingEntries) return <Loading />;
 
