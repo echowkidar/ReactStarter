@@ -27,7 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
-import { Plus, Eye, Upload, Trash2, Loader2 } from "lucide-react";
+import { Plus, Eye, Upload, Trash2, Loader2, FileCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 // Types
