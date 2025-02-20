@@ -307,7 +307,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
               <TableRow>
                 <TableHead className="w-[50px]">Include</TableHead>
                 <TableHead>EPID</TableHead>
-                <TableHead>Employee ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Designation</TableHead>
                 <TableHead>Reg No.</TableHead>
@@ -324,7 +323,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                       disabled={isLoading}
                     />
                   </TableCell>
-                  <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.employeeId}</TableCell>
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
