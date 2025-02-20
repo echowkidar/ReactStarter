@@ -57,7 +57,8 @@ export default function AdminDashboard() {
 
   if (isLoading) return <Loading />;
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | Date | null) => {
+    if (!date) return "-";
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -91,6 +92,8 @@ export default function AdminDashboard() {
             <TableRow>
               <TableHead>Department</TableHead>
               <TableHead>Month</TableHead>
+              <TableHead>Receipt No.</TableHead>
+              <TableHead>Receipt Date</TableHead>
               <TableHead>Transaction ID</TableHead>
               <TableHead>Despatch No.</TableHead>
               <TableHead>Despatch Date</TableHead>
@@ -113,6 +116,8 @@ export default function AdminDashboard() {
                     },
                   )}
                 </TableCell>
+                <TableCell>{report.receiptNo || "-"}</TableCell>
+                <TableCell>{formatDate(report.receiptDate)}</TableCell>
                 <TableCell>
                   {report.status === "draft"
                     ? "*****"
