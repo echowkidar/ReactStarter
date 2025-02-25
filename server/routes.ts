@@ -170,6 +170,7 @@ export async function registerRoutes(app: Express) {
       const employeeData = insertEmployeeSchema.parse({
         ...req.body,
         departmentId: Number(req.params.departmentId),
+        epid: req.body.employeeId || req.body.epid, // Handle both field names
         joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
         employmentStatus: req.body.employmentStatus || "Permanent",
         joiningShift: req.body.joiningShift || "morning",
@@ -177,7 +178,7 @@ export async function registerRoutes(app: Express) {
         salaryRegisterNo: req.body.salaryRegisterNo || "",
         bankAccount: req.body.bankAccount || "",
         panNumber: req.body.panNumber || "",
-        aadharCard: req.body.aadharCard || ""
+        aadharCard: req.body.adharCard || req.body.aadharCard || "" // Handle both spellings
       });
 
       // Log the parsed data
