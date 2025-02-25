@@ -115,15 +115,22 @@ export async function registerRoutes(app: Express) {
 
   // Employee routes
   app.get("/api/departments/:departmentId/employees", async (req, res) => {
-    const employees = await storage.getEmployeesByDepartment(Number(req.params.departmentId));
-    res.json(employees);
+    try {
+      console.log('Fetching employees for department:', req.params.departmentId);
+      const employees = await storage.getEmployeesByDepartment(Number(req.params.departmentId));
+      console.log('Found employees:', employees);
+      res.json(employees);
+    } catch (error) {
+      console.error('Error fetching department employees:', error);
+      res.status(500).json({ message: "Failed to fetch employees" });
+    }
   });
 
   // Create employee (admin)
   app.post("/api/admin/employees", async (req, res) => {
     try {
       // Log the raw request body
-      console.log("Received raw employee data:", req.body);
+      console.log("Admin - Received raw employee data:", req.body);
 
       const employeeData = insertEmployeeSchema.parse({
         ...req.body,
@@ -139,7 +146,7 @@ export async function registerRoutes(app: Express) {
       });
 
       // Log the parsed data
-      console.log("Parsed employee data:", employeeData);
+      console.log("Admin - Parsed employee data:", employeeData);
 
       const employee = await storage.createEmployee(employeeData);
       res.status(201).json(employee);
