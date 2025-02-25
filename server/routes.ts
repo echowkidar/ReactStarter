@@ -114,18 +114,6 @@ export async function registerRoutes(app: Express) {
   });
 
   // Employee routes
-  app.get("/api/departments/:departmentId/employees", async (req, res) => {
-    try {
-      console.log('Fetching employees for department:', req.params.departmentId);
-      const employees = await storage.getEmployeesByDepartment(Number(req.params.departmentId));
-      console.log('Found employees:', employees);
-      res.json(employees);
-    } catch (error) {
-      console.error('Error fetching department employees:', error);
-      res.status(500).json({ message: "Failed to fetch employees" });
-    }
-  });
-
   // Create employee (admin)
   app.post("/api/admin/employees", async (req, res) => {
     try {
@@ -137,7 +125,7 @@ export async function registerRoutes(app: Express) {
         departmentId: Number(req.body.departmentId),
         joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
         employmentStatus: req.body.employmentStatus || "Permanent",
-        joiningShift: req.body.joiningShift || "morning",
+        joiningShift: req.body.joiningShift || "FN",
         officeMemoNo: req.body.officeMemoNo || "",
         salaryRegisterNo: req.body.salaryRegisterNo || "",
         bankAccount: req.body.bankAccount || "",
@@ -148,11 +136,12 @@ export async function registerRoutes(app: Express) {
       // Log the parsed data
       console.log("Admin - Parsed employee data:", employeeData);
 
+      // Create the employee
+      console.log("Creating employee in storage:", employeeData);
       const employee = await storage.createEmployee(employeeData);
       res.status(201).json(employee);
     } catch (error) {
       console.error('Error creating employee:', error);
-      // Send back detailed error information for debugging
       if (error instanceof Error) {
         res.status(400).json({ 
           message: "Invalid employee data",
@@ -168,46 +157,24 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Create employee (department)
-  app.post("/api/departments/:departmentId/employees", async (req, res) => {
+  // Get employees for a department
+  app.get("/api/departments/:departmentId/employees", async (req, res) => {
     try {
-      // Log the raw request body
-      console.log("Department - Received raw employee data:", req.body);
+      const departmentId = Number(req.params.departmentId);
+      console.log('Fetching employees for department:', departmentId);
 
-      const employeeData = insertEmployeeSchema.parse({
-        ...req.body,
-        departmentId: Number(req.params.departmentId),
-        epid: req.body.employeeId || req.body.epid, // Handle both field names
-        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
-        employmentStatus: req.body.employmentStatus || "Permanent",
-        joiningShift: req.body.joiningShift || "morning",
-        officeMemoNo: req.body.officeMemoNo || "",
-        salaryRegisterNo: req.body.salaryRegisterNo || "",
-        bankAccount: req.body.bankAccount || "",
-        panNumber: req.body.panNumber || "",
-        aadharCard: req.body.adharCard || req.body.aadharCard || "" // Handle both spellings
-      });
-
-      // Log the parsed data
-      console.log("Department - Parsed employee data:", employeeData);
-
-      const employee = await storage.createEmployee(employeeData);
-      res.status(201).json(employee);
-    } catch (error) {
-      console.error('Error creating employee in department:', error);
-      // Send back detailed error information for debugging
-      if (error instanceof Error) {
-        res.status(400).json({ 
-          message: "Invalid employee data",
-          details: error.message,
-          stack: error.stack
-        });
-      } else {
-        res.status(400).json({ 
-          message: "Invalid employee data",
-          details: String(error)
-        });
+      // Verify department exists
+      const department = await storage.getDepartment(departmentId);
+      if (!department) {
+        return res.status(404).json({ message: "Department not found" });
       }
+
+      const employees = await storage.getEmployeesByDepartment(departmentId);
+      console.log('Found employees for department:', departmentId, employees);
+      res.json(employees);
+    } catch (error) {
+      console.error('Error fetching department employees:', error);
+      res.status(500).json({ message: "Failed to fetch employees" });
     }
   });
 
