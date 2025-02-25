@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Employee, Department } from "@shared/schema";
+import type { Employee, Department, InsertEmployee } from "@shared/schema";
 
 export default function AdminEmployees() {
   const { toast } = useToast();
@@ -43,7 +43,7 @@ export default function AdminEmployees() {
 
   // Create/Update employee mutation
   const saveMutation = useMutation({
-    mutationFn: async (data: Partial<Employee>) => {
+    mutationFn: async (data: Partial<InsertEmployee>) => {
       if (selectedEmployee) {
         await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, data);
       } else {
@@ -70,8 +70,12 @@ export default function AdminEmployees() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
-    saveMutation.mutate(data as any);
+    const data: Record<string, any> = Object.fromEntries(formData.entries());
+
+    // Convert departmentId to number
+    data.departmentId = parseInt(data.departmentId as string, 10);
+
+    saveMutation.mutate(data as InsertEmployee);
   };
 
   return (
@@ -152,7 +156,7 @@ export default function AdminEmployees() {
                     <Label htmlFor="employmentStatus">Employment Status</Label>
                     <Select 
                       name="employmentStatus"
-                      defaultValue={selectedEmployee?.employmentStatus}
+                      defaultValue={selectedEmployee?.employmentStatus || "permanent"}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select status" />
@@ -187,7 +191,7 @@ export default function AdminEmployees() {
                     <Label htmlFor="joiningShift">Joining Shift</Label>
                     <Select 
                       name="joiningShift"
-                      defaultValue={selectedEmployee?.joiningShift}
+                      defaultValue={selectedEmployee?.joiningShift || "FN"}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select shift" />
@@ -212,6 +216,7 @@ export default function AdminEmployees() {
                     <Select 
                       name="departmentId"
                       defaultValue={selectedEmployee?.departmentId?.toString()}
+                      required
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select department" />
