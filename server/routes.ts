@@ -349,5 +349,37 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Add this new route for fetching departments before the return statement
+  app.get("/api/departments", async (req, res) => {
+    try {
+      const departments = await storage.getAllDepartments();
+      // Create a list of predefined departments if no departments exist
+      if (!departments || departments.length === 0) {
+        const defaultDepartments = [
+          { name: "Department of Computer Science", hodTitle: "Chairperson", email: "", password: "" },
+          { name: "Department of Physics", hodTitle: "Chairperson", email: "", password: "" },
+          { name: "Department of Chemistry", hodTitle: "Chairperson", email: "", password: "" },
+          { name: "Department of Mathematics", hodTitle: "Chairperson", email: "", password: "" },
+          { name: "Department of Botany", hodTitle: "Chairperson", email: "", password: "" },
+          { name: "Department of Zoology", hodTitle: "Chairperson", email: "", password: "" }
+        ];
+
+        // Create each department
+        for (const dept of defaultDepartments) {
+          await storage.createDepartment(dept);
+        }
+
+        // Fetch the newly created departments
+        const newDepartments = await storage.getAllDepartments();
+        return res.json(newDepartments);
+      }
+
+      res.json(departments);
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+      res.status(500).json({ message: "Failed to fetch departments" });
+    }
+  });
+
   return httpServer;
 }
