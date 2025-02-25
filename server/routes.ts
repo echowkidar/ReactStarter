@@ -349,19 +349,18 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Add this new route for fetching departments before the return statement
   app.get("/api/departments", async (req, res) => {
     try {
       const departments = await storage.getAllDepartments();
       // Create a list of predefined departments if no departments exist
       if (!departments || departments.length === 0) {
         const defaultDepartments = [
-          { name: "Department of Computer Science", hodTitle: "Chairperson", email: "", password: "" },
-          { name: "Department of Physics", hodTitle: "Chairperson", email: "", password: "" },
-          { name: "Department of Chemistry", hodTitle: "Chairperson", email: "", password: "" },
-          { name: "Department of Mathematics", hodTitle: "Chairperson", email: "", password: "" },
-          { name: "Department of Botany", hodTitle: "Chairperson", email: "", password: "" },
-          { name: "Department of Zoology", hodTitle: "Chairperson", email: "", password: "" }
+          { name: "Department of Computer Science", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+          { name: "Department of Physics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+          { name: "Department of Chemistry", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+          { name: "Department of Mathematics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+          { name: "Department of Botany", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+          { name: "Department of Zoology", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" }
         ];
 
         // Create each department

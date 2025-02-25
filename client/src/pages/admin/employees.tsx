@@ -222,7 +222,6 @@ export default function AdminEmployees() {
                         <SelectValue placeholder={isDepartmentsLoading ? "Loading..." : "Select department"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Select department</SelectItem>
                         {departments.map((dept) => (
                           <SelectItem key={dept.id} value={dept.id.toString()}>
                             {dept.name}
