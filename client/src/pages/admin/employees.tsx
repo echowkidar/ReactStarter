@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Employee } from "@shared/schema";
+import type { Employee, Department } from "@shared/schema";
 
 export default function AdminEmployees() {
   const { toast } = useToast();
@@ -19,6 +20,11 @@ export default function AdminEmployees() {
   // Fetch all employees
   const { data: employees = [] } = useQuery<Employee[]>({ 
     queryKey: ['/api/admin/employees']
+  });
+
+  // Fetch departments for dropdown
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ['/api/departments']
   });
 
   // Delete employee mutation
@@ -80,52 +86,149 @@ export default function AdminEmployees() {
                 Add Employee
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>
                   {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Name</Label>
-                  <Input 
-                    id="name" 
-                    name="name" 
-                    defaultValue={selectedEmployee?.name}
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="employeeId">Employee ID</Label>
-                  <Input 
-                    id="employeeId" 
-                    name="employeeId" 
-                    defaultValue={selectedEmployee?.employeeId}
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="designation">Designation</Label>
-                  <Input 
-                    id="designation" 
-                    name="designation" 
-                    defaultValue={selectedEmployee?.designation}
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="employmentStatus">Employment Status</Label>
-                  <Input 
-                    id="employmentStatus" 
-                    name="employmentStatus" 
-                    defaultValue={selectedEmployee?.employmentStatus}
-                    required 
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="epid">EPID</Label>
+                    <Input 
+                      id="epid" 
+                      name="epid" 
+                      defaultValue={selectedEmployee?.epid}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="name">Name</Label>
+                    <Input 
+                      id="name" 
+                      name="name" 
+                      defaultValue={selectedEmployee?.name}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="panNumber">PAN Number</Label>
+                    <Input 
+                      id="panNumber" 
+                      name="panNumber" 
+                      defaultValue={selectedEmployee?.panNumber}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bankAccount">Bank Account</Label>
+                    <Input 
+                      id="bankAccount" 
+                      name="bankAccount" 
+                      defaultValue={selectedEmployee?.bankAccount}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="aadharCard">Aadhar Card</Label>
+                    <Input 
+                      id="aadharCard" 
+                      name="aadharCard" 
+                      defaultValue={selectedEmployee?.aadharCard}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="designation">Designation</Label>
+                    <Input 
+                      id="designation" 
+                      name="designation" 
+                      defaultValue={selectedEmployee?.designation}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="employmentStatus">Employment Status</Label>
+                    <Select 
+                      name="employmentStatus"
+                      defaultValue={selectedEmployee?.employmentStatus}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="permanent">Permanent</SelectItem>
+                        <SelectItem value="temporary">Temporary</SelectItem>
+                        <SelectItem value="contract">Contract</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="officeMemoNo">Office Memo No.</Label>
+                    <Input 
+                      id="officeMemoNo" 
+                      name="officeMemoNo" 
+                      defaultValue={selectedEmployee?.officeMemoNo}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="joiningDate">Joining Date</Label>
+                    <Input 
+                      id="joiningDate" 
+                      name="joiningDate" 
+                      type="date"
+                      defaultValue={selectedEmployee?.joiningDate}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="joiningShift">Joining Shift</Label>
+                    <Select 
+                      name="joiningShift"
+                      defaultValue={selectedEmployee?.joiningShift}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select shift" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="FN">FN</SelectItem>
+                        <SelectItem value="AN">AN</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
+                    <Input 
+                      id="salaryRegisterNo" 
+                      name="salaryRegisterNo" 
+                      defaultValue={selectedEmployee?.salaryRegisterNo}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="departmentId">Department</Label>
+                    <Select 
+                      name="departmentId"
+                      defaultValue={selectedEmployee?.departmentId?.toString()}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>
+                            {dept.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="flex justify-end space-x-2">
                   <Button type="submit" disabled={saveMutation.isPending}>
-                    {saveMutation.isPending ? 'Saving...' : 'Save'}
+                    {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
                   </Button>
                 </div>
               </form>
@@ -136,8 +239,9 @@ export default function AdminEmployees() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employee ID</TableHead>
+                <TableHead>EPID</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Department</TableHead>
                 <TableHead>Designation</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -146,8 +250,9 @@ export default function AdminEmployees() {
             <TableBody>
               {employees.map((employee) => (
                 <TableRow key={employee.id}>
-                  <TableCell>{employee.employeeId}</TableCell>
+                  <TableCell>{employee.epid}</TableCell>
                   <TableCell>{employee.name}</TableCell>
+                  <TableCell>{employee.departmentName}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
                   <TableCell>{employee.employmentStatus}</TableCell>
                   <TableCell className="text-right">

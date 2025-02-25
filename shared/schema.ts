@@ -14,14 +14,13 @@ export const departments = pgTable("departments", {
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
   departmentId: integer("department_id").notNull(),
-  employeeId: text("employee_id").notNull(),
+  epid: text("epid").notNull(),
   name: text("name").notNull(),
   panNumber: text("pan_number").notNull(),
   bankAccount: text("bank_account").notNull(),
-  adharCard: text("adhar_card").notNull(),
+  aadharCard: text("aadhar_card").notNull(),
   designation: text("designation").notNull(),
   employmentStatus: text("employment_status").notNull(),
-  termExpiry: date("term_expiry"),
   officeMemoNo: text("office_memo_no").notNull(),
   joiningDate: date("joining_date").notNull(),
   joiningShift: text("joining_shift").notNull(),
@@ -33,8 +32,8 @@ export const attendanceReports = pgTable("attendance_reports", {
   departmentId: integer("department_id").notNull(),
   month: integer("month").notNull(),
   year: integer("year").notNull(),
-  receiptNo: serial("receipt_no"),  // Added: Auto-incrementing receipt number
-  receiptDate: timestamp("receipt_date"),  // Added: Receipt date field
+  receiptNo: serial("receipt_no"),
+  receiptDate: timestamp("receipt_date"),
   transactionId: text("transaction_id"),
   despatchNo: text("despatch_no"),
   despatchDate: date("despatch_date"),
@@ -50,7 +49,7 @@ export const attendanceEntries = pgTable("attendance_entries", {
   days: integer("days").notNull(),
   fromDate: text("from_date").notNull(),
   toDate: text("to_date").notNull(),
-  periods: text("periods").notNull(), 
+  periods: text("periods").notNull(),
   remarks: text("remarks"),
 });
 
@@ -59,8 +58,8 @@ export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: tru
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({ 
   id: true, 
   createdAt: true,
-  receiptNo: true, // Omit receipt number as it's auto-generated
-  receiptDate: true // Omit receipt date as it's set when status changes to sent
+  receiptNo: true,
+  receiptDate: true
 });
 
 const periodSchema = z.object({
@@ -75,12 +74,12 @@ export const insertAttendanceEntrySchema = createInsertSchema(attendanceEntries)
   .extend({
     fromDate: z.string(),
     toDate: z.string(),
-    periods: z.string() 
+    periods: z.string()
   });
 
 export type Department = typeof departments.$inferSelect;
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
-export type Employee = typeof employees.$inferSelect;
+export type Employee = typeof employees.$inferSelect & { departmentName?: string };
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type AttendanceReport = typeof attendanceReports.$inferSelect;
 export type InsertAttendanceReport = z.infer<typeof insertAttendanceReportSchema>;
