@@ -23,7 +23,7 @@ export default function AdminEmployees() {
   });
 
   // Fetch departments for dropdown
-  const { data: departments = [] } = useQuery<Department[]>({
+  const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({
     queryKey: ['/api/departments']
   });
 
@@ -219,7 +219,7 @@ export default function AdminEmployees() {
                       required
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select department" />
+                        <SelectValue placeholder={isDepartmentsLoading ? "Loading..." : "Select department"} />
                       </SelectTrigger>
                       <SelectContent>
                         {departments.map((dept) => (
@@ -269,7 +269,7 @@ export default function AdminEmployees() {
                         setIsDialogOpen(true);
                       }}
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="w-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
