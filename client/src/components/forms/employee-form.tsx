@@ -64,326 +64,212 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Basic Information */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="epid"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>EPID</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="panNumber"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>PAN Number</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="bankAccount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Bank Account</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="aadharCard"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Aadhar Card</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="designation"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Designation</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="employmentStatus"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Employment Status</FormLabel>
-                <Select
-                  disabled={isLoading}
-                  onValueChange={field.onChange}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {employmentStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {form.watch("employmentStatus") !== "Permanent" && (
-            <FormField
-              control={form.control}
-              name="termExpiry"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Term Expiry Date</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="date" disabled={isLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-          <FormField
-            control={form.control}
-            name="officeMemoNo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Office Memo No.</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="joiningDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Joining Date</FormLabel>
-                <FormControl>
-                  <Input {...field} type="date" disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="joiningShift"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Joining Shift</FormLabel>
-                <Select
-                  disabled={isLoading}
-                  onValueChange={field.onChange}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="FN">FN</SelectItem>
-                    <SelectItem value="AN">AN</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="salaryRegisterNo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Salary Register No.</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isLoading} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {/* Document Upload Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Documents</h3>
-          <div className="grid gap-6 md:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="panCardDoc"
-              render={({ field }) => (
-                <FormItem>
-                  <FileUpload
-                    label="PAN Card"
-                    name="panCardDoc"
-                    value={field.value}
-                    onChange={(file) => {
-                      if (file) {
-                        // Handle file upload and update form value with URL
-                        field.onChange(URL.createObjectURL(file));
-                      } else {
-                        field.onChange("");
-                      }
-                    }}
-                    disabled={isLoading}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="bankAccountDoc"
-              render={({ field }) => (
-                <FormItem>
-                  <FileUpload
-                    label="Bank Account Proof"
-                    name="bankAccountDoc"
-                    value={field.value}
-                    onChange={(file) => {
-                      if (file) {
-                        field.onChange(URL.createObjectURL(file));
-                      } else {
-                        field.onChange("");
-                      }
-                    }}
-                    disabled={isLoading}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="aadharCardDoc"
-              render={({ field }) => (
-                <FormItem>
-                  <FileUpload
-                    label="Aadhar Card"
-                    name="aadharCardDoc"
-                    value={field.value}
-                    onChange={(file) => {
-                      if (file) {
-                        field.onChange(URL.createObjectURL(file));
-                      } else {
-                        field.onChange("");
-                      }
-                    }}
-                    disabled={isLoading}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="officeMemoDoc"
-              render={({ field }) => (
-                <FormItem>
-                  <FileUpload
-                    label="Office Memo"
-                    name="officeMemoDoc"
-                    value={field.value}
-                    onChange={(file) => {
-                      if (file) {
-                        field.onChange(URL.createObjectURL(file));
-                      } else {
-                        field.onChange("");
-                      }
-                    }}
-                    disabled={isLoading}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="joiningReportDoc"
-              render={({ field }) => (
-                <FormItem>
-                  <FileUpload
-                    label="Joining Report"
-                    name="joiningReportDoc"
-                    value={field.value}
-                    onChange={(file) => {
-                      if (file) {
-                        field.onChange(URL.createObjectURL(file));
-                      } else {
-                        field.onChange("");
-                      }
-                    }}
-                    disabled={isLoading}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {(form.watch("employmentStatus") === "Probation" || 
-             form.watch("employmentStatus") === "Temporary") && (
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <div className="space-y-6">
+          {/* Basic Information Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="termExtensionDoc"
+                name="epid"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>EPID</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="panNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>PAN Number</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bankAccount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bank Account</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="aadharCard"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Aadhar Card</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="designation"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Designation</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="employmentStatus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Employment Status</FormLabel>
+                    <Select
+                      disabled={isLoading}
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {employmentStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {(form.watch("employmentStatus") === "Probation" || form.watch("employmentStatus") === "Temporary") && (
+                <FormField
+                  control={form.control}
+                  name="termExpiry"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Term Expiry Date</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="date" disabled={isLoading} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              <FormField
+                control={form.control}
+                name="officeMemoNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Office Memo No.</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="joiningDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Joining Date</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="date" disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="joiningShift"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Joining Shift</FormLabel>
+                    <Select
+                      disabled={isLoading}
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="FN">FN</SelectItem>
+                        <SelectItem value="AN">AN</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="salaryRegisterNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Salary Register No.</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Document Upload Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Document Upload</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="panCardDoc"
                 render={({ field }) => (
                   <FormItem>
                     <FileUpload
-                      label="Term Extension Office Memo"
-                      name="termExtensionDoc"
+                      label="PAN Card"
+                      name="panCardDoc"
                       value={field.value}
                       onChange={(file) => {
                         if (file) {
@@ -398,7 +284,125 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-            )}
+
+              <FormField
+                control={form.control}
+                name="bankAccountDoc"
+                render={({ field }) => (
+                  <FormItem>
+                    <FileUpload
+                      label="Bank Account Proof"
+                      name="bankAccountDoc"
+                      value={field.value}
+                      onChange={(file) => {
+                        if (file) {
+                          field.onChange(URL.createObjectURL(file));
+                        } else {
+                          field.onChange("");
+                        }
+                      }}
+                      disabled={isLoading}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="aadharCardDoc"
+                render={({ field }) => (
+                  <FormItem>
+                    <FileUpload
+                      label="Aadhar Card"
+                      name="aadharCardDoc"
+                      value={field.value}
+                      onChange={(file) => {
+                        if (file) {
+                          field.onChange(URL.createObjectURL(file));
+                        } else {
+                          field.onChange("");
+                        }
+                      }}
+                      disabled={isLoading}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="officeMemoDoc"
+                render={({ field }) => (
+                  <FormItem>
+                    <FileUpload
+                      label="Office Memo"
+                      name="officeMemoDoc"
+                      value={field.value}
+                      onChange={(file) => {
+                        if (file) {
+                          field.onChange(URL.createObjectURL(file));
+                        } else {
+                          field.onChange("");
+                        }
+                      }}
+                      disabled={isLoading}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="joiningReportDoc"
+                render={({ field }) => (
+                  <FormItem>
+                    <FileUpload
+                      label="Joining Report"
+                      name="joiningReportDoc"
+                      value={field.value}
+                      onChange={(file) => {
+                        if (file) {
+                          field.onChange(URL.createObjectURL(file));
+                        } else {
+                          field.onChange("");
+                        }
+                      }}
+                      disabled={isLoading}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {(form.watch("employmentStatus") === "Probation" ||
+                form.watch("employmentStatus") === "Temporary") && (
+                <FormField
+                  control={form.control}
+                  name="termExtensionDoc"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FileUpload
+                        label="Term Extension Office Memo"
+                        name="termExtensionDoc"
+                        value={field.value}
+                        onChange={(file) => {
+                          if (file) {
+                            field.onChange(URL.createObjectURL(file));
+                          } else {
+                            field.onChange("");
+                          }
+                        }}
+                        disabled={isLoading}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
           </div>
         </div>
 
