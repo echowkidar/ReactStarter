@@ -11,6 +11,7 @@ import Attendance from "@/pages/dashboard/attendance";
 import ReportDetails from "@/pages/dashboard/report-details";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
+import AdminEmployees from "@/pages/admin/employees";
 import AdminReportDetails from "@/pages/admin/report-details";
 
 function Router() {
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/dashboard/reports/:id" component={ReportDetails} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/admin/employees" component={AdminEmployees} />
       <Route path="/admin/reports/:id" component={AdminReportDetails} />
       <Route component={NotFound} />
     </Switch>

@@ -301,5 +301,48 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Add these new routes after the existing admin routes
+
+  // Get all employees (admin)
+  app.get("/api/admin/employees", async (req, res) => {
+    const allEmployees = [];
+    const departments = await storage.getAllDepartments();
+
+    for (const department of departments) {
+      const employees = await storage.getEmployeesByDepartment(department.id);
+      allEmployees.push(...employees.map(emp => ({
+        ...emp,
+        departmentName: department.name
+      })));
+    }
+
+    res.json(allEmployees);
+  });
+
+  // Create employee (admin)
+  app.post("/api/admin/employees", async (req, res) => {
+    try {
+      const employeeData = insertEmployeeSchema.parse({
+        ...req.body,
+        departmentId: Number(req.body.departmentId)
+      });
+      const employee = await storage.createEmployee(employeeData);
+      res.status(201).json(employee);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid employee data" });
+    }
+  });
+
+  // Update employee (admin)
+  app.patch("/api/employees/:id", async (req, res) => {
+    try {
+      const employee = await storage.updateEmployee(Number(req.params.id), req.body);
+      res.json(employee);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid employee update" });
+    }
+  });
+
+
   return httpServer;
 }

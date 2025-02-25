@@ -15,12 +15,14 @@ export interface IStorage {
   getDepartment(id: number): Promise<Department | undefined>;
   getDepartmentByEmail(email: string): Promise<Department | undefined>;
   createDepartment(department: InsertDepartment): Promise<Department>;
+  getAllDepartments(): Promise<Department[]>; // Added
 
   // Employee operations
   getEmployee(id: number): Promise<Employee | undefined>;
   getEmployeesByDepartment(departmentId: number): Promise<Employee[]>;
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
+  updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee>; // Added
 
   // Attendance operations
   createAttendanceReport(report: InsertAttendanceReport): Promise<AttendanceReport>;
@@ -187,6 +189,19 @@ export class MemStorage implements IStorage {
     const updatedEntry = { ...entry, ...updates };
     this.attendanceEntries.set(id, updatedEntry);
     return updatedEntry;
+  }
+
+  async getAllDepartments(): Promise<Department[]> { // Added implementation
+    return Array.from(this.departments.values());
+  }
+
+  async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> { // Added implementation
+    const employee = await this.getEmployee(id);
+    if (!employee) throw new Error("Employee not found");
+
+    const updatedEmployee = { ...employee, ...updates };
+    this.employees.set(id, updatedEmployee);
+    return updatedEmployee;
   }
 }
 
