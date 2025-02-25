@@ -18,7 +18,7 @@ export default function AdminEmployees() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Fetch all employees
-  const { data: employees = [] } = useQuery<Employee[]>({ 
+  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({ 
     queryKey: ['/api/admin/employees']
   });
 
@@ -269,7 +269,7 @@ export default function AdminEmployees() {
                         setIsDialogOpen(true);
                       }}
                     >
-                      <Pencil className="w-4 w-4" />
+                      <Pencil className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="ghost"

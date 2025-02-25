@@ -301,17 +301,53 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Add this new route for fetching departments
-  app.get("/api/departments", async (req, res) => {
+
+  // Get all employees (admin)
+  app.get("/api/admin/employees", async (req, res) => {
     try {
+      const allEmployees = [];
       const departments = await storage.getAllDepartments();
-      res.json(departments);
+
+      for (const department of departments) {
+        const employees = await storage.getEmployeesByDepartment(department.id);
+        allEmployees.push(...employees.map(emp => ({
+          ...emp,
+          departmentName: department.name
+        })));
+      }
+
+      res.json(allEmployees);
     } catch (error) {
-      console.error('Error fetching departments:', error);
-      res.status(500).json({ message: "Failed to fetch departments" });
+      console.error('Error fetching employees:', error);
+      res.status(500).json({ message: "Failed to fetch employees" });
     }
   });
 
+  // Create employee (admin)
+  app.post("/api/admin/employees", async (req, res) => {
+    try {
+      const employeeData = insertEmployeeSchema.parse({
+        ...req.body,
+        departmentId: Number(req.body.departmentId)
+      });
+      const employee = await storage.createEmployee(employeeData);
+      res.status(201).json(employee);
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      res.status(400).json({ message: "Invalid employee data" });
+    }
+  });
+
+  // Update employee (admin)
+  app.patch("/api/employees/:id", async (req, res) => {
+    try {
+      const employee = await storage.updateEmployee(Number(req.params.id), req.body);
+      res.json(employee);
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      res.status(400).json({ message: "Invalid employee update" });
+    }
+  });
 
   return httpServer;
 }
