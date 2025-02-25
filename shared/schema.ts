@@ -21,6 +21,7 @@ export const employees = pgTable("employees", {
   aadharCard: text("aadhar_card").notNull(),
   designation: text("designation").notNull(),
   employmentStatus: text("employment_status").notNull(),
+  termExpiry: date("term_expiry"),
   joiningDate: date("joining_date").notNull(),
   salaryRegisterNo: text("salary_register_no").notNull(),
   officeMemoNo: text("office_memo_no").notNull(),
@@ -61,6 +62,15 @@ export const insertEmployeeSchema = createInsertSchema(employees)
       z.string(),
       z.date().transform(date => date.toISOString().split('T')[0])
     ]),
+    termExpiry: z.union([
+      z.string(),
+      z.date(),
+      z.null()
+    ]).optional().transform(val => {
+      if (!val) return null;
+      if (val instanceof Date) return val.toISOString().split('T')[0];
+      return val;
+    }),
     employmentStatus: z.string().transform(val => {
       const normalized = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
       if (!["Permanent", "Probation", "Temporary"].includes(normalized)) {
