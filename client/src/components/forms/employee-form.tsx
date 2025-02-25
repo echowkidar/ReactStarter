@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FileUpload } from "@/components/ui/file-upload";
 import { employmentStatuses } from "@/lib/departments";
 import { Loader2 } from "lucide-react";
 
@@ -21,6 +22,13 @@ const employeeSchema = z.object({
   joiningDate: z.string().min(1, "Joining Date is required"),
   joiningShift: z.enum(["FN", "AN"]),
   salaryRegisterNo: z.string().min(1, "Salary Register No. is required"),
+  // Document fields
+  panCardDoc: z.string().optional(),
+  bankAccountDoc: z.string().optional(),
+  aadharCardDoc: z.string().optional(),
+  officeMemoDoc: z.string().optional(),
+  joiningReportDoc: z.string().optional(),
+  termExtensionDoc: z.string().optional(),
 });
 
 interface EmployeeFormProps {
@@ -44,12 +52,20 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       joiningDate: "",
       joiningShift: "FN",
       salaryRegisterNo: "",
+      // Document fields
+      panCardDoc: "",
+      bankAccountDoc: "",
+      aadharCardDoc: "",
+      officeMemoDoc: "",
+      joiningReportDoc: "",
+      termExtensionDoc: "",
     },
   });
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Basic Information */}
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
@@ -237,6 +253,155 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
             )}
           />
         </div>
+
+        {/* Document Upload Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Documents</h3>
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="panCardDoc"
+              render={({ field }) => (
+                <FormItem>
+                  <FileUpload
+                    label="PAN Card"
+                    name="panCardDoc"
+                    value={field.value}
+                    onChange={(file) => {
+                      if (file) {
+                        // Handle file upload and update form value with URL
+                        field.onChange(URL.createObjectURL(file));
+                      } else {
+                        field.onChange("");
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="bankAccountDoc"
+              render={({ field }) => (
+                <FormItem>
+                  <FileUpload
+                    label="Bank Account Proof"
+                    name="bankAccountDoc"
+                    value={field.value}
+                    onChange={(file) => {
+                      if (file) {
+                        field.onChange(URL.createObjectURL(file));
+                      } else {
+                        field.onChange("");
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="aadharCardDoc"
+              render={({ field }) => (
+                <FormItem>
+                  <FileUpload
+                    label="Aadhar Card"
+                    name="aadharCardDoc"
+                    value={field.value}
+                    onChange={(file) => {
+                      if (file) {
+                        field.onChange(URL.createObjectURL(file));
+                      } else {
+                        field.onChange("");
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="officeMemoDoc"
+              render={({ field }) => (
+                <FormItem>
+                  <FileUpload
+                    label="Office Memo"
+                    name="officeMemoDoc"
+                    value={field.value}
+                    onChange={(file) => {
+                      if (file) {
+                        field.onChange(URL.createObjectURL(file));
+                      } else {
+                        field.onChange("");
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="joiningReportDoc"
+              render={({ field }) => (
+                <FormItem>
+                  <FileUpload
+                    label="Joining Report"
+                    name="joiningReportDoc"
+                    value={field.value}
+                    onChange={(file) => {
+                      if (file) {
+                        field.onChange(URL.createObjectURL(file));
+                      } else {
+                        field.onChange("");
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {(form.watch("employmentStatus") === "Probation" || 
+             form.watch("employmentStatus") === "Temporary") && (
+              <FormField
+                control={form.control}
+                name="termExtensionDoc"
+                render={({ field }) => (
+                  <FormItem>
+                    <FileUpload
+                      label="Term Extension Office Memo"
+                      name="termExtensionDoc"
+                      value={field.value}
+                      onChange={(file) => {
+                        if (file) {
+                          field.onChange(URL.createObjectURL(file));
+                        } else {
+                          field.onChange("");
+                        }
+                      }}
+                      disabled={isLoading}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+          </div>
+        </div>
+
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? (
             <>

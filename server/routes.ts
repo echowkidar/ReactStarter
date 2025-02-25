@@ -26,14 +26,15 @@ export async function registerRoutes(app: Express) {
     },
     filename: function (req, file, cb) {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      cb(null, 'attendance-' + uniqueSuffix + '.pdf');
+      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
   });
 
   const upload = multer({ 
     storage: fileStorage,
     fileFilter: (req, file, cb) => {
-      if (file.mimetype === 'application/pdf') {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
+      if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
       } else {
         cb(null, false);
@@ -42,7 +43,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Add this new endpoint for file uploads
-  app.post("/api/attendance/:reportId/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/upload", upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded or invalid file type" });
@@ -50,12 +51,6 @@ export async function registerRoutes(app: Express) {
 
       // Generate the file URL
       const fileUrl = `/uploads/${req.file.filename}`;
-
-      // Update the report with the file URL if needed
-      await storage.updateAttendanceReport(Number(req.params.reportId), {
-        fileUrl: fileUrl
-      });
-
       res.json({ fileUrl });
     } catch (error) {
       console.error('Error uploading file:', error);
