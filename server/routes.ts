@@ -409,7 +409,7 @@ export async function registerRoutes(app: Express) {
   app.get("/api/departments", async (req, res) => {
     try {
       const departments = await storage.getAllDepartments();
-      // Create a list of predefined departments if no departments exist
+      // Create default departments if none exist
       if (!departments || departments.length === 0) {
         const defaultDepartments = [
           { name: "Department of Computer Science", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
@@ -424,13 +424,11 @@ export async function registerRoutes(app: Express) {
         for (const dept of defaultDepartments) {
           await storage.createDepartment(dept);
         }
-
-        // Fetch the newly created departments
-        const newDepartments = await storage.getAllDepartments();
-        return res.json(newDepartments);
       }
 
-      res.json(departments);
+      // Get all departments after ensuring defaults exist
+      const allDepartments = await storage.getAllDepartments();
+      res.json(allDepartments);
     } catch (error) {
       console.error('Error fetching departments:', error);
       res.status(500).json({ message: "Failed to fetch departments" });
