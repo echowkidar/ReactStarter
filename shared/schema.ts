@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, date, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, date, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -21,10 +21,10 @@ export const employees = pgTable("employees", {
   aadharCard: text("aadhar_card").notNull(),
   designation: text("designation").notNull(),
   employmentStatus: text("employment_status").notNull(),
-  officeMemoNo: text("office_memo_no").notNull(),
   joiningDate: date("joining_date").notNull(),
-  joiningShift: text("joining_shift").notNull(),
   salaryRegisterNo: text("salary_register_no").notNull(),
+  officeMemoNo: text("office_memo_no").notNull(),
+  joiningShift: text("joining_shift").notNull().default("morning"),
 });
 
 export const attendanceReports = pgTable("attendance_reports", {
@@ -54,9 +54,16 @@ export const attendanceEntries = pgTable("attendance_entries", {
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
-export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true });
-export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({ 
-  id: true, 
+export const insertEmployeeSchema = createInsertSchema(employees)
+  .omit({ id: true })
+  .extend({
+    joiningDate: z.string().transform(str => new Date(str)),
+    employmentStatus: z.enum(["Permanent", "Probation", "Temporary"]),
+    joiningShift: z.string().default("morning"),
+    officeMemoNo: z.string().default(""),
+  });
+export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
+  id: true,
   createdAt: true,
   receiptNo: true,
   receiptDate: true

@@ -326,15 +326,25 @@ export async function registerRoutes(app: Express) {
   // Create employee (admin)
   app.post("/api/admin/employees", async (req, res) => {
     try {
+      console.log("Received employee data:", req.body); // Add logging
       const employeeData = insertEmployeeSchema.parse({
         ...req.body,
-        departmentId: Number(req.body.departmentId)
+        departmentId: Number(req.body.departmentId),
+        joiningDate: req.body.joiningDate,
+        employmentStatus: req.body.employmentStatus || "Permanent",
+        joiningShift: req.body.joiningShift || "morning",
+        officeMemoNo: req.body.officeMemoNo || "",
       });
+
+      console.log("Parsed employee data:", employeeData); // Add logging
       const employee = await storage.createEmployee(employeeData);
       res.status(201).json(employee);
     } catch (error) {
-      console.error('Error creating employee:', error);
-      res.status(400).json({ message: "Invalid employee data" });
+      console.error('Error creating employee:', error); // Add error logging
+      res.status(400).json({ 
+        message: "Invalid employee data",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
