@@ -326,11 +326,13 @@ export async function registerRoutes(app: Express) {
   // Create employee (admin)
   app.post("/api/admin/employees", async (req, res) => {
     try {
-      console.log("Received employee data:", req.body);
+      // Log the raw request body
+      console.log("Received raw employee data:", req.body);
+
       const employeeData = insertEmployeeSchema.parse({
         ...req.body,
         departmentId: Number(req.body.departmentId),
-        joiningDate: req.body.joiningDate || new Date().toISOString(),
+        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
         employmentStatus: req.body.employmentStatus || "Permanent",
         joiningShift: req.body.joiningShift || "morning",
         officeMemoNo: req.body.officeMemoNo || "",
@@ -340,11 +342,14 @@ export async function registerRoutes(app: Express) {
         aadharCard: req.body.aadharCard || ""
       });
 
+      // Log the parsed data
       console.log("Parsed employee data:", employeeData);
+
       const employee = await storage.createEmployee(employeeData);
       res.status(201).json(employee);
     } catch (error) {
       console.error('Error creating employee:', error);
+      // Send back detailed error information
       res.status(400).json({ 
         message: "Invalid employee data",
         details: error instanceof Error ? error.message : String(error)

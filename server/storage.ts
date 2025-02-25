@@ -83,12 +83,22 @@ export class MemStorage implements IStorage {
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
     const id = this.currentId.employee++;
+
+    // Convert joiningDate to string format as per schema
+    const joiningDateStr = employee.joiningDate instanceof Date 
+      ? employee.joiningDate.toISOString().split('T')[0]
+      : employee.joiningDate;
+
     const newEmployee = { 
       ...employee, 
       id,
-      termExpiry: employee.termExpiry || null,
+      joiningDate: joiningDateStr,
       joiningShift: employee.joiningShift || "morning",
-      officeMemoNo: employee.officeMemoNo || ""
+      officeMemoNo: employee.officeMemoNo || "",
+      salaryRegisterNo: employee.salaryRegisterNo || "",
+      bankAccount: employee.bankAccount || "",
+      panNumber: employee.panNumber || "",
+      aadharCard: employee.aadharCard || ""
     };
 
     // Log the employee being created
@@ -194,11 +204,11 @@ export class MemStorage implements IStorage {
     return updatedEntry;
   }
 
-  async getAllDepartments(): Promise<Department[]> { // Added implementation
+  async getAllDepartments(): Promise<Department[]> { 
     return Array.from(this.departments.values());
   }
 
-  async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> { // Added implementation
+  async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> { 
     const employee = await this.getEmployee(id);
     if (!employee) throw new Error("Employee not found");
 
