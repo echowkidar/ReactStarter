@@ -406,23 +406,25 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Replace the /api/departments GET endpoint handler
   app.get("/api/departments", async (req, res) => {
     try {
       const departments = await storage.getAllDepartments();
-      // Create default departments if none exist
-      if (!departments || departments.length === 0) {
-        const defaultDepartments = [
-          { name: "Department of Computer Science", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
-          { name: "Department of Mathematics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
-          { name: "Department of Physics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
-          { name: "Department of Chemistry", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
-          { name: "Department of Botany", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
-          { name: "Department of Zoology", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" }
-        ];
+      // Default department templates
+      const defaultDepartments = [
+        { name: "Department of Computer Science", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+        { name: "Department of Mathematics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+        { name: "Department of Physics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+        { name: "Department of Chemistry", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+        { name: "Department of Botany", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+        { name: "Department of Zoology", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" }
+      ];
 
-        // Create each department
-        for (const dept of defaultDepartments) {
-          await storage.createDepartment(dept);
+      // Check each default department and create if it doesn't exist
+      for (const defaultDept of defaultDepartments) {
+        const exists = departments.some(dept => dept.name === defaultDept.name);
+        if (!exists) {
+          await storage.createDepartment(defaultDept);
         }
       }
 

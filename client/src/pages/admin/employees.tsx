@@ -17,11 +17,11 @@ export default function AdminEmployees() {
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus || "permanent");
+  const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
   const [, setLocation] = useLocation();
 
   // Fetch all employees
-  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({ 
+  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
     queryKey: ['/api/admin/employees']
   });
 
@@ -39,9 +39,9 @@ export default function AdminEmployees() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
       toast({
         title: "Success",
-        description: "Employee deleted successfully",
+        description: "Employee deleted successfully"
       });
-    },
+    }
   });
 
   // Create/Update employee mutation
@@ -59,9 +59,9 @@ export default function AdminEmployees() {
       setSelectedEmployee(null);
       toast({
         title: "Success",
-        description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`,
+        description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
       });
-    },
+    }
   });
 
   const handleDelete = (employee: Employee) => {
@@ -167,8 +167,8 @@ export default function AdminEmployees() {
                       <Label htmlFor="employmentStatus">Employment Status</Label>
                       <Select 
                         name="employmentStatus"
-                        defaultValue={selectedEmployee?.employmentStatus || "permanent"}
-                        onValueChange={(value) => setEmploymentStatus(value)}
+                        value={employmentStatus}
+                        onValueChange={setEmploymentStatus}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select status" />
@@ -239,7 +239,7 @@ export default function AdminEmployees() {
                       <Label htmlFor="departmentId">Department</Label>
                       <Select 
                         name="departmentId"
-                        defaultValue={selectedEmployee?.departmentId?.toString()}
+                        value={selectedEmployee?.departmentId?.toString() || ""}
                         required
                       >
                         <SelectTrigger>
