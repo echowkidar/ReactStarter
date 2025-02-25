@@ -177,6 +177,47 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Create employee (department)
+  app.post("/api/departments/:departmentId/employees", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      console.log("Department - Received raw employee data:", req.body);
+
+      const employeeData = insertEmployeeSchema.parse({
+        ...req.body,
+        departmentId,
+        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
+        employmentStatus: req.body.employmentStatus || "Permanent",
+        joiningShift: req.body.joiningShift || "FN",
+        officeMemoNo: req.body.officeMemoNo || "",
+        salaryRegisterNo: req.body.salaryRegisterNo || "",
+        bankAccount: req.body.bankAccount || "",
+        panNumber: req.body.panNumber || "",
+        aadharCard: req.body.aadharCard || ""
+      });
+
+      console.log("Department - Parsed employee data:", employeeData);
+      console.log("Creating employee in storage:", employeeData);
+
+      const employee = await storage.createEmployee(employeeData);
+      res.status(201).json(employee);
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      if (error instanceof Error) {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: error.message,
+          stack: error.stack
+        });
+      } else {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: String(error)
+        });
+      }
+    }
+  });
+
   // Get employees for a department
   app.get("/api/departments/:departmentId/employees", async (req, res) => {
     try {
