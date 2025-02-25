@@ -8,14 +8,13 @@ export const departmentTitles = [
   "Member-in-Charge"
 ] as const;
 
-// Mock list of 350 departments
 export const departmentList = [
-  "Computer Science",
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  // ... add more departments as needed
+  "Department of Computer Science",
+  "Department of Mathematics",
+  "Department of Physics",
+  "Department of Chemistry",
+  "Department of Botany",
+  "Department of Zoology"
 ] as const;
 
 export const employmentStatuses = [

@@ -356,9 +356,9 @@ export async function registerRoutes(app: Express) {
       if (!departments || departments.length === 0) {
         const defaultDepartments = [
           { name: "Department of Computer Science", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
+          { name: "Department of Mathematics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
           { name: "Department of Physics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
           { name: "Department of Chemistry", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
-          { name: "Department of Mathematics", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
           { name: "Department of Botany", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" },
           { name: "Department of Zoology", hodTitle: "Chairperson", hodName: "HOD", email: "", password: "" }
         ];
