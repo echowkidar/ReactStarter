@@ -95,22 +95,42 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
+      // Check if department with same name exists (case insensitive)
+      const departments = await storage.getAllDepartments();
+      const existingDeptByName = departments.find(
+        dept => dept.name.toLowerCase() === departmentData.name.toLowerCase()
+      );
+
+      if (existingDeptByName) {
+        // Return existing department for the matching name
+        return res.status(200).json(existingDeptByName);
+      }
+
       const department = await storage.createDepartment(departmentData);
       res.status(201).json(department);
     } catch (error) {
+      console.error('Error registering department:', error);
       res.status(400).json({ message: "Invalid department data" });
     }
   });
 
   app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body;
-    const department = await storage.getDepartmentByEmail(email);
+    try {
+      const { email, password } = req.body;
+      console.log('Login attempt for:', email);
 
-    if (!department || department.password !== password) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      const department = await storage.getDepartmentByEmail(email);
+      console.log('Found department:', department);
+
+      if (!department || department.password !== password) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      res.json(department);
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ message: "Login failed" });
     }
-
-    res.json(department);
   });
 
   // Employee routes
@@ -166,11 +186,13 @@ export async function registerRoutes(app: Express) {
       // Verify department exists
       const department = await storage.getDepartment(departmentId);
       if (!department) {
+        console.log('Department not found:', departmentId);
         return res.status(404).json({ message: "Department not found" });
       }
+      console.log('Found department:', department);
 
       const employees = await storage.getEmployeesByDepartment(departmentId);
-      console.log('Found employees for department:', departmentId, employees);
+      console.log('Found employees:', employees);
       res.json(employees);
     } catch (error) {
       console.error('Error fetching department employees:', error);
