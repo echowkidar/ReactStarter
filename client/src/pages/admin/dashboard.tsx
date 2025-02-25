@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
-import { FileCheck, LogOut, Eye, Download, Search } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { useState, useMemo } from "react";
 import {
@@ -161,14 +161,24 @@ export default function AdminDashboard() {
             Salary Section
           </Badge>
         </div>
-        <Button
-          variant="outline"
-          onClick={handleLogout}
-          className="flex items-center gap-2"
-        >
-          <LogOut className="h-4 w-4" />
-          Logout
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => setLocation("/admin/employees")}
+            className="flex items-center gap-2"
+          >
+            <Users className="h-4 w-4" />
+            Manage Employees
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4 mb-4">
