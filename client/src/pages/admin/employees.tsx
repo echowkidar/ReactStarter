@@ -18,6 +18,7 @@ export default function AdminEmployees() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
   const [, setLocation] = useLocation();
 
   // Fetch all employees
@@ -96,6 +97,7 @@ export default function AdminEmployees() {
                 <Button onClick={() => {
                   setSelectedEmployee(null);
                   setEmploymentStatus("permanent");
+                  setSelectedDepartmentId("");
                 }}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Employee
@@ -187,7 +189,7 @@ export default function AdminEmployees() {
                           id="termExpiry" 
                           name="termExpiry" 
                           type="date"
-                          defaultValue={selectedEmployee?.termExpiry}
+                          defaultValue={selectedEmployee?.termExpiry || ""}
                           required 
                         />
                       </div>
@@ -239,8 +241,8 @@ export default function AdminEmployees() {
                       <Label htmlFor="departmentId">Department</Label>
                       <Select 
                         name="departmentId"
-                        value={selectedEmployee?.departmentId?.toString() || ""}
-                        required
+                        value={selectedDepartmentId || (selectedEmployee?.departmentId?.toString() || "")}
+                        onValueChange={setSelectedDepartmentId}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder={isDepartmentsLoading ? "Loading..." : "Select department"} />
@@ -296,6 +298,7 @@ export default function AdminEmployees() {
                       onClick={() => {
                         setSelectedEmployee(employee);
                         setEmploymentStatus(employee.employmentStatus.toLowerCase());
+                        setSelectedDepartmentId(employee.departmentId.toString());
                         setIsDialogOpen(true);
                       }}
                     >

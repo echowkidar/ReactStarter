@@ -19,8 +19,8 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-sm font-medium text-muted-foreground">Employee ID</label>
-          <p>{employee.employeeId}</p>
+          <label className="text-sm font-medium text-muted-foreground">EPID</label>
+          <p>{employee.epid}</p>
         </div>
         <div>
           <label className="text-sm font-medium text-muted-foreground">Name</label>
@@ -168,13 +168,13 @@ export default function Employees() {
             <TableBody>
               {employees.map((employee) => (
                 <TableRow key={employee.id}>
-                  <TableCell>{employee.employeeId}</TableCell>
+                  <TableCell>{employee.epid}</TableCell>
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
                   <TableCell>{employee.employmentStatus}</TableCell>
                   <TableCell>
-                    {(employee.employmentStatus === "Probation" || 
-                      employee.employmentStatus === "Temporary") && 
+                    {(employee.employmentStatus === "Probation" ||
+                      employee.employmentStatus === "Temporary") &&
                       employee.termExpiry ? (
                         format(new Date(employee.termExpiry), "dd MMM yyyy")
                       ) : (

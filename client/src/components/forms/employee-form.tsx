@@ -9,18 +9,18 @@ import { employmentStatuses } from "@/lib/departments";
 import { Loader2 } from "lucide-react";
 
 const employeeSchema = z.object({
-  employeeId: z.string().min(1),
-  name: z.string().min(1),
-  panNumber: z.string().min(1),
-  bankAccount: z.string().min(1),
-  adharCard: z.string().min(1),
-  designation: z.string().min(1),
+  epid: z.string().min(1, "EPID is required"),
+  name: z.string().min(1, "Name is required"),
+  panNumber: z.string().min(1, "PAN Number is required"),
+  bankAccount: z.string().min(1, "Bank Account is required"),
+  aadharCard: z.string().min(1, "Aadhar Card is required"),
+  designation: z.string().min(1, "Designation is required"),
   employmentStatus: z.enum(employmentStatuses),
   termExpiry: z.string().optional(),
-  officeMemoNo: z.string().min(1),
-  joiningDate: z.string().min(1),
+  officeMemoNo: z.string().min(1, "Office Memo No. is required"),
+  joiningDate: z.string().min(1, "Joining Date is required"),
   joiningShift: z.enum(["FN", "AN"]),
-  salaryRegisterNo: z.string().min(1),
+  salaryRegisterNo: z.string().min(1, "Salary Register No. is required"),
 });
 
 interface EmployeeFormProps {
@@ -32,11 +32,11 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
-      employeeId: "",
+      epid: "",
       name: "",
       panNumber: "",
       bankAccount: "",
-      adharCard: "",
+      aadharCard: "",
       designation: "",
       employmentStatus: "Permanent",
       termExpiry: "",
@@ -53,7 +53,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
-            name="employeeId"
+            name="epid"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>EPID</FormLabel>
@@ -105,10 +105,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
           />
           <FormField
             control={form.control}
-            name="adharCard"
+            name="aadharCard"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Adhar Card</FormLabel>
+                <FormLabel>Aadhar Card</FormLabel>
                 <FormControl>
                   <Input {...field} disabled={isLoading} />
                 </FormControl>
