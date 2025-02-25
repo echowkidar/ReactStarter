@@ -16,14 +16,12 @@ export interface IStorage {
   getDepartmentByEmail(email: string): Promise<Department | undefined>;
   createDepartment(department: InsertDepartment): Promise<Department>;
   getAllDepartments(): Promise<Department[]>; // Added
-
   // Employee operations
   getEmployee(id: number): Promise<Employee | undefined>;
   getEmployeesByDepartment(departmentId: number): Promise<Employee[]>;
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
   updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee>; // Added
-
   // Attendance operations
   createAttendanceReport(report: InsertAttendanceReport): Promise<AttendanceReport>;
   getAttendanceReport(id: number): Promise<AttendanceReport | undefined>;
@@ -31,7 +29,6 @@ export interface IStorage {
   getAllAttendanceReports(): Promise<AttendanceReport[]>;
   updateAttendanceReport(id: number, updates: Partial<AttendanceReport>): Promise<AttendanceReport>;
   deleteAttendanceReport(id: number): Promise<void>;
-
   createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry>;
   getAttendanceEntriesByReport(reportId: number): Promise<AttendanceEntry[]>;
   updateAttendanceEntry(id: number, updates: Partial<AttendanceEntry>): Promise<AttendanceEntry>;
@@ -89,8 +86,14 @@ export class MemStorage implements IStorage {
     const newEmployee = { 
       ...employee, 
       id,
-      termExpiry: employee.termExpiry || null
+      termExpiry: employee.termExpiry || null,
+      joiningShift: employee.joiningShift || "morning",
+      officeMemoNo: employee.officeMemoNo || ""
     };
+
+    // Log the employee being created
+    console.log('Creating employee in storage:', newEmployee);
+
     this.employees.set(id, newEmployee);
     return newEmployee;
   }

@@ -60,7 +60,11 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     joiningDate: z.string().transform(str => new Date(str)),
     employmentStatus: z.enum(["Permanent", "Probation", "Temporary"]),
     joiningShift: z.string().default("morning"),
-    officeMemoNo: z.string().default(""),
+    officeMemoNo: z.string().optional().default(""),
+    salaryRegisterNo: z.string().optional().default(""),
+    bankAccount: z.string().optional().default(""),
+    panNumber: z.string().optional().default(""),
+    aadharCard: z.string().optional().default(""),
   });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
   id: true,
