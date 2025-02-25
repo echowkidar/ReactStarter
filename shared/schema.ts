@@ -61,7 +61,13 @@ export const insertEmployeeSchema = createInsertSchema(employees)
       z.string(),
       z.date().transform(date => date.toISOString().split('T')[0])
     ]),
-    employmentStatus: z.enum(["Permanent", "Probation", "Temporary"]),
+    employmentStatus: z.string().transform(val => {
+      const normalized = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+      if (!["Permanent", "Probation", "Temporary"].includes(normalized)) {
+        throw new Error("Invalid employment status");
+      }
+      return normalized;
+    }),
     joiningShift: z.string().default("morning"),
     officeMemoNo: z.string().optional().default(""),
     salaryRegisterNo: z.string().optional().default(""),

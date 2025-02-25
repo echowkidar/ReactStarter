@@ -119,16 +119,87 @@ export async function registerRoutes(app: Express) {
     res.json(employees);
   });
 
-  app.post("/api/departments/:departmentId/employees", async (req, res) => {
+  // Create employee (admin)
+  app.post("/api/admin/employees", async (req, res) => {
     try {
+      // Log the raw request body
+      console.log("Received raw employee data:", req.body);
+
       const employeeData = insertEmployeeSchema.parse({
         ...req.body,
-        departmentId: Number(req.params.departmentId)
+        departmentId: Number(req.body.departmentId),
+        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
+        employmentStatus: req.body.employmentStatus || "Permanent",
+        joiningShift: req.body.joiningShift || "morning",
+        officeMemoNo: req.body.officeMemoNo || "",
+        salaryRegisterNo: req.body.salaryRegisterNo || "",
+        bankAccount: req.body.bankAccount || "",
+        panNumber: req.body.panNumber || "",
+        aadharCard: req.body.aadharCard || ""
       });
+
+      // Log the parsed data
+      console.log("Parsed employee data:", employeeData);
+
       const employee = await storage.createEmployee(employeeData);
       res.status(201).json(employee);
     } catch (error) {
-      res.status(400).json({ message: "Invalid employee data" });
+      console.error('Error creating employee:', error);
+      // Send back detailed error information for debugging
+      if (error instanceof Error) {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: error.message,
+          stack: error.stack
+        });
+      } else {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: String(error)
+        });
+      }
+    }
+  });
+
+  // Create employee (department)
+  app.post("/api/departments/:departmentId/employees", async (req, res) => {
+    try {
+      // Log the raw request body
+      console.log("Department - Received raw employee data:", req.body);
+
+      const employeeData = insertEmployeeSchema.parse({
+        ...req.body,
+        departmentId: Number(req.params.departmentId),
+        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
+        employmentStatus: req.body.employmentStatus || "Permanent",
+        joiningShift: req.body.joiningShift || "morning",
+        officeMemoNo: req.body.officeMemoNo || "",
+        salaryRegisterNo: req.body.salaryRegisterNo || "",
+        bankAccount: req.body.bankAccount || "",
+        panNumber: req.body.panNumber || "",
+        aadharCard: req.body.aadharCard || ""
+      });
+
+      // Log the parsed data
+      console.log("Department - Parsed employee data:", employeeData);
+
+      const employee = await storage.createEmployee(employeeData);
+      res.status(201).json(employee);
+    } catch (error) {
+      console.error('Error creating employee in department:', error);
+      // Send back detailed error information for debugging
+      if (error instanceof Error) {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: error.message,
+          stack: error.stack
+        });
+      } else {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: String(error)
+        });
+      }
     }
   });
 
@@ -320,40 +391,6 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error fetching employees:', error);
       res.status(500).json({ message: "Failed to fetch employees" });
-    }
-  });
-
-  // Create employee (admin)
-  app.post("/api/admin/employees", async (req, res) => {
-    try {
-      // Log the raw request body
-      console.log("Received raw employee data:", req.body);
-
-      const employeeData = insertEmployeeSchema.parse({
-        ...req.body,
-        departmentId: Number(req.body.departmentId),
-        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
-        employmentStatus: req.body.employmentStatus || "Permanent",
-        joiningShift: req.body.joiningShift || "morning",
-        officeMemoNo: req.body.officeMemoNo || "",
-        salaryRegisterNo: req.body.salaryRegisterNo || "",
-        bankAccount: req.body.bankAccount || "",
-        panNumber: req.body.panNumber || "",
-        aadharCard: req.body.aadharCard || ""
-      });
-
-      // Log the parsed data
-      console.log("Parsed employee data:", employeeData);
-
-      const employee = await storage.createEmployee(employeeData);
-      res.status(201).json(employee);
-    } catch (error) {
-      console.error('Error creating employee:', error);
-      // Send back detailed error information
-      res.status(400).json({ 
-        message: "Invalid employee data",
-        details: error instanceof Error ? error.message : String(error)
-      });
     }
   });
 
