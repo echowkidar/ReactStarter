@@ -1,0 +1,132 @@
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+7:22:15 PM [express] serving on port 5000
+7:22:44 PM [express] POST /api/auth/register 201 in 3ms :: {"name":"Department of Computer Science",…
+7:22:44 PM [express] GET /api/departments/1/attendance 304 in 1ms :: []
+Fetching employees for department: 1
+Found department: {
+  name: 'Department of Computer Science',
+  hodTitle: 'Chairperson',
+  hodName: 'Sand',
+  email: 'abc@abc.com',
+  password: '123456',
+  id: 1
+}
+Found employees: []
+7:22:44 PM [express] GET /api/departments/1/employees 200 in 12ms :: []
+Department - Received raw employee data: {
+  epid: 'gdfg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: '',
+  officeMemoNo: 'gdg',
+  joiningDate: '2025-02-21',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'gd',
+  panCardDoc: 'blob:https://76415bb1-3916-49e4-bfc8-fe2023ce2d7c-00-1vpxntr7lr2ao.janeway.replit.dev/83e0c913-076b-4c2c-af1a-22fd38ff4e44',
+  bankAccountDoc: 'blob:https://76415bb1-3916-49e4-bfc8-fe2023ce2d7c-00-1vpxntr7lr2ao.janeway.replit.dev/efa8250a-c107-4769-8c92-e73953d9fa0c',
+  aadharCardDoc: 'blob:https://76415bb1-3916-49e4-bfc8-fe2023ce2d7c-00-1vpxntr7lr2ao.janeway.replit.dev/3543c281-9462-4ee4-8fd7-b0e780d2511a',
+  officeMemoDoc: 'blob:https://76415bb1-3916-49e4-bfc8-fe2023ce2d7c-00-1vpxntr7lr2ao.janeway.replit.dev/b0271371-dbaa-4007-988a-aaa665b85ce8',
+  joiningReportDoc: 'blob:https://76415bb1-3916-49e4-bfc8-fe2023ce2d7c-00-1vpxntr7lr2ao.janeway.replit.dev/ecb31ce9-8c37-4057-81bc-4b6027d018c1',
+  termExtensionDoc: ''
+}
+Department - Parsed employee data: {
+  departmentId: 1,
+  epid: 'gdfg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-21',
+  salaryRegisterNo: 'gd',
+  officeMemoNo: 'gdg',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'gdfg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-21',
+  salaryRegisterNo: 'gd',
+  officeMemoNo: 'gdg',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'gdfg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-21',
+  salaryRegisterNo: 'gd',
+  officeMemoNo: 'gdg',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null,
+  id: 1
+}
+7:23:24 PM [express] POST /api/departments/1/employees 201 in 4ms :: {"departmentId":1,"epid":"gdfg"…
+Fetching employees for department: 1
+Found department: {
+  name: 'Department of Computer Science',
+  hodTitle: 'Chairperson',
+  hodName: 'Sand',
+  email: 'abc@abc.com',
+  password: '123456',
+  id: 1
+}
+Found employees: [
+  {
+    departmentId: 1,
+    epid: 'gdfg',
+    name: 'dgd',
+    panNumber: 'dg',
+    bankAccount: 'dg',
+    aadharCard: 'dg',
+    designation: 'dgd',
+    employmentStatus: 'Permanent',
+    termExpiry: null,
+    joiningDate: '2025-02-21',
+    salaryRegisterNo: 'gd',
+    officeMemoNo: 'gdg',
+    joiningShift: 'FN',
+    panCardUrl: null,
+    bankProofUrl: null,
+    aadharCardUrl: null,
+    officeMemoUrl: null,
+    joiningReportUrl: null,
+    id: 1
+  }
+]
+7:23:24 PM [express] GET /api/departments/1/employees 200 in 2ms :: [{"departmentId":1,"epid":"gdfg"…

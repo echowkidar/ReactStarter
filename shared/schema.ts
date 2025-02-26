@@ -96,22 +96,6 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     aadharCardUrl: z.string().nullable().optional(),
     officeMemoUrl: z.string().nullable().optional(),
     joiningReportUrl: z.string().nullable().optional(),
-    // Allow both epid and employeeId
-    epid: z.union([
-      z.string(),
-      z.undefined()
-    ]).transform(val => {
-      if (!val && typeof window !== 'undefined') {
-        const formData = window.document?.activeElement?.closest('form')?.elements;
-        const employeeId = formData?.['employeeId']?.value;
-        if (employeeId) return employeeId;
-      }
-      return val || '';
-    }).refine(val => val.length > 0, {
-      message: "Employee ID is required"
-    }),
-    name: z.string().min(1, "Name is required"),
-    designation: z.string().min(1, "Designation is required"),
   });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
   id: true,

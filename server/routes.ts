@@ -47,6 +47,66 @@ export async function registerRoutes(app: Express) {
   // Serve uploaded files statically
   app.use('/uploads', express.static(uploadDir));
 
+  // Multi-file upload fields configuration
+  const documentFields = [
+    { name: 'panCardDoc', maxCount: 1 },
+    { name: 'bankAccountDoc', maxCount: 1 },
+    { name: 'aadharCardDoc', maxCount: 1 },
+    { name: 'officeMemoDoc', maxCount: 1 },
+    { name: 'joiningReportDoc', maxCount: 1 },
+    { name: 'termExtensionDoc', maxCount: 1 }
+  ];
+
+  // Create employee (department)
+  app.post("/api/departments/:departmentId/employees", upload.fields(documentFields), async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      console.log("Department - Received raw employee data:", req.body);
+
+      // Handle uploaded files
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const employeeData = {
+        ...req.body,
+        departmentId,
+        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
+        employmentStatus: req.body.employmentStatus || "Permanent",
+        joiningShift: req.body.joiningShift || "FN",
+        officeMemoNo: req.body.officeMemoNo || "",
+        salaryRegisterNo: req.body.salaryRegisterNo || "",
+        bankAccount: req.body.bankAccount || "",
+        panNumber: req.body.panNumber || "",
+        aadharCard: req.body.aadharCard || "",
+        // Map file URLs from the uploaded files
+        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : null,
+        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : null,
+        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : null,
+        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : null,
+        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : null
+      };
+
+      const parsedData = insertEmployeeSchema.parse(employeeData);
+      console.log("Department - Parsed employee data:", parsedData);
+      console.log("Creating employee in storage:", parsedData);
+
+      const employee = await storage.createEmployee(parsedData);
+      res.status(201).json(employee);
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      if (error instanceof Error) {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: error.message,
+          stack: error.stack
+        });
+      } else {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: String(error)
+        });
+      }
+    }
+  });
+
   // Add this new endpoint for file uploads
   app.post("/api/upload", upload.single('file'), async (req, res) => {
     try {
@@ -62,7 +122,6 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to upload file" });
     }
   });
-
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
     const { email, password } = req.body;
@@ -130,12 +189,13 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Employee routes
   // Create employee (admin)
-  app.post("/api/admin/employees", async (req, res) => {
+  app.post("/api/admin/employees", upload.fields(documentFields), async (req, res) => {
     try {
       console.log("Admin - Received raw employee data:", req.body);
 
+      // Handle uploaded files
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const employeeData = {
         ...req.body,
         departmentId: Number(req.body.departmentId),
@@ -147,12 +207,12 @@ export async function registerRoutes(app: Express) {
         bankAccount: req.body.bankAccount || "",
         panNumber: req.body.panNumber || "",
         aadharCard: req.body.aadharCard || "",
-        // Map file URLs from the upload responses
-        panCardUrl: req.body.panCardUrl || null,
-        bankProofUrl: req.body.bankProofUrl || null,
-        aadharCardUrl: req.body.aadharCardUrl || null,
-        officeMemoUrl: req.body.officeMemoUrl || null,
-        joiningReportUrl: req.body.joiningReportUrl || null
+        // Map file URLs from the uploaded files
+        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : null,
+        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : null,
+        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : null,
+        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : null,
+        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : null,
       };
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
@@ -178,54 +238,6 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Create employee (department)
-  app.post("/api/departments/:departmentId/employees", async (req, res) => {
-    try {
-      const departmentId = Number(req.params.departmentId);
-      console.log("Department - Received raw employee data:", req.body);
-
-      // Map any document URLs if they exist
-      const employeeData = {
-        ...req.body,
-        departmentId,
-        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
-        employmentStatus: req.body.employmentStatus || "Permanent",
-        joiningShift: req.body.joiningShift || "FN",
-        officeMemoNo: req.body.officeMemoNo || "",
-        salaryRegisterNo: req.body.salaryRegisterNo || "",
-        bankAccount: req.body.bankAccount || "",
-        panNumber: req.body.panNumber || "",
-        aadharCard: req.body.aadharCard || "",
-        // Map file URLs from the upload responses
-        panCardUrl: req.body.panCardUrl || null,
-        bankProofUrl: req.body.bankProofUrl || null,
-        aadharCardUrl: req.body.aadharCardUrl || null,
-        officeMemoUrl: req.body.officeMemoUrl || null,
-        joiningReportUrl: req.body.joiningReportUrl || null
-      };
-
-      const parsedData = insertEmployeeSchema.parse(employeeData);
-      console.log("Department - Parsed employee data:", parsedData);
-      console.log("Creating employee in storage:", parsedData);
-
-      const employee = await storage.createEmployee(parsedData);
-      res.status(201).json(employee);
-    } catch (error) {
-      console.error('Error creating employee:', error);
-      if (error instanceof Error) {
-        res.status(400).json({ 
-          message: "Invalid employee data",
-          details: error.message,
-          stack: error.stack
-        });
-      } else {
-        res.status(400).json({ 
-          message: "Invalid employee data",
-          details: String(error)
-        });
-      }
-    }
-  });
 
   // Get employees for a department
   app.get("/api/departments/:departmentId/employees", async (req, res) => {
