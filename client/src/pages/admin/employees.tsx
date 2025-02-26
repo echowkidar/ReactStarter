@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
 
 interface FileUpload {
-  file: File;
+  file: File | null;
   preview: string;
 }
 
@@ -35,7 +35,33 @@ export default function AdminEmployees() {
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
 
-  // Existing queries...
+  useEffect(() => {
+    if (selectedEmployee) {
+      const existingUploads: UploadState = {};
+
+      if (selectedEmployee.panCardUrl) {
+        existingUploads.panCard = { file: null, preview: selectedEmployee.panCardUrl };
+      }
+      if (selectedEmployee.bankProofUrl) {
+        existingUploads.bankProof = { file: null, preview: selectedEmployee.bankProofUrl };
+      }
+      if (selectedEmployee.aadharCardUrl) {
+        existingUploads.aadharCard = { file: null, preview: selectedEmployee.aadharCardUrl };
+      }
+      if (selectedEmployee.officeMemoUrl) {
+        existingUploads.officeMemo = { file: null, preview: selectedEmployee.officeMemoUrl };
+      }
+      if (selectedEmployee.joiningReportUrl) {
+        existingUploads.joiningReport = { file: null, preview: selectedEmployee.joiningReportUrl };
+      }
+
+      setUploads(existingUploads);
+    } else {
+      setUploads({});
+    }
+  }, [selectedEmployee]);
+
+
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
     queryKey: ['/api/admin/employees']
   });
@@ -44,7 +70,6 @@ export default function AdminEmployees() {
     queryKey: ['/api/departments']
   });
 
-  // File upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -58,7 +83,6 @@ export default function AdminEmployees() {
     }
   });
 
-  // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadState) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -76,7 +100,6 @@ export default function AdminEmployees() {
     reader.readAsDataURL(file);
   };
 
-  // Remove uploaded file
   const handleRemoveFile = (type: keyof UploadState) => {
     setUploads(prev => {
       const newUploads = { ...prev };
@@ -85,26 +108,22 @@ export default function AdminEmployees() {
     });
   };
 
-  // Create/Update employee mutation
   const saveMutation = useMutation({
     mutationFn: async (data: Partial<InsertEmployee>) => {
-      // Upload all files first
       const fileUrls: Record<string, string> = {};
 
       for (const [key, upload] of Object.entries(uploads)) {
         if (upload?.file) {
           const result = await uploadMutation.mutateAsync(upload.file);
-          fileUrls[key] = result.fileUrl;
+          fileUrls[key + 'Url'] = result.fileUrl;
+        } else if (upload?.preview) {
+          fileUrls[key + 'Url'] = upload.preview;
         }
       }
 
       const employeeData = {
         ...data,
-        panCardUrl: fileUrls.panCard,
-        bankProofUrl: fileUrls.bankProof,
-        aadharCardUrl: fileUrls.aadharCard,
-        officeMemoUrl: fileUrls.officeMemo,
-        joiningReportUrl: fileUrls.joiningReport
+        ...fileUrls
       };
 
       if (selectedEmployee) {
@@ -139,7 +158,6 @@ export default function AdminEmployees() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    // Filter out the file upload fields from form data
     const data: Record<string, any> = {};
     for (const [key, value] of formData.entries()) {
       if (!['panCard', 'bankProof', 'aadharCard', 'officeMemo', 'joiningReport'].includes(key)) {
@@ -147,13 +165,11 @@ export default function AdminEmployees() {
       }
     }
 
-    // Convert departmentId to number
     data.departmentId = parseInt(data.departmentId as string, 10);
 
     saveMutation.mutate(data as InsertEmployee);
   };
 
-  // Render upload preview
   const renderUploadPreview = (type: keyof UploadState, label: string) => {
     const upload = uploads[type];
 
@@ -198,7 +214,6 @@ export default function AdminEmployees() {
     );
   };
 
-  // Delete employee mutation (from original code)
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest('DELETE', `/api/employees/${id}`);
@@ -242,7 +257,6 @@ export default function AdminEmployees() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-8">
-                    {/* Keep existing Basic Information section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -309,7 +323,6 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Keep existing Identification Details section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -346,7 +359,6 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Keep existing Office Details section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -418,7 +430,6 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Add new Document Upload section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
                       <div className="grid grid-cols-1 gap-6">
