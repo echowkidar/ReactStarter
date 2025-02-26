@@ -13,12 +13,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
 
-// Placeholder for FileUpload component -  Needs actual implementation
-const FileUpload = ({ name, value, onChange }: { name: string; value: string; onChange: (file: File | null) => void }) => (
-  <input type="file" id={name} name={name} onChange={(e) => onChange(e.target.files?.[0] || null)} />
-);
-
-
 export default function AdminEmployees() {
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -53,7 +47,7 @@ export default function AdminEmployees() {
 
   // Create/Update employee mutation
   const saveMutation = useMutation({
-    mutationFn: async (data: FormData) => { // Modified to handle FormData
+    mutationFn: async (data: Partial<InsertEmployee>) => {
       if (selectedEmployee) {
         await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, data);
       } else {
@@ -81,10 +75,15 @@ export default function AdminEmployees() {
     setLocation('/admin/login');
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    saveMutation.mutate(formData); // Pass FormData directly
+    const data: Record<string, any> = Object.fromEntries(formData.entries());
+
+    // Convert departmentId to number
+    data.departmentId = parseInt(data.departmentId as string, 10);
+
+    saveMutation.mutate(data as InsertEmployee);
   };
 
   return (
@@ -287,90 +286,6 @@ export default function AdminEmployees() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Document Upload Section */}
-                    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                      <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
-                          <Label htmlFor="panCardDoc">PAN Card</Label>
-                          <FileUpload
-                            name="panCardDoc"
-                            value={selectedEmployee?.panCardDoc || ""}
-                            onChange={(file) => {
-                              // Handle file upload
-                              if (file) {
-                                // You'll need to implement file handling logic here
-                                console.log("PAN Card uploaded:", file);
-                              }
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="bankAccountDoc">Bank Account Proof</Label>
-                          <FileUpload
-                            name="bankAccountDoc"
-                            value={selectedEmployee?.bankAccountDoc || ""}
-                            onChange={(file) => {
-                              if (file) {
-                                console.log("Bank Account doc uploaded:", file);
-                              }
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="aadharCardDoc">Aadhar Card</Label>
-                          <FileUpload
-                            name="aadharCardDoc"
-                            value={selectedEmployee?.aadharCardDoc || ""}
-                            onChange={(file) => {
-                              if (file) {
-                                console.log("Aadhar Card uploaded:", file);
-                              }
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="officeMemoDoc">Office Memo</Label>
-                          <FileUpload
-                            name="officeMemoDoc"
-                            value={selectedEmployee?.officeMemoDoc || ""}
-                            onChange={(file) => {
-                              if (file) {
-                                console.log("Office Memo uploaded:", file);
-                              }
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="joiningReportDoc">Joining Report</Label>
-                          <FileUpload
-                            name="joiningReportDoc"
-                            value={selectedEmployee?.joiningReportDoc || ""}
-                            onChange={(file) => {
-                              if (file) {
-                                console.log("Joining Report uploaded:", file);
-                              }
-                            }}
-                          />
-                        </div>
-                        {(employmentStatus === "probation" || employmentStatus === "temporary") && (
-                          <div>
-                            <Label htmlFor="termExtensionDoc">Term Extension Office Memo</Label>
-                            <FileUpload
-                              name="termExtensionDoc"
-                              value={selectedEmployee?.termExtensionDoc || ""}
-                              onChange={(file) => {
-                                if (file) {
-                                  console.log("Term Extension doc uploaded:", file);
-                                }
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
                   </div>
 
                   <Button 
