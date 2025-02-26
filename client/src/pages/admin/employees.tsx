@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Loader2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
@@ -90,13 +90,13 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
   );
 };
 
-
 export default function AdminEmployees() {
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [, setLocation] = useLocation();
 
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
@@ -136,6 +136,14 @@ export default function AdminEmployees() {
         title: "Success",
         description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
       });
+    },
+    onError: (error) => {
+      console.error('Mutation error:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save employee data. Please check all required fields."
+      });
     }
   });
 
@@ -149,67 +157,107 @@ export default function AdminEmployees() {
     setLocation('/admin/login');
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
-    // Convert FormData to object and handle type conversions
-    const data: Record<string, any> = {};
-
-    // Basic Information
-    data.epid = formData.get('epid') as string;
-    data.name = formData.get('name') as string;
-    data.designation = formData.get('designation') as string;
-    data.employmentStatus = formData.get('employmentStatus') as string;
-    if (data.employmentStatus === 'probation' || data.employmentStatus === 'temporary') {
-      data.termExpiry = formData.get('termExpiry') as string;
-    }
-
-    // Identification Details
-    data.panNumber = formData.get('panNumber') as string;
-    data.bankAccount = formData.get('bankAccount') as string;
-    data.aadharCard = formData.get('aadharCard') as string;
-
-    // Office Details
-    data.officeMemoNo = formData.get('officeMemoNo') as string;
-    data.joiningDate = formData.get('joiningDate') as string;
-    data.joiningShift = formData.get('joiningShift') as string;
-    data.salaryRegisterNo = formData.get('salaryRegisterNo') as string;
-    data.departmentId = parseInt(formData.get('departmentId') as string, 10);
-
-    // Handle file uploads
-    const fileFields = [
-      'panCardDoc', 'bankAccountDoc', 'aadharCardDoc',
-      'officeMemoDoc', 'joiningReportDoc', 'termExtensionDoc'
+  const validateForm = (formData: FormData): boolean => {
+    const requiredFields = [
+      'epid', 'name', 'designation', 'employmentStatus',
+      'panNumber', 'bankAccount', 'aadharCard',
+      'officeMemoNo', 'joiningDate', 'joiningShift',
+      'salaryRegisterNo', 'departmentId'
     ];
 
-    // Create a new FormData for submission with both text data and files
-    const submitFormData = new FormData();
-
-    // Add all text fields
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== null && value !== undefined) {
-        submitFormData.append(key, value.toString());
+    for (const field of requiredFields) {
+      const value = formData.get(field);
+      if (!value) {
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: `${field.charAt(0).toUpperCase() + field.slice(1)} is required`
+        });
+        return false;
       }
-    });
+    }
 
-    // Add files
-    fileFields.forEach(field => {
-      const fileInput = e.currentTarget.querySelector(`input[name="${field}"]`) as HTMLInputElement;
-      if (fileInput?.files?.[0]) {
-        submitFormData.append(field, fileInput.files[0]);
-      }
-    });
+    const departmentId = parseInt(formData.get('departmentId') as string);
+    if (isNaN(departmentId)) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please select a department"
+      });
+      return false;
+    }
+
+    if ((employmentStatus === 'probation' || employmentStatus === 'temporary') && !formData.get('termExpiry')) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Term expiry date is required for probation/temporary employees"
+      });
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
     try {
+      setIsSubmitting(true);
+      const formData = new FormData(e.currentTarget);
+
+      if (!validateForm(formData)) {
+        return;
+      }
+
+      // Create a new FormData for submission
+      const submitFormData = new FormData();
+
+      // Add basic information
+      submitFormData.append('epid', formData.get('epid') as string);
+      submitFormData.append('name', formData.get('name') as string);
+      submitFormData.append('designation', formData.get('designation') as string);
+      submitFormData.append('employmentStatus', formData.get('employmentStatus') as string);
+
+      if (employmentStatus === 'probation' || employmentStatus === 'temporary') {
+        submitFormData.append('termExpiry', formData.get('termExpiry') as string);
+      }
+
+      // Add identification details
+      submitFormData.append('panNumber', formData.get('panNumber') as string);
+      submitFormData.append('bankAccount', formData.get('bankAccount') as string);
+      submitFormData.append('aadharCard', formData.get('aadharCard') as string);
+
+      // Add office details
+      submitFormData.append('officeMemoNo', formData.get('officeMemoNo') as string);
+      submitFormData.append('joiningDate', formData.get('joiningDate') as string);
+      submitFormData.append('joiningShift', formData.get('joiningShift') as string);
+      submitFormData.append('salaryRegisterNo', formData.get('salaryRegisterNo') as string);
+      submitFormData.append('departmentId', formData.get('departmentId') as string);
+
+      // Add files
+      const fileFields = [
+        'panCardDoc', 'bankAccountDoc', 'aadharCardDoc',
+        'officeMemoDoc', 'joiningReportDoc', 'termExtensionDoc'
+      ];
+
+      fileFields.forEach(field => {
+        const fileInput = e.currentTarget.querySelector(`input[name="${field}"]`) as HTMLInputElement;
+        if (fileInput?.files?.[0]) {
+          submitFormData.append(field, fileInput.files[0]);
+        }
+      });
+
       await saveMutation.mutateAsync(submitFormData);
     } catch (error) {
       console.error('Error submitting form:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save employee data. Please check all required fields.",
+        description: "Failed to save employee data. Please try again."
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -226,7 +274,7 @@ export default function AdminEmployees() {
                   setEmploymentStatus("permanent");
                   setSelectedDepartmentId("");
                 }}>
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="h-4 w-4 mr-2" />
                   Add Employee
                 </Button>
               </DialogTrigger>
@@ -495,9 +543,16 @@ export default function AdminEmployees() {
                   <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
-                    disabled={saveMutation.isPending}
+                    disabled={isSubmitting}
                   >
-                    {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Employee'
+                    )}
                   </Button>
                 </form>
               </DialogContent>
