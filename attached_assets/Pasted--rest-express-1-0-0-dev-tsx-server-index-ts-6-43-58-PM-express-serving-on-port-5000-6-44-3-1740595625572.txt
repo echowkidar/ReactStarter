@@ -1,0 +1,97 @@
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+6:43:58 PM [express] serving on port 5000
+6:44:31 PM [express] POST /api/auth/admin/login 200 in 2ms :: {"role":"admin","message":"Admin logge…
+6:44:32 PM [express] GET /api/admin/attendance 200 in 1ms :: []
+6:44:41 PM [express] GET /api/admin/employees 200 in 1ms :: []
+6:44:41 PM [express] GET /api/departments 200 in 1ms :: [{"name":"Department of Computer Science","h…
+6:45:28 PM [express] POST /api/upload 200 in 263ms :: {"fileUrl":"/uploads/file-1740595527969-936788…
+6:45:29 PM [express] POST /api/upload 200 in 816ms :: {"fileUrl":"/uploads/file-1740595528510-793224…
+6:45:29 PM [express] POST /api/upload 200 in 2ms :: {"fileUrl":"/uploads/file-1740595529610-75869511…
+6:45:29 PM [express] POST /api/upload 200 in 3ms :: {"fileUrl":"/uploads/file-1740595529892-28314653…
+6:45:30 PM [express] POST /api/upload 200 in 3ms :: {"fileUrl":"/uploads/file-1740595530175-67582728…
+Admin - Received raw employee data: {
+  epid: 'gdg',
+  name: 'dgd',
+  designation: 'dgd',
+  employmentStatus: 'permanent',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  officeMemoNo: 'dg',
+  joiningDate: '2025-02-06',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'dgd',
+  departmentId: 1,
+  aadharCard: 'dg',
+  panCardUrl: '/uploads/file-1740595527969-936788022.jpeg',
+  bankProofUrl: '/uploads/file-1740595528510-793224927.jpeg',
+  aadharCardUrl: '/uploads/file-1740595529610-758695114.jpeg',
+  officeMemoUrl: '/uploads/file-1740595529892-283146531.jpeg',
+  joiningReportUrl: '/uploads/file-1740595530175-675827283.jpeg'
+}
+Admin - Parsed employee data: {
+  departmentId: 1,
+  epid: 'gdg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-06',
+  salaryRegisterNo: 'dgd',
+  officeMemoNo: 'dg',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740595527969-936788022.jpeg',
+  bankProofUrl: '/uploads/file-1740595528510-793224927.jpeg',
+  aadharCardUrl: '/uploads/file-1740595529610-758695114.jpeg',
+  officeMemoUrl: '/uploads/file-1740595529892-283146531.jpeg',
+  joiningReportUrl: '/uploads/file-1740595530175-675827283.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'gdg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-06',
+  salaryRegisterNo: 'dgd',
+  officeMemoNo: 'dg',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740595527969-936788022.jpeg',
+  bankProofUrl: '/uploads/file-1740595528510-793224927.jpeg',
+  aadharCardUrl: '/uploads/file-1740595529610-758695114.jpeg',
+  officeMemoUrl: '/uploads/file-1740595529892-283146531.jpeg',
+  joiningReportUrl: '/uploads/file-1740595530175-675827283.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'gdg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-06',
+  salaryRegisterNo: 'dgd',
+  officeMemoNo: 'dg',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740595527969-936788022.jpeg',
+  bankProofUrl: '/uploads/file-1740595528510-793224927.jpeg',
+  aadharCardUrl: '/uploads/file-1740595529610-758695114.jpeg',
+  officeMemoUrl: '/uploads/file-1740595529892-283146531.jpeg',
+  joiningReportUrl: '/uploads/file-1740595530175-675827283.jpeg',
+  id: 1
+}
+6:45:30 PM [express] POST /api/admin/employees 201 in 6ms :: {"departmentId":1,"epid":"gdg","name":"…
+6:45:30 PM [express] GET /api/admin/employees 200 in 1ms :: [{"departmentId":1,"epid":"gdg","name":"…
+6:46:30 PM [express] DELETE /api/employees/1 204 in 1ms
+6:46:30 PM [express] GET /api/admin/employees 200 in 1ms :: []

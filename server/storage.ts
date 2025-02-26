@@ -1,4 +1,6 @@
 import { v4 as uuid } from "uuid";
+import fs from "fs";
+import path from "path";
 import {
   Department,
   Employee,
@@ -10,18 +12,38 @@ import {
   InsertAttendanceEntry,
 } from "@shared/schema";
 
+// Helper function to delete file if it exists
+function deleteFileIfExists(filePath: string) {
+  // Only process paths that start with /uploads/
+  if (!filePath || !filePath.startsWith('/uploads/')) {
+    return;
+  }
+
+  // Convert URL path to file system path
+  const absolutePath = path.join(__dirname, '..', filePath);
+
+  if (fs.existsSync(absolutePath)) {
+    try {
+      fs.unlinkSync(absolutePath);
+      console.log(`Deleted file: ${absolutePath}`);
+    } catch (error) {
+      console.error(`Error deleting file ${absolutePath}:`, error);
+    }
+  }
+}
+
 export interface IStorage {
   // Department operations
   getDepartment(id: number): Promise<Department | undefined>;
   getDepartmentByEmail(email: string): Promise<Department | undefined>;
   createDepartment(department: InsertDepartment): Promise<Department>;
-  getAllDepartments(): Promise<Department[]>; // Added
+  getAllDepartments(): Promise<Department[]>;
   // Employee operations
   getEmployee(id: number): Promise<Employee | undefined>;
   getEmployeesByDepartment(departmentId: number): Promise<Employee[]>;
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
-  updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee>; // Added
+  updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee>;
   // Attendance operations
   createAttendanceReport(report: InsertAttendanceReport): Promise<AttendanceReport>;
   getAttendanceReport(id: number): Promise<AttendanceReport | undefined>;
@@ -98,7 +120,7 @@ export class MemStorage implements IStorage {
       salaryRegisterNo: employee.salaryRegisterNo || "",
       bankAccount: employee.bankAccount || "",
       panNumber: employee.panNumber || "",
-      aadharCard: employee.aadharCard || "" // Fix: Use the provided aadharCard value
+      aadharCard: employee.aadharCard || "" 
     };
 
     // Log the employee being created
@@ -109,7 +131,28 @@ export class MemStorage implements IStorage {
   }
 
   async deleteEmployee(id: number): Promise<void> {
-    this.employees.delete(id);
+    const employee = this.employees.get(id);
+    if (employee) {
+      // Delete all associated files
+      if (employee.panCardUrl) deleteFileIfExists(employee.panCardUrl);
+      if (employee.bankProofUrl) deleteFileIfExists(employee.bankProofUrl);
+      if (employee.aadharCardUrl) deleteFileIfExists(employee.aadharCardUrl);
+      if (employee.officeMemoUrl) deleteFileIfExists(employee.officeMemoUrl);
+      if (employee.joiningReportUrl) deleteFileIfExists(employee.joiningReportUrl);
+
+      // Remove from storage
+      this.employees.delete(id);
+      console.log(`Employee ${id} and associated files deleted successfully`);
+    }
+  }
+
+  async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> { 
+    const employee = await this.getEmployee(id);
+    if (!employee) throw new Error("Employee not found");
+
+    const updatedEmployee = { ...employee, ...updates };
+    this.employees.set(id, updatedEmployee);
+    return updatedEmployee;
   }
 
   async createAttendanceReport(report: InsertAttendanceReport): Promise<AttendanceReport> {
@@ -206,15 +249,6 @@ export class MemStorage implements IStorage {
 
   async getAllDepartments(): Promise<Department[]> { 
     return Array.from(this.departments.values());
-  }
-
-  async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> { 
-    const employee = await this.getEmployee(id);
-    if (!employee) throw new Error("Employee not found");
-
-    const updatedEmployee = { ...employee, ...updates };
-    this.employees.set(id, updatedEmployee);
-    return updatedEmployee;
   }
 }
 
