@@ -14,16 +14,22 @@ import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
 
 const FileUpload = ({ name, value, onChange, label }: { name: string; value: string; onChange: (file: File | null) => void; label: string }) => {
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(value || null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      // For images, show preview
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // For PDFs and other docs, show an icon
+        setPreview("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3C/svg%3E");
+      }
       onChange(file);
     } else {
       setPreview(null);
@@ -45,9 +51,8 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
         />
         <div
           className={`
-            min-h-[100px] p-4 border-2 border-dashed rounded-lg 
-            ${preview ? 'border-primary/50' : 'border-gray-200'} 
-            hover:border-primary/70 transition-colors cursor-pointer
+            min-h-[100px] p-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors
+            ${preview ? 'border-primary/50 hover:border-primary/70' : 'border-gray-200 hover:border-primary/50'} 
             bg-white dark:bg-slate-800
           `}
           onClick={() => document.getElementById(name)?.click()}
@@ -58,9 +63,6 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
                 src={preview}
                 alt="Preview"
                 className="max-h-[100px] object-contain"
-                onError={(e) => {
-                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3C/svg%3E";
-                }}
               />
               <p className="text-sm text-muted-foreground">Click to change file</p>
             </div>
