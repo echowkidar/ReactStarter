@@ -125,7 +125,13 @@ export class MemStorage implements IStorage {
       salaryRegisterNo: employee.salaryRegisterNo || "",
       bankAccount: employee.bankAccount || "",
       panNumber: employee.panNumber || "",
-      aadharCard: employee.aadharCard || ""
+      aadharCard: employee.aadharCard || "",
+      // Add document URLs
+      panCardUrl: (employee as any).panCardUrl || null,
+      bankProofUrl: (employee as any).bankProofUrl || null,
+      aadharCardUrl: (employee as any).aadharCardUrl || null,
+      officeMemoUrl: (employee as any).officeMemoUrl || null,
+      joiningReportUrl: (employee as any).joiningReportUrl || null
     };
 
     // Log the employee being created
