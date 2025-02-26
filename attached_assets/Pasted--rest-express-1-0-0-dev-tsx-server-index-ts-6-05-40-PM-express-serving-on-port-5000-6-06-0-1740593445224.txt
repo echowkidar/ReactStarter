@@ -1,0 +1,116 @@
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+6:05:40 PM [express] serving on port 5000
+6:06:08 PM [express] POST /api/auth/admin/login 200 in 2ms :: {"role":"admin","message":"Admin logge…
+6:06:08 PM [express] GET /api/admin/attendance 304 in 0ms :: []
+6:06:12 PM [express] GET /api/admin/employees 304 in 1ms :: []
+6:06:12 PM [express] GET /api/departments 304 in 1ms :: [{"name":"Department of Computer Science","h…
+Fetching employees for department: NaN
+Department not found: NaN
+6:06:43 PM [express] GET /api/departments/undefined/employees 404 in 2ms :: {"message":"Department n…
+6:07:02 PM [express] POST /api/upload 200 in 268ms :: {"fileUrl":"/uploads/file-1740593221737-413032…
+6:07:02 PM [express] POST /api/upload 200 in 3ms :: {"fileUrl":"/uploads/file-1740593222283-91927616…
+6:07:02 PM [express] POST /api/upload 200 in 3ms :: {"fileUrl":"/uploads/file-1740593222573-99873608…
+6:07:02 PM [express] POST /api/upload 200 in 3ms :: {"fileUrl":"/uploads/file-1740593222857-11288905…
+6:07:03 PM [express] POST /api/upload 200 in 2ms :: {"fileUrl":"/uploads/file-1740593223141-25951321…
+Admin - Received raw employee data: {
+  epid: 'fsfs',
+  name: 'sfsf',
+  designation: 'sfs',
+  employmentStatus: 'permanent',
+  panNumber: 'sf',
+  bankAccount: 'sf',
+  aadharCard: {},
+  officeMemoNo: 'sf',
+  joiningDate: '2025-02-13',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'sfs',
+  departmentId: 1,
+  panCard: {},
+  bankProof: {},
+  officeMemo: {},
+  joiningReport: {},
+  panCardUrl: '/uploads/file-1740593221737-413032447.jpeg',
+  bankProofUrl: '/uploads/file-1740593222283-919276160.jpeg',
+  aadharCardUrl: '/uploads/file-1740593222573-998736082.jpeg',
+  officeMemoUrl: '/uploads/file-1740593222857-112889055.jpeg',
+  joiningReportUrl: '/uploads/file-1740593223141-259513215.jpeg'
+}
+Error creating employee: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "object",
+    "path": [
+      "aadharCard"
+    ],
+    "message": "Expected string, received object"
+  }
+]
+    at get error [as error] (file:///home/runner/workspace/node_modules/zod/lib/index.mjs:587:31)
+    at ZodObject.parse (file:///home/runner/workspace/node_modules/zod/lib/index.mjs:692:22)
+    at <anonymous> (/home/runner/workspace/server/routes.ts:138:49)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at <anonymous> (/home/runner/workspace/server/index.ts:36:3)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at urlencodedParser (/home/runner/workspace/node_modules/body-parser/lib/types/urlencoded.js:85:7)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at /home/runner/workspace/node_modules/body-parser/lib/read.js:137:5
+    at AsyncResource.runInAsyncScope (node:async_hooks:206:9)
+    at invokeCallback (/home/runner/workspace/node_modules/raw-body/index.js:238:16)
+    at done (/home/runner/workspace/node_modules/raw-body/index.js:227:7)
+    at IncomingMessage.onEnd (/home/runner/workspace/node_modules/raw-body/index.js:287:7)
+    at IncomingMessage.emit (node:events:518:28)
+    at endReadableNT (node:internal/streams/readable:1698:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  issues: [
+    {
+      code: 'invalid_type',
+      expected: 'string',
+      received: 'object',
+      path: [Array],
+      message: 'Expected string, received object'
+    }
+  ],
+  addIssue: [Function (anonymous)],
+  addIssues: [Function (anonymous)],
+  errors: [
+    {
+      code: 'invalid_type',
+      expected: 'string',
+      received: 'object',
+      path: [Array],
+      message: 'Expected string, received object'
+    }
+  ]
+}
+6:07:03 PM [express] POST /api/admin/employees 400 in 15ms :: {"message":"Invalid employee data","de…
+Fetching employees for department: NaN
+Department not found: NaN
+6:07:42 PM [express] GET /api/departments/undefined/employees 404 in 1ms :: {"message":"Department n…
+6:07:45 PM [express] GET /api/departments/undefined/attendance 200 in 1ms :: []
+Fetching employees for department: NaN
+Department not found: NaN
+6:07:45 PM [express] GET /api/departments/undefined/employees 404 in 1ms :: {"message":"Department n…
+Fetching employees for department: NaN
+Department not found: NaN
+6:07:50 PM [express] GET /api/departments/undefined/employees 404 in 1ms :: {"message":"Department n…
+6:08:15 PM [express] POST /api/auth/admin/login 200 in 1ms :: {"role":"admin","message":"Admin logge…
+6:08:15 PM [express] GET /api/admin/attendance 200 in 3ms :: []
+6:08:19 PM [express] GET /api/admin/employees 200 in 0ms :: []
+6:08:19 PM [express] GET /api/departments 200 in 1ms :: [{"name":"Department of Computer Science","h…

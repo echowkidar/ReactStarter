@@ -138,8 +138,18 @@ export default function AdminEmployees() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data: Record<string, any> = Object.fromEntries(formData.entries());
+
+    // Filter out the file upload fields from form data
+    const data: Record<string, any> = {};
+    for (const [key, value] of formData.entries()) {
+      if (!['panCard', 'bankProof', 'aadharCard', 'officeMemo', 'joiningReport'].includes(key)) {
+        data[key] = value;
+      }
+    }
+
+    // Convert departmentId to number
     data.departmentId = parseInt(data.departmentId as string, 10);
+
     saveMutation.mutate(data as InsertEmployee);
   };
 
@@ -154,8 +164,8 @@ export default function AdminEmployees() {
           <div className="relative w-32 h-32 border rounded-lg overflow-hidden bg-slate-50">
             {upload ? (
               <>
-                <img 
-                  src={upload.preview} 
+                <img
+                  src={upload.preview}
                   alt={`${label} preview`}
                   className="w-full h-full object-cover"
                 />
@@ -211,8 +221,8 @@ export default function AdminEmployees() {
           <div className="flex items-center gap-4">
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button 
-                  className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+                <Button
+                  className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
                   onClick={() => {
                     setSelectedEmployee(null);
                     setEmploymentStatus("permanent");
@@ -238,37 +248,37 @@ export default function AdminEmployees() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="epid">EPID</Label>
-                          <Input 
-                            id="epid" 
-                            name="epid" 
+                          <Input
+                            id="epid"
+                            name="epid"
                             defaultValue={selectedEmployee?.epid}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="name">Name</Label>
-                          <Input 
-                            id="name" 
-                            name="name" 
+                          <Input
+                            id="name"
+                            name="name"
                             defaultValue={selectedEmployee?.name}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="designation">Designation</Label>
-                          <Input 
-                            id="designation" 
-                            name="designation" 
+                          <Input
+                            id="designation"
+                            name="designation"
                             defaultValue={selectedEmployee?.designation}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="employmentStatus">Employment Status</Label>
-                          <Select 
+                          <Select
                             name="employmentStatus"
                             value={employmentStatus}
                             onValueChange={setEmploymentStatus}
@@ -286,13 +296,13 @@ export default function AdminEmployees() {
                         {(employmentStatus === "probation" || employmentStatus === "temporary") && (
                           <div>
                             <Label htmlFor="termExpiry">Term Expiry Date</Label>
-                            <Input 
-                              id="termExpiry" 
-                              name="termExpiry" 
+                            <Input
+                              id="termExpiry"
+                              name="termExpiry"
                               type="date"
                               defaultValue={selectedEmployee?.termExpiry || ""}
                               className="bg-white dark:bg-slate-800"
-                              required 
+                              required
                             />
                           </div>
                         )}
@@ -305,32 +315,32 @@ export default function AdminEmployees() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="panNumber">PAN Number</Label>
-                          <Input 
-                            id="panNumber" 
-                            name="panNumber" 
+                          <Input
+                            id="panNumber"
+                            name="panNumber"
                             defaultValue={selectedEmployee?.panNumber}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="bankAccount">Bank Account</Label>
-                          <Input 
-                            id="bankAccount" 
-                            name="bankAccount" 
+                          <Input
+                            id="bankAccount"
+                            name="bankAccount"
                             defaultValue={selectedEmployee?.bankAccount}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="aadharCard">Aadhar Card</Label>
-                          <Input 
-                            id="aadharCard" 
-                            name="aadharCard" 
+                          <Input
+                            id="aadharCard"
+                            name="aadharCard"
                             defaultValue={selectedEmployee?.aadharCard}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                       </div>
@@ -342,28 +352,28 @@ export default function AdminEmployees() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="officeMemoNo">Office Memo No.</Label>
-                          <Input 
-                            id="officeMemoNo" 
-                            name="officeMemoNo" 
+                          <Input
+                            id="officeMemoNo"
+                            name="officeMemoNo"
                             defaultValue={selectedEmployee?.officeMemoNo}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="joiningDate">Joining Date</Label>
-                          <Input 
-                            id="joiningDate" 
-                            name="joiningDate" 
+                          <Input
+                            id="joiningDate"
+                            name="joiningDate"
                             type="date"
                             defaultValue={selectedEmployee?.joiningDate}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="joiningShift">Joining Shift</Label>
-                          <Select 
+                          <Select
                             name="joiningShift"
                             defaultValue={selectedEmployee?.joiningShift || "FN"}
                           >
@@ -378,17 +388,17 @@ export default function AdminEmployees() {
                         </div>
                         <div>
                           <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
-                          <Input 
-                            id="salaryRegisterNo" 
-                            name="salaryRegisterNo" 
+                          <Input
+                            id="salaryRegisterNo"
+                            name="salaryRegisterNo"
                             defaultValue={selectedEmployee?.salaryRegisterNo}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="departmentId">Department</Label>
-                          <Select 
+                          <Select
                             name="departmentId"
                             value={selectedDepartmentId || (selectedEmployee?.departmentId?.toString() || "")}
                             onValueChange={setSelectedDepartmentId}
@@ -421,9 +431,9 @@ export default function AdminEmployees() {
                     </div>
                   </div>
 
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
                     disabled={saveMutation.isPending}
                   >
                     {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
