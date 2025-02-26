@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
@@ -19,14 +19,6 @@ export default function AdminEmployees() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
-  const [documents, setDocuments] = useState({
-    panCard: "",
-    bankAccountProof: "",
-    aadharCard: "",
-    officeMemo: "",
-    joiningReport: ""
-  });
-  const [isUploading, setIsUploading] = useState(false);
   const [, setLocation] = useLocation();
 
   // Fetch all employees
@@ -66,13 +58,6 @@ export default function AdminEmployees() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
       setIsDialogOpen(false);
       setSelectedEmployee(null);
-      setDocuments({
-        panCard: "",
-        bankAccountProof: "",
-        aadharCard: "",
-        officeMemo: "",
-        joiningReport: ""
-      });
       toast({
         title: "Success",
         description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
@@ -90,44 +75,6 @@ export default function AdminEmployees() {
     setLocation('/admin/login');
   };
 
-  const handleFileUpload = async (type: string, event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      const data = await response.json();
-      setDocuments(prev => ({
-        ...prev,
-        [type]: data.fileUrl
-      }));
-      toast({
-        title: "Success",
-        description: `${type.replace(/([A-Z])/g, ' $1').trim()} uploaded successfully`
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to upload document",
-        variant: "destructive"
-      });
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -135,13 +82,6 @@ export default function AdminEmployees() {
 
     // Convert departmentId to number
     data.departmentId = parseInt(data.departmentId as string, 10);
-
-    // Add document URLs
-    Object.entries(documents).forEach(([key, value]) => {
-      if (value) {
-        data[key] = value;
-      }
-    });
 
     saveMutation.mutate(data as InsertEmployee);
   };
@@ -158,13 +98,6 @@ export default function AdminEmployees() {
                   setSelectedEmployee(null);
                   setEmploymentStatus("permanent");
                   setSelectedDepartmentId("");
-                  setDocuments({
-                    panCard: "",
-                    bankAccountProof: "",
-                    aadharCard: "",
-                    officeMemo: "",
-                    joiningReport: ""
-                  });
                 }}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Employee
@@ -351,149 +284,6 @@ export default function AdminEmployees() {
                             </SelectContent>
                           </Select>
                         </div>
-
-                        {/* Document Upload Section */}
-                        <div className="col-span-2">
-                          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                            <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                              <div>
-                                <Label htmlFor="panCard">PAN Card</Label>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => document.getElementById('panCard')?.click()}
-                                    disabled={isUploading}
-                                  >
-                                    <Upload className="w-4 h-4 mr-2" />
-                                    Upload PAN Card
-                                  </Button>
-                                  <Input
-                                    id="panCard"
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => handleFileUpload('panCard', e)}
-                                    accept=".pdf,.jpg,.jpeg,.png"
-                                    name="panCard"
-                                  />
-                                  {documents.panCard && (
-                                    <div className="text-sm text-green-600">✓</div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div>
-                                <Label htmlFor="bankAccountProof">Bank Account Proof</Label>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => document.getElementById('bankAccountProof')?.click()}
-                                    disabled={isUploading}
-                                  >
-                                    <Upload className="w-4 h-4 mr-2" />
-                                    Upload Bank Account Proof
-                                  </Button>
-                                  <Input
-                                    id="bankAccountProof"
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => handleFileUpload('bankAccountProof', e)}
-                                    accept=".pdf,.jpg,.jpeg,.png"
-                                    name="bankAccountProof"
-                                  />
-                                  {documents.bankAccountProof && (
-                                    <div className="text-sm text-green-600">✓</div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div>
-                                <Label htmlFor="aadharCard">Aadhar Card</Label>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => document.getElementById('aadharCard')?.click()}
-                                    disabled={isUploading}
-                                  >
-                                    <Upload className="w-4 h-4 mr-2" />
-                                    Upload Aadhar Card
-                                  </Button>
-                                  <Input
-                                    id="aadharCard"
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => handleFileUpload('aadharCard', e)}
-                                    accept=".pdf,.jpg,.jpeg,.png"
-                                    name="aadharCard"
-                                  />
-                                  {documents.aadharCard && (
-                                    <div className="text-sm text-green-600">✓</div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div>
-                                <Label htmlFor="officeMemo">Office Memo</Label>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => document.getElementById('officeMemo')?.click()}
-                                    disabled={isUploading}
-                                  >
-                                    <Upload className="w-4 h-4 mr-2" />
-                                    Upload Office Memo
-                                  </Button>
-                                  <Input
-                                    id="officeMemo"
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => handleFileUpload('officeMemo', e)}
-                                    accept=".pdf,.jpg,.jpeg,.png"
-                                    name="officeMemo"
-                                  />
-                                  {documents.officeMemo && (
-                                    <div className="text-sm text-green-600">✓</div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div>
-                                <Label htmlFor="joiningReport">Joining Report</Label>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => document.getElementById('joiningReport')?.click()}
-                                    disabled={isUploading}
-                                  >
-                                    <Upload className="w-4 h-4 mr-2" />
-                                    Upload Joining Report
-                                  </Button>
-                                  <Input
-                                    id="joiningReport"
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => handleFileUpload('joiningReport', e)}
-                                    accept=".pdf,.jpg,.jpeg,.png"
-                                    name="joiningReport"
-                                  />
-                                  {documents.joiningReport && (
-                                    <div className="text-sm text-green-600">✓</div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -501,7 +291,7 @@ export default function AdminEmployees() {
                   <Button 
                     type="submit" 
                     className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
-                    disabled={saveMutation.isPending || isUploading}
+                    disabled={saveMutation.isPending}
                   >
                     {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
                   </Button>
@@ -523,7 +313,6 @@ export default function AdminEmployees() {
                 <TableHead>Department</TableHead>
                 <TableHead>Designation</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Document</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -535,19 +324,6 @@ export default function AdminEmployees() {
                   <TableCell>{employee.departmentName}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
                   <TableCell>{employee.employmentStatus}</TableCell>
-                  <TableCell>
-                    {employee.documentUrl && (
-                      <a 
-                        href={employee.documentUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline flex items-center gap-1"
-                      >
-                        <Upload className="w-4 h-4" />
-                        View
-                      </a>
-                    )}
-                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
@@ -556,13 +332,6 @@ export default function AdminEmployees() {
                         setSelectedEmployee(employee);
                         setEmploymentStatus(employee.employmentStatus.toLowerCase());
                         setSelectedDepartmentId(employee.departmentId.toString());
-                        setDocuments({
-                          panCard: employee.panCard || "",
-                          bankAccountProof: employee.bankAccountProof || "",
-                          aadharCard: employee.aadharCard || "",
-                          officeMemo: employee.officeMemo || "",
-                          joiningReport: employee.joiningReport || ""
-                        });
                         setIsDialogOpen(true);
                       }}
                     >
