@@ -134,14 +134,14 @@ export default function Employees() {
           <h1 className="text-2xl font-bold">Employees</h1>
           <Dialog open={isAddingEmployee} onOpenChange={setIsAddingEmployee}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Employee
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
               <DialogHeader>
-                <DialogTitle>Add New Employee</DialogTitle>
+                <DialogTitle className="text-xl font-semibold">Add New Employee</DialogTitle>
               </DialogHeader>
               <EmployeeForm
                 onSubmit={async (data) => {

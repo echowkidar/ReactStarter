@@ -52,7 +52,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       joiningDate: "",
       joiningShift: "FN",
       salaryRegisterNo: "",
-      // Document fields
       panCardDoc: "",
       bankAccountDoc: "",
       aadharCardDoc: "",
@@ -64,12 +63,12 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <div className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto px-1">
+        <div className="space-y-8">
           {/* Basic Information Section */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="epid"
@@ -77,7 +76,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>EPID</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} />
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -90,46 +89,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="panNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PAN Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={isLoading} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="bankAccount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bank Account</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={isLoading} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="aadharCard"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Aadhar Card</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={isLoading} />
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -142,7 +102,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>Designation</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} />
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -160,7 +120,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       value={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-white dark:bg-slate-800">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -184,13 +144,66 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                     <FormItem>
                       <FormLabel>Term Expiry Date</FormLabel>
                       <FormControl>
-                        <Input {...field} type="date" disabled={isLoading} />
+                        <Input {...field} type="date" disabled={isLoading} className="bg-white dark:bg-slate-800" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               )}
+            </div>
+          </div>
+
+          {/* Identification Details Section */}
+          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="panNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>PAN Number</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bankAccount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bank Account</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="aadharCard"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Aadhar Card</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Office Details Section */}
+          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="officeMemoNo"
@@ -198,7 +211,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>Office Memo No.</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} />
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -211,7 +224,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>Joining Date</FormLabel>
                     <FormControl>
-                      <Input {...field} type="date" disabled={isLoading} />
+                      <Input {...field} type="date" disabled={isLoading} className="bg-white dark:bg-slate-800" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -229,7 +242,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       value={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-white dark:bg-slate-800">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -249,7 +262,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>Salary Register No.</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} />
+                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -259,9 +272,9 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
           </div>
 
           {/* Document Upload Section */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Document Upload</h3>
-            <div className="grid grid-cols-2 gap-6">
+          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="panCardDoc"
@@ -284,7 +297,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="bankAccountDoc"
@@ -307,7 +319,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="aadharCardDoc"
@@ -330,7 +341,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="officeMemoDoc"
@@ -353,7 +363,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="joiningReportDoc"
@@ -376,7 +385,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-
               {(form.watch("employmentStatus") === "Probation" ||
                 form.watch("employmentStatus") === "Temporary") && (
                 <FormField
@@ -406,7 +414,11 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
           </div>
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button 
+          type="submit" 
+          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+          disabled={isLoading}
+        >
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
