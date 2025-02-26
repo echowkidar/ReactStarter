@@ -98,7 +98,7 @@ export class MemStorage implements IStorage {
       salaryRegisterNo: employee.salaryRegisterNo || "",
       bankAccount: employee.bankAccount || "",
       panNumber: employee.panNumber || "",
-      aadharCard: employee.aadharCard || ""
+      aadharCard: employee.aadharCard || "" // Fix: Use the provided aadharCard value
     };
 
     // Log the employee being created

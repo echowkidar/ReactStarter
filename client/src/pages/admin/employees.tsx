@@ -227,7 +227,6 @@ export default function AdminEmployees() {
     }
   });
 
-
   return (
     <div className="container mx-auto py-8">
       <Card>
@@ -351,7 +350,7 @@ export default function AdminEmployees() {
                           <Input
                             id="aadharCard"
                             name="aadharCard"
-                            defaultValue={selectedEmployee?.aadharCard}
+                            defaultValue={selectedEmployee?.aadharCard || ""}
                             className="bg-white dark:bg-slate-800"
                             required
                           />
