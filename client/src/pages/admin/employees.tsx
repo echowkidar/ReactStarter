@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +18,6 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // For images, show preview
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -27,7 +25,7 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
         };
         reader.readAsDataURL(file);
       } else {
-        // For PDFs and other docs, show an icon
+        // For PDFs and documents, show a document icon
         setPreview("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3C/svg%3E");
       }
       onChange(file);
@@ -59,11 +57,15 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
         >
           {preview ? (
             <div className="flex flex-col items-center gap-2">
-              <img
-                src={preview}
-                alt="Preview"
-                className="max-h-[100px] object-contain"
-              />
+              {preview.startsWith('data:image/') ? (
+                <img
+                  src={preview}
+                  alt="Preview"
+                  className="max-h-[100px] object-contain"
+                />
+              ) : (
+                <div className="w-12 h-12" dangerouslySetInnerHTML={{ __html: preview }} />
+              )}
               <p className="text-sm text-muted-foreground">Click to change file</p>
             </div>
           ) : (
@@ -203,12 +205,13 @@ export default function AdminEmployees() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     try {
-      setIsSubmitting(true);
       const formData = new FormData(e.currentTarget);
 
       if (!validateForm(formData)) {
+        setIsSubmitting(false);
         return;
       }
 
@@ -288,6 +291,7 @@ export default function AdminEmployees() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-8">
+                    {/* Basic Information Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -354,6 +358,7 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
+                    {/* Identification Details Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -390,6 +395,7 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
+                    {/* Office Details Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -461,6 +467,7 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
+                    {/* Document Upload Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
