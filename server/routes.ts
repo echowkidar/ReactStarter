@@ -15,13 +15,15 @@ const __dirname = path.dirname(__filename);
 export async function registerRoutes(app: Express) {
   const httpServer = createServer(app);
 
+  // Ensure uploads directory exists
+  const uploadDir = path.join(__dirname, '../uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
   // Configure multer for file uploads
   const fileStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-      const uploadDir = path.join(__dirname, '../uploads');
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
       cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
@@ -42,6 +44,9 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Serve uploaded files statically
+  app.use('/uploads', express.static(uploadDir));
+
   // Add this new endpoint for file uploads
   app.post("/api/upload", upload.single('file'), async (req, res) => {
     try {
@@ -49,7 +54,7 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "No file uploaded or invalid file type" });
       }
 
-      // Generate the file URL - make it absolute
+      // Return the URL that can be used to access the file
       const fileUrl = `/uploads/${req.file.filename}`;
       res.json({ fileUrl });
     } catch (error) {
@@ -57,9 +62,6 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to upload file" });
     }
   });
-
-  // Serve uploaded files statically - ensure the path is correct
-  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
