@@ -132,10 +132,9 @@ export async function registerRoutes(app: Express) {
   // Create employee (admin)
   app.post("/api/admin/employees", async (req, res) => {
     try {
-      // Log the raw request body
       console.log("Admin - Received raw employee data:", req.body);
 
-      const employeeData = insertEmployeeSchema.parse({
+      const employeeData = {
         ...req.body,
         departmentId: Number(req.body.departmentId),
         joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
@@ -145,15 +144,20 @@ export async function registerRoutes(app: Express) {
         salaryRegisterNo: req.body.salaryRegisterNo || "",
         bankAccount: req.body.bankAccount || "",
         panNumber: req.body.panNumber || "",
-        aadharCard: req.body.aadharCard || ""
-      });
+        aadharCard: req.body.aadharCard || "",
+        // Map file URLs from the upload responses
+        panCardUrl: req.body.panCardUrl || null,
+        bankProofUrl: req.body.bankProofUrl || null,
+        aadharCardUrl: req.body.aadharCardUrl || null,
+        officeMemoUrl: req.body.officeMemoUrl || null,
+        joiningReportUrl: req.body.joiningReportUrl || null
+      };
 
-      // Log the parsed data
-      console.log("Admin - Parsed employee data:", employeeData);
+      const parsedData = insertEmployeeSchema.parse(employeeData);
+      console.log("Admin - Parsed employee data:", parsedData);
+      console.log("Creating employee in storage:", parsedData);
 
-      // Create the employee
-      console.log("Creating employee in storage:", employeeData);
-      const employee = await storage.createEmployee(employeeData);
+      const employee = await storage.createEmployee(parsedData);
       res.status(201).json(employee);
     } catch (error) {
       console.error('Error creating employee:', error);
@@ -178,7 +182,8 @@ export async function registerRoutes(app: Express) {
       const departmentId = Number(req.params.departmentId);
       console.log("Department - Received raw employee data:", req.body);
 
-      const employeeData = insertEmployeeSchema.parse({
+      // Map any document URLs if they exist
+      const employeeData = {
         ...req.body,
         departmentId,
         joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
@@ -188,13 +193,20 @@ export async function registerRoutes(app: Express) {
         salaryRegisterNo: req.body.salaryRegisterNo || "",
         bankAccount: req.body.bankAccount || "",
         panNumber: req.body.panNumber || "",
-        aadharCard: req.body.aadharCard || ""
-      });
+        aadharCard: req.body.aadharCard || "",
+        // Map file URLs from the upload responses
+        panCardUrl: req.body.panCardUrl || null,
+        bankProofUrl: req.body.bankProofUrl || null,
+        aadharCardUrl: req.body.aadharCardUrl || null,
+        officeMemoUrl: req.body.officeMemoUrl || null,
+        joiningReportUrl: req.body.joiningReportUrl || null
+      };
 
-      console.log("Department - Parsed employee data:", employeeData);
-      console.log("Creating employee in storage:", employeeData);
+      const parsedData = insertEmployeeSchema.parse(employeeData);
+      console.log("Department - Parsed employee data:", parsedData);
+      console.log("Creating employee in storage:", parsedData);
 
-      const employee = await storage.createEmployee(employeeData);
+      const employee = await storage.createEmployee(parsedData);
       res.status(201).json(employee);
     } catch (error) {
       console.error('Error creating employee:', error);

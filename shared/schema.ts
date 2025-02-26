@@ -90,6 +90,12 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     bankAccount: z.string().optional().default(""),
     panNumber: z.string().optional().default(""),
     aadharCard: z.string().optional().default(""),
+    // Add URL fields to the schema
+    panCardUrl: z.string().nullable().optional(),
+    bankProofUrl: z.string().nullable().optional(),
+    aadharCardUrl: z.string().nullable().optional(),
+    officeMemoUrl: z.string().nullable().optional(),
+    joiningReportUrl: z.string().nullable().optional(),
     // Allow both epid and employeeId
     epid: z.union([
       z.string(),
