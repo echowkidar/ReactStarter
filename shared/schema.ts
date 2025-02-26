@@ -26,6 +26,12 @@ export const employees = pgTable("employees", {
   salaryRegisterNo: text("salary_register_no").notNull(),
   officeMemoNo: text("office_memo_no").notNull(),
   joiningShift: text("joining_shift").notNull().default("morning"),
+  // Add document URL fields
+  panCardUrl: text("pan_card_url"),
+  bankProofUrl: text("bank_proof_url"),
+  aadharCardUrl: text("aadhar_card_url"),
+  officeMemoUrl: text("office_memo_url"),
+  joiningReportUrl: text("joining_report_url"),
 });
 
 export const attendanceReports = pgTable("attendance_reports", {
@@ -125,7 +131,14 @@ export const insertAttendanceEntrySchema = createInsertSchema(attendanceEntries)
 
 export type Department = typeof departments.$inferSelect;
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
-export type Employee = typeof employees.$inferSelect & { departmentName?: string };
+export type Employee = typeof employees.$inferSelect & { 
+  departmentName?: string;
+  panCardUrl?: string;
+  bankProofUrl?: string;
+  aadharCardUrl?: string;
+  officeMemoUrl?: string;
+  joiningReportUrl?: string;
+};
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type AttendanceReport = typeof attendanceReports.$inferSelect;
 export type InsertAttendanceReport = z.infer<typeof insertAttendanceReportSchema>;
