@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Upload } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
@@ -19,6 +19,8 @@ export default function AdminEmployees() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [documentUrl, setDocumentUrl] = useState<string>("");
+  const [isUploading, setIsUploading] = useState(false);
   const [, setLocation] = useLocation();
 
   // Fetch all employees
@@ -58,6 +60,7 @@ export default function AdminEmployees() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
       setIsDialogOpen(false);
       setSelectedEmployee(null);
+      setDocumentUrl("");
       toast({
         title: "Success",
         description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
@@ -75,6 +78,41 @@ export default function AdminEmployees() {
     setLocation('/admin/login');
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const data = await response.json();
+      setDocumentUrl(data.fileUrl);
+      toast({
+        title: "Success",
+        description: "Document uploaded successfully"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to upload document",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -82,6 +120,11 @@ export default function AdminEmployees() {
 
     // Convert departmentId to number
     data.departmentId = parseInt(data.departmentId as string, 10);
+
+    // Add document URL if available
+    if (documentUrl) {
+      data.documentUrl = documentUrl;
+    }
 
     saveMutation.mutate(data as InsertEmployee);
   };
@@ -98,6 +141,7 @@ export default function AdminEmployees() {
                   setSelectedEmployee(null);
                   setEmploymentStatus("permanent");
                   setSelectedDepartmentId("");
+                  setDocumentUrl("");
                 }}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Employee
@@ -284,6 +328,27 @@ export default function AdminEmployees() {
                             </SelectContent>
                           </Select>
                         </div>
+
+                        {/* Document Upload Section */}
+                        <div className="col-span-2">
+                          <Label htmlFor="document">Upload Document</Label>
+                          <div className="mt-2 flex items-center gap-4">
+                            <Input
+                              id="document"
+                              type="file"
+                              onChange={handleFileUpload}
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              className="bg-white dark:bg-slate-800"
+                              disabled={isUploading}
+                            />
+                            {isUploading && <div className="text-sm text-muted-foreground">Uploading...</div>}
+                            {documentUrl && (
+                              <div className="text-sm text-green-600">
+                                Document uploaded successfully
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -291,7 +356,7 @@ export default function AdminEmployees() {
                   <Button 
                     type="submit" 
                     className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
-                    disabled={saveMutation.isPending}
+                    disabled={saveMutation.isPending || isUploading}
                   >
                     {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
                   </Button>
@@ -313,6 +378,7 @@ export default function AdminEmployees() {
                 <TableHead>Department</TableHead>
                 <TableHead>Designation</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Document</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -324,6 +390,19 @@ export default function AdminEmployees() {
                   <TableCell>{employee.departmentName}</TableCell>
                   <TableCell>{employee.designation}</TableCell>
                   <TableCell>{employee.employmentStatus}</TableCell>
+                  <TableCell>
+                    {employee.documentUrl && (
+                      <a 
+                        href={employee.documentUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Upload className="w-4 h-4" />
+                        View
+                      </a>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
@@ -332,6 +411,7 @@ export default function AdminEmployees() {
                         setSelectedEmployee(employee);
                         setEmploymentStatus(employee.employmentStatus.toLowerCase());
                         setSelectedDepartmentId(employee.departmentId.toString());
+                        setDocumentUrl(employee.documentUrl || "");
                         setIsDialogOpen(true);
                       }}
                     >
