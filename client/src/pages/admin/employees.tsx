@@ -8,10 +8,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, X, Upload } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
+
+interface FileUpload {
+  file: File;
+  preview: string;
+}
+
+interface UploadState {
+  panCard?: FileUpload;
+  bankProof?: FileUpload;
+  aadharCard?: FileUpload;
+  officeMemo?: FileUpload;
+  joiningReport?: FileUpload;
+}
 
 export default function AdminEmployees() {
   const { toast } = useToast();
@@ -19,45 +32,92 @@ export default function AdminEmployees() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
 
-  // Fetch all employees
+  // Existing queries...
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
     queryKey: ['/api/admin/employees']
   });
 
-  // Fetch departments for dropdown
   const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({
     queryKey: ['/api/departments']
   });
 
-  // Delete employee mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest('DELETE', `/api/employees/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
-      toast({
-        title: "Success",
-        description: "Employee deleted successfully"
+  // File upload mutation
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
       });
+      if (!response.ok) throw new Error('Upload failed');
+      return response.json();
     }
   });
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadState) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setUploads(prev => ({
+        ...prev,
+        [type]: {
+          file,
+          preview: reader.result as string
+        }
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Remove uploaded file
+  const handleRemoveFile = (type: keyof UploadState) => {
+    setUploads(prev => {
+      const newUploads = { ...prev };
+      delete newUploads[type];
+      return newUploads;
+    });
+  };
 
   // Create/Update employee mutation
   const saveMutation = useMutation({
     mutationFn: async (data: Partial<InsertEmployee>) => {
+      // Upload all files first
+      const fileUrls: Record<string, string> = {};
+
+      for (const [key, upload] of Object.entries(uploads)) {
+        if (upload?.file) {
+          const result = await uploadMutation.mutateAsync(upload.file);
+          fileUrls[key] = result.fileUrl;
+        }
+      }
+
+      const employeeData = {
+        ...data,
+        panCardUrl: fileUrls.panCard,
+        bankProofUrl: fileUrls.bankProof,
+        aadharCardUrl: fileUrls.aadharCard,
+        officeMemoUrl: fileUrls.officeMemo,
+        joiningReportUrl: fileUrls.joiningReport
+      };
+
       if (selectedEmployee) {
-        await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, data);
+        await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, employeeData);
       } else {
-        await apiRequest('POST', '/api/admin/employees', data);
+        await apiRequest('POST', '/api/admin/employees', employeeData);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
       setIsDialogOpen(false);
       setSelectedEmployee(null);
+      setUploads({});
       toast({
         title: "Success",
         description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
@@ -75,16 +135,73 @@ export default function AdminEmployees() {
     setLocation('/admin/login');
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data: Record<string, any> = Object.fromEntries(formData.entries());
-
-    // Convert departmentId to number
     data.departmentId = parseInt(data.departmentId as string, 10);
-
     saveMutation.mutate(data as InsertEmployee);
   };
+
+  // Render upload preview
+  const renderUploadPreview = (type: keyof UploadState, label: string) => {
+    const upload = uploads[type];
+
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={type}>{label}</Label>
+        <div className="flex items-center gap-4">
+          <div className="relative w-32 h-32 border rounded-lg overflow-hidden bg-slate-50">
+            {upload ? (
+              <>
+                <img 
+                  src={upload.preview} 
+                  alt={`${label} preview`}
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFile(type)}
+                  className="absolute top-1 right-1 p-1 bg-white rounded-full shadow-sm hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Upload className="w-8 h-8 text-slate-400" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1">
+            <Input
+              id={type}
+              name={type}
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => handleFileSelect(e, type)}
+              className="bg-white dark:bg-slate-800"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Delete employee mutation (from original code)
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest('DELETE', `/api/employees/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
+      toast({
+        title: "Success",
+        description: "Employee deleted successfully"
+      });
+    }
+  });
+
 
   return (
     <div className="container mx-auto py-8">
@@ -94,11 +211,15 @@ export default function AdminEmployees() {
           <div className="flex items-center gap-4">
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary" onClick={() => {
-                  setSelectedEmployee(null);
-                  setEmploymentStatus("permanent");
-                  setSelectedDepartmentId("");
-                }}>
+                <Button 
+                  className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+                  onClick={() => {
+                    setSelectedEmployee(null);
+                    setEmploymentStatus("permanent");
+                    setSelectedDepartmentId("");
+                    setUploads({});
+                  }}
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Employee
                 </Button>
@@ -111,7 +232,7 @@ export default function AdminEmployees() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-8">
-                    {/* Basic Information Section */}
+                    {/* Keep existing Basic Information section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -178,7 +299,7 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Identification Details Section */}
+                    {/* Keep existing Identification Details section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -215,7 +336,7 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Office Details Section */}
+                    {/* Keep existing Office Details section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -284,6 +405,18 @@ export default function AdminEmployees() {
                             </SelectContent>
                           </Select>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Add new Document Upload section */}
+                    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
+                      <div className="grid grid-cols-1 gap-6">
+                        {renderUploadPreview('panCard', 'PAN Card')}
+                        {renderUploadPreview('bankProof', 'Bank Account Proof')}
+                        {renderUploadPreview('aadharCard', 'Aadhar Card')}
+                        {renderUploadPreview('officeMemo', 'Office Memo')}
+                        {renderUploadPreview('joiningReport', 'Joining Report')}
                       </div>
                     </div>
                   </div>
