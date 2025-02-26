@@ -43,7 +43,7 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
           className="hidden"
           accept=".pdf,.jpg,.jpeg,.png"
         />
-        <div 
+        <div
           className={`
             min-h-[100px] p-4 border-2 border-dashed rounded-lg 
             ${preview ? 'border-primary/50' : 'border-gray-200'} 
@@ -54,8 +54,8 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
         >
           {preview ? (
             <div className="flex flex-col items-center gap-2">
-              <img 
-                src={preview} 
+              <img
+                src={preview}
                 alt="Preview"
                 className="max-h-[100px] object-contain"
                 onError={(e) => {
@@ -152,7 +152,65 @@ export default function AdminEmployees() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    saveMutation.mutate(formData);
+
+    // Convert FormData to object and handle type conversions
+    const data: Record<string, any> = {};
+
+    // Basic Information
+    data.epid = formData.get('epid') as string;
+    data.name = formData.get('name') as string;
+    data.designation = formData.get('designation') as string;
+    data.employmentStatus = formData.get('employmentStatus') as string;
+    if (data.employmentStatus === 'probation' || data.employmentStatus === 'temporary') {
+      data.termExpiry = formData.get('termExpiry') as string;
+    }
+
+    // Identification Details
+    data.panNumber = formData.get('panNumber') as string;
+    data.bankAccount = formData.get('bankAccount') as string;
+    data.aadharCard = formData.get('aadharCard') as string;
+
+    // Office Details
+    data.officeMemoNo = formData.get('officeMemoNo') as string;
+    data.joiningDate = formData.get('joiningDate') as string;
+    data.joiningShift = formData.get('joiningShift') as string;
+    data.salaryRegisterNo = formData.get('salaryRegisterNo') as string;
+    data.departmentId = parseInt(formData.get('departmentId') as string, 10);
+
+    // Handle file uploads
+    const fileFields = [
+      'panCardDoc', 'bankAccountDoc', 'aadharCardDoc',
+      'officeMemoDoc', 'joiningReportDoc', 'termExtensionDoc'
+    ];
+
+    // Create a new FormData for submission with both text data and files
+    const submitFormData = new FormData();
+
+    // Add all text fields
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        submitFormData.append(key, value.toString());
+      }
+    });
+
+    // Add files
+    fileFields.forEach(field => {
+      const fileInput = e.currentTarget.querySelector(`input[name="${field}"]`) as HTMLInputElement;
+      if (fileInput?.files?.[0]) {
+        submitFormData.append(field, fileInput.files[0]);
+      }
+    });
+
+    try {
+      await saveMutation.mutateAsync(submitFormData);
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save employee data. Please check all required fields.",
+      });
+    }
   };
 
   return (
@@ -185,37 +243,37 @@ export default function AdminEmployees() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="epid">EPID</Label>
-                          <Input 
-                            id="epid" 
-                            name="epid" 
+                          <Input
+                            id="epid"
+                            name="epid"
                             defaultValue={selectedEmployee?.epid}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="name">Name</Label>
-                          <Input 
-                            id="name" 
-                            name="name" 
+                          <Input
+                            id="name"
+                            name="name"
                             defaultValue={selectedEmployee?.name}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="designation">Designation</Label>
-                          <Input 
-                            id="designation" 
-                            name="designation" 
+                          <Input
+                            id="designation"
+                            name="designation"
                             defaultValue={selectedEmployee?.designation}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="employmentStatus">Employment Status</Label>
-                          <Select 
+                          <Select
                             name="employmentStatus"
                             value={employmentStatus}
                             onValueChange={setEmploymentStatus}
@@ -233,13 +291,13 @@ export default function AdminEmployees() {
                         {(employmentStatus === "probation" || employmentStatus === "temporary") && (
                           <div>
                             <Label htmlFor="termExpiry">Term Expiry Date</Label>
-                            <Input 
-                              id="termExpiry" 
-                              name="termExpiry" 
+                            <Input
+                              id="termExpiry"
+                              name="termExpiry"
                               type="date"
                               defaultValue={selectedEmployee?.termExpiry || ""}
                               className="bg-white dark:bg-slate-800"
-                              required 
+                              required
                             />
                           </div>
                         )}
@@ -251,32 +309,32 @@ export default function AdminEmployees() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="panNumber">PAN Number</Label>
-                          <Input 
-                            id="panNumber" 
-                            name="panNumber" 
+                          <Input
+                            id="panNumber"
+                            name="panNumber"
                             defaultValue={selectedEmployee?.panNumber}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="bankAccount">Bank Account</Label>
-                          <Input 
-                            id="bankAccount" 
-                            name="bankAccount" 
+                          <Input
+                            id="bankAccount"
+                            name="bankAccount"
                             defaultValue={selectedEmployee?.bankAccount}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="aadharCard">Aadhar Card</Label>
-                          <Input 
-                            id="aadharCard" 
-                            name="aadharCard" 
+                          <Input
+                            id="aadharCard"
+                            name="aadharCard"
                             defaultValue={selectedEmployee?.aadharCard}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                       </div>
@@ -287,28 +345,28 @@ export default function AdminEmployees() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="officeMemoNo">Office Memo No.</Label>
-                          <Input 
-                            id="officeMemoNo" 
-                            name="officeMemoNo" 
+                          <Input
+                            id="officeMemoNo"
+                            name="officeMemoNo"
                             defaultValue={selectedEmployee?.officeMemoNo}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="joiningDate">Joining Date</Label>
-                          <Input 
-                            id="joiningDate" 
-                            name="joiningDate" 
+                          <Input
+                            id="joiningDate"
+                            name="joiningDate"
                             type="date"
                             defaultValue={selectedEmployee?.joiningDate}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="joiningShift">Joining Shift</Label>
-                          <Select 
+                          <Select
                             name="joiningShift"
                             defaultValue={selectedEmployee?.joiningShift || "FN"}
                           >
@@ -323,17 +381,17 @@ export default function AdminEmployees() {
                         </div>
                         <div>
                           <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
-                          <Input 
-                            id="salaryRegisterNo" 
-                            name="salaryRegisterNo" 
+                          <Input
+                            id="salaryRegisterNo"
+                            name="salaryRegisterNo"
                             defaultValue={selectedEmployee?.salaryRegisterNo}
                             className="bg-white dark:bg-slate-800"
-                            required 
+                            required
                           />
                         </div>
                         <div>
                           <Label htmlFor="departmentId">Department</Label>
-                          <Select 
+                          <Select
                             name="departmentId"
                             value={selectedDepartmentId || (selectedEmployee?.departmentId?.toString() || "")}
                             onValueChange={setSelectedDepartmentId}
@@ -434,9 +492,9 @@ export default function AdminEmployees() {
                     </div>
                   </div>
 
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
                     disabled={saveMutation.isPending}
                   >
                     {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
