@@ -165,8 +165,10 @@ export default function AdminEmployees() {
       }
     }
 
+    data.aadharCard = formData.get('aadharCard') || '';
     data.departmentId = parseInt(data.departmentId as string, 10);
 
+    console.log("Form data being submitted:", data); 
     saveMutation.mutate(data as InsertEmployee);
   };
 
@@ -350,7 +352,7 @@ export default function AdminEmployees() {
                           <Input
                             id="aadharCard"
                             name="aadharCard"
-                            defaultValue={selectedEmployee?.aadharCard || ""}
+                            defaultValue={selectedEmployee?.aadharCard}
                             className="bg-white dark:bg-slate-800"
                             required
                           />
@@ -482,6 +484,7 @@ export default function AdminEmployees() {
                       variant="ghost"
                       size="icon"
                       onClick={() => {
+                        console.log("Selected employee for edit:", employee);
                         setSelectedEmployee(employee);
                         setEmploymentStatus(employee.employmentStatus.toLowerCase());
                         setSelectedDepartmentId(employee.departmentId.toString());
