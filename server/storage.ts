@@ -1,6 +1,7 @@
 import { v4 as uuid } from "uuid";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from 'url';
 import {
   Department,
   Employee,
@@ -11,6 +12,10 @@ import {
   InsertAttendanceReport,
   InsertAttendanceEntry,
 } from "@shared/schema";
+
+// Fix for __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Helper function to delete file if it exists
 function deleteFileIfExists(filePath: string) {
@@ -107,12 +112,12 @@ export class MemStorage implements IStorage {
     const id = this.currentId.employee++;
 
     // Convert joiningDate to string format as per schema
-    const joiningDateStr = employee.joiningDate instanceof Date 
+    const joiningDateStr = employee.joiningDate instanceof Date
       ? employee.joiningDate.toISOString().split('T')[0]
       : employee.joiningDate;
 
-    const newEmployee = { 
-      ...employee, 
+    const newEmployee = {
+      ...employee,
       id,
       joiningDate: joiningDateStr,
       joiningShift: employee.joiningShift || "morning",
@@ -120,7 +125,7 @@ export class MemStorage implements IStorage {
       salaryRegisterNo: employee.salaryRegisterNo || "",
       bankAccount: employee.bankAccount || "",
       panNumber: employee.panNumber || "",
-      aadharCard: employee.aadharCard || "" 
+      aadharCard: employee.aadharCard || ""
     };
 
     // Log the employee being created
@@ -146,7 +151,7 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> { 
+  async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> {
     const employee = await this.getEmployee(id);
     if (!employee) throw new Error("Employee not found");
 
@@ -157,9 +162,9 @@ export class MemStorage implements IStorage {
 
   async createAttendanceReport(report: InsertAttendanceReport): Promise<AttendanceReport> {
     const id = this.currentId.report++;
-    const newReport = { 
-      ...report, 
-      id, 
+    const newReport = {
+      ...report,
+      id,
       createdAt: new Date(),
       status: report.status || "draft",
       transactionId: uuid().slice(0, 8).toUpperCase(),
@@ -216,8 +221,8 @@ export class MemStorage implements IStorage {
 
   async createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry> {
     const id = this.currentId.entry++;
-    const newEntry = { 
-      ...entry, 
+    const newEntry = {
+      ...entry,
       id,
       remarks: entry.remarks || null,
       fromDate: entry.fromDate || "",
@@ -247,7 +252,7 @@ export class MemStorage implements IStorage {
     return updatedEntry;
   }
 
-  async getAllDepartments(): Promise<Department[]> { 
+  async getAllDepartments(): Promise<Department[]> {
     return Array.from(this.departments.values());
   }
 }

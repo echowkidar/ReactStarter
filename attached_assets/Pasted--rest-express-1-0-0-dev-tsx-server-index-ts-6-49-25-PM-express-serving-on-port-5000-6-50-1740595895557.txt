@@ -1,0 +1,152 @@
+
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+6:49:25 PM [express] serving on port 5000
+6:50:05 PM [express] POST /api/auth/admin/login 200 in 2ms :: {"role":"admin","message":"Admin logge…
+6:50:06 PM [express] GET /api/admin/attendance 304 in 1ms :: []
+6:50:09 PM [express] GET /api/admin/employees 304 in 1ms :: []
+6:50:09 PM [express] GET /api/departments 304 in 1ms :: [{"name":"Department of Computer Science","h…
+6:50:59 PM [express] POST /api/upload 200 in 242ms :: {"fileUrl":"/uploads/file-1740595859276-668435…
+6:50:59 PM [express] POST /api/upload 200 in 2ms :: {"fileUrl":"/uploads/file-1740595859773-97738398…
+6:51:00 PM [express] POST /api/upload 200 in 512ms :: {"fileUrl":"/uploads/file-1740595860034-604706…
+6:51:00 PM [express] POST /api/upload 200 in 3ms :: {"fileUrl":"/uploads/file-1740595860806-66321251…
+6:51:01 PM [express] POST /api/upload 200 in 2ms :: {"fileUrl":"/uploads/file-1740595861068-26277761…
+Admin - Received raw employee data: {
+  epid: 'gdg',
+  name: 'dgdg',
+  designation: 'dgd',
+  employmentStatus: 'permanent',
+  panNumber: 'dgd',
+  bankAccount: 'dgd',
+  officeMemoNo: 'dgd',
+  joiningDate: '2025-02-12',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'dgd',
+  departmentId: 1,
+  aadharCard: 'dg',
+  panCardUrl: '/uploads/file-1740595859276-668435478.jpeg',
+  bankProofUrl: '/uploads/file-1740595859773-977383987.jpeg',
+  aadharCardUrl: '/uploads/file-1740595860034-604706859.jpeg',
+  officeMemoUrl: '/uploads/file-1740595860806-663212512.jpeg',
+  joiningReportUrl: '/uploads/file-1740595861068-262777619.jpeg'
+}
+Admin - Parsed employee data: {
+  departmentId: 1,
+  epid: 'gdg',
+  name: 'dgdg',
+  panNumber: 'dgd',
+  bankAccount: 'dgd',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'dgd',
+  officeMemoNo: 'dgd',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740595859276-668435478.jpeg',
+  bankProofUrl: '/uploads/file-1740595859773-977383987.jpeg',
+  aadharCardUrl: '/uploads/file-1740595860034-604706859.jpeg',
+  officeMemoUrl: '/uploads/file-1740595860806-663212512.jpeg',
+  joiningReportUrl: '/uploads/file-1740595861068-262777619.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'gdg',
+  name: 'dgdg',
+  panNumber: 'dgd',
+  bankAccount: 'dgd',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'dgd',
+  officeMemoNo: 'dgd',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740595859276-668435478.jpeg',
+  bankProofUrl: '/uploads/file-1740595859773-977383987.jpeg',
+  aadharCardUrl: '/uploads/file-1740595860034-604706859.jpeg',
+  officeMemoUrl: '/uploads/file-1740595860806-663212512.jpeg',
+  joiningReportUrl: '/uploads/file-1740595861068-262777619.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'gdg',
+  name: 'dgdg',
+  panNumber: 'dgd',
+  bankAccount: 'dgd',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'dgd',
+  officeMemoNo: 'dgd',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740595859276-668435478.jpeg',
+  bankProofUrl: '/uploads/file-1740595859773-977383987.jpeg',
+  aadharCardUrl: '/uploads/file-1740595860034-604706859.jpeg',
+  officeMemoUrl: '/uploads/file-1740595860806-663212512.jpeg',
+  joiningReportUrl: '/uploads/file-1740595861068-262777619.jpeg',
+  id: 1
+}
+6:51:01 PM [express] POST /api/admin/employees 201 in 7ms :: {"departmentId":1,"epid":"gdg","name":"…
+6:51:01 PM [express] GET /api/admin/employees 200 in 1ms :: [{"departmentId":1,"epid":"gdg","name":"…
+/home/runner/workspace/server/storage.ts:23
+  const absolutePath = path.join(__dirname, '..', filePath);
+                                 ^
+
+
+ReferenceError: __dirname is not defined
+    at deleteFileIfExists (/home/runner/workspace/server/storage.ts:23:34)
+    at MemStorage.deleteEmployee (/home/runner/workspace/server/storage.ts:137:32)
+    at <anonymous> (/home/runner/workspace/server/routes.ts:240:19)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:284:15
+    at param (/home/runner/workspace/node_modules/express/lib/router/index.js:365:14)
+    at param (/home/runner/workspace/node_modules/express/lib/router/index.js:376:14)
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:421:3)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at <anonymous> (/home/runner/workspace/server/index.ts:36:3)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at urlencodedParser (/home/runner/workspace/node_modules/body-parser/lib/types/urlencoded.js:94:7)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at jsonParser (/home/runner/workspace/node_modules/body-parser/lib/types/json.js:113:7)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at expressInit (/home/runner/workspace/node_modules/express/lib/middleware/init.js:40:5)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at query (/home/runner/workspace/node_modules/express/lib/middleware/query.js:45:5)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/runner/workspace/node_modules/express/lib/router/index.js:175:3)
+    at Function.handle (/home/runner/workspace/node_modules/express/lib/application.js:181:10)
+    at Server.app (/home/runner/workspace/node_modules/express/lib/express.js:39:9)
+    at Server.emit (node:events:518:28)
+    at parserOnIncoming (node:_http_server:1141:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:118:17)
+
+Node.js v20.18.1
