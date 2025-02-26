@@ -1,33 +1,29 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
 
 const FileUpload = ({ name, value, onChange, label }: { name: string; value: string; onChange: (file: File | null) => void; label: string }) => {
-  const [preview, setPreview] = useState<string | null>(value || null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        // For PDFs and documents, show a document icon
-        setPreview("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3C/svg%3E");
-      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
       onChange(file);
     } else {
       setPreview(null);
@@ -47,25 +43,25 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
           className="hidden"
           accept=".pdf,.jpg,.jpeg,.png"
         />
-        <div
+        <div 
           className={`
-            min-h-[100px] p-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors
-            ${preview ? 'border-primary/50 hover:border-primary/70' : 'border-gray-200 hover:border-primary/50'} 
+            min-h-[100px] p-4 border-2 border-dashed rounded-lg 
+            ${preview ? 'border-primary/50' : 'border-gray-200'} 
+            hover:border-primary/70 transition-colors cursor-pointer
             bg-white dark:bg-slate-800
           `}
           onClick={() => document.getElementById(name)?.click()}
         >
           {preview ? (
             <div className="flex flex-col items-center gap-2">
-              {preview.startsWith('data:image/') ? (
-                <img
-                  src={preview}
-                  alt="Preview"
-                  className="max-h-[100px] object-contain"
-                />
-              ) : (
-                <div className="w-12 h-12" dangerouslySetInnerHTML={{ __html: preview }} />
-              )}
+              <img 
+                src={preview} 
+                alt="Preview"
+                className="max-h-[100px] object-contain"
+                onError={(e) => {
+                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3C/svg%3E";
+                }}
+              />
               <p className="text-sm text-muted-foreground">Click to change file</p>
             </div>
           ) : (
@@ -94,13 +90,13 @@ const FileUpload = ({ name, value, onChange, label }: { name: string; value: str
   );
 };
 
+
 export default function AdminEmployees() {
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [, setLocation] = useLocation();
 
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
@@ -140,14 +136,6 @@ export default function AdminEmployees() {
         title: "Success",
         description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
       });
-    },
-    onError: (error) => {
-      console.error('Mutation error:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to save employee data. Please check all required fields."
-      });
     }
   });
 
@@ -161,109 +149,10 @@ export default function AdminEmployees() {
     setLocation('/admin/login');
   };
 
-  const validateForm = (formData: FormData): boolean => {
-    const requiredFields = [
-      'epid', 'name', 'designation', 'employmentStatus',
-      'panNumber', 'bankAccount', 'aadharCard',
-      'officeMemoNo', 'joiningDate', 'joiningShift',
-      'salaryRegisterNo', 'departmentId'
-    ];
-
-    for (const field of requiredFields) {
-      const value = formData.get(field);
-      if (!value) {
-        toast({
-          variant: "destructive",
-          title: "Validation Error",
-          description: `${field.charAt(0).toUpperCase() + field.slice(1)} is required`
-        });
-        return false;
-      }
-    }
-
-    const departmentId = parseInt(formData.get('departmentId') as string);
-    if (isNaN(departmentId)) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Please select a department"
-      });
-      return false;
-    }
-
-    if ((employmentStatus === 'probation' || employmentStatus === 'temporary') && !formData.get('termExpiry')) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Term expiry date is required for probation/temporary employees"
-      });
-      return false;
-    }
-
-    return true;
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const formData = new FormData(e.currentTarget);
-
-      if (!validateForm(formData)) {
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Create a new FormData for submission
-      const submitFormData = new FormData();
-
-      // Add basic information
-      submitFormData.append('epid', formData.get('epid') as string);
-      submitFormData.append('name', formData.get('name') as string);
-      submitFormData.append('designation', formData.get('designation') as string);
-      submitFormData.append('employmentStatus', formData.get('employmentStatus') as string);
-
-      if (employmentStatus === 'probation' || employmentStatus === 'temporary') {
-        submitFormData.append('termExpiry', formData.get('termExpiry') as string);
-      }
-
-      // Add identification details
-      submitFormData.append('panNumber', formData.get('panNumber') as string);
-      submitFormData.append('bankAccount', formData.get('bankAccount') as string);
-      submitFormData.append('aadharCard', formData.get('aadharCard') as string);
-
-      // Add office details
-      submitFormData.append('officeMemoNo', formData.get('officeMemoNo') as string);
-      submitFormData.append('joiningDate', formData.get('joiningDate') as string);
-      submitFormData.append('joiningShift', formData.get('joiningShift') as string);
-      submitFormData.append('salaryRegisterNo', formData.get('salaryRegisterNo') as string);
-      submitFormData.append('departmentId', formData.get('departmentId') as string);
-
-      // Add files
-      const fileFields = [
-        'panCardDoc', 'bankAccountDoc', 'aadharCardDoc',
-        'officeMemoDoc', 'joiningReportDoc', 'termExtensionDoc'
-      ];
-
-      fileFields.forEach(field => {
-        const fileInput = e.currentTarget.querySelector(`input[name="${field}"]`) as HTMLInputElement;
-        if (fileInput?.files?.[0]) {
-          submitFormData.append(field, fileInput.files[0]);
-        }
-      });
-
-      await saveMutation.mutateAsync(submitFormData);
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to save employee data. Please try again."
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+    const formData = new FormData(e.currentTarget);
+    saveMutation.mutate(formData);
   };
 
   return (
@@ -279,7 +168,7 @@ export default function AdminEmployees() {
                   setEmploymentStatus("permanent");
                   setSelectedDepartmentId("");
                 }}>
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="w-4 h-4 mr-2" />
                   Add Employee
                 </Button>
               </DialogTrigger>
@@ -291,43 +180,42 @@ export default function AdminEmployees() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-8">
-                    {/* Basic Information Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="epid">EPID</Label>
-                          <Input
-                            id="epid"
-                            name="epid"
+                          <Input 
+                            id="epid" 
+                            name="epid" 
                             defaultValue={selectedEmployee?.epid}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="name">Name</Label>
-                          <Input
-                            id="name"
-                            name="name"
+                          <Input 
+                            id="name" 
+                            name="name" 
                             defaultValue={selectedEmployee?.name}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="designation">Designation</Label>
-                          <Input
-                            id="designation"
-                            name="designation"
+                          <Input 
+                            id="designation" 
+                            name="designation" 
                             defaultValue={selectedEmployee?.designation}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="employmentStatus">Employment Status</Label>
-                          <Select
+                          <Select 
                             name="employmentStatus"
                             value={employmentStatus}
                             onValueChange={setEmploymentStatus}
@@ -345,84 +233,82 @@ export default function AdminEmployees() {
                         {(employmentStatus === "probation" || employmentStatus === "temporary") && (
                           <div>
                             <Label htmlFor="termExpiry">Term Expiry Date</Label>
-                            <Input
-                              id="termExpiry"
-                              name="termExpiry"
+                            <Input 
+                              id="termExpiry" 
+                              name="termExpiry" 
                               type="date"
                               defaultValue={selectedEmployee?.termExpiry || ""}
                               className="bg-white dark:bg-slate-800"
-                              required
+                              required 
                             />
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Identification Details Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="panNumber">PAN Number</Label>
-                          <Input
-                            id="panNumber"
-                            name="panNumber"
+                          <Input 
+                            id="panNumber" 
+                            name="panNumber" 
                             defaultValue={selectedEmployee?.panNumber}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="bankAccount">Bank Account</Label>
-                          <Input
-                            id="bankAccount"
-                            name="bankAccount"
+                          <Input 
+                            id="bankAccount" 
+                            name="bankAccount" 
                             defaultValue={selectedEmployee?.bankAccount}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="aadharCard">Aadhar Card</Label>
-                          <Input
-                            id="aadharCard"
-                            name="aadharCard"
+                          <Input 
+                            id="aadharCard" 
+                            name="aadharCard" 
                             defaultValue={selectedEmployee?.aadharCard}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                       </div>
                     </div>
 
-                    {/* Office Details Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <Label htmlFor="officeMemoNo">Office Memo No.</Label>
-                          <Input
-                            id="officeMemoNo"
-                            name="officeMemoNo"
+                          <Input 
+                            id="officeMemoNo" 
+                            name="officeMemoNo" 
                             defaultValue={selectedEmployee?.officeMemoNo}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="joiningDate">Joining Date</Label>
-                          <Input
-                            id="joiningDate"
-                            name="joiningDate"
+                          <Input 
+                            id="joiningDate" 
+                            name="joiningDate" 
                             type="date"
                             defaultValue={selectedEmployee?.joiningDate}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="joiningShift">Joining Shift</Label>
-                          <Select
+                          <Select 
                             name="joiningShift"
                             defaultValue={selectedEmployee?.joiningShift || "FN"}
                           >
@@ -437,17 +323,17 @@ export default function AdminEmployees() {
                         </div>
                         <div>
                           <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
-                          <Input
-                            id="salaryRegisterNo"
-                            name="salaryRegisterNo"
+                          <Input 
+                            id="salaryRegisterNo" 
+                            name="salaryRegisterNo" 
                             defaultValue={selectedEmployee?.salaryRegisterNo}
                             className="bg-white dark:bg-slate-800"
-                            required
+                            required 
                           />
                         </div>
                         <div>
                           <Label htmlFor="departmentId">Department</Label>
-                          <Select
+                          <Select 
                             name="departmentId"
                             value={selectedDepartmentId || (selectedEmployee?.departmentId?.toString() || "")}
                             onValueChange={setSelectedDepartmentId}
@@ -467,7 +353,6 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Document Upload Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -549,19 +434,12 @@ export default function AdminEmployees() {
                     </div>
                   </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
-                    disabled={isSubmitting}
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+                    disabled={saveMutation.isPending}
                   >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Employee'
-                    )}
+                    {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
                   </Button>
                 </form>
               </DialogContent>
