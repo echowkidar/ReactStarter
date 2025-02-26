@@ -49,7 +49,7 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "No file uploaded or invalid file type" });
       }
 
-      // Generate the file URL
+      // Generate the file URL - make it absolute
       const fileUrl = `/uploads/${req.file.filename}`;
       res.json({ fileUrl });
     } catch (error) {
@@ -58,7 +58,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Serve uploaded files statically
+  // Serve uploaded files statically - ensure the path is correct
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
   // Admin auth routes
