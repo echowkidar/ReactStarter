@@ -94,7 +94,7 @@ export default function AdminEmployees() {
           <div className="flex items-center gap-4">
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => {
+                <Button className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary" onClick={() => {
                   setSelectedEmployee(null);
                   setEmploymentStatus("permanent");
                   setSelectedDepartmentId("");
@@ -103,165 +103,198 @@ export default function AdminEmployees() {
                   Add Employee
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto px-4">
                 <DialogHeader>
-                  <DialogTitle>
+                  <DialogTitle className="text-xl font-semibold">
                     {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
                   </DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="epid">EPID</Label>
-                      <Input 
-                        id="epid" 
-                        name="epid" 
-                        defaultValue={selectedEmployee?.epid}
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="name">Name</Label>
-                      <Input 
-                        id="name" 
-                        name="name" 
-                        defaultValue={selectedEmployee?.name}
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="panNumber">PAN Number</Label>
-                      <Input 
-                        id="panNumber" 
-                        name="panNumber" 
-                        defaultValue={selectedEmployee?.panNumber}
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="bankAccount">Bank Account</Label>
-                      <Input 
-                        id="bankAccount" 
-                        name="bankAccount" 
-                        defaultValue={selectedEmployee?.bankAccount}
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="aadharCard">Aadhar Card</Label>
-                      <Input 
-                        id="aadharCard" 
-                        name="aadharCard" 
-                        defaultValue={selectedEmployee?.aadharCard}
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="designation">Designation</Label>
-                      <Input 
-                        id="designation" 
-                        name="designation" 
-                        defaultValue={selectedEmployee?.designation}
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="employmentStatus">Employment Status</Label>
-                      <Select 
-                        name="employmentStatus"
-                        value={employmentStatus}
-                        onValueChange={setEmploymentStatus}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="permanent">Permanent</SelectItem>
-                          <SelectItem value="probation">Probation</SelectItem>
-                          <SelectItem value="temporary">Temporary</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {(employmentStatus === "probation" || employmentStatus === "temporary") && (
-                      <div>
-                        <Label htmlFor="termExpiry">Term Expiry Date</Label>
-                        <Input 
-                          id="termExpiry" 
-                          name="termExpiry" 
-                          type="date"
-                          defaultValue={selectedEmployee?.termExpiry || ""}
-                          required 
-                        />
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-8">
+                    {/* Basic Information Section */}
+                    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="epid">EPID</Label>
+                          <Input 
+                            id="epid" 
+                            name="epid" 
+                            defaultValue={selectedEmployee?.epid}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="name">Name</Label>
+                          <Input 
+                            id="name" 
+                            name="name" 
+                            defaultValue={selectedEmployee?.name}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="designation">Designation</Label>
+                          <Input 
+                            id="designation" 
+                            name="designation" 
+                            defaultValue={selectedEmployee?.designation}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="employmentStatus">Employment Status</Label>
+                          <Select 
+                            name="employmentStatus"
+                            value={employmentStatus}
+                            onValueChange={setEmploymentStatus}
+                          >
+                            <SelectTrigger className="bg-white dark:bg-slate-800">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="permanent">Permanent</SelectItem>
+                              <SelectItem value="probation">Probation</SelectItem>
+                              <SelectItem value="temporary">Temporary</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {(employmentStatus === "probation" || employmentStatus === "temporary") && (
+                          <div>
+                            <Label htmlFor="termExpiry">Term Expiry Date</Label>
+                            <Input 
+                              id="termExpiry" 
+                              name="termExpiry" 
+                              type="date"
+                              defaultValue={selectedEmployee?.termExpiry || ""}
+                              className="bg-white dark:bg-slate-800"
+                              required 
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div>
-                      <Label htmlFor="officeMemoNo">Office Memo No.</Label>
-                      <Input 
-                        id="officeMemoNo" 
-                        name="officeMemoNo" 
-                        defaultValue={selectedEmployee?.officeMemoNo}
-                        required 
-                      />
                     </div>
-                    <div>
-                      <Label htmlFor="joiningDate">Joining Date</Label>
-                      <Input 
-                        id="joiningDate" 
-                        name="joiningDate" 
-                        type="date"
-                        defaultValue={selectedEmployee?.joiningDate}
-                        required 
-                      />
+
+                    {/* Identification Details Section */}
+                    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="panNumber">PAN Number</Label>
+                          <Input 
+                            id="panNumber" 
+                            name="panNumber" 
+                            defaultValue={selectedEmployee?.panNumber}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="bankAccount">Bank Account</Label>
+                          <Input 
+                            id="bankAccount" 
+                            name="bankAccount" 
+                            defaultValue={selectedEmployee?.bankAccount}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="aadharCard">Aadhar Card</Label>
+                          <Input 
+                            id="aadharCard" 
+                            name="aadharCard" 
+                            defaultValue={selectedEmployee?.aadharCard}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <Label htmlFor="joiningShift">Joining Shift</Label>
-                      <Select 
-                        name="joiningShift"
-                        defaultValue={selectedEmployee?.joiningShift || "FN"}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select shift" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="FN">FN</SelectItem>
-                          <SelectItem value="AN">AN</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
-                      <Input 
-                        id="salaryRegisterNo" 
-                        name="salaryRegisterNo" 
-                        defaultValue={selectedEmployee?.salaryRegisterNo}
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="departmentId">Department</Label>
-                      <Select 
-                        name="departmentId"
-                        value={selectedDepartmentId || (selectedEmployee?.departmentId?.toString() || "")}
-                        onValueChange={setSelectedDepartmentId}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={isDepartmentsLoading ? "Loading..." : "Select department"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {departments.map((dept) => (
-                            <SelectItem key={dept.id} value={dept.id.toString()}>
-                              {dept.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+
+                    {/* Office Details Section */}
+                    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="officeMemoNo">Office Memo No.</Label>
+                          <Input 
+                            id="officeMemoNo" 
+                            name="officeMemoNo" 
+                            defaultValue={selectedEmployee?.officeMemoNo}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="joiningDate">Joining Date</Label>
+                          <Input 
+                            id="joiningDate" 
+                            name="joiningDate" 
+                            type="date"
+                            defaultValue={selectedEmployee?.joiningDate}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="joiningShift">Joining Shift</Label>
+                          <Select 
+                            name="joiningShift"
+                            defaultValue={selectedEmployee?.joiningShift || "FN"}
+                          >
+                            <SelectTrigger className="bg-white dark:bg-slate-800">
+                              <SelectValue placeholder="Select shift" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="FN">FN</SelectItem>
+                              <SelectItem value="AN">AN</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
+                          <Input 
+                            id="salaryRegisterNo" 
+                            name="salaryRegisterNo" 
+                            defaultValue={selectedEmployee?.salaryRegisterNo}
+                            className="bg-white dark:bg-slate-800"
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="departmentId">Department</Label>
+                          <Select 
+                            name="departmentId"
+                            value={selectedDepartmentId || (selectedEmployee?.departmentId?.toString() || "")}
+                            onValueChange={setSelectedDepartmentId}
+                          >
+                            <SelectTrigger className="bg-white dark:bg-slate-800">
+                              <SelectValue placeholder={isDepartmentsLoading ? "Loading..." : "Select department"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departments.map((dept) => (
+                                <SelectItem key={dept.id} value={dept.id.toString()}>
+                                  {dept.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex justify-end space-x-2">
-                    <Button type="submit" disabled={saveMutation.isPending}>
-                      {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
-                    </Button>
-                  </div>
+
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+                    disabled={saveMutation.isPending}
+                  >
+                    {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
+                  </Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -307,6 +340,7 @@ export default function AdminEmployees() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="text-red-500 hover:text-red-600 hover:bg-red-50"
                       onClick={() => handleDelete(employee)}
                     >
                       <Trash2 className="w-4 h-4" />
