@@ -80,7 +80,7 @@ export class MemStorage implements IStorage {
       report: 1,
       entry: 1,
     };
-    this.lastReceiptNo = 0; // Initialize receipt number counter
+    this.lastReceiptNo = 0;
   }
 
   async getDepartment(id: number): Promise<Department | undefined> {
@@ -116,8 +116,8 @@ export class MemStorage implements IStorage {
       ? employee.joiningDate.toISOString().split('T')[0]
       : employee.joiningDate;
 
-    const newEmployee = {
-      ...employee,
+    const newEmployee: Employee = {
+      ...employee as any,
       id,
       joiningDate: joiningDateStr,
       joiningShift: employee.joiningShift || "morning",
@@ -127,11 +127,12 @@ export class MemStorage implements IStorage {
       panNumber: employee.panNumber || "",
       aadharCard: employee.aadharCard || "",
       // Add document URLs
-      panCardUrl: (employee as any).panCardUrl || null,
-      bankProofUrl: (employee as any).bankProofUrl || null,
-      aadharCardUrl: (employee as any).aadharCardUrl || null,
-      officeMemoUrl: (employee as any).officeMemoUrl || null,
-      joiningReportUrl: (employee as any).joiningReportUrl || null
+      panCardUrl: employee.panCardUrl || null,
+      bankProofUrl: employee.bankProofUrl || null,
+      aadharCardUrl: employee.aadharCardUrl || null,
+      officeMemoUrl: employee.officeMemoUrl || null,
+      joiningReportUrl: employee.joiningReportUrl || null,
+      termExpiry: employee.termExpiry || null
     };
 
     // Log the employee being created
