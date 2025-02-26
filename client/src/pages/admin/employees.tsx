@@ -13,10 +13,82 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
 
-// Placeholder for FileUpload component -  Needs actual implementation
-const FileUpload = ({ name, value, onChange }: { name: string; value: string; onChange: (file: File | null) => void }) => (
-  <input type="file" id={name} name={name} onChange={(e) => onChange(e.target.files?.[0] || null)} />
-);
+const FileUpload = ({ name, value, onChange, label }: { name: string; value: string; onChange: (file: File | null) => void; label: string }) => {
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      onChange(file);
+    } else {
+      setPreview(null);
+      onChange(null);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={name}>{label}</Label>
+      <div className="flex flex-col gap-2">
+        <input
+          type="file"
+          id={name}
+          name={name}
+          onChange={handleFileChange}
+          className="hidden"
+          accept=".pdf,.jpg,.jpeg,.png"
+        />
+        <div 
+          className={`
+            min-h-[100px] p-4 border-2 border-dashed rounded-lg 
+            ${preview ? 'border-primary/50' : 'border-gray-200'} 
+            hover:border-primary/70 transition-colors cursor-pointer
+            bg-white dark:bg-slate-800
+          `}
+          onClick={() => document.getElementById(name)?.click()}
+        >
+          {preview ? (
+            <div className="flex flex-col items-center gap-2">
+              <img 
+                src={preview} 
+                alt="Preview"
+                className="max-h-[100px] object-contain"
+                onError={(e) => {
+                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3C/svg%3E";
+                }}
+              />
+              <p className="text-sm text-muted-foreground">Click to change file</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full gap-2">
+              <svg
+                className="w-8 h-8 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              <span className="text-sm text-muted-foreground">
+                Click to upload file
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
 export default function AdminEmployees() {
@@ -27,17 +99,14 @@ export default function AdminEmployees() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
   const [, setLocation] = useLocation();
 
-  // Fetch all employees
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
     queryKey: ['/api/admin/employees']
   });
 
-  // Fetch departments for dropdown
   const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({
     queryKey: ['/api/departments']
   });
 
-  // Delete employee mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest('DELETE', `/api/employees/${id}`);
@@ -51,9 +120,8 @@ export default function AdminEmployees() {
     }
   });
 
-  // Create/Update employee mutation
   const saveMutation = useMutation({
-    mutationFn: async (data: FormData) => { // Modified to handle FormData
+    mutationFn: async (data: FormData) => {
       if (selectedEmployee) {
         await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, data);
       } else {
@@ -84,7 +152,7 @@ export default function AdminEmployees() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    saveMutation.mutate(formData); // Pass FormData directly
+    saveMutation.mutate(formData);
   };
 
   return (
@@ -112,7 +180,6 @@ export default function AdminEmployees() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-8">
-                    {/* Basic Information Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -179,7 +246,6 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Identification Details Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -216,7 +282,6 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Office Details Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -288,28 +353,25 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
-                    {/* Document Upload Section */}
                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                       <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
-                          <Label htmlFor="panCardDoc">PAN Card</Label>
                           <FileUpload
                             name="panCardDoc"
+                            label="PAN Card"
                             value={selectedEmployee?.panCardDoc || ""}
                             onChange={(file) => {
-                              // Handle file upload
                               if (file) {
-                                // You'll need to implement file handling logic here
                                 console.log("PAN Card uploaded:", file);
                               }
                             }}
                           />
                         </div>
                         <div>
-                          <Label htmlFor="bankAccountDoc">Bank Account Proof</Label>
                           <FileUpload
                             name="bankAccountDoc"
+                            label="Bank Account Proof"
                             value={selectedEmployee?.bankAccountDoc || ""}
                             onChange={(file) => {
                               if (file) {
@@ -319,9 +381,9 @@ export default function AdminEmployees() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="aadharCardDoc">Aadhar Card</Label>
                           <FileUpload
                             name="aadharCardDoc"
+                            label="Aadhar Card"
                             value={selectedEmployee?.aadharCardDoc || ""}
                             onChange={(file) => {
                               if (file) {
@@ -331,9 +393,9 @@ export default function AdminEmployees() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="officeMemoDoc">Office Memo</Label>
                           <FileUpload
                             name="officeMemoDoc"
+                            label="Office Memo"
                             value={selectedEmployee?.officeMemoDoc || ""}
                             onChange={(file) => {
                               if (file) {
@@ -343,9 +405,9 @@ export default function AdminEmployees() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="joiningReportDoc">Joining Report</Label>
                           <FileUpload
                             name="joiningReportDoc"
+                            label="Joining Report"
                             value={selectedEmployee?.joiningReportDoc || ""}
                             onChange={(file) => {
                               if (file) {
@@ -356,9 +418,9 @@ export default function AdminEmployees() {
                         </div>
                         {(employmentStatus === "probation" || employmentStatus === "temporary") && (
                           <div>
-                            <Label htmlFor="termExtensionDoc">Term Extension Office Memo</Label>
                             <FileUpload
                               name="termExtensionDoc"
+                              label="Term Extension Office Memo"
                               value={selectedEmployee?.termExtensionDoc || ""}
                               onChange={(file) => {
                                 if (file) {
@@ -370,7 +432,6 @@ export default function AdminEmployees() {
                         )}
                       </div>
                     </div>
-
                   </div>
 
                   <Button 
