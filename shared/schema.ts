@@ -90,12 +90,12 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     bankAccount: z.string().optional().default(""),
     panNumber: z.string().optional().default(""),
     aadharCard: z.string().optional().default(""),
-    // Add URL fields to the schema
-    panCardUrl: z.string().nullable().optional(),
-    bankProofUrl: z.string().nullable().optional(),
-    aadharCardUrl: z.string().nullable().optional(),
-    officeMemoUrl: z.string().nullable().optional(),
-    joiningReportUrl: z.string().nullable().optional(),
+    // Document URLs should be optional but preserve their values when present
+    panCardUrl: z.string().nullable(),
+    bankProofUrl: z.string().nullable(),
+    aadharCardUrl: z.string().nullable(),
+    officeMemoUrl: z.string().nullable(),
+    joiningReportUrl: z.string().nullable(),
   });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
   id: true,

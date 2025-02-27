@@ -117,7 +117,7 @@ export class MemStorage implements IStorage {
       : employee.joiningDate;
 
     const newEmployee: Employee = {
-      ...employee as any,
+      ...employee,
       id,
       joiningDate: joiningDateStr,
       joiningShift: employee.joiningShift || "morning",
@@ -126,7 +126,7 @@ export class MemStorage implements IStorage {
       bankAccount: employee.bankAccount || "",
       panNumber: employee.panNumber || "",
       aadharCard: employee.aadharCard || "",
-      // Add document URLs
+      // Preserve document URLs
       panCardUrl: employee.panCardUrl || null,
       bankProofUrl: employee.bankProofUrl || null,
       aadharCardUrl: employee.aadharCardUrl || null,
@@ -162,7 +162,18 @@ export class MemStorage implements IStorage {
     const employee = await this.getEmployee(id);
     if (!employee) throw new Error("Employee not found");
 
-    const updatedEmployee = { ...employee, ...updates };
+    // Preserve existing document URLs if not being updated
+    const updatedEmployee = {
+      ...employee,
+      ...updates,
+      // Only update document URLs if new ones are provided
+      panCardUrl: updates.panCardUrl !== undefined ? updates.panCardUrl : employee.panCardUrl,
+      bankProofUrl: updates.bankProofUrl !== undefined ? updates.bankProofUrl : employee.bankProofUrl,
+      aadharCardUrl: updates.aadharCardUrl !== undefined ? updates.aadharCardUrl : employee.aadharCardUrl,
+      officeMemoUrl: updates.officeMemoUrl !== undefined ? updates.officeMemoUrl : employee.officeMemoUrl,
+      joiningReportUrl: updates.joiningReportUrl !== undefined ? updates.joiningReportUrl : employee.joiningReportUrl,
+    };
+
     this.employees.set(id, updatedEmployee);
     return updatedEmployee;
   }
