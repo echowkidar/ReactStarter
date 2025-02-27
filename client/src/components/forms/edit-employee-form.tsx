@@ -40,7 +40,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       aadharCard: employee.aadharCard || "",
       officeMemoNo: employee.officeMemoNo || "",
       joiningDate: employee.joiningDate || "",
-      joiningShift: employee.joiningShift || "morning",
+      joiningShift: employee.joiningShift || "FN",
       salaryRegisterNo: employee.salaryRegisterNo || "",
       departmentId: employee.departmentId,
     }
@@ -75,17 +75,21 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         }
       });
 
-      // Preserve existing document URLs
+      // Preserve existing document URLs if no new files are uploaded
       formData.append("panCardUrl", employee.panCardUrl || "");
       formData.append("bankProofUrl", employee.bankProofUrl || "");
       formData.append("aadharCardUrl", employee.aadharCardUrl || "");
       formData.append("officeMemoUrl", employee.officeMemoUrl || "");
       formData.append("joiningReportUrl", employee.joiningReportUrl || "");
 
-      await apiRequest(`/api/departments/${employee.departmentId}/employees/${employee.id}`, {
+      const response = await fetch(`/api/departments/${employee.departmentId}/employees/${employee.id}`, {
         method: "PATCH",
         body: formData,
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to update employee');
+      }
 
       toast({
         title: "Success",
@@ -114,7 +118,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" encType="multipart/form-data">
             <div className="grid grid-cols-2 gap-4">
               {/* Basic Information */}
               <FormField
@@ -305,6 +309,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                   </FormItem>
                 )}
               />
+
               {/* Other fields */}
               <FormField
                 control={form.control}
