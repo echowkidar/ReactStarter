@@ -116,10 +116,10 @@ export default function Employees() {
 
   const addEmployee = useMutation({
     mutationFn: async (data: any) => {
-      const formData = new FormData();
-
       // Log the received data for debugging
-      console.log("Received form data:", data);
+      console.log("Form submitted with data:", data);
+
+      const formData = new FormData();
 
       // Add required fields
       const requiredFields = [
