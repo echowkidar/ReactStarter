@@ -118,7 +118,25 @@ export default function Employees() {
     mutationFn: async (data: any) => {
       const formData = new FormData();
 
-      // Append all the document files if they exist
+      // Add the required fields
+      formData.append('epid', data.epid);
+      formData.append('name', data.name);
+      formData.append('designation', data.designation);
+      formData.append('employmentStatus', data.employmentStatus);
+      formData.append('panNumber', data.panNumber);
+      formData.append('bankAccount', data.bankAccount);
+      formData.append('aadharCard', data.aadharCard);
+      formData.append('officeMemoNo', data.officeMemoNo);
+      formData.append('joiningDate', data.joiningDate);
+      formData.append('joiningShift', data.joiningShift);
+      formData.append('salaryRegisterNo', data.salaryRegisterNo);
+
+      // Add optional fields
+      if (data.termExpiry) {
+        formData.append('termExpiry', data.termExpiry);
+      }
+
+      // Append document files if they exist
       if (data.panCardDoc) {
         formData.append('panCard', data.panCardDoc);
       }
@@ -138,12 +156,8 @@ export default function Employees() {
         formData.append('termExtension', data.termExtensionDoc);
       }
 
-      // Append the rest of the employee data
-      Object.keys(data).forEach(key => {
-        if (!key.endsWith('Doc')) {
-          formData.append(key, data[key]);
-        }
-      });
+      // Log the form data for debugging
+      console.log("Form data being submitted:", Object.fromEntries(formData));
 
       await apiRequest("POST", `/api/departments/${department?.id}/employees`, formData);
     },
@@ -155,7 +169,8 @@ export default function Employees() {
         description: "Employee added successfully",
       });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("Error adding employee:", error);
       toast({
         variant: "destructive",
         title: "Error",

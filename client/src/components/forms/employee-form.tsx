@@ -22,13 +22,13 @@ const employeeSchema = z.object({
   joiningDate: z.string().min(1, "Joining Date is required"),
   joiningShift: z.enum(["FN", "AN"]),
   salaryRegisterNo: z.string().min(1, "Salary Register No. is required"),
-  // Document fields
-  panCardDoc: z.string().optional(),
-  bankAccountDoc: z.string().optional(),
-  aadharCardDoc: z.string().optional(),
-  officeMemoDoc: z.string().optional(),
-  joiningReportDoc: z.string().optional(),
-  termExtensionDoc: z.string().optional(),
+  // Document fields are now File objects instead of URLs
+  panCardDoc: z.any().optional(),
+  bankAccountDoc: z.any().optional(),
+  aadharCardDoc: z.any().optional(),
+  officeMemoDoc: z.any().optional(),
+  joiningReportDoc: z.any().optional(),
+  termExtensionDoc: z.any().optional(),
 });
 
 interface EmployeeFormProps {
@@ -52,12 +52,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       joiningDate: "",
       joiningShift: "FN",
       salaryRegisterNo: "",
-      panCardDoc: "",
-      bankAccountDoc: "",
-      aadharCardDoc: "",
-      officeMemoDoc: "",
-      joiningReportDoc: "",
-      termExtensionDoc: "",
     },
   });
 
@@ -284,13 +278,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="PAN Card"
                       name="panCardDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => field.onChange(file)}
                       disabled={isLoading}
                     />
                     <FormMessage />
@@ -306,13 +294,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Bank Account Proof"
                       name="bankAccountDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => field.onChange(file)}
                       disabled={isLoading}
                     />
                     <FormMessage />
@@ -328,13 +310,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Aadhar Card"
                       name="aadharCardDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => field.onChange(file)}
                       disabled={isLoading}
                     />
                     <FormMessage />
@@ -350,13 +326,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Office Memo"
                       name="officeMemoDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => field.onChange(file)}
                       disabled={isLoading}
                     />
                     <FormMessage />
@@ -372,13 +342,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Joining Report"
                       name="joiningReportDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => field.onChange(file)}
                       disabled={isLoading}
                     />
                     <FormMessage />
@@ -396,13 +360,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                         label="Term Extension Office Memo"
                         name="termExtensionDoc"
                         value={field.value}
-                        onChange={(file) => {
-                          if (file) {
-                            field.onChange(URL.createObjectURL(file));
-                          } else {
-                            field.onChange("");
-                          }
-                        }}
+                        onChange={(file) => field.onChange(file)}
                         disabled={isLoading}
                       />
                       <FormMessage />
