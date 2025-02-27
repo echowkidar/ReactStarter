@@ -169,12 +169,24 @@ export default function Employees() {
         description: "Employee added successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error adding employee:", error);
+      let errorMessage = "Failed to add employee";
+
+      // Try to extract more detailed error message if available
+      try {
+        const errorData = JSON.parse(error.message.split(': ')[1]);
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (e) {
+        // Use default error message if parsing fails
+      }
+
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to add employee",
+        description: errorMessage,
       });
     },
   });
@@ -214,7 +226,7 @@ export default function Employees() {
                 Add Employee
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">Add New Employee</DialogTitle>
               </DialogHeader>
