@@ -118,18 +118,22 @@ export default function Employees() {
     mutationFn: async (data: any) => {
       const formData = new FormData();
 
-      // Add the required fields
-      formData.append('epid', data.epid);
-      formData.append('name', data.name);
-      formData.append('designation', data.designation);
-      formData.append('employmentStatus', data.employmentStatus);
-      formData.append('panNumber', data.panNumber);
-      formData.append('bankAccount', data.bankAccount);
-      formData.append('aadharCard', data.aadharCard);
-      formData.append('officeMemoNo', data.officeMemoNo);
-      formData.append('joiningDate', data.joiningDate);
-      formData.append('joiningShift', data.joiningShift);
-      formData.append('salaryRegisterNo', data.salaryRegisterNo);
+      // Log the received data for debugging
+      console.log("Received form data:", data);
+
+      // Add required fields
+      const requiredFields = [
+        'epid', 'name', 'designation', 'employmentStatus',
+        'panNumber', 'bankAccount', 'aadharCard', 'officeMemoNo',
+        'joiningDate', 'joiningShift', 'salaryRegisterNo'
+      ];
+
+      requiredFields.forEach(field => {
+        if (data[field] === undefined || data[field] === '') {
+          throw new Error(`${field} is required`);
+        }
+        formData.append(field, data[field]);
+      });
 
       // Add optional fields
       if (data.termExpiry) {
@@ -137,26 +141,22 @@ export default function Employees() {
       }
 
       // Append document files if they exist
-      if (data.panCardDoc) {
-        formData.append('panCard', data.panCardDoc);
-      }
-      if (data.bankAccountDoc) {
-        formData.append('bankProof', data.bankAccountDoc);
-      }
-      if (data.aadharCardDoc) {
-        formData.append('aadharCard', data.aadharCardDoc);
-      }
-      if (data.officeMemoDoc) {
-        formData.append('officeMemo', data.officeMemoDoc);
-      }
-      if (data.joiningReportDoc) {
-        formData.append('joiningReport', data.joiningReportDoc);
-      }
-      if (data.termExtensionDoc) {
-        formData.append('termExtension', data.termExtensionDoc);
-      }
+      const documentFields = {
+        panCardDoc: 'panCard',
+        bankAccountDoc: 'bankProof',
+        aadharCardDoc: 'aadharCard',
+        officeMemoDoc: 'officeMemo',
+        joiningReportDoc: 'joiningReport',
+        termExtensionDoc: 'termExtension'
+      };
 
-      // Log the form data for debugging
+      Object.entries(documentFields).forEach(([formField, serverField]) => {
+        if (data[formField] instanceof File) {
+          formData.append(serverField, data[formField]);
+        }
+      });
+
+      // Log the final FormData for debugging
       console.log("Form data being submitted:", Object.fromEntries(formData));
 
       await apiRequest("POST", `/api/departments/${department?.id}/employees`, formData);
@@ -173,14 +173,18 @@ export default function Employees() {
       console.error("Error adding employee:", error);
       let errorMessage = "Failed to add employee";
 
-      // Try to extract more detailed error message if available
       try {
-        const errorData = JSON.parse(error.message.split(': ')[1]);
-        if (errorData.message) {
-          errorMessage = errorData.message;
+        if (error.message.includes(':')) {
+          const errorData = JSON.parse(error.message.split(': ')[1]);
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+          if (errorData.details) {
+            console.error("Validation errors:", errorData.details);
+          }
         }
       } catch (e) {
-        // Use default error message if parsing fails
+        console.error("Error parsing error message:", e);
       }
 
       toast({
@@ -232,6 +236,7 @@ export default function Employees() {
               </DialogHeader>
               <EmployeeForm
                 onSubmit={async (data) => {
+                  console.log("Form submitted with data:", data);
                   await addEmployee.mutateAsync(data);
                 }}
                 isLoading={addEmployee.isPending}
