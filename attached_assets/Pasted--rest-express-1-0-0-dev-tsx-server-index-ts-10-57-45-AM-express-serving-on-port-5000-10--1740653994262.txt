@@ -1,0 +1,96 @@
+
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+10:57:45 AM [express] serving on port 5000
+10:58:14 AM [express] POST /api/auth/admin/login 200 in 2ms :: {"role":"admin","message":"Admin logge…
+10:58:15 AM [express] GET /api/admin/attendance 304 in 1ms :: []
+10:58:18 AM [express] GET /api/admin/employees 200 in 1ms :: []
+10:58:18 AM [express] GET /api/departments 304 in 1ms :: [{"name":"Department of Computer Science","h…
+10:58:59 AM [express] POST /api/upload 200 in 281ms :: {"fileUrl":"/uploads/file-1740653939206-280390…
+10:58:59 AM [express] POST /api/upload 200 in 28ms :: {"fileUrl":"/uploads/file-1740653939782-7855577…
+10:59:00 AM [express] POST /api/upload 200 in 34ms :: {"fileUrl":"/uploads/file-1740653940099-1988115…
+10:59:00 AM [express] POST /api/upload 200 in 27ms :: {"fileUrl":"/uploads/file-1740653940421-8090335…
+10:59:01 AM [express] POST /api/upload 200 in 452ms :: {"fileUrl":"/uploads/file-1740653940736-608483…
+Admin - Received raw employee data: {
+  epid: 'fsdf',
+  name: 'sfsf',
+  designation: 'fs',
+  employmentStatus: 'permanent',
+  panNumber: 'sf',
+  bankAccount: 'sfs',
+  officeMemoNo: 'sf',
+  joiningDate: '2025-02-05',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'sf',
+  departmentId: 1,
+  aadharCard: 'sfs',
+  panCardUrl: '/uploads/file-1740653939206-280390207.jpeg',
+  bankProofUrl: '/uploads/file-1740653939782-785557784.jpeg',
+  aadharCardUrl: '/uploads/file-1740653940099-198811500.jpeg',
+  officeMemoUrl: '/uploads/file-1740653940421-809033538.jpeg',
+  joiningReportUrl: '/uploads/file-1740653940736-60848349.jpeg'
+}
+Admin - Parsed employee data: {
+  departmentId: 1,
+  epid: 'fsdf',
+  name: 'sfsf',
+  panNumber: 'sf',
+  bankAccount: 'sfs',
+  aadharCard: 'sfs',
+  designation: 'fs',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-05',
+  salaryRegisterNo: 'sf',
+  officeMemoNo: 'sf',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'fsdf',
+  name: 'sfsf',
+  panNumber: 'sf',
+  bankAccount: 'sfs',
+  aadharCard: 'sfs',
+  designation: 'fs',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-05',
+  salaryRegisterNo: 'sf',
+  officeMemoNo: 'sf',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null
+}
+Creating employee in storage: {
+  departmentId: 1,
+  epid: 'fsdf',
+  name: 'sfsf',
+  panNumber: 'sf',
+  bankAccount: 'sfs',
+  aadharCard: 'sfs',
+  designation: 'fs',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-05',
+  salaryRegisterNo: 'sf',
+  officeMemoNo: 'sf',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null,
+  id: 1
+}
+10:59:01 AM [express] POST /api/admin/employees 201 in 14ms :: {"departmentId":1,"epid":"fsdf","name"…
+10:59:01 AM [express] GET /api/admin/employees 200 in 1ms :: [{"departmentId":1,"epid":"fsdf","name":…
