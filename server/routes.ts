@@ -122,6 +122,38 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Add this new route for department employee updates
+  app.patch("/api/departments/:departmentId/employees/:id", upload.fields(documentFields), async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const employeeId = Number(req.params.id);
+
+      // Verify employee belongs to department
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee || employee.departmentId !== departmentId) {
+        return res.status(404).json({ message: "Employee not found in department" });
+      }
+
+      // Handle uploaded files
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const updates = {
+        ...req.body,
+        // Only update URLs if new files are uploaded
+        ...(files?.panCardDoc && { panCardUrl: `/uploads/${files.panCardDoc[0].filename}` }),
+        ...(files?.bankAccountDoc && { bankProofUrl: `/uploads/${files.bankAccountDoc[0].filename}` }),
+        ...(files?.aadharCardDoc && { aadharCardUrl: `/uploads/${files.aadharCardDoc[0].filename}` }),
+        ...(files?.officeMemoDoc && { officeMemoUrl: `/uploads/${files.officeMemoDoc[0].filename}` }),
+        ...(files?.joiningReportDoc && { joiningReportUrl: `/uploads/${files.joiningReportDoc[0].filename}` })
+      };
+
+      const updatedEmployee = await storage.updateEmployee(employeeId, updates);
+      res.json(updatedEmployee);
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      res.status(400).json({ message: "Invalid employee update" });
+    }
+  });
+
   // Add this new endpoint for file uploads
   app.post("/api/upload", upload.single('file'), async (req, res) => {
     try {

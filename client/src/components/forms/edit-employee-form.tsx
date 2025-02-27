@@ -7,58 +7,66 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { employmentStatuses } from "@/lib/departments";
-import { insertEmployeeSchema } from "@shared/schema";
+import { Employee, InsertEmployee, insertEmployeeSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }) {
+interface EditEmployeeFormProps {
+  employee: Employee;
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+}
+
+export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditEmployeeFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm({
+  const form = useForm<InsertEmployee>({
     resolver: zodResolver(insertEmployeeSchema),
     defaultValues: {
       epid: employee.epid,
       name: employee.name,
       designation: employee.designation,
       employmentStatus: employee.employmentStatus,
-      panNumber: employee.panNumber,
-      bankAccount: employee.bankAccount,
-      aadharCard: employee.aadharCard,
-      officeMemoNo: employee.officeMemoNo,
-      joiningDate: employee.joiningDate,
-      joiningShift: employee.joiningShift,
-      salaryRegisterNo: employee.salaryRegisterNo,
+      panNumber: employee.panNumber || "",
+      bankAccount: employee.bankAccount || "",
+      aadharCard: employee.aadharCard || "",
+      officeMemoNo: employee.officeMemoNo || "",
+      joiningDate: employee.joiningDate || "",
+      joiningShift: employee.joiningShift || "morning",
+      salaryRegisterNo: employee.salaryRegisterNo || "",
       departmentId: employee.departmentId,
     }
   });
 
-  const onSubmit = async (data) => {
+  const onSubmit = async (data: InsertEmployee) => {
     try {
       setIsSubmitting(true);
       const formData = new FormData();
-      
-      // Append file fields if files are selected
-      if (form.watch("panCardDoc")?.[0]) {
-        formData.append("panCardDoc", form.watch("panCardDoc")[0]);
-      }
-      if (form.watch("bankAccountDoc")?.[0]) {
-        formData.append("bankAccountDoc", form.watch("bankAccountDoc")[0]);
-      }
-      if (form.watch("aadharCardDoc")?.[0]) {
-        formData.append("aadharCardDoc", form.watch("aadharCardDoc")[0]);
-      }
-      if (form.watch("officeMemoDoc")?.[0]) {
-        formData.append("officeMemoDoc", form.watch("officeMemoDoc")[0]);
-      }
-      if (form.watch("joiningReportDoc")?.[0]) {
-        formData.append("joiningReportDoc", form.watch("joiningReportDoc")[0]);
-      }
+
+      // Handle file uploads
+      const fileFields = {
+        panCardDoc: form.getValues("panCardDoc"),
+        bankAccountDoc: form.getValues("bankAccountDoc"),
+        aadharCardDoc: form.getValues("aadharCardDoc"),
+        officeMemoDoc: form.getValues("officeMemoDoc"),
+        joiningReportDoc: form.getValues("joiningReportDoc"),
+      };
+
+      // Append files if they exist
+      Object.entries(fileFields).forEach(([key, files]) => {
+        if (files?.[0]) {
+          formData.append(key, files[0]);
+        }
+      });
 
       // Append other form data
       Object.entries(data).forEach(([key, value]) => {
         if (key.endsWith("Doc")) return; // Skip file fields
-        formData.append(key, value);
+        if (value !== null && value !== undefined) {
+          formData.append(key, String(value));
+        }
       });
 
       // Preserve existing document URLs
@@ -68,7 +76,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }) {
       formData.append("officeMemoUrl", employee.officeMemoUrl || "");
       formData.append("joiningReportUrl", employee.joiningReportUrl || "");
 
-      await apiRequest(`/api/employees/${employee.id}`, {
+      await apiRequest(`/api/departments/${employee.departmentId}/employees/${employee.id}`, {
         method: "PATCH",
         body: formData,
       });
@@ -102,6 +110,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }) {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
+              {/* Basic Information */}
               <FormField
                 control={form.control}
                 name="epid"
@@ -155,7 +164,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }) {
                       </FormControl>
                       <SelectContent>
                         {employmentStatuses.map(status => (
-                          <SelectItem key={status} value={status.toLowerCase()}>
+                          <SelectItem key={status} value={status}>
                             {status}
                           </SelectItem>
                         ))}
