@@ -159,7 +159,15 @@ export default function Employees() {
       // Log the final FormData for debugging
       console.log("Form data being submitted:", Object.fromEntries(formData));
 
-      await apiRequest("POST", `/api/departments/${department?.id}/employees`, formData);
+      // Send the FormData to the server
+      const response = await apiRequest(
+        "POST", 
+        `/api/departments/${department?.id}/employees`, 
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
