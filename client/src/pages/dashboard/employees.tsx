@@ -49,8 +49,8 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
           <p>{employee.bankAccount}</p>
         </div>
         <div>
-          <label className="text-sm font-medium text-muted-foreground">Adhar Card</label>
-          <p>{employee.adharCard}</p>
+          <label className="text-sm font-medium text-muted-foreground">Aadhar Card</label>
+          <p>{employee.aadharCard}</p>
         </div>
         <div>
           <label className="text-sm font-medium text-muted-foreground">Office Memo No</label>
@@ -68,6 +68,37 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
           <label className="text-sm font-medium text-muted-foreground">Salary Register No</label>
           <p>{employee.salaryRegisterNo}</p>
         </div>
+        {/* Document Preview Section */}
+        {employee.panCardUrl && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">PAN Card Document</label>
+            <img src={employee.panCardUrl} alt="PAN Card" className="max-w-xs rounded-lg border" />
+          </div>
+        )}
+        {employee.bankProofUrl && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Bank Proof</label>
+            <img src={employee.bankProofUrl} alt="Bank Proof" className="max-w-xs rounded-lg border" />
+          </div>
+        )}
+        {employee.aadharCardUrl && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Aadhar Card Document</label>
+            <img src={employee.aadharCardUrl} alt="Aadhar Card" className="max-w-xs rounded-lg border" />
+          </div>
+        )}
+        {employee.officeMemoUrl && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Office Memo Document</label>
+            <img src={employee.officeMemoUrl} alt="Office Memo" className="max-w-xs rounded-lg border" />
+          </div>
+        )}
+        {employee.joiningReportUrl && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Joining Report</label>
+            <img src={employee.joiningReportUrl} alt="Joining Report" className="max-w-xs rounded-lg border" />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -85,7 +116,36 @@ export default function Employees() {
 
   const addEmployee = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("POST", `/api/departments/${department?.id}/employees`, data);
+      const formData = new FormData();
+
+      // Append all the document files if they exist
+      if (data.panCardDoc) {
+        formData.append('panCard', data.panCardDoc);
+      }
+      if (data.bankAccountDoc) {
+        formData.append('bankProof', data.bankAccountDoc);
+      }
+      if (data.aadharCardDoc) {
+        formData.append('aadharCard', data.aadharCardDoc);
+      }
+      if (data.officeMemoDoc) {
+        formData.append('officeMemo', data.officeMemoDoc);
+      }
+      if (data.joiningReportDoc) {
+        formData.append('joiningReport', data.joiningReportDoc);
+      }
+      if (data.termExtensionDoc) {
+        formData.append('termExtension', data.termExtensionDoc);
+      }
+
+      // Append the rest of the employee data
+      Object.keys(data).forEach(key => {
+        if (!key.endsWith('Doc')) {
+          formData.append(key, data[key]);
+        }
+      });
+
+      await apiRequest("POST", `/api/departments/${department?.id}/employees`, formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
@@ -193,7 +253,7 @@ export default function Employees() {
                             <Eye className="h-4 w-4" />
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-3xl">
+                        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Employee Details</DialogTitle>
                           </DialogHeader>
