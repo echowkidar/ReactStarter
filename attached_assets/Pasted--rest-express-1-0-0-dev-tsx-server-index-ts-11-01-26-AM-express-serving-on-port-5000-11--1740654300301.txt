@@ -1,0 +1,96 @@
+
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+11:01:26 AM [express] serving on port 5000
+11:01:50 AM [express] POST /api/auth/admin/login 200 in 2ms :: {"role":"admin","message":"Admin logge…
+11:01:50 AM [express] GET /api/admin/attendance 304 in 1ms :: []
+11:01:54 AM [express] GET /api/admin/employees 200 in 1ms :: []
+11:01:54 AM [express] GET /api/departments 304 in 1ms :: [{"name":"Department of Computer Science","h…
+11:02:31 AM [express] POST /api/upload 200 in 274ms :: {"fileUrl":"/uploads/file-1740654151486-933061…
+11:02:33 AM [express] POST /api/upload 200 in 1158ms :: {"fileUrl":"/uploads/file-1740654152055-41168…
+11:02:33 AM [express] POST /api/upload 200 in 26ms :: {"fileUrl":"/uploads/file-1740654153498-4341887…
+11:02:33 AM [express] POST /api/upload 200 in 29ms :: {"fileUrl":"/uploads/file-1740654153812-8761246…
+11:02:34 AM [express] POST /api/upload 200 in 26ms :: {"fileUrl":"/uploads/file-1740654154128-2005952…
+Admin - Received raw employee data: {
+  epid: 'dsfsdf',
+  name: 'sfsf',
+  designation: 'sfs',
+  employmentStatus: 'permanent',
+  panNumber: 'sf',
+  bankAccount: 'sf',
+  officeMemoNo: 'sf',
+  joiningDate: '2025-02-12',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'sfs',
+  departmentId: 3,
+  aadharCard: 'sf',
+  panCardUrl: '/uploads/file-1740654151486-933061424.jpeg',
+  bankProofUrl: '/uploads/file-1740654152055-411680033.jpeg',
+  aadharCardUrl: '/uploads/file-1740654153498-434188713.jpeg',
+  officeMemoUrl: '/uploads/file-1740654153812-876124608.jpeg',
+  joiningReportUrl: '/uploads/file-1740654154128-200595228.jpeg'
+}
+Admin - Parsed employee data: {
+  departmentId: 3,
+  epid: 'dsfsdf',
+  name: 'sfsf',
+  panNumber: 'sf',
+  bankAccount: 'sf',
+  aadharCard: 'sf',
+  designation: 'sfs',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'sfs',
+  officeMemoNo: 'sf',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740654151486-933061424.jpeg',
+  bankProofUrl: '/uploads/file-1740654152055-411680033.jpeg',
+  aadharCardUrl: '/uploads/file-1740654153498-434188713.jpeg',
+  officeMemoUrl: '/uploads/file-1740654153812-876124608.jpeg',
+  joiningReportUrl: '/uploads/file-1740654154128-200595228.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 3,
+  epid: 'dsfsdf',
+  name: 'sfsf',
+  panNumber: 'sf',
+  bankAccount: 'sf',
+  aadharCard: 'sf',
+  designation: 'sfs',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'sfs',
+  officeMemoNo: 'sf',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740654151486-933061424.jpeg',
+  bankProofUrl: '/uploads/file-1740654152055-411680033.jpeg',
+  aadharCardUrl: '/uploads/file-1740654153498-434188713.jpeg',
+  officeMemoUrl: '/uploads/file-1740654153812-876124608.jpeg',
+  joiningReportUrl: '/uploads/file-1740654154128-200595228.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 3,
+  epid: 'dsfsdf',
+  name: 'sfsf',
+  panNumber: 'sf',
+  bankAccount: 'sf',
+  aadharCard: 'sf',
+  designation: 'sfs',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'sfs',
+  officeMemoNo: 'sf',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740654151486-933061424.jpeg',
+  bankProofUrl: '/uploads/file-1740654152055-411680033.jpeg',
+  aadharCardUrl: '/uploads/file-1740654153498-434188713.jpeg',
+  officeMemoUrl: '/uploads/file-1740654153812-876124608.jpeg',
+  joiningReportUrl: '/uploads/file-1740654154128-200595228.jpeg',
+  id: 1
+}
+11:02:34 AM [express] POST /api/admin/employees 201 in 6ms :: {"departmentId":3,"epid":"dsfsdf","name…
+11:02:34 AM [express] GET /api/admin/employees 200 in 1ms :: [{"departmentId":3,"epid":"dsfsdf","name…
