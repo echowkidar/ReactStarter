@@ -68,20 +68,12 @@ export async function registerRoutes(app: Express) {
       const employeeData = {
         ...req.body,
         departmentId,
-        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
-        employmentStatus: req.body.employmentStatus || "Permanent",
-        joiningShift: req.body.joiningShift || "FN",
-        officeMemoNo: req.body.officeMemoNo || "",
-        salaryRegisterNo: req.body.salaryRegisterNo || "",
-        bankAccount: req.body.bankAccount || "",
-        panNumber: req.body.panNumber || "",
-        aadharCard: req.body.aadharCard || "",
-        // Map file URLs from the uploaded files
-        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : null,
-        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : null,
-        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : null,
-        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : null,
-        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : null
+        // Preserve existing URLs if files aren't being updated
+        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : req.body.panCardUrl || null,
+        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : req.body.bankProofUrl || null,
+        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : req.body.aadharCardUrl || null,
+        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : req.body.officeMemoUrl || null,
+        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : req.body.joiningReportUrl || null
       };
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
@@ -104,6 +96,29 @@ export async function registerRoutes(app: Express) {
           details: String(error)
         });
       }
+    }
+  });
+
+  // Update employee (admin)
+  app.patch("/api/employees/:id", upload.fields(documentFields), async (req, res) => {
+    try {
+      // Handle uploaded files
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const updates = {
+        ...req.body,
+        // Only update URLs if new files are uploaded
+        ...(files?.panCardDoc && { panCardUrl: `/uploads/${files.panCardDoc[0].filename}` }),
+        ...(files?.bankAccountDoc && { bankProofUrl: `/uploads/${files.bankAccountDoc[0].filename}` }),
+        ...(files?.aadharCardDoc && { aadharCardUrl: `/uploads/${files.aadharCardDoc[0].filename}` }),
+        ...(files?.officeMemoDoc && { officeMemoUrl: `/uploads/${files.officeMemoDoc[0].filename}` }),
+        ...(files?.joiningReportDoc && { joiningReportUrl: `/uploads/${files.joiningReportDoc[0].filename}` })
+      };
+
+      const employee = await storage.updateEmployee(Number(req.params.id), updates);
+      res.json(employee);
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      res.status(400).json({ message: "Invalid employee update" });
     }
   });
 
@@ -208,11 +223,11 @@ export async function registerRoutes(app: Express) {
         panNumber: req.body.panNumber || "",
         aadharCard: req.body.aadharCard || "",
         // Map file URLs from the uploaded files
-        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : null,
-        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : null,
-        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : null,
-        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : null,
-        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : null,
+        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : req.body.panCardUrl || null,
+        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : req.body.bankProofUrl || null,
+        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : req.body.aadharCardUrl || null,
+        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : req.body.officeMemoUrl || null,
+        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : req.body.joiningReportUrl || null,
       };
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
@@ -453,10 +468,22 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Update employee (admin)
-  app.patch("/api/employees/:id", async (req, res) => {
+  // Update employee (admin) - updated to handle file uploads
+  app.patch("/api/employees/:id", upload.fields(documentFields), async (req, res) => {
     try {
-      const employee = await storage.updateEmployee(Number(req.params.id), req.body);
+      // Handle uploaded files
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const updates = {
+        ...req.body,
+        // Only update URLs if new files are uploaded
+        ...(files?.panCardDoc && { panCardUrl: `/uploads/${files.panCardDoc[0].filename}` }),
+        ...(files?.bankAccountDoc && { bankProofUrl: `/uploads/${files.bankAccountDoc[0].filename}` }),
+        ...(files?.aadharCardDoc && { aadharCardUrl: `/uploads/${files.aadharCardDoc[0].filename}` }),
+        ...(files?.officeMemoDoc && { officeMemoUrl: `/uploads/${files.officeMemoDoc[0].filename}` }),
+        ...(files?.joiningReportDoc && { joiningReportUrl: `/uploads/${files.joiningReportDoc[0].filename}` })
+      };
+
+      const employee = await storage.updateEmployee(Number(req.params.id), updates);
       res.json(employee);
     } catch (error) {
       console.error('Error updating employee:', error);
