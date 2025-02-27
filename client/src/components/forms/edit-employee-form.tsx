@@ -22,7 +22,13 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<InsertEmployee>({
+  const form = useForm<InsertEmployee & {
+    panCardDoc?: FileList;
+    bankAccountDoc?: FileList;
+    aadharCardDoc?: FileList;
+    officeMemoDoc?: FileList;
+    joiningReportDoc?: FileList;
+  }>({
     resolver: zodResolver(insertEmployeeSchema),
     defaultValues: {
       epid: employee.epid,
@@ -40,18 +46,18 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     }
   });
 
-  const onSubmit = async (data: InsertEmployee) => {
+  const onSubmit = async (data: any) => {
     try {
       setIsSubmitting(true);
       const formData = new FormData();
 
       // Handle file uploads
       const fileFields = {
-        panCardDoc: form.getValues("panCardDoc"),
-        bankAccountDoc: form.getValues("bankAccountDoc"),
-        aadharCardDoc: form.getValues("aadharCardDoc"),
-        officeMemoDoc: form.getValues("officeMemoDoc"),
-        joiningReportDoc: form.getValues("joiningReportDoc"),
+        panCardDoc: data.panCardDoc,
+        bankAccountDoc: data.bankAccountDoc,
+        aadharCardDoc: data.aadharCardDoc,
+        officeMemoDoc: data.officeMemoDoc,
+        joiningReportDoc: data.joiningReportDoc,
       };
 
       // Append files if they exist

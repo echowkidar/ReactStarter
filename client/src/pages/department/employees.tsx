@@ -6,10 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Pencil, Eye, Plus } from "lucide-react";
 import { EditEmployeeForm } from "@/components/forms/edit-employee-form";
 import { apiRequest } from "@/lib/queryClient";
+import type { Employee } from "@shared/schema";
 
 export default function DepartmentEmployees() {
   const [, setLocation] = useLocation();
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Get department ID from stored department info
@@ -21,7 +22,7 @@ export default function DepartmentEmployees() {
     queryFn: () => apiRequest(`/api/departments/${departmentId}/employees`),
   });
 
-  const handleEditClick = (employee) => {
+  const handleEditClick = (employee: Employee) => {
     setSelectedEmployee(employee);
     setIsEditDialogOpen(true);
   };
@@ -52,7 +53,7 @@ export default function DepartmentEmployees() {
             </tr>
           </thead>
           <tbody>
-            {employees.map((employee) => (
+            {employees.map((employee: Employee) => (
               <tr key={employee.id} className="border-b">
                 <td className="p-4">{employee.epid}</td>
                 <td className="p-4">{employee.name}</td>
@@ -95,7 +96,7 @@ export default function DepartmentEmployees() {
       {selectedEmployee && (
         <EditEmployeeForm
           employee={selectedEmployee}
-          isOpen={isEditDialogOpen}
+          isOpen={isEditDialogOpen} 
           onClose={() => {
             setIsEditDialogOpen(false);
             setSelectedEmployee(null);
