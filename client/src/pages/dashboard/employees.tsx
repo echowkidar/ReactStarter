@@ -115,59 +115,15 @@ export default function Employees() {
   });
 
   const addEmployee = useMutation({
-    mutationFn: async (data: any) => {
-      // Log the received data for debugging
-      console.log("Form submitted with data:", data);
+    mutationFn: async (formData: FormData) => {
+      // Log the received form data for debugging
+      console.log("Form data received:", Object.fromEntries(formData));
 
-      const formData = new FormData();
-
-      // Add required fields
-      const requiredFields = [
-        'epid', 'name', 'designation', 'employmentStatus',
-        'panNumber', 'bankAccount', 'aadharCard', 'officeMemoNo',
-        'joiningDate', 'joiningShift', 'salaryRegisterNo'
-      ];
-
-      requiredFields.forEach(field => {
-        if (data[field] === undefined || data[field] === '') {
-          throw new Error(`${field} is required`);
-        }
-        formData.append(field, data[field]);
-      });
-
-      // Add optional fields
-      if (data.termExpiry) {
-        formData.append('termExpiry', data.termExpiry);
-      }
-
-      // Append document files if they exist
-      const documentFields = {
-        panCardDoc: 'panCard',
-        bankAccountDoc: 'bankProof',
-        aadharCardDoc: 'aadharCard',
-        officeMemoDoc: 'officeMemo',
-        joiningReportDoc: 'joiningReport',
-        termExtensionDoc: 'termExtension'
-      };
-
-      Object.entries(documentFields).forEach(([formField, serverField]) => {
-        if (data[formField] instanceof File) {
-          formData.append(serverField, data[formField]);
-        }
-      });
-
-      // Log the final FormData for debugging
-      console.log("Form data being submitted:", Object.fromEntries(formData));
-
-      // Send the FormData to the server
-      const response = await apiRequest(
-        "POST", 
-        `/api/departments/${department?.id}/employees`, 
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+      return apiRequest(
+        "POST",
+        `/api/departments/${department?.id}/employees`,
+        formData
       );
-
-      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
@@ -205,7 +161,7 @@ export default function Employees() {
 
   const deleteEmployee = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/employees/${id}`);
+      await apiRequest("DELETE", `/api/departments/${department?.id}/employees/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
@@ -222,6 +178,51 @@ export default function Employees() {
       });
     },
   });
+
+  const handleFormSubmit = async (data: any) => {
+    const formData = new FormData();
+
+    // Add required fields
+    const requiredFields = [
+      'epid', 'name', 'designation', 'employmentStatus',
+      'panNumber', 'bankAccount', 'aadharCard', 'officeMemoNo',
+      'joiningDate', 'joiningShift', 'salaryRegisterNo'
+    ];
+
+    requiredFields.forEach(field => {
+      if (data[field] === undefined || data[field] === '') {
+        throw new Error(`${field} is required`);
+      }
+      formData.append(field, data[field]);
+    });
+
+    // Add optional fields
+    if (data.termExpiry) {
+      formData.append('termExpiry', data.termExpiry);
+    }
+
+    // Handle document uploads
+    const documentFields = {
+      panCardDoc: 'panCard',
+      bankAccountDoc: 'bankProof',
+      aadharCardDoc: 'aadharCard',
+      officeMemoDoc: 'officeMemo',
+      joiningReportDoc: 'joiningReport',
+      termExtensionDoc: 'termExtension'
+    };
+
+    Object.entries(documentFields).forEach(([formField, serverField]) => {
+      const file = data[formField]?.[0];
+      if (file instanceof File) {
+        formData.append(serverField, file);
+      }
+    });
+
+    // Log form data for debugging
+    console.log("Form data being submitted:", Object.fromEntries(formData));
+
+    await addEmployee.mutateAsync(formData);
+  };
 
   if (isLoading) return <Loading />;
 
@@ -243,10 +244,7 @@ export default function Employees() {
                 <DialogTitle className="text-xl font-semibold">Add New Employee</DialogTitle>
               </DialogHeader>
               <EmployeeForm
-                onSubmit={async (data) => {
-                  console.log("Form submitted with data:", data);
-                  await addEmployee.mutateAsync(data);
-                }}
+                onSubmit={handleFormSubmit}
                 isLoading={addEmployee.isPending}
               />
             </DialogContent>
