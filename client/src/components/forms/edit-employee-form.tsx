@@ -75,7 +75,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         }
       });
 
-      // Preserve existing document URLs if no new files are uploaded
+      // Preserve existing document URLs
       formData.append("panCardUrl", employee.panCardUrl || "");
       formData.append("bankProofUrl", employee.bankProofUrl || "");
       formData.append("aadharCardUrl", employee.aadharCardUrl || "");
@@ -90,6 +90,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       if (!response.ok) {
         throw new Error('Failed to update employee');
       }
+
+      const updatedEmployee = await response.json();
+      console.log("Updated employee:", updatedEmployee);
 
       toast({
         title: "Success",

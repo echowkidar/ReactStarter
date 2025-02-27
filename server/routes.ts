@@ -134,17 +134,22 @@ export async function registerRoutes(app: Express) {
         return res.status(404).json({ message: "Employee not found in department" });
       }
 
+      console.log("Department employee update - files:", req.files);
+      console.log("Department employee update - body:", req.body);
+
       // Handle uploaded files
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const updates = {
         ...req.body,
-        // Only update URLs if new files are uploaded
-        ...(files?.panCardDoc && { panCardUrl: `/uploads/${files.panCardDoc[0].filename}` }),
-        ...(files?.bankAccountDoc && { bankProofUrl: `/uploads/${files.bankAccountDoc[0].filename}` }),
-        ...(files?.aadharCardDoc && { aadharCardUrl: `/uploads/${files.aadharCardDoc[0].filename}` }),
-        ...(files?.officeMemoDoc && { officeMemoUrl: `/uploads/${files.officeMemoDoc[0].filename}` }),
-        ...(files?.joiningReportDoc && { joiningReportUrl: `/uploads/${files.joiningReportDoc[0].filename}` })
+        // Keep existing URLs if no new files are uploaded
+        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : req.body.panCardUrl,
+        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : req.body.bankProofUrl,
+        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : req.body.aadharCardUrl,
+        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : req.body.officeMemoUrl,
+        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : req.body.joiningReportUrl
       };
+
+      console.log("Department employee update - processed updates:", updates);
 
       const updatedEmployee = await storage.updateEmployee(employeeId, updates);
       res.json(updatedEmployee);
