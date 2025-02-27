@@ -49,8 +49,8 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
           <p>{employee.bankAccount}</p>
         </div>
         <div>
-          <label className="text-sm font-medium text-muted-foreground">Aadhar Card</label>
-          <p>{employee.aadharCard}</p>
+          <label className="text-sm font-medium text-muted-foreground">Adhar Card</label>
+          <p>{employee.adharCard}</p>
         </div>
         <div>
           <label className="text-sm font-medium text-muted-foreground">Office Memo No</label>
@@ -68,37 +68,6 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
           <label className="text-sm font-medium text-muted-foreground">Salary Register No</label>
           <p>{employee.salaryRegisterNo}</p>
         </div>
-        {/* Document Preview Section */}
-        {employee.panCardUrl && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">PAN Card Document</label>
-            <img src={employee.panCardUrl} alt="PAN Card" className="max-w-xs rounded-lg border" />
-          </div>
-        )}
-        {employee.bankProofUrl && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Bank Proof</label>
-            <img src={employee.bankProofUrl} alt="Bank Proof" className="max-w-xs rounded-lg border" />
-          </div>
-        )}
-        {employee.aadharCardUrl && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Aadhar Card Document</label>
-            <img src={employee.aadharCardUrl} alt="Aadhar Card" className="max-w-xs rounded-lg border" />
-          </div>
-        )}
-        {employee.officeMemoUrl && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Office Memo Document</label>
-            <img src={employee.officeMemoUrl} alt="Office Memo" className="max-w-xs rounded-lg border" />
-          </div>
-        )}
-        {employee.joiningReportUrl && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Joining Report</label>
-            <img src={employee.joiningReportUrl} alt="Joining Report" className="max-w-xs rounded-lg border" />
-          </div>
-        )}
       </div>
     </div>
   );
@@ -115,15 +84,8 @@ export default function Employees() {
   });
 
   const addEmployee = useMutation({
-    mutationFn: async (formData: FormData) => {
-      // Log the received form data for debugging
-      console.log("Form data received:", Object.fromEntries(formData));
-
-      return apiRequest(
-        "POST",
-        `/api/departments/${department?.id}/employees`,
-        formData
-      );
+    mutationFn: async (data: any) => {
+      await apiRequest("POST", `/api/departments/${department?.id}/employees`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
@@ -133,35 +95,18 @@ export default function Employees() {
         description: "Employee added successfully",
       });
     },
-    onError: (error: any) => {
-      console.error("Error adding employee:", error);
-      let errorMessage = "Failed to add employee";
-
-      try {
-        if (error.message.includes(':')) {
-          const errorData = JSON.parse(error.message.split(': ')[1]);
-          if (errorData.message) {
-            errorMessage = errorData.message;
-          }
-          if (errorData.details) {
-            console.error("Validation errors:", errorData.details);
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing error message:", e);
-      }
-
+    onError: () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: errorMessage,
+        description: "Failed to add employee",
       });
     },
   });
 
   const deleteEmployee = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/departments/${department?.id}/employees/${id}`);
+      await apiRequest("DELETE", `/api/employees/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
@@ -179,51 +124,6 @@ export default function Employees() {
     },
   });
 
-  const handleFormSubmit = async (data: any) => {
-    const formData = new FormData();
-
-    // Add required fields
-    const requiredFields = [
-      'epid', 'name', 'designation', 'employmentStatus',
-      'panNumber', 'bankAccount', 'aadharCard', 'officeMemoNo',
-      'joiningDate', 'joiningShift', 'salaryRegisterNo'
-    ];
-
-    requiredFields.forEach(field => {
-      if (data[field] === undefined || data[field] === '') {
-        throw new Error(`${field} is required`);
-      }
-      formData.append(field, data[field]);
-    });
-
-    // Add optional fields
-    if (data.termExpiry) {
-      formData.append('termExpiry', data.termExpiry);
-    }
-
-    // Handle document uploads
-    const documentFields = {
-      panCardDoc: 'panCard',
-      bankAccountDoc: 'bankProof',
-      aadharCardDoc: 'aadharCard',
-      officeMemoDoc: 'officeMemo',
-      joiningReportDoc: 'joiningReport',
-      termExtensionDoc: 'termExtension'
-    };
-
-    Object.entries(documentFields).forEach(([formField, serverField]) => {
-      const file = data[formField]?.[0];
-      if (file instanceof File) {
-        formData.append(serverField, file);
-      }
-    });
-
-    // Log form data for debugging
-    console.log("Form data being submitted:", Object.fromEntries(formData));
-
-    await addEmployee.mutateAsync(formData);
-  };
-
   if (isLoading) return <Loading />;
 
   return (
@@ -239,12 +139,14 @@ export default function Employees() {
                 Add Employee
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">Add New Employee</DialogTitle>
               </DialogHeader>
               <EmployeeForm
-                onSubmit={handleFormSubmit}
+                onSubmit={async (data) => {
+                  await addEmployee.mutateAsync(data);
+                }}
                 isLoading={addEmployee.isPending}
               />
             </DialogContent>
@@ -291,7 +193,7 @@ export default function Employees() {
                             <Eye className="h-4 w-4" />
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                        <DialogContent className="max-w-3xl">
                           <DialogHeader>
                             <DialogTitle>Employee Details</DialogTitle>
                           </DialogHeader>
