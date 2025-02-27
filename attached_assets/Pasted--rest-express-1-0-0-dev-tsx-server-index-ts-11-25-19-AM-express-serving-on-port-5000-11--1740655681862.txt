@@ -1,0 +1,269 @@
+
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+11:25:19 AM [express] serving on port 5000
+11:25:54 AM [express] POST /api/auth/admin/login 200 in 1ms :: {"role":"admin","message":"Admin logge…
+11:25:54 AM [express] GET /api/admin/attendance 304 in 1ms :: []
+11:25:57 AM [express] GET /api/admin/employees 200 in 1ms :: []
+11:25:57 AM [express] GET /api/departments 304 in 1ms :: [{"name":"Department of Computer Science","h…
+11:26:22 AM [express] GET /api/admin/employees 200 in 1ms :: []
+11:26:22 AM [express] GET /api/departments 304 in 0ms :: [{"name":"Department of Computer Science","h…
+11:26:35 AM [express] POST /api/upload 200 in 15ms :: {"fileUrl":"/uploads/file-1740655595690-8497428…
+11:26:36 AM [express] POST /api/upload 200 in 25ms :: {"fileUrl":"/uploads/file-1740655596005-4766111…
+11:26:36 AM [express] POST /api/upload 200 in 26ms :: {"fileUrl":"/uploads/file-1740655596325-2051210…
+11:26:36 AM [express] POST /api/upload 200 in 25ms :: {"fileUrl":"/uploads/file-1740655596639-5856674…
+11:26:37 AM [express] POST /api/upload 200 in 286ms :: {"fileUrl":"/uploads/file-1740655596956-849328…
+Admin - Received raw employee data: {
+  epid: 'bb',
+  name: 'bcb',
+  designation: 'bc',
+  employmentStatus: 'permanent',
+  panNumber: 'bc',
+  bankAccount: 'cb',
+  officeMemoNo: 'cb',
+  joiningDate: '2025-02-12',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'bc',
+  departmentId: 2,
+  aadharCard: 'cb',
+  panCardUrl: '/uploads/file-1740655595690-8497428.jpeg',
+  bankProofUrl: '/uploads/file-1740655596005-476611106.jpeg',
+  aadharCardUrl: '/uploads/file-1740655596325-205121076.jpeg',
+  officeMemoUrl: '/uploads/file-1740655596639-585667474.jpeg',
+  joiningReportUrl: '/uploads/file-1740655596956-849328931.jpeg'
+}
+Admin - Parsed employee data: {
+  departmentId: 2,
+  epid: 'bb',
+  name: 'bcb',
+  panNumber: 'bc',
+  bankAccount: 'cb',
+  aadharCard: 'cb',
+  designation: 'bc',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'bc',
+  officeMemoNo: 'cb',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740655595690-8497428.jpeg',
+  bankProofUrl: '/uploads/file-1740655596005-476611106.jpeg',
+  aadharCardUrl: '/uploads/file-1740655596325-205121076.jpeg',
+  officeMemoUrl: '/uploads/file-1740655596639-585667474.jpeg',
+  joiningReportUrl: '/uploads/file-1740655596956-849328931.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 2,
+  epid: 'bb',
+  name: 'bcb',
+  panNumber: 'bc',
+  bankAccount: 'cb',
+  aadharCard: 'cb',
+  designation: 'bc',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'bc',
+  officeMemoNo: 'cb',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740655595690-8497428.jpeg',
+  bankProofUrl: '/uploads/file-1740655596005-476611106.jpeg',
+  aadharCardUrl: '/uploads/file-1740655596325-205121076.jpeg',
+  officeMemoUrl: '/uploads/file-1740655596639-585667474.jpeg',
+  joiningReportUrl: '/uploads/file-1740655596956-849328931.jpeg'
+}
+Creating employee in storage: {
+  departmentId: 2,
+  epid: 'bb',
+  name: 'bcb',
+  panNumber: 'bc',
+  bankAccount: 'cb',
+  aadharCard: 'cb',
+  designation: 'bc',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'bc',
+  officeMemoNo: 'cb',
+  joiningShift: 'FN',
+  panCardUrl: '/uploads/file-1740655595690-8497428.jpeg',
+  bankProofUrl: '/uploads/file-1740655596005-476611106.jpeg',
+  aadharCardUrl: '/uploads/file-1740655596325-205121076.jpeg',
+  officeMemoUrl: '/uploads/file-1740655596639-585667474.jpeg',
+  joiningReportUrl: '/uploads/file-1740655596956-849328931.jpeg',
+  id: 1
+}
+11:26:37 AM [express] POST /api/admin/employees 201 in 5ms :: {"departmentId":2,"epid":"bb","name":"b…
+11:26:37 AM [express] GET /api/admin/employees 200 in 1ms :: [{"departmentId":2,"epid":"bb","name":"b…
+11:26:53 AM [express] POST /api/auth/register 200 in 1ms :: {"name":"Department of Mathematics","hodT…
+11:26:53 AM [express] GET /api/departments/2/attendance 304 in 1ms :: []
+Fetching employees for department: 2
+Found department: {
+  name: 'Department of Mathematics',
+  hodTitle: 'Chairperson',
+  hodName: 'HOD',
+  email: '',
+  password: '',
+  id: 2
+}
+Found employees: [
+  {
+    departmentId: 2,
+    epid: 'bb',
+    name: 'bcb',
+    panNumber: 'bc',
+    bankAccount: 'cb',
+    aadharCard: 'cb',
+    designation: 'bc',
+    employmentStatus: 'Permanent',
+    termExpiry: null,
+    joiningDate: '2025-02-12',
+    salaryRegisterNo: 'bc',
+    officeMemoNo: 'cb',
+    joiningShift: 'FN',
+    panCardUrl: '/uploads/file-1740655595690-8497428.jpeg',
+    bankProofUrl: '/uploads/file-1740655596005-476611106.jpeg',
+    aadharCardUrl: '/uploads/file-1740655596325-205121076.jpeg',
+    officeMemoUrl: '/uploads/file-1740655596639-585667474.jpeg',
+    joiningReportUrl: '/uploads/file-1740655596956-849328931.jpeg',
+    id: 1
+  }
+]
+11:26:53 AM [express] GET /api/departments/2/employees 200 in 1ms :: [{"departmentId":2,"epid":"bb","…
+Department - Received raw employee data: {
+  epid: 'dgdg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: '',
+  officeMemoNo: 'dg',
+  joiningDate: '2025-02-12',
+  joiningShift: 'FN',
+  salaryRegisterNo: 'dg',
+  panCardDoc: 'blob:https://8f8b7d11-6228-4d2e-a580-aabfe511f466-00-1eah3o3hlriuh.riker.replit.dev/4fd3ee0e-250d-4faf-be8b-d181a0196698',
+  bankAccountDoc: 'blob:https://8f8b7d11-6228-4d2e-a580-aabfe511f466-00-1eah3o3hlriuh.riker.replit.dev/147f9909-38d1-4479-877e-b1cdb5d5a27e',
+  aadharCardDoc: 'blob:https://8f8b7d11-6228-4d2e-a580-aabfe511f466-00-1eah3o3hlriuh.riker.replit.dev/89710b64-487d-4d98-a2b8-78c5db157cc3',
+  officeMemoDoc: 'blob:https://8f8b7d11-6228-4d2e-a580-aabfe511f466-00-1eah3o3hlriuh.riker.replit.dev/8e8f231c-2f20-416b-a47e-53cccbf6a26f',
+  joiningReportDoc: 'blob:https://8f8b7d11-6228-4d2e-a580-aabfe511f466-00-1eah3o3hlriuh.riker.replit.dev/e38a73f2-8421-46b0-8b3b-a9cebbc992ce',
+  termExtensionDoc: ''
+}
+Department - Parsed employee data: {
+  departmentId: 2,
+  epid: 'dgdg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'dg',
+  officeMemoNo: 'dg',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null
+}
+Creating employee in storage: {
+  departmentId: 2,
+  epid: 'dgdg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'dg',
+  officeMemoNo: 'dg',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null
+}
+Creating employee in storage: {
+  departmentId: 2,
+  epid: 'dgdg',
+  name: 'dgd',
+  panNumber: 'dg',
+  bankAccount: 'dg',
+  aadharCard: 'dg',
+  designation: 'dgd',
+  employmentStatus: 'Permanent',
+  termExpiry: null,
+  joiningDate: '2025-02-12',
+  salaryRegisterNo: 'dg',
+  officeMemoNo: 'dg',
+  joiningShift: 'FN',
+  panCardUrl: null,
+  bankProofUrl: null,
+  aadharCardUrl: null,
+  officeMemoUrl: null,
+  joiningReportUrl: null,
+  id: 2
+}
+11:27:43 AM [express] POST /api/departments/2/employees 201 in 2ms :: {"departmentId":2,"epid":"dgdg"…
+Fetching employees for department: 2
+Found department: {
+  name: 'Department of Mathematics',
+  hodTitle: 'Chairperson',
+  hodName: 'HOD',
+  email: '',
+  password: '',
+  id: 2
+}
+Found employees: [
+  {
+    departmentId: 2,
+    epid: 'bb',
+    name: 'bcb',
+    panNumber: 'bc',
+    bankAccount: 'cb',
+    aadharCard: 'cb',
+    designation: 'bc',
+    employmentStatus: 'Permanent',
+    termExpiry: null,
+    joiningDate: '2025-02-12',
+    salaryRegisterNo: 'bc',
+    officeMemoNo: 'cb',
+    joiningShift: 'FN',
+    panCardUrl: '/uploads/file-1740655595690-8497428.jpeg',
+    bankProofUrl: '/uploads/file-1740655596005-476611106.jpeg',
+    aadharCardUrl: '/uploads/file-1740655596325-205121076.jpeg',
+    officeMemoUrl: '/uploads/file-1740655596639-585667474.jpeg',
+    joiningReportUrl: '/uploads/file-1740655596956-849328931.jpeg',
+    id: 1
+  },
+  {
+    departmentId: 2,
+    epid: 'dgdg',
+    name: 'dgd',
+    panNumber: 'dg',
+    bankAccount: 'dg',
+    aadharCard: 'dg',
+    designation: 'dgd',
+    employmentStatus: 'Permanent',
+    termExpiry: null,
+    joiningDate: '2025-02-12',
+    salaryRegisterNo: 'dg',
+    officeMemoNo: 'dg',
+    joiningShift: 'FN',
+    panCardUrl: null,
+    bankProofUrl: null,
+    aadharCardUrl: null,
+    officeMemoUrl: null,
+    joiningReportUrl: null,
+    id: 2
+  }
+]
+11:27:43 AM [express] GET /api/departments/2/employees 200 in 1ms :: [{"departmentId":2,"epid":"bb","…
