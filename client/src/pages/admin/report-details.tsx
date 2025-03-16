@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { AttendanceReport, AttendanceEntry, Department, Employee } from "@shared/schema";
 import { Download, Printer, X } from "lucide-react";
+import Loading from "@/components/layout/loading";
+import AdminHeader from "@/components/layout/admin-header";
 
 interface ExtendedAttendanceEntry extends AttendanceEntry {
   employee?: Employee;
@@ -90,7 +92,7 @@ export default function ReportDetails() {
       const periods = JSON.parse(entry.periods);
       periods.forEach((period: any) => {
         attendanceData.push([
-          entry.employee?.employeeId,
+          entry.employee?.epid,
           entry.employee?.name,
           entry.employee?.designation,
           `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
@@ -130,129 +132,132 @@ export default function ReportDetails() {
   };
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <style type="text/css" media="print">{`
-        @page { 
-          size: auto;
-          margin: 10mm 15mm;
-        }
-        @media print {
-          body { 
-            visibility: hidden;
-          }
-          .print-content { 
-            visibility: visible;
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          .no-print {
-            display: none;
-          }
-        }
-      `}</style>
-
-      <div className="flex justify-between items-center no-print">
-        <h1 className="text-2xl font-bold">Attendance Report Details</h1>
-        <div className="space-x-2">
-          <Button variant="outline" onClick={handleDownload}>
-            <Download className="h-4 w-4 mr-2" />
-            Download Excel
-          </Button>
-          <Button variant="outline" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
-          <Button variant="outline" onClick={() => setLocation("/admin/dashboard")}>
-            <X className="h-4 w-4 mr-2" />
-            Close
-          </Button>
+    <div className="min-h-screen flex flex-col">
+      <AdminHeader />
+      <div className="p-6 flex-1">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Attendance Report Details</h1>
+          <div className="space-x-2">
+            <Button variant="outline" onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Excel
+            </Button>
+            <Button variant="outline" onClick={handlePrint}>
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+            <Button variant="outline" onClick={() => setLocation("/admin/dashboard")}>
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <div className="print-content space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Attendance Report Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <InfoItem label="Department" value={report.department?.name} />
-              <InfoItem label="Month/Year" value={formatPeriod(report.year, report.month)} />
-              <InfoItem label="Transaction ID" value={report.transactionId || '-'} />
-              <InfoItem 
-                label="Status" 
-                value={
-                  <Badge variant={report.status === "submitted" ? "default" : "secondary"}>
-                    {report.status}
-                  </Badge>
-                } 
-              />
-              {report.despatchNo && (
-                <InfoItem label="Despatch No" value={report.despatchNo} />
-              )}
-              {report.despatchDate && (
+        <style type="text/css" media="print">{`
+          @page { 
+            size: auto;
+            margin: 10mm 15mm;
+          }
+          @media print {
+            body { 
+              visibility: hidden;
+            }
+            .print-content { 
+              visibility: visible;
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+            }
+            .no-print {
+              display: none;
+            }
+          }
+        `}</style>
+
+        <div className="print-content space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Attendance Report Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <InfoItem label="Department" value={report.department?.name} />
+                <InfoItem label="Month/Year" value={formatPeriod(report.year, report.month)} />
+                <InfoItem label="Transaction ID" value={report.transactionId || '-'} />
                 <InfoItem 
-                  label="Despatch Date" 
-                  value={format(new Date(report.despatchDate), "dd MMM yyyy")} 
+                  label="Status" 
+                  value={
+                    <Badge variant={report.status === "submitted" ? "default" : "secondary"}>
+                      {report.status}
+                    </Badge>
+                  } 
                 />
-              )}
+                {report.despatchNo && (
+                  <InfoItem label="Despatch No" value={report.despatchNo} />
+                )}
+                {report.despatchDate && (
+                  <InfoItem 
+                    label="Despatch Date" 
+                    value={format(new Date(report.despatchDate), "dd MMM yyyy")} 
+                  />
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Attendance Entries</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Designation</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Days</TableHead>
+                    <TableHead>Remarks</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {report.entries?.map((entry) => {
+                    try {
+                      const periods = typeof entry.periods === 'string' 
+                        ? JSON.parse(entry.periods) 
+                        : entry.periods;
+
+                      return periods.map((period: any, periodIndex: number) => (
+                        <TableRow key={`${entry.id}-${periodIndex}`}>
+                          <TableCell>{entry.employee?.epid}</TableCell>
+                          <TableCell>{entry.employee?.name}</TableCell>
+                          <TableCell>{entry.employee?.designation}</TableCell>
+                          <TableCell>
+                            {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
+                          </TableCell>
+                          <TableCell>{period.days}</TableCell>
+                          <TableCell>{period.remarks || "-"}</TableCell>
+                        </TableRow>
+                      ));
+                    } catch (error) {
+                      console.error('Error parsing periods:', error);
+                      return null;
+                    }
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <div className="mt-8 space-y-4 text-right">
+            <p>Certified that the above attendance report is correct.</p>
+            <div className="space-y-1">
+              <p>{report.department?.hodTitle}</p>
+              <p>{report.department?.hodName}</p>
+              <p>{report.department?.name}</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attendance Entries</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Days</TableHead>
-                  <TableHead>Remarks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {report.entries?.map((entry) => {
-                  try {
-                    const periods = typeof entry.periods === 'string' 
-                      ? JSON.parse(entry.periods) 
-                      : entry.periods;
-
-                    return periods.map((period: any, periodIndex: number) => (
-                      <TableRow key={`${entry.id}-${periodIndex}`}>
-                        <TableCell>{entry.employee?.employeeId}</TableCell>
-                        <TableCell>{entry.employee?.name}</TableCell>
-                        <TableCell>{entry.employee?.designation}</TableCell>
-                        <TableCell>
-                          {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
-                        </TableCell>
-                        <TableCell>{period.days}</TableCell>
-                        <TableCell>{period.remarks || "-"}</TableCell>
-                      </TableRow>
-                    ));
-                  } catch (error) {
-                    console.error('Error parsing periods:', error);
-                    return null;
-                  }
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <div className="mt-8 space-y-4 text-right">
-          <p>Certified that the above attendance report is correct.</p>
-          <div className="space-y-1">
-            <p>{report.department?.hodTitle}</p>
-            <p>{report.department?.hodName}</p>
-            <p>{report.department?.name}</p>
           </div>
         </div>
       </div>

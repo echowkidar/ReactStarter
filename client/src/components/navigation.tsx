@@ -20,6 +20,10 @@ export function Navigation() {
       <div className="p-6">
         <h2 className="text-lg font-semibold mb-6">{department.name}</h2>
         
+        <p className="mb-4 text-sm text-gray-500">
+          {department.email ? `User: ${department.email}` : ""}
+        </p>
+        
         <div className="space-y-2">
           <Link href="/department/dashboard">
             <Button variant="ghost" className="w-full justify-start">

@@ -42,6 +42,17 @@ export default function AdminLogin() {
         throw new Error("Invalid credentials");
       }
 
+      const responseData = await response.json();
+      
+      // Store admin information in localStorage
+      localStorage.setItem("adminType", responseData.adminType || "super");
+      
+      // Store admin info as object
+      localStorage.setItem("admin", JSON.stringify({
+        email: data.email,
+        role: responseData.adminType === "salary" ? "salary" : "superadmin"
+      }));
+
       toast({
         title: "Success",
         description: "Logged in successfully",

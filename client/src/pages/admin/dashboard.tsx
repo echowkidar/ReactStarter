@@ -19,9 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
+import AdminHeader from "@/components/layout/admin-header";
 import { FileCheck, LogOut, Eye, Download, Search, Users } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -66,7 +67,14 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [monthFilter, setMonthFilter] = useState<string>("all");
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "", direction: "asc" });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "receiptNo", direction: "desc" });
+  const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+
+  useEffect(() => {
+    // Check if user is salary admin
+    const adminType = localStorage.getItem("adminType");
+    setIsSalaryAdmin(adminType === "salary");
+  }, []);
 
   // Get unique months from reports
   const availableMonths = useMemo(() => {
@@ -117,18 +125,22 @@ export default function AdminDashboard() {
 
     if (sortConfig.key) {
       filtered.sort((a, b) => {
-        let aValue = a[sortConfig.key];
-        let bValue = b[sortConfig.key];
+        let aValue: any = a[sortConfig.key as keyof ReportWithDepartment];
+        let bValue: any = b[sortConfig.key as keyof ReportWithDepartment];
 
         if (sortConfig.key === "department") {
           aValue = a.department?.name || "";
           bValue = b.department?.name || "";
         }
 
-        if (aValue === null) return 1;
-        if (bValue === null) return -1;
+        if (aValue === null || aValue === undefined) return 1;
+        if (bValue === null || bValue === undefined) return -1;
 
-        const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+        // Convert to strings for safe comparison
+        const aString = String(aValue);
+        const bString = String(bValue);
+
+        const comparison = aString < bString ? -1 : aString > bString ? 1 : 0;
         return sortConfig.direction === "asc" ? comparison : -comparison;
       });
     }
@@ -137,6 +149,8 @@ export default function AdminDashboard() {
   }, [reports, searchTerm, statusFilter, monthFilter, sortConfig]);
 
   const handleLogout = () => {
+    // Clear admin data from localStorage
+    localStorage.removeItem("adminType");
     setLocation("/admin/login");
   };
 
@@ -152,220 +166,243 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold">Attendance Reports</h1>
-          <Badge variant="outline" className="text-lg">
-            <FileCheck className="h-4 w-4 mr-2" />
-            Salary Section
-          </Badge>
+    <div className="min-h-screen flex flex-col">
+      <AdminHeader />
+      <div className="p-6 flex-1">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold">Attendance Reports</h1>
+            <Badge variant="outline" className="text-lg">
+              <FileCheck className="h-4 w-4 mr-2" />
+              Salary Section
+            </Badge>
+          </div>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/admin/attendance-reports")}
+              className="flex items-center gap-2"
+            >
+              <FileCheck className="h-4 w-4" />
+              Detailed View
+            </Button>
+            {!isSalaryAdmin && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation("/admin/employees")}
+                  className="flex items-center gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  Manage Employees
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation("/admin/users")}
+                  className="flex items-center gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  User Management
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            onClick={() => setLocation("/admin/employees")}
-            className="flex items-center gap-2"
-          >
-            <Users className="h-4 w-4" />
-            Manage Employees
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            className="flex items-center gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
-        </div>
-      </div>
 
-      <div className="flex gap-4 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by department, receipt no. or transaction ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
+        <div className="flex gap-4 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by department, receipt no. or transaction ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <Select
+            value={monthFilter}
+            onValueChange={setMonthFilter}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filter by month" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Months</SelectItem>
+              {availableMonths.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={setStatusFilter}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select
-          value={monthFilter}
-          onValueChange={setMonthFilter}
-        >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filter by month" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Months</SelectItem>
-            {availableMonths.map(({ value, label }) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={statusFilter}
-          onValueChange={setStatusFilter}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="sent">Sent</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead 
-                className="cursor-pointer"
-                onClick={() => handleSort("receiptNo")}
-              >
-                Receipt No.
-                {sortConfig.key === "receiptNo" && (
-                  <span className="ml-2">
-                    {sortConfig.direction === "asc" ? "↑" : "↓"}
-                  </span>
-                )}
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer"
-                onClick={() => handleSort("receiptDate")}
-              >
-                Receipt Date
-                {sortConfig.key === "receiptDate" && (
-                  <span className="ml-2">
-                    {sortConfig.direction === "asc" ? "↑" : "↓"}
-                  </span>
-                )}
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer"
-                onClick={() => handleSort("month")}
-              >
-                Month
-                {sortConfig.key === "month" && (
-                  <span className="ml-2">
-                    {sortConfig.direction === "asc" ? "↑" : "↓"}
-                  </span>
-                )}
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer"
-                onClick={() => handleSort("department")}
-              >
-                Department
-                {sortConfig.key === "department" && (
-                  <span className="ml-2">
-                    {sortConfig.direction === "asc" ? "↑" : "↓"}
-                  </span>
-                )}
-              </TableHead>
-              <TableHead>Transaction ID</TableHead>
-              <TableHead>Despatch No.</TableHead>
-              <TableHead>Despatch Date</TableHead>
-              <TableHead 
-                className="cursor-pointer"
-                onClick={() => handleSort("status")}
-              >
-                Status
-                {sortConfig.key === "status" && (
-                  <span className="ml-2">
-                    {sortConfig.direction === "asc" ? "↑" : "↓"}
-                  </span>
-                )}
-              </TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredAndSortedReports.map((report) => (
-              <TableRow key={report.id}>
-                <TableCell>{report.receiptNo || "-"}</TableCell>
-                <TableCell>{formatDate(report.receiptDate)}</TableCell>
-                <TableCell>
-                  {new Date(report.year, report.month - 1).toLocaleDateString(
-                    "en-US",
-                    {
-                      year: "numeric",
-                      month: "long",
-                    }
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead 
+                  className="cursor-pointer"
+                  onClick={() => handleSort("receiptNo")}
+                >
+                  Receipt No.
+                  {sortConfig.key === "receiptNo" && (
+                    <span className="ml-2">
+                      {sortConfig.direction === "asc" ? "↑" : "↓"}
+                    </span>
                   )}
-                </TableCell>
-                <TableCell className="font-medium">
-                  {report.department?.name || "N/A"}
-                </TableCell>
-                <TableCell>
-                  {report.status === "draft"
-                    ? "*****"
-                    : report.transactionId || "Not generated"}
-                </TableCell>
-                <TableCell>{report.despatchNo || "-"}</TableCell>
-                <TableCell>{formatDate(report.despatchDate)}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={report.status === "submitted" ? "default" : "secondary"}
-                  >
-                    {report.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {report.fileUrl && (
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer"
+                  onClick={() => handleSort("receiptDate")}
+                >
+                  Receipt Date
+                  {sortConfig.key === "receiptDate" && (
+                    <span className="ml-2">
+                      {sortConfig.direction === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer"
+                  onClick={() => handleSort("month")}
+                >
+                  Month
+                  {sortConfig.key === "month" && (
+                    <span className="ml-2">
+                      {sortConfig.direction === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer"
+                  onClick={() => handleSort("department")}
+                >
+                  Department
+                  {sortConfig.key === "department" && (
+                    <span className="ml-2">
+                      {sortConfig.direction === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </TableHead>
+                <TableHead>Transaction ID</TableHead>
+                <TableHead>Despatch No.</TableHead>
+                <TableHead>Despatch Date</TableHead>
+                <TableHead 
+                  className="cursor-pointer"
+                  onClick={() => handleSort("status")}
+                >
+                  Status
+                  {sortConfig.key === "status" && (
+                    <span className="ml-2">
+                      {sortConfig.direction === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAndSortedReports.map((report) => (
+                <TableRow key={report.id}>
+                  <TableCell>{report.receiptNo || "-"}</TableCell>
+                  <TableCell>{formatDate(report.receiptDate)}</TableCell>
+                  <TableCell>
+                    {new Date(report.year, report.month - 1).toLocaleDateString(
+                      "en-US",
+                      {
+                        year: "numeric",
+                        month: "long",
+                      }
+                    )}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {report.department?.name || "N/A"}
+                  </TableCell>
+                  <TableCell>
+                    {report.status === "draft"
+                      ? "*****"
+                      : report.transactionId || "Not generated"}
+                  </TableCell>
+                  <TableCell>{report.despatchNo || "-"}</TableCell>
+                  <TableCell>{formatDate(report.despatchDate)}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={report.status === "submitted" ? "default" : "secondary"}
+                    >
+                      {report.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {report.fileUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedReport(report.id);
+                            setShowPdfPreview(true);
+                          }}
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          View PDF
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          setSelectedReport(report.id);
-                          setShowPdfPreview(true);
-                        }}
+                        onClick={() => setLocation(`/admin/reports/${report.id}`)}
                         className="flex items-center gap-2"
                       >
-                        <Download className="h-4 w-4" />
-                        View PDF
+                        <Eye className="h-4 w-4" />
+                        View Details
                       </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setLocation(`/admin/reports/${report.id}`)}
-                      className="flex items-center gap-2"
-                    >
-                      <Eye className="h-4 w-4" />
-                      View Details
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>View Report PDF</DialogTitle>
+              <DialogDescription>
+                Review the submitted report PDF.
+              </DialogDescription>
+            </DialogHeader>
+            {selectedReport &&
+              reports?.find((r) => r.id === selectedReport)?.fileUrl && (
+                <PdfPreview
+                  pdfUrl={reports.find((r) => r.id === selectedReport)!.fileUrl!}
+                />
+              )}
+          </DialogContent>
+        </Dialog>
       </div>
-      <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>View Report PDF</DialogTitle>
-            <DialogDescription>
-              Review the submitted report PDF.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedReport &&
-            reports?.find((r) => r.id === selectedReport)?.fileUrl && (
-              <PdfPreview
-                pdfUrl={reports.find((r) => r.id === selectedReport)!.fileUrl!}
-              />
-            )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

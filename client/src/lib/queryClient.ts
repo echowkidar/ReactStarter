@@ -11,11 +11,29 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  useJSON: boolean = true
 ): Promise<Response> {
+  const headers: Record<string, string> = {};
+  let body: BodyInit | null | undefined = undefined;
+
+  if (data) {
+    if (data instanceof FormData) {
+      // Don't set headers for FormData, browser will set it automatically
+      body = data;
+    } else if (useJSON) {
+      // JSON data
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(data);
+    } else {
+      // For other types of data
+      body = data as BodyInit;
+    }
+  }
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers,
+    body,
     credentials: "include",
   });
 

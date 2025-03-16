@@ -42,6 +42,8 @@ export interface IStorage {
   getDepartment(id: number): Promise<Department | undefined>;
   getDepartmentByEmail(email: string): Promise<Department | undefined>;
   createDepartment(department: InsertDepartment): Promise<Department>;
+  updateDepartment(id: number, updates: Partial<Department>): Promise<Department>;
+  deleteDepartment(id: number): Promise<void>;
   getAllDepartments(): Promise<Department[]>;
   // Employee operations
   getEmployee(id: number): Promise<Employee | undefined>;
@@ -93,9 +95,29 @@ export class MemStorage implements IStorage {
 
   async createDepartment(department: InsertDepartment): Promise<Department> {
     const id = this.currentId.department++;
-    const newDepartment = { ...department, id };
+    const newDepartment: Department = { id, ...department };
     this.departments.set(id, newDepartment);
     return newDepartment;
+  }
+
+  async updateDepartment(id: number, updates: Partial<Department>): Promise<Department> {
+    const department = await this.getDepartment(id);
+    if (!department) {
+      throw new Error(`Department with ID ${id} not found`);
+    }
+
+    const updatedDepartment = { ...department, ...updates };
+    this.departments.set(id, updatedDepartment);
+    return updatedDepartment;
+  }
+
+  async deleteDepartment(id: number): Promise<void> {
+    const department = await this.getDepartment(id);
+    if (department) {
+      // Remove from storage
+      this.departments.delete(id);
+      console.log(`Department ${id} deleted successfully`);
+    }
   }
 
   async getEmployee(id: number): Promise<Employee | undefined> {

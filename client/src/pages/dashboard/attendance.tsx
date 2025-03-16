@@ -25,6 +25,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
 import { Plus, Eye, Upload, Trash2, Loader2, FileCheck } from "lucide-react";
@@ -138,67 +139,81 @@ export default function Attendance() {
     reportId: number,
     despatchDetails?: DespatchDetails,
   ) => {
-    const formData = new FormData();
-    formData.append("file", file);
     try {
+      // Create form data
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      // Upload the file
       const response = await fetch(`/api/attendance/${reportId}/upload`, {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error("Upload failed");
+        // Try to safely parse the error response
+        try {
+          const errorData = await response.json();
+          console.error("Upload error:", errorData);
+          throw new Error(errorData.message || "Upload failed");
+        } catch (parseError) {
+          // If we can't parse JSON (e.g., got HTML), use text instead
+          const errorText = await response.text();
+          console.error("Upload error (non-JSON):", errorText);
+          throw new Error("Server error during upload");
+        }
       }
 
-      const data = await response.json();
+      // Safely handle the response - it might not be valid JSON
+      let data;
+      try {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          console.log("Non-JSON response:", text);
+          // Create fallback data if needed
+          data = { fileUrl: `/uploads/${file.name}` };
+        }
+      } catch (parseError) {
+        console.error("Error parsing response:", parseError);
+        // Create fallback data
+        data = { fileUrl: `/uploads/${file.name}` };
+      }
+
       setUploadedPdfUrl(data.fileUrl);
       setSelectedReport(reportId);
 
-      // Update status to "sent" after successful PDF upload along with receipt and despatch details
+      // Update status to "sent" after successful PDF upload along with despatch details
       const updateResponse = await apiRequest("PATCH", `/api/attendance/${reportId}`, {
         status: "sent",
         fileUrl: data.fileUrl,
         despatchNo: despatchDetails?.despatchNo,
-        despatchDate: despatchDetails?.despatchDate,
-        receiptDate: new Date().toISOString(),
+        despatchDate: despatchDetails?.despatchDate ? new Date(despatchDetails.despatchDate) : undefined,
+        receiptDate: new Date(),
       });
 
       if (!updateResponse.ok) {
         throw new Error("Failed to update report status");
       }
 
-      const updatedData = await updateResponse.json();
-
-      // Update local state with the new receipt number from the backend response
-      const updatedReports = reports?.map((report) =>
-        report.id === reportId
-          ? {
-              ...report,
-              fileUrl: data.fileUrl,
-              status: "sent",
-              despatchNo: despatchDetails?.despatchNo,
-              despatchDate: despatchDetails?.despatchDate,
-              receiptDate: new Date().toISOString(),
-              receiptNo: updatedData.receiptNo, // Use the receipt number from the response
-            }
-          : report,
-      );
-
-      queryClient.setQueryData(
-        [`/api/departments/${department?.id}/attendance`],
-        updatedReports,
-      );
-
+      // Update local state with the new data
+      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
       toast({
         title: "Success",
-        description: "File uploaded successfully",
+        description: "PDF uploaded successfully",
       });
+
+      return data;
     } catch (error) {
+      console.error("Error uploading PDF:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to upload file",
+        description: error instanceof Error ? error.message : "Failed to upload PDF",
       });
+      throw error;
     }
   };
 
@@ -230,29 +245,43 @@ export default function Attendance() {
     }
   };
 
-  const deleteReportMutation = useMutation({
+  const deleteAttendance = useMutation({
     mutationFn: async (reportId: number) => {
       await apiRequest("DELETE", `/api/attendance/${reportId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
-      toast({ title: "Success", description: "Report deleted successfully" });
+      toast({
+        title: "Success",
+        description: "Attendance report deleted",
+      });
     },
-    onError: (error: any) => {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete report" });
+    onError: () => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete attendance report",
+      });
     },
   });
 
-  const finalizeReportMutation = useMutation({
+  const changeStatus = useMutation({
     mutationFn: async (report: AttendanceReport) => {
       await apiRequest("PATCH", `/api/attendance/${report.id}`, { status: "submitted" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
-      toast({ title: "Success", description: "Report finalized successfully" });
+      toast({
+        title: "Success",
+        description: "Report submitted successfully",
+      });
     },
     onError: (error: any) => {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to finalize report" });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to submit report",
+      });
     },
   });
 
@@ -261,283 +290,322 @@ export default function Attendance() {
   return (
     <div className="flex min-h-screen">
       <Sidebar className="w-64 border-r" />
-      <main className="flex-1 p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Attendance Reports</h1>
-          <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Report
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl">
-              <DialogHeader>
-                <DialogTitle>Create Attendance Report</DialogTitle>
-              </DialogHeader>
-              <AttendanceForm
-                onSubmit={async (data) => {
-                  await createReport.mutateAsync(data);
-                }}
-                isLoading={createReport.isPending}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
+      <div className="flex-1 flex flex-col">
+        <Header />
+        <main className="flex-1 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Attendance Reports</h1>
+            <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
+              <DialogTrigger asChild>
+                <Button className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Report
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-7xl max-h-[85vh] overflow-hidden flex flex-col">
+                <DialogHeader className="flex-shrink-0">
+                  <DialogTitle className="text-xl font-semibold">Create Attendance Report</DialogTitle>
+                </DialogHeader>
+                <div className="overflow-y-auto flex-grow pr-1">
+                  <AttendanceForm
+                    onSubmit={async (data) => {
+                      try {
+                        await createReport.mutateAsync(data);
+                        setIsCreatingReport(false);
+                      } catch (error) {
+                        console.error("Failed to create report:", error);
+                      }
+                    }}
+                    isLoading={createReport.isPending}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
 
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Rec. No.</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Month</TableHead>
-                <TableHead>Transaction ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Despatch Details</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {reports?.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell>
-                    {report.receiptNo || "-"}
-                  </TableCell>
-                  <TableCell>
-                    {report.receiptDate ? formatDate(report.receiptDate) : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {formatPeriod(report.year, report.month)}
-                  </TableCell>
-                  <TableCell>
-                    {report.transactionId || "Not generated"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={getStatusColor(report.status)}
-                      className={report.status === "sent" ? "font-bold text-green-600" : ""}
-                    >
-                      {report.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {report.status === "sent" && report.despatchNo ? (
-                      <div className="text-sm">
-                        <p>
-                          <span className="font-medium">No:</span> {report.despatchNo}
-                        </p>
-                        <p>
-                          <span className="font-medium">Date:</span>{" "}
-                          {formatDate(report.despatchDate!)}
-                        </p>
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {report.status === "draft" && (
-                        <>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="destructive" size="sm">
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Delete Report</DialogTitle>
-                                <DialogDescription>
-                                  Are you sure you want to delete this
-                                  attendance report? This action cannot be
-                                  undone.
-                                </DialogDescription>
-                              </DialogHeader>
-                              <DialogFooter>
-                                <DialogClose asChild>
-                                  <Button variant="outline">Cancel</Button>
-                                </DialogClose>
-                                <Button
-                                  variant="destructive"
-                                  onClick={() => deleteReportMutation.mutate(report.id)}
-                                  disabled={deleteReportMutation.isLoading}
-                                >
-                                  {deleteReportMutation.isLoading ? (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rec. No.</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Transaction ID</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Despatch Details</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reports?.map((report) => (
+                  <TableRow key={report.id}>
+                    <TableCell>
+                      {report.receiptNo || "-"}
+                    </TableCell>
+                    <TableCell>
+                      {report.receiptDate ? formatDate(report.receiptDate) : "-"}
+                    </TableCell>
+                    <TableCell>
+                      {formatPeriod(report.year, report.month)}
+                    </TableCell>
+                    <TableCell>
+                      {report.transactionId || "Not generated"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={getStatusColor(report.status)}
+                        className={report.status === "sent" ? "font-bold text-green-600" : ""}
+                      >
+                        {report.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {report.status === "sent" && report.despatchNo ? (
+                        <div className="text-sm">
+                          <p>
+                            <span className="font-medium">No:</span> {report.despatchNo}
+                          </p>
+                          <p>
+                            <span className="font-medium">Date:</span>{" "}
+                            {formatDate(report.despatchDate!)}
+                          </p>
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {report.status === "draft" && (
+                          <>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Delete Report</DialogTitle>
+                                  <DialogDescription>
+                                    Are you sure you want to delete this
+                                    attendance report? This action cannot be
+                                    undone.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter>
+                                  <DialogClose asChild>
+                                    <Button variant="outline">Cancel</Button>
+                                  </DialogClose>
+                                  <Button
+                                    variant="destructive"
+                                    onClick={() => deleteAttendance.mutate(report.id)}
+                                    disabled={deleteAttendance.isPending}
+                                  >
+                                    {deleteAttendance.isPending ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Deleting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete
+                                      </>
+                                    )}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                            <Button
+                              size="sm"
+                              onClick={() => changeStatus.mutate(report)}
+                              disabled={changeStatus.isPending}
+                            >
+                              {changeStatus.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <FileCheck className="h-4 w-4 mr-2" />
+                              )}
+                              Finalize
+                            </Button>
+                          </>
+                        )}
+                        {report.status !== "draft" && (
+                          <>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  {report.fileUrl ? (
                                     <>
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      Deleting...
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      View PDF
                                     </>
                                   ) : (
-                                    "Delete Report"
+                                    <>
+                                      <Upload className="h-4 w-4 mr-2" />
+                                      Upload PDF
+                                    </>
                                   )}
                                 </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                          <Button
-                            size="sm"
-                            onClick={() => finalizeReportMutation.mutate(report)}
-                            disabled={finalizeReportMutation.isLoading}
-                          >
-                            {finalizeReportMutation.isLoading ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <FileCheck className="h-4 w-4 mr-2" />
-                            )}
-                            Finalize
-                          </Button>
-                        </>
-                      )}
-                      {report.status !== "draft" && (
-                        <>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm">
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>
+                                    {report.fileUrl ? "View PDF Report" : "Upload PDF Report"}
+                                  </DialogTitle>
+                                  <DialogDescription>
+                                    {report.fileUrl
+                                      ? "Review the uploaded PDF report"
+                                      : "Upload the signed PDF version of this attendance report and provide despatch details."}
+                                  </DialogDescription>
+                                </DialogHeader>
                                 {report.fileUrl ? (
                                   <>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View PDF
+                                    <div className="space-y-2">
+                                      <div className="text-sm text-muted-foreground">
+                                        <p>
+                                          <strong>Despatch No:</strong> {report.despatchNo}
+                                        </p>
+                                        <p>
+                                          <strong>Despatch Date:</strong>{" "}
+                                          {formatDate(report.despatchDate!)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="w-full h-[600px] border rounded-lg overflow-hidden">
+                                      <object
+                                        data={report.fileUrl}
+                                        type="application/pdf"
+                                        className="w-full h-full"
+                                      >
+                                        <p>
+                                          Unable to display PDF.{" "}
+                                          <a
+                                            href={report.fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            Click here to download
+                                          </a>
+                                        </p>
+                                      </object>
+                                    </div>
                                   </>
                                 ) : (
-                                  <>
-                                    <Upload className="h-4 w-4 mr-2" />
-                                    Upload PDF
-                                  </>
+                                  <form className="space-y-4">
+                                    <div className="grid gap-4">
+                                      <div className="space-y-2">
+                                        <label htmlFor="despatchNo" className="text-sm font-medium">
+                                          Despatch No
+                                        </label>
+                                        <Input
+                                          id="despatchNo"
+                                          placeholder="Enter despatch number"
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label htmlFor="despatchDate" className="text-sm font-medium">
+                                          Despatch Date
+                                        </label>
+                                        <Input id="despatchDate" type="date" />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label htmlFor="pdfFile" className="text-sm font-medium">
+                                          PDF File
+                                        </label>
+                                        <Input id="pdfFile" type="file" accept=".pdf" />
+                                      </div>
+                                    </div>
+                                    <DialogFooter>
+                                      <DialogClose asChild>
+                                        <Button variant="outline">Cancel</Button>
+                                      </DialogClose>
+                                      <Button
+                                        type="button"
+                                        onClick={async (e) => {
+                                          e.preventDefault();
+                                          const form = e.currentTarget.closest("form");
+                                          if (form) {
+                                            try {
+                                              const fileInput = form.querySelector("#pdfFile") as HTMLInputElement;
+                                              const despatchNoInput = form.querySelector("#despatchNo") as HTMLInputElement;
+                                              const despatchDateInput = form.querySelector("#despatchDate") as HTMLInputElement;
+                                              
+                                              const file = fileInput?.files?.[0];
+                                              const despatchNo = despatchNoInput?.value;
+                                              const despatchDate = despatchDateInput?.value;
+
+                                              if (!file || !despatchNo || !despatchDate) {
+                                                toast({
+                                                  variant: "destructive",
+                                                  title: "Error",
+                                                  description: "Please fill in all fields",
+                                                });
+                                                return;
+                                              }
+                                              
+                                              // Set button to loading state
+                                              const button = e.currentTarget;
+                                              const originalText = button.innerHTML;
+                                              button.innerHTML = '<span class="animate-spin mr-2">⏳</span> Uploading...';
+                                              button.disabled = true;
+                                              
+                                              try {
+                                                await handleUpload(file, report.id, {
+                                                  despatchNo,
+                                                  despatchDate,
+                                                });
+                                                
+                                                // Close the dialog after successful upload
+                                                const closeButton = document.querySelector("[data-dialog-close]");
+                                                if (closeButton instanceof HTMLButtonElement) {
+                                                  closeButton.click();
+                                                }
+                                              } catch (uploadError) {
+                                                console.error("Upload error:", uploadError);
+                                                // Reset button on error
+                                                button.innerHTML = originalText;
+                                                button.disabled = false;
+                                              }
+                                            } catch (error) {
+                                              console.error("Error in form submission:", error);
+                                              toast({
+                                                variant: "destructive",
+                                                title: "Error",
+                                                description: "An unexpected error occurred"
+                                              });
+                                            }
+                                          }
+                                        }}
+                                      >
+                                        <span>Submit</span>
+                                      </Button>
+                                    </DialogFooter>
+                                  </form>
                                 )}
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>
-                                  {report.fileUrl ? "View PDF Report" : "Upload PDF Report"}
-                                </DialogTitle>
-                                <DialogDescription>
-                                  {report.fileUrl
-                                    ? "Review the uploaded PDF report"
-                                    : "Upload the signed PDF version of this attendance report and provide despatch details."}
-                                </DialogDescription>
-                              </DialogHeader>
-                              {report.fileUrl ? (
-                                <>
-                                  <div className="space-y-2">
-                                    <div className="text-sm text-muted-foreground">
-                                      <p>
-                                        <strong>Despatch No:</strong> {report.despatchNo}
-                                      </p>
-                                      <p>
-                                        <strong>Despatch Date:</strong>{" "}
-                                        {formatDate(report.despatchDate!)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="w-full h-[600px] border rounded-lg overflow-hidden">
-                                    <object
-                                      data={report.fileUrl}
-                                      type="application/pdf"
-                                      className="w-full h-full"
-                                    >
-                                      <p>
-                                        Unable to display PDF.{" "}
-                                        <a
-                                          href={report.fileUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          Click here to download
-                                        </a>
-                                      </p>
-                                    </object>
-                                  </div>
-                                </>
-                              ) : (
-                                <form className="space-y-4">
-                                  <div className="grid gap-4">
-                                    <div className="space-y-2">
-                                      <label htmlFor="despatchNo" className="text-sm font-medium">
-                                        Despatch No
-                                      </label>
-                                      <Input
-                                        id="despatchNo"
-                                        placeholder="Enter despatch number"
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <label htmlFor="despatchDate" className="text-sm font-medium">
-                                        Despatch Date
-                                      </label>
-                                      <Input id="despatchDate" type="date" />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <label htmlFor="pdfFile" className="text-sm font-medium">
-                                        PDF File
-                                      </label>
-                                      <Input id="pdfFile" type="file" accept=".pdf" />
-                                    </div>
-                                  </div>
-                                  <DialogFooter>
-                                    <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
-                                    </DialogClose>
-                                    <Button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        const form = e.currentTarget.closest("form");
-                                        if (form) {
-                                          const file = (form.querySelector("#pdfFile") as HTMLInputElement)?.files?.[0];
-                                          const despatchNo = (form.querySelector("#despatchNo") as HTMLInputElement)?.value;
-                                          const despatchDate = (form.querySelector("#despatchDate") as HTMLInputElement)?.value;
-
-                                          if (!file || !despatchNo || !despatchDate) {
-                                            toast({
-                                              variant: "destructive",
-                                              title: "Error",
-                                              description: "Please fill in all fields",
-                                            });
-                                            return;
-                                          }
-
-                                          handleUpload(file, report.id, {
-                                            despatchNo,
-                                            despatchDate,
-                                          });
-
-                                          // Close the dialog after successful upload
-                                          const closeButton = document.querySelector("[data-dialog-close]");
-                                          if (closeButton instanceof HTMLButtonElement) {
-                                            closeButton.click();
-                                          }
-                                        }
-                                      }}
-                                    >
-                                      Submit
-                                    </Button>
-                                  </DialogFooter>
-                                </form>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
-                          >
-                            <Eye className="h-4 w-4" />
-                            View Details
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </main>
+                              </DialogContent>
+                            </Dialog>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
+                            >
+                              <Eye className="h-4 w-4" />
+                              View Details
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

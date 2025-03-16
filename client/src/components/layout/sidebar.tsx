@@ -40,6 +40,9 @@ export default function Sidebar({ className }: SidebarProps) {
         <h2 className="mb-2 px-4 text-lg font-semibold">
           {department?.name}
         </h2>
+        <p className="mb-4 px-4 text-sm text-gray-500">
+          {department?.email ? `User: ${department.email}` : ""}
+        </p>
         <div className="space-y-1">
           {navigation.map((item) => (
             <Link key={item.name} href={item.href}>

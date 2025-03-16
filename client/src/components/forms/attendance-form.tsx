@@ -30,14 +30,35 @@ const formatDateForDisplay = (date: Date): string => {
 
 // Utility function to convert DD-MM-YY to YYYY-MM-DD for input type="date"
 const formatDateForInput = (dateStr: string): string => {
-  const [day, month, year] = dateStr.split('-').map(Number);
-  return `20${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+  console.log("formatDateForInput input:", dateStr);
+  if (!dateStr || typeof dateStr !== 'string' || !dateStr.includes('-')) {
+    console.error("Invalid date string:", dateStr);
+    return "";
+  }
+  
+  try {
+    const [day, month, year] = dateStr.split('-').map(Number);
+    const result = `20${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    console.log("formatDateForInput output:", result);
+    return result;
+  } catch (error) {
+    console.error("Error formatting date for input:", error, dateStr);
+    return "";
+  }
 };
 
 // Utility function to convert YYYY-MM-DD to DD-MM-YY
 const formatDateFromInput = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return formatDateForDisplay(date);
+  console.log("formatDateFromInput input:", dateStr);
+  try {
+    const date = new Date(dateStr);
+    const result = formatDateForDisplay(date);
+    console.log("formatDateFromInput output:", result);
+    return result;
+  } catch (error) {
+    console.error("Error formatting date from input:", error, dateStr);
+    return "";
+  }
 };
 
 const calculateDays = (fromDate: string, toDate: string): number => {
@@ -154,7 +175,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   };
 
   const addPeriod = (employeeId: number) => {
-    const currentEntries = [...form.getValues("entries")] || [];
+    const currentEntries = form.getValues("entries") || [];
     const entryIndex = currentEntries.findIndex(entry => entry.employeeId === employeeId);
 
     if (entryIndex === -1) return;
@@ -301,16 +322,26 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           />
         </div>
 
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]">Include</TableHead>
-                <TableHead>EPID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Designation</TableHead>
-                <TableHead>Reg No.</TableHead>
-                <TableHead>Attendance Periods</TableHead>
+                <TableHead className="w-[80px]">EPID</TableHead>
+                <TableHead className="w-[120px]">Name</TableHead>
+                <TableHead className="w-[120px]">Designation</TableHead>
+                <TableHead className="w-[120px]">Employment Status</TableHead>
+                <TableHead className="w-[100px]">Reg No.</TableHead>
+                <TableHead className="min-w-[500px] px-0">
+                  <div className="text-left mb-2">Attendance Periods</div>
+                  <div className="grid grid-cols-11 gap-2 text-xs font-normal">
+                    <div className="col-span-3">From Date</div>
+                    <div className="col-span-3">To Date</div>
+                    <div className="col-span-1 text-center">Days</div>
+                    <div className="col-span-3">Remarks</div>
+                    <div className="col-span-1 text-center">Action</div>
+                  </div>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -323,89 +354,108 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                       disabled={isLoading}
                     />
                   </TableCell>
-                  <TableCell>{employee.employeeId}</TableCell>
-                  <TableCell>{employee.name}</TableCell>
-                  <TableCell>{employee.designation}</TableCell>
-                  <TableCell>{employee.salaryRegisterNo || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{employee.epid}</TableCell>
+                  <TableCell className="whitespace-nowrap">{employee.name}</TableCell>
+                  <TableCell className="whitespace-nowrap">{employee.designation}</TableCell>
+                  <TableCell className="whitespace-nowrap">{employee.employmentStatus || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{employee.salaryRegisterNo || '-'}</TableCell>
                   <TableCell>
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       {form.getValues("entries")
                         ?.find(entry => entry.employeeId === employee.id)
                         ?.periods?.map((period, periodIndex) => (
-                          <div key={periodIndex} className="flex items-center gap-2">
-                            <Input
-                              type="date"
-                              value={formatDateForInput(period.fromDate)}
-                              onChange={(e) => {
-                                const entries = form.getValues("entries");
-                                const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
-                                if (entryIndex !== -1) {
-                                  const newEntries = [...entries];
-                                  const newFromDate = formatDateFromInput(e.target.value);
-                                  newEntries[entryIndex].periods[periodIndex].fromDate = newFromDate;
-                                  newEntries[entryIndex].periods[periodIndex].days =
-                                    calculateDays(newFromDate, period.toDate);
-                                  form.setValue("entries", newEntries);
-                                }
-                              }}
-                              disabled={isLoading || !includedEmployees.has(employee.id)}
-                            />
-                            <Input
-                              type="date"
-                              value={formatDateForInput(period.toDate)}
-                              onChange={(e) => {
-                                const entries = form.getValues("entries");
-                                const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
-                                if (entryIndex !== -1) {
-                                  const newEntries = [...entries];
-                                  const newToDate = formatDateFromInput(e.target.value);
-                                  newEntries[entryIndex].periods[periodIndex].toDate = newToDate;
-                                  newEntries[entryIndex].periods[periodIndex].days =
-                                    calculateDays(period.fromDate, newToDate);
-                                  form.setValue("entries", newEntries);
-                                }
-                              }}
-                              disabled={isLoading || !includedEmployees.has(employee.id)}
-                            />
-                            <div className="w-20 text-center">
-                              {period.days} days
+                          <div key={periodIndex} className="border p-1.5 rounded-md bg-slate-50 dark:bg-slate-900">
+                            <div className="grid grid-cols-11 gap-2 items-center">
+                              <div className="col-span-3">
+                                <input
+                                  type="date"
+                                  className="w-full p-2 border rounded-md"
+                                  value={formatDateForInput(period.fromDate)}
+                                  onChange={(e) => {
+                                    const entries = form.getValues("entries");
+                                    const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                    if (entryIndex !== -1) {
+                                      const newEntries = [...entries];
+                                      const newFromDate = formatDateFromInput(e.target.value);
+                                      newEntries[entryIndex].periods[periodIndex].fromDate = newFromDate;
+                                      newEntries[entryIndex].periods[periodIndex].days =
+                                        calculateDays(newFromDate, period.toDate);
+                                      form.setValue("entries", newEntries);
+                                    }
+                                  }}
+                                  disabled={isLoading || !includedEmployees.has(employee.id)}
+                                />
+                              </div>
+
+                              <div className="col-span-3">
+                                <input
+                                  type="date"
+                                  className="w-full p-2 border rounded-md"
+                                  value={formatDateForInput(period.toDate)}
+                                  onChange={(e) => {
+                                    const entries = form.getValues("entries");
+                                    const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                    if (entryIndex !== -1) {
+                                      const newEntries = [...entries];
+                                      const newToDate = formatDateFromInput(e.target.value);
+                                      newEntries[entryIndex].periods[periodIndex].toDate = newToDate;
+                                      newEntries[entryIndex].periods[periodIndex].days =
+                                        calculateDays(period.fromDate, newToDate);
+                                      form.setValue("entries", newEntries);
+                                    }
+                                  }}
+                                  disabled={isLoading || !includedEmployees.has(employee.id)}
+                                />
+                              </div>
+
+                              <div className="col-span-1 text-center">
+                                <div className="p-2 bg-blue-50 dark:bg-blue-900/30 border rounded-md text-center">
+                                  {period.days}
+                                </div>
+                              </div>
+
+                              <div className="col-span-3">
+                                <input
+                                  type="text"
+                                  placeholder="Enter remarks"
+                                  className="w-full p-2 border rounded-md"
+                                  value={period.remarks}
+                                  onChange={(e) => {
+                                    const entries = form.getValues("entries");
+                                    const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                    if (entryIndex !== -1) {
+                                      const newEntries = [...entries];
+                                      newEntries[entryIndex].periods[periodIndex].remarks = e.target.value;
+                                      form.setValue("entries", newEntries);
+                                    }
+                                  }}
+                                  disabled={isLoading || !includedEmployees.has(employee.id)}
+                                />
+                              </div>
+
+                              <div className="col-span-1 flex justify-center">
+                                <button
+                                  type="button"
+                                  className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-md flex items-center justify-center h-10 w-10"
+                                  onClick={() => removePeriod(employee.id, periodIndex)}
+                                  disabled={isLoading || !includedEmployees.has(employee.id)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
                             </div>
-                            <Input
-                              placeholder="Remarks"
-                              value={period.remarks}
-                              onChange={(e) => {
-                                const entries = form.getValues("entries");
-                                const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
-                                if (entryIndex !== -1) {
-                                  const newEntries = [...entries];
-                                  newEntries[entryIndex].periods[periodIndex].remarks = e.target.value;
-                                  form.setValue("entries", newEntries);
-                                }
-                              }}
-                              disabled={isLoading || !includedEmployees.has(employee.id)}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removePeriod(employee.id, periodIndex)}
-                              disabled={isLoading || !includedEmployees.has(employee.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
                           </div>
                         ))}
                       {includedEmployees.has(employee.id) && (
-                        <Button
+                        <button
                           type="button"
-                          variant="outline"
-                          size="sm"
+                          className="w-full mt-1 h-10 border rounded-md bg-white hover:bg-gray-50 flex items-center justify-center"
                           onClick={() => addPeriod(employee.id)}
                           disabled={isLoading}
                         >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Period
-                        </Button>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add
+                        </button>
                       )}
                     </div>
                   </TableCell>
@@ -415,16 +465,20 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           </Table>
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading || includedEmployees.size === 0}>
+        <button
+          type="submit"
+          className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isLoading || includedEmployees.size === 0}
+        >
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
               Saving...
             </>
           ) : (
             "Create Report"
           )}
-        </Button>
+        </button>
       </form>
     </Form>
   );

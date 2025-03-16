@@ -12,7 +12,9 @@ import ReportDetails from "@/pages/dashboard/report-details";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminEmployees from "@/pages/admin/employees";
+import AdminUsers from "@/pages/admin/users";
 import AdminReportDetails from "@/pages/admin/report-details";
+import AttendanceReports from "@/pages/admin/attendance-reports";
 
 function Router() {
   return (
@@ -26,7 +28,9 @@ function Router() {
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/admin/employees" component={AdminEmployees} />
+      <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/reports/:id" component={AdminReportDetails} />
+      <Route path="/admin/attendance-reports" component={AttendanceReports} />
       <Route component={NotFound} />
     </Switch>
   );

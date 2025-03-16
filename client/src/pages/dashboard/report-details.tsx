@@ -16,10 +16,10 @@ interface ExtendedAttendanceEntry extends AttendanceEntry {
   employee?: Employee;
 }
 
-interface ExtendedAttendanceReport extends AttendanceReport {
+interface ExtendedAttendanceReport extends Omit<AttendanceReport, 'fileUrl'> {
   department?: Department;
   entries?: ExtendedAttendanceEntry[];
-  fileUrl?: string;
+  fileUrl?: string | null;
 }
 
 const PdfPreview = ({ pdfUrl }: { pdfUrl: string }) => {
@@ -103,16 +103,18 @@ export default function ReportDetails() {
     ];
 
     const attendanceData = [
-      ['Employee ID', 'Name', 'Designation', 'Period', 'Days', 'Remarks']
+      ['Employee ID', 'Name', 'Designation', 'Employment Status', 'Salary Register No', 'Period', 'Days', 'Remarks']
     ];
 
     report.entries?.forEach(entry => {
       const periods = typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods;
       periods.forEach((period: any) => {
         attendanceData.push([
-          entry.employee?.employeeId,
+          entry.employee?.epid,
           entry.employee?.name,
           entry.employee?.designation,
+          entry.employee?.employmentStatus || '-',
+          entry.employee?.salaryRegisterNo || '-',
           `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
           period.days,
           period.remarks || '-'
@@ -136,6 +138,8 @@ export default function ReportDetails() {
       { wch: 15 },
       { wch: 20 },
       { wch: 20 },
+      { wch: 20 },
+      { wch: 25 },
       { wch: 25 },
       { wch: 10 },
       { wch: 30 }
@@ -229,16 +233,18 @@ export default function ReportDetails() {
           <CardHeader>
             <CardTitle>Attendance Entries</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Days</TableHead>
-                  <TableHead>Remarks</TableHead>
+                  <TableHead className="whitespace-nowrap">Employee ID</TableHead>
+                  <TableHead className="whitespace-nowrap">Name</TableHead>
+                  <TableHead className="whitespace-nowrap">Designation</TableHead>
+                  <TableHead className="whitespace-nowrap">Employment Status</TableHead>
+                  <TableHead className="whitespace-nowrap">Salary Register No</TableHead>
+                  <TableHead className="whitespace-nowrap">Period</TableHead>
+                  <TableHead className="whitespace-nowrap">Days</TableHead>
+                  <TableHead className="whitespace-nowrap">Remarks</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -250,13 +256,15 @@ export default function ReportDetails() {
 
                     return periods.map((period: any, periodIndex: number) => (
                       <TableRow key={`${entry.id}-${periodIndex}`}>
-                        <TableCell>{entry.employee?.employeeId}</TableCell>
-                        <TableCell>{entry.employee?.name}</TableCell>
-                        <TableCell>{entry.employee?.designation}</TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.employee?.name}</TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.employee?.designation}</TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.employee?.employmentStatus || "-"}</TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                        <TableCell className="whitespace-nowrap">
                           {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
                         </TableCell>
-                        <TableCell>{period.days}</TableCell>
+                        <TableCell className="whitespace-nowrap">{period.days}</TableCell>
                         <TableCell>{period.remarks || "-"}</TableCell>
                       </TableRow>
                     ));
