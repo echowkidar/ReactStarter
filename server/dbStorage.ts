@@ -14,6 +14,54 @@ import type {
 } from "@shared/schema";
 
 export class DbStorage implements IStorage {
+  // Database connection check
+  async checkConnection(): Promise<boolean> {
+    try {
+      // Try a simple query to check if database is connected
+      await db.query.departments.findMany({ limit: 1 });
+      return true;
+    } catch (error) {
+      console.error("Database connection check failed:", error);
+      return false;
+    }
+  }
+  
+  // Authentication methods
+  async adminLogin(email: string, password: string): Promise<any> {
+    try {
+      // This is a simplified version - in a real app you'd verify password with bcrypt
+      // For demo purposes, check if this is the admin account (update with your actual admin email)
+      if (email === "admin@amu.ac.in" && password === "admin123") {
+        return { id: 1, email, role: "admin" };
+      }
+      return null;
+    } catch (error) {
+      console.error("Admin login error:", error);
+      return null;
+    }
+  }
+  
+  async departmentLogin(email: string, password: string): Promise<Department | null> {
+    try {
+      const department = await this.getDepartmentByEmail(email);
+      
+      if (!department) {
+        return null;
+      }
+      
+      // In a real app, you'd use bcrypt to compare the password
+      // This is simplified for demo purposes
+      if (department.password === password) {
+        return department;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Department login error:", error);
+      return null;
+    }
+  }
+
   // Department operations
   async getDepartment(id: number): Promise<Department | undefined> {
     return await db.query.departments.findFirst({
