@@ -37,7 +37,8 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
+// Separate init function to support both local server and serverless
+export async function initApp() {
   try {
     // Run database migrations
     await runMigrations();
@@ -61,14 +62,40 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
 
-    // ALWAYS serve the app on port 5001
-    // this serves both the API and the client
-    const PORT = 5001;
-    server.listen(PORT, "0.0.0.0", () => {
-      log(`serving on port ${PORT}`);
-    });
+    return { app, server };
   } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
+    console.error("Failed to initialize application:", error);
+    throw error;
   }
-})();
+}
+
+// Support for local development
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  (async () => {
+    try {
+      const { app, server } = await initApp();
+      // ALWAYS serve the app on port 5001
+      // this serves both the API and the client
+      const PORT = process.env.PORT || 5001;
+      server.listen(PORT, "0.0.0.0", () => {
+        log(`serving on port ${PORT}`);
+      });
+    } catch (error) {
+      console.error("Failed to start server:", error);
+      process.exit(1);
+    }
+  })();
+}
+
+// Export for Vercel serverless function
+export default async function handler(req: Request, res: Response) {
+  await initApp();
+  return new Promise((resolve, reject) => {
+    app(req, res, (result) => {
+      if (result instanceof Error) {
+        return reject(result);
+      }
+      return resolve(result);
+    });
+  });
+}
