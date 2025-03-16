@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { testDbConnection } from "./db";
 import { departments, employees, attendanceReports, attendanceEntries } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import type { IStorage } from "./storage";
@@ -17,9 +18,9 @@ export class DbStorage implements IStorage {
   // Database connection check
   async checkConnection(): Promise<boolean> {
     try {
-      // Try a simple query to check if database is connected
-      await db.query.departments.findMany({ limit: 1 });
-      return true;
+      // Use the improved test function
+      const result = await testDbConnection();
+      return result;
     } catch (error) {
       console.error("Database connection check failed:", error);
       return false;

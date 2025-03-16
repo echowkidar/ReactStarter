@@ -22,8 +22,8 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'API is working' });
 });
 
-// Admin login endpoint
-app.post('/api/admin/login', async (req, res) => {
+// FIXED: Admin login endpoint - match client expected path
+app.post('/api/auth/admin/login', async (req, res) => {
   try {
     console.log('Admin login attempt:', req.body.email);
     const { email, password } = req.body;
@@ -46,8 +46,32 @@ app.post('/api/admin/login', async (req, res) => {
   }
 });
 
-// Department login endpoint
-app.post('/api/login', async (req, res) => {
+// Alias for backward compatibility
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    console.log('Admin login attempt (via legacy endpoint):', req.body.email);
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    const admin = await db.adminLogin(email, password);
+    if (admin) {
+      console.log('Admin login successful:', email);
+      res.json({ success: true, admin });
+    } else {
+      console.log('Admin login failed:', email);
+      res.status(401).json({ error: 'Invalid admin credentials' });
+    }
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// FIXED: Department login endpoint - match client expected path
+app.post('/api/auth/login', async (req, res) => {
   try {
     console.log('Department login attempt:', req.body.email);
     const { email, password } = req.body;
@@ -67,6 +91,46 @@ app.post('/api/login', async (req, res) => {
   } catch (error) {
     console.error('Department login error:', error);
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// Alias for backward compatibility
+app.post('/api/login', async (req, res) => {
+  try {
+    console.log('Department login attempt (via legacy endpoint):', req.body.email);
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    const department = await db.departmentLogin(email, password);
+    if (department) {
+      console.log('Department login successful:', email);
+      res.json({ success: true, department });
+    } else {
+      console.log('Department login failed:', email);
+      res.status(401).json({ error: 'Invalid department credentials' });
+    }
+  } catch (error) {
+    console.error('Department login error:', error);
+    res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// Added register endpoint
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    console.log('Registration attempt:', req.body.email);
+    // For demo, just return a success message
+    // In a real app, you would create a new user
+    res.json({ 
+      success: true, 
+      message: 'Registration endpoint reached. This is a demo endpoint that would normally create a new user.' 
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Server error during registration' });
   }
 });
 
