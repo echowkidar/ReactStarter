@@ -107,6 +107,178 @@ async function testDbConnection(forceNew = false) {
   }
 }
 
+// Create a database utility function that matches DbStorage
+const dbUtil = {
+  async getUser(userId) {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      return null;
+    } finally {
+      await pool.end();
+    }
+  },
+
+  async getUserByEmail(email) {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error fetching user by email:', error);
+      return null;
+    } finally {
+      await pool.end();
+    }
+  },
+
+  async getUsers() {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      const result = await pool.query(`
+        SELECT * FROM users
+        ORDER BY id ASC
+      `);
+      return result.rows;
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      return [];
+    } finally {
+      await pool.end();
+    }
+  },
+  
+  async getDepartments() {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      const result = await pool.query(`
+        SELECT id, name, hod_name as "hodName", hod_title as "hodTitle", email 
+        FROM departments
+        ORDER BY id ASC
+      `);
+      return result.rows;
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+      return [];
+    } finally {
+      await pool.end();
+    }
+  },
+
+  async getDepartment(id) {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      const result = await pool.query(`
+        SELECT id, name, hod_name as "hodName", hod_title as "hodTitle", email 
+        FROM departments
+        WHERE id = $1
+      `, [id]);
+      return result.rows[0];
+    } catch (error) {
+      console.error(`Error fetching department ${id}:`, error);
+      return null;
+    } finally {
+      await pool.end();
+    }
+  },
+
+  async getEmployees(departmentId = null) {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      let query = `
+        SELECT e.*, d.name as "departmentName"
+        FROM employees e
+        JOIN departments d ON e.department_id = d.id
+      `;
+      
+      const params = [];
+      if (departmentId) {
+        query += ' WHERE e.department_id = $1';
+        params.push(departmentId);
+      }
+      
+      query += ' ORDER BY e.id ASC';
+      
+      const result = await pool.query(query, params);
+      
+      // Transform the result to match the schema format
+      return result.rows.map(row => ({
+        id: row.id,
+        departmentId: row.department_id,
+        departmentName: row.departmentName,
+        epid: row.epid,
+        name: row.name,
+        panNumber: row.pan_number,
+        bankAccount: row.bank_account,
+        aadharCard: row.aadhar_card,
+        designation: row.designation,
+        employmentStatus: row.employment_status,
+        termExpiry: row.term_expiry,
+        joiningDate: row.joining_date,
+        salaryRegisterNo: row.salary_register_no,
+        officeMemoNo: row.office_memo_no,
+        joiningShift: row.joining_shift,
+        panCardUrl: row.pan_card_url,
+        bankProofUrl: row.bank_proof_url,
+        aadharCardUrl: row.aadhar_card_url,
+        officeMemoUrl: row.office_memo_url,
+        joiningReportUrl: row.joining_report_url
+      }));
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      return [];
+    } finally {
+      await pool.end();
+    }
+  },
+
+  async getAttendanceReports(departmentId = null) {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      let query = `
+        SELECT ar.*, d.name as "departmentName"
+        FROM attendance_reports ar
+        JOIN departments d ON ar.department_id = d.id
+      `;
+      
+      const params = [];
+      if (departmentId) {
+        query += ' WHERE ar.department_id = $1';
+        params.push(departmentId);
+      }
+      
+      query += ' ORDER BY ar.year DESC, ar.month DESC';
+      
+      const result = await pool.query(query, params);
+      
+      // Transform the result to match the schema format
+      return result.rows.map(row => ({
+        id: row.id,
+        departmentId: row.department_id,
+        departmentName: row.departmentName,
+        month: row.month,
+        year: row.year,
+        receiptNo: row.receipt_no,
+        receiptDate: row.receipt_date,
+        transactionId: row.transaction_id,
+        despatchNo: row.despatch_no,
+        despatchDate: row.despatch_date,
+        status: row.status,
+        fileUrl: row.file_url,
+        createdAt: row.created_at
+      }));
+    } catch (error) {
+      console.error('Error fetching attendance reports:', error);
+      return [];
+    } finally {
+      await pool.end();
+    }
+  }
+};
+
 // Run a test connection on startup
 testDbConnection().then(result => {
   console.log('Initial database connection test result:', result);
@@ -148,7 +320,7 @@ app.post('/api/auth/admin/login', async (req, res) => {
       console.log('Admin login successful:', email);
       res.json({ 
         success: true, 
-        admin: { id: 1, email, role: "admin" } 
+        admin: { id: 1, name: "Super Administrator", email, role: "Super Admin" } 
       });
     } else {
       console.log('Admin login failed:', email);
@@ -170,7 +342,36 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     
-    // Implement real login logic here - for now return demo success
+    if (dbConnectionStatus.connected) {
+      try {
+        // Try to fetch the department from the database
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+        const result = await pool.query('SELECT * FROM departments WHERE email = $1', [email]);
+        await pool.end();
+        
+        const department = result.rows[0];
+        
+        if (department && department.password === password) {
+          console.log('Department login successful:', email);
+          // Transform to match expected format
+          res.json({ 
+            success: true, 
+            department: { 
+              id: department.id, 
+              name: department.name, 
+              email: department.email,
+              hodName: department.hod_name,
+              hodTitle: department.hod_title
+            } 
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('Error during department login database query:', error);
+      }
+    }
+    
+    // Fallback to demo data if database query failed or no match
     console.log('Demo department login successful');
     res.json({ 
       success: true, 
@@ -191,70 +392,60 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     console.log('Department registration attempt:', req.body);
     
-    // In a real app, you would validate and save to database
-    // For demo, just echo back with success message and generated ID
+    if (dbConnectionStatus.connected) {
+      try {
+        // Try to insert the department into the database
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+        
+        // Check if email already exists
+        const checkResult = await pool.query('SELECT id FROM departments WHERE email = $1', [req.body.email]);
+        if (checkResult.rows.length > 0) {
+          await pool.end();
+          return res.status(400).json({ 
+            success: false,
+            error: 'Email already exists' 
+          });
+        }
+        
+        // Insert new department
+        const result = await pool.query(`
+          INSERT INTO departments (name, hod_name, hod_title, email, password)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING id, name, hod_name as "hodName", hod_title as "hodTitle", email
+        `, [req.body.name, req.body.hodName, req.body.hodTitle || 'Head', req.body.email, req.body.password]);
+        
+        await pool.end();
+        
+        const newDepartment = result.rows[0];
+        
+        console.log('Registered new department from database:', newDepartment);
+        res.json({ 
+          success: true, 
+          department: newDepartment,
+          message: 'Department registered successfully.'
+        });
+        return;
+      } catch (error) {
+        console.error('Error registering department in database:', error);
+      }
+    }
+    
+    // Fallback to mock data if database insertion failed
     const newDepartment = {
       id: Math.floor(Math.random() * 1000) + 10, // Random ID
       ...req.body,
       createdAt: new Date().toISOString()
     };
     
-    console.log('Registered new department:', newDepartment);
+    console.log('Registered new department (mock):', newDepartment);
     res.json({ 
       success: true, 
       department: newDepartment,
-      message: 'Department registered successfully.'
+      message: 'Department registered successfully (mock data).'
     });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Server error during registration' });
-  }
-});
-
-// Departments endpoint
-app.get('/api/departments', async (req, res) => {
-  try {
-    console.log('Fetching departments...');
-    
-    // Check if database is connected
-    if (dbConnectionStatus.connected) {
-      try {
-        console.log('Attempting to fetch departments from database');
-        const { Pool } = pg;
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-        
-        // For real database query, this would be your actual query
-        const result = await pool.query(`
-          SELECT id, name, email FROM departments
-          ORDER BY id ASC
-        `).catch(err => {
-          console.error('Database query error:', err.message);
-          throw err;
-        });
-        
-        console.log(`Database returned ${result.rowCount} departments`);
-        
-        await pool.end();
-        
-        // Return the database results
-        return res.json(result.rows);
-      } catch (dbError) {
-        console.error('Error fetching departments from database, falling back to mock data:', dbError.message);
-        // If database query fails, fall back to mock data
-      }
-    } else {
-      console.log('Database not connected, using mock department data');
-    }
-    
-    // Return some mock data if database isn't connected or query failed
-    res.json([
-      { id: 1, name: "Computer Science", email: "cs@amu.ac.in" },
-      { id: 2, name: "Electronics", email: "electronics@amu.ac.in" },
-      { id: 3, name: "Mechanical", email: "mechanical@amu.ac.in" }
-    ]);
-  } catch (error) {
-    console.error('Failed to fetch departments:', error);
-    res.status(500).json({ error: 'Failed to fetch departments', details: error.message });
   }
 });
 
@@ -267,14 +458,11 @@ app.get('/api/admin/users', async (req, res) => {
     if (dbConnectionStatus.connected) {
       try {
         console.log('Attempting to fetch users from database');
-        const { Pool } = pg;
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
         
         // For real database query, this would be your actual query
-        // This is just an example - modify according to your schema
         const result = await pool.query(`
           SELECT id, name, email, role FROM users
-          WHERE role IN ('admin', 'manager', 'super_admin')
           ORDER BY id ASC
         `).catch(err => {
           console.error('Database query error:', err.message);
@@ -285,8 +473,10 @@ app.get('/api/admin/users', async (req, res) => {
         
         await pool.end();
         
-        // Return the database results
-        return res.json(result.rows);
+        if (result.rows.length > 0) {
+          // Return the database results
+          return res.json(result.rows);
+        }
       } catch (dbError) {
         console.error('Error fetching from database, falling back to mock data:', dbError.message);
         // If database query fails, fall back to mock data
@@ -296,8 +486,9 @@ app.get('/api/admin/users', async (req, res) => {
     // Return mock data if database isn't connected or query failed
     console.log('Using mock user data');
     res.json([
-      { id: 1, name: "Admin User", email: "admin@amu.ac.in", role: "admin" },
-      { id: 2, name: "Department Manager", email: "dept@amu.ac.in", role: "manager" }
+      { id: 1, name: "Super Administrator", email: "admin@amu.ac.in", role: "Super Admin" },
+      { id: 2, name: "Salary Officer", email: "salary@amu.ac.in", role: "Salary Admin" },
+      { id: 3, name: "Department Manager", email: "dept@amu.ac.in", role: "Department Admin" }
     ]);
   } catch (error) {
     console.error('Failed to fetch admin users:', error);
@@ -310,6 +501,39 @@ app.post('/api/admin/users', async (req, res) => {
   try {
     console.log('Creating admin user:', req.body);
     
+    if (dbConnectionStatus.connected) {
+      try {
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+        
+        // Check if email already exists
+        const checkResult = await pool.query('SELECT id FROM users WHERE email = $1', [req.body.email]);
+        if (checkResult.rows.length > 0) {
+          await pool.end();
+          return res.status(400).json({ 
+            success: false,
+            error: 'Email already exists' 
+          });
+        }
+        
+        // Insert new user
+        const result = await pool.query(`
+          INSERT INTO users (name, email, password, role)
+          VALUES ($1, $2, $3, $4)
+          RETURNING id, name, email, role
+        `, [req.body.name, req.body.email, req.body.password, req.body.role]);
+        
+        await pool.end();
+        
+        const newUser = result.rows[0];
+        console.log('Created new user from database:', newUser);
+        
+        res.status(201).json(newUser);
+        return;
+      } catch (dbError) {
+        console.error('Error creating user in database:', dbError);
+      }
+    }
+    
     // In a real app, you'd validate and save to database
     // For demo, just echo back the data with a generated ID
     const newUser = {
@@ -318,7 +542,7 @@ app.post('/api/admin/users', async (req, res) => {
       createdAt: new Date().toISOString()
     };
     
-    console.log('Created new user:', newUser);
+    console.log('Created new user (mock):', newUser);
     res.status(201).json(newUser);
   } catch (error) {
     console.error('Failed to create admin user:', error);
@@ -330,7 +554,21 @@ app.post('/api/admin/users', async (req, res) => {
 app.get('/api/admin/employees', async (req, res) => {
   try {
     console.log('Fetching all employees (admin)...');
-    // Return some mock employees data
+    
+    if (dbConnectionStatus.connected) {
+      try {
+        const employees = await dbUtil.getEmployees();
+        if (employees.length > 0) {
+          console.log(`Found ${employees.length} employees in database`);
+          return res.json(employees);
+        }
+      } catch (error) {
+        console.error('Error fetching employees from database:', error);
+      }
+    }
+    
+    // Return mock employees data if database query failed
+    console.log('Using mock employee data');
     res.json([
       { 
         id: 1, 
@@ -370,13 +608,27 @@ app.get('/api/admin/employees', async (req, res) => {
 app.get('/api/admin/attendance', async (req, res) => {
   try {
     console.log('Fetching admin attendance reports...');
-    // Return some mock attendance data
+    
+    if (dbConnectionStatus.connected) {
+      try {
+        const reports = await dbUtil.getAttendanceReports();
+        if (reports.length > 0) {
+          console.log(`Found ${reports.length} attendance reports in database`);
+          return res.json(reports);
+        }
+      } catch (error) {
+        console.error('Error fetching attendance reports from database:', error);
+      }
+    }
+    
+    // Return mock attendance data if database query failed
+    console.log('Using mock attendance data');
     res.json([
       { 
         id: 1, 
         departmentId: 1, 
         departmentName: "Computer Science",
-        month: "March", 
+        month: 3, 
         year: 2024, 
         status: "Submitted",
         submittedOn: "2024-03-15T10:30:00Z"
@@ -385,7 +637,7 @@ app.get('/api/admin/attendance', async (req, res) => {
         id: 2, 
         departmentId: 2, 
         departmentName: "Electronics",
-        month: "February", 
+        month: 2, 
         year: 2024, 
         status: "Approved",
         submittedOn: "2024-02-28T14:15:00Z"
@@ -397,17 +649,60 @@ app.get('/api/admin/attendance', async (req, res) => {
   }
 });
 
+// Departments endpoint
+app.get('/api/departments', async (req, res) => {
+  try {
+    console.log('Fetching departments...');
+    
+    // Check if database is connected
+    if (dbConnectionStatus.connected) {
+      try {
+        const departments = await dbUtil.getDepartments();
+        if (departments.length > 0) {
+          console.log(`Found ${departments.length} departments in database`);
+          return res.json(departments);
+        }
+      } catch (dbError) {
+        console.error('Error fetching departments from database, falling back to mock data:', dbError.message);
+      }
+    } else {
+      console.log('Database not connected, using mock department data');
+    }
+    
+    // Return some mock data if database isn't connected or query failed
+    res.json([
+      { id: 1, name: "Computer Science", email: "cs@amu.ac.in" },
+      { id: 2, name: "Electronics", email: "electronics@amu.ac.in" },
+      { id: 3, name: "Mechanical", email: "mechanical@amu.ac.in" }
+    ]);
+  } catch (error) {
+    console.error('Failed to fetch departments:', error);
+    res.status(500).json({ error: 'Failed to fetch departments', details: error.message });
+  }
+});
+
 // Department employees endpoint
 app.get('/api/departments/:departmentId/employees', async (req, res) => {
   try {
     const departmentId = req.params.departmentId;
     console.log(`Fetching employees for department ${departmentId}...`);
     
-    // Return some mock employee data
+    // Handle "undefined" departmentId
     if (departmentId === "undefined") {
       return res.json([]);
     }
     
+    if (dbConnectionStatus.connected && departmentId !== "undefined") {
+      try {
+        const employees = await dbUtil.getEmployees(departmentId);
+        console.log(`Found ${employees.length} employees for department ${departmentId} in database`);
+        return res.json(employees);
+      } catch (error) {
+        console.error(`Error fetching employees for department ${departmentId} from database:`, error);
+      }
+    }
+    
+    // Return some mock employee data
     res.json([
       { 
         id: 1, 
@@ -438,23 +733,34 @@ app.get('/api/departments/:departmentId/attendance', async (req, res) => {
     const departmentId = req.params.departmentId;
     console.log(`Fetching attendance for department ${departmentId}...`);
     
-    // Return some mock attendance data
+    // Handle "undefined" departmentId
     if (departmentId === "undefined") {
       return res.json([]);
     }
     
+    if (dbConnectionStatus.connected && departmentId !== "undefined") {
+      try {
+        const reports = await dbUtil.getAttendanceReports(departmentId);
+        console.log(`Found ${reports.length} attendance reports for department ${departmentId} in database`);
+        return res.json(reports);
+      } catch (error) {
+        console.error(`Error fetching attendance for department ${departmentId} from database:`, error);
+      }
+    }
+    
+    // Return some mock attendance data
     res.json([
       { 
         id: 1, 
         departmentId: parseInt(departmentId),
-        month: "March", 
+        month: 3, 
         year: 2024, 
         status: "Draft"
       },
       { 
         id: 2, 
         departmentId: parseInt(departmentId),
-        month: "February", 
+        month: 2, 
         year: 2024, 
         status: "Submitted"
       }
@@ -465,9 +771,35 @@ app.get('/api/departments/:departmentId/attendance', async (req, res) => {
   }
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+// Original db-check endpoint for backward compatibility
+app.get('/api/db-check', async (req, res) => {
+  try {
+    console.log('Basic database connection check');
+    const result = await testDbConnection(req.query.force === 'true');
+    if (result) {
+      res.json({ 
+        connected: true, 
+        message: 'Database connection successful',
+        dbUrl: dbConnectionStatus.host || 'unknown',
+        lastChecked: dbConnectionStatus.lastChecked,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
+    } else {
+      res.status(503).json({ 
+        connected: false, 
+        message: 'Database connection failed', 
+        error: dbConnectionStatus.error,
+        lastChecked: dbConnectionStatus.lastChecked
+      });
+    }
+  } catch (error) {
+    console.error('Database connection error:', error);
+    res.status(500).json({ 
+      connected: false, 
+      message: 'Database connection error', 
+      error: error.message 
+    });
+  }
 });
 
 // Enhanced database connection check endpoint
@@ -507,37 +839,6 @@ app.get('/api/db-status', async (req, res) => {
   }
 });
 
-// Original db-check endpoint for backward compatibility
-app.get('/api/db-check', async (req, res) => {
-  try {
-    console.log('Basic database connection check');
-    const result = await testDbConnection(req.query.force === 'true');
-    if (result) {
-      res.json({ 
-        connected: true, 
-        message: 'Database connection successful',
-        dbUrl: dbConnectionStatus.host || 'unknown',
-        lastChecked: dbConnectionStatus.lastChecked,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      });
-    } else {
-      res.status(503).json({ 
-        connected: false, 
-        message: 'Database connection failed', 
-        error: dbConnectionStatus.error,
-        lastChecked: dbConnectionStatus.lastChecked
-      });
-    }
-  } catch (error) {
-    console.error('Database connection error:', error);
-    res.status(500).json({ 
-      connected: false, 
-      message: 'Database connection error', 
-      error: error.message 
-    });
-  }
-});
-
 // Echo environment variables (sanitized) for debugging
 app.get('/api/env-check', (req, res) => {
   res.json({
@@ -545,6 +846,11 @@ app.get('/api/env-check', (req, res) => {
     vercel: process.env.VERCEL ? 'true' : 'false',
     hasDbUrl: process.env.DATABASE_URL ? 'true' : 'false'
   });
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
 // Request echo endpoint for debugging
