@@ -8,37 +8,124 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Debugging middleware
-app.use((req, res, next) => {
-  console.log(`API Request: ${req.method} ${req.url}`);
-  next();
-});
+// Global variable to track connection status
+let dbConnectionStatus = {
+  connected: false,
+  lastChecked: null,
+  error: null,
+  host: null
+};
 
-// Simple database check
-async function testDbConnection() {
+// Enhanced database connection check
+async function testDbConnection(forceNew = false) {
+  // If we already checked recently and not forcing a new check, return cached result
+  const now = Date.now();
+  if (!forceNew && dbConnectionStatus.lastChecked && (now - dbConnectionStatus.lastChecked < 60000)) {
+    console.log('Using cached DB connection status:', dbConnectionStatus);
+    return dbConnectionStatus.connected;
+  }
+
+  console.log('Testing database connection...');
+  console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+  
+  if (!process.env.DATABASE_URL) {
+    dbConnectionStatus = {
+      connected: false,
+      lastChecked: now,
+      error: 'DATABASE_URL environment variable is not set',
+      host: 'unknown'
+    };
+    console.error('DATABASE_URL is not set');
+    return false;
+  }
+  
+  // Log partial connection string for debugging (hide credentials)
+  try {
+    const connectionParts = process.env.DATABASE_URL.split('@');
+    const hostInfo = connectionParts[1]?.split('/')[0] || 'unknown';
+    console.log('Attempting to connect to database host:', hostInfo);
+    dbConnectionStatus.host = hostInfo;
+  } catch (error) {
+    console.error('Error parsing DATABASE_URL:', error);
+  }
+
   const { Pool } = pg;
   const pool = new Pool({ 
     connectionString: process.env.DATABASE_URL,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000, // 10 seconds
     min: 0,
-    max: 10,
-    idleTimeoutMillis: 30000
+    max: 5,
+    idleTimeoutMillis: 30000 // 30 seconds
   });
   
   let client;
   try {
+    console.log('Acquiring client from pool...');
     client = await pool.connect();
-    await client.query('SELECT 1');
-    console.log('Database connection successful');
+    console.log('Client acquired, running test query...');
+    const result = await client.query('SELECT current_timestamp as time, current_database() as database');
+    console.log('Database connection successful:', result.rows[0]);
+    
+    // Try to query a real table to validate schema
+    try {
+      console.log('Testing schema by querying departments table...');
+      const deptResult = await client.query('SELECT COUNT(*) FROM departments');
+      console.log('Department count:', deptResult.rows[0].count);
+    } catch (schemaError) {
+      console.log('Schema test error (expected if tables don\'t exist yet):', schemaError.message);
+    }
+    
+    dbConnectionStatus = {
+      connected: true,
+      lastChecked: now,
+      error: null,
+      host: dbConnectionStatus.host,
+      database: result.rows[0]?.database,
+      timestamp: result.rows[0]?.time
+    };
     return true;
   } catch (error) {
-    console.error('Database connection test failed:', error);
+    console.error('Database connection test failed:', error.message);
+    dbConnectionStatus = {
+      connected: false,
+      lastChecked: now,
+      error: error.message,
+      host: dbConnectionStatus.host
+    };
     return false;
   } finally {
-    if (client) client.release();
-    await pool.end();
+    if (client) {
+      console.log('Releasing database client...');
+      client.release();
+    }
+    try {
+      console.log('Ending pool...');
+      await pool.end();
+    } catch (endError) {
+      console.error('Error ending pool:', endError.message);
+    }
   }
 }
+
+// Run a test connection on startup
+testDbConnection().then(result => {
+  console.log('Initial database connection test result:', result);
+});
+
+// Debugging middleware with more context
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] API Request: ${req.method} ${req.url}`);
+  console.log('Request headers:', JSON.stringify(req.headers));
+  if (req.method !== 'GET') {
+    console.log('Request body:', JSON.stringify(req.body));
+  }
+  
+  // Add DB status to response headers for debugging
+  res.setHeader('X-DB-Connected', dbConnectionStatus.connected ? 'true' : 'false');
+  res.setHeader('X-DB-Last-Checked', dbConnectionStatus.lastChecked || 'never');
+  
+  next();
+});
 
 // API endpoints
 app.get('/api/test', (req, res) => {
@@ -128,7 +215,38 @@ app.post('/api/auth/register', async (req, res) => {
 app.get('/api/departments', async (req, res) => {
   try {
     console.log('Fetching departments...');
-    // Return some demo data
+    
+    // Check if database is connected
+    if (dbConnectionStatus.connected) {
+      try {
+        console.log('Attempting to fetch departments from database');
+        const { Pool } = pg;
+        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        
+        // For real database query, this would be your actual query
+        const result = await pool.query(`
+          SELECT id, name, email FROM departments
+          ORDER BY id ASC
+        `).catch(err => {
+          console.error('Database query error:', err.message);
+          throw err;
+        });
+        
+        console.log(`Database returned ${result.rowCount} departments`);
+        
+        await pool.end();
+        
+        // Return the database results
+        return res.json(result.rows);
+      } catch (dbError) {
+        console.error('Error fetching departments from database, falling back to mock data:', dbError.message);
+        // If database query fails, fall back to mock data
+      }
+    } else {
+      console.log('Database not connected, using mock department data');
+    }
+    
+    // Return some mock data if database isn't connected or query failed
     res.json([
       { id: 1, name: "Computer Science", email: "cs@amu.ac.in" },
       { id: 2, name: "Electronics", email: "electronics@amu.ac.in" },
@@ -136,7 +254,7 @@ app.get('/api/departments', async (req, res) => {
     ]);
   } catch (error) {
     console.error('Failed to fetch departments:', error);
-    res.status(500).json({ error: 'Failed to fetch departments' });
+    res.status(500).json({ error: 'Failed to fetch departments', details: error.message });
   }
 });
 
@@ -144,14 +262,46 @@ app.get('/api/departments', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
   try {
     console.log('Fetching admin users...');
-    // Return some mock users data
+    
+    // Check if database is connected
+    if (dbConnectionStatus.connected) {
+      try {
+        console.log('Attempting to fetch users from database');
+        const { Pool } = pg;
+        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        
+        // For real database query, this would be your actual query
+        // This is just an example - modify according to your schema
+        const result = await pool.query(`
+          SELECT id, name, email, role FROM users
+          WHERE role IN ('admin', 'manager', 'super_admin')
+          ORDER BY id ASC
+        `).catch(err => {
+          console.error('Database query error:', err.message);
+          throw err;
+        });
+        
+        console.log(`Database returned ${result.rowCount} users`);
+        
+        await pool.end();
+        
+        // Return the database results
+        return res.json(result.rows);
+      } catch (dbError) {
+        console.error('Error fetching from database, falling back to mock data:', dbError.message);
+        // If database query fails, fall back to mock data
+      }
+    }
+    
+    // Return mock data if database isn't connected or query failed
+    console.log('Using mock user data');
     res.json([
       { id: 1, name: "Admin User", email: "admin@amu.ac.in", role: "admin" },
       { id: 2, name: "Department Manager", email: "dept@amu.ac.in", role: "manager" }
     ]);
   } catch (error) {
     console.error('Failed to fetch admin users:', error);
-    res.status(500).json({ error: 'Failed to fetch admin users' });
+    res.status(500).json({ error: 'Failed to fetch admin users', details: error.message });
   }
 });
 
@@ -320,23 +470,63 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-// Database connection check
+// Enhanced database connection check endpoint
+app.get('/api/db-status', async (req, res) => {
+  try {
+    console.log('Detailed database status check requested');
+    const forceCheck = req.query.force === 'true';
+    const result = await testDbConnection(forceCheck);
+    
+    // Check environment variables
+    const envVars = {
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+      VERCEL: process.env.VERCEL ? 'true' : 'false',
+      VERCEL_ENV: process.env.VERCEL_ENV || 'not set',
+      DATABASE_URL_SET: process.env.DATABASE_URL ? 'true' : 'false'
+    };
+    
+    console.log('Environment variables check:', envVars);
+    
+    res.json({
+      success: true,
+      databaseConnected: result,
+      status: dbConnectionStatus,
+      environment: envVars,
+      serverTime: new Date().toISOString(),
+      message: result 
+        ? 'Database connection successful' 
+        : 'Database connection failed. See status for details.'
+    });
+  } catch (error) {
+    console.error('Database status check error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      stack: process.env.NODE_ENV === 'production' ? 'Hidden in production' : error.stack
+    });
+  }
+});
+
+// Original db-check endpoint for backward compatibility
 app.get('/api/db-check', async (req, res) => {
   try {
-    console.log('Checking database connection...');
-    const result = await testDbConnection();
+    console.log('Basic database connection check');
+    const result = await testDbConnection(req.query.force === 'true');
     if (result) {
-      console.log('Database connection successful');
       res.json({ 
         connected: true, 
         message: 'Database connection successful',
-        dbUrl: process.env.DATABASE_URL ? 
-          `${process.env.DATABASE_URL.split('@')[1]?.split('/')[0] || 'unknown-host'}` : 
-          'not-set'
+        dbUrl: dbConnectionStatus.host || 'unknown',
+        lastChecked: dbConnectionStatus.lastChecked,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       });
     } else {
-      console.log('Database connection failed');
-      res.status(500).json({ connected: false, message: 'Database connection failed' });
+      res.status(503).json({ 
+        connected: false, 
+        message: 'Database connection failed', 
+        error: dbConnectionStatus.error,
+        lastChecked: dbConnectionStatus.lastChecked
+      });
     }
   } catch (error) {
     console.error('Database connection error:', error);
@@ -380,6 +570,16 @@ app.all('/api/echo', (req, res) => {
 
 // Vercel serverless handler
 export default function (req, res) {
-  console.log(`Received request: ${req.method} ${req.url}`);
+  const start = Date.now();
+  console.log(`[${new Date().toISOString()}] Request started: ${req.method} ${req.url}`);
+  
+  // Add response end logging
+  const originalEnd = res.end;
+  res.end = function() {
+    const duration = Date.now() - start;
+    console.log(`[${new Date().toISOString()}] Request completed: ${req.method} ${req.url} (${duration}ms)`);
+    return originalEnd.apply(this, arguments);
+  };
+  
   return app(req, res);
 } 
