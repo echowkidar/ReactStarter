@@ -102,10 +102,21 @@ app.post('/api/auth/login', async (req, res) => {
 // Register endpoint
 app.post('/api/auth/register', async (req, res) => {
   try {
-    console.log('Registration attempt:', req.body.email);
+    console.log('Department registration attempt:', req.body);
+    
+    // In a real app, you would validate and save to database
+    // For demo, just echo back with success message and generated ID
+    const newDepartment = {
+      id: Math.floor(Math.random() * 1000) + 10, // Random ID
+      ...req.body,
+      createdAt: new Date().toISOString()
+    };
+    
+    console.log('Registered new department:', newDepartment);
     res.json({ 
       success: true, 
-      message: 'Registration endpoint reached. This is a demo endpoint.' 
+      department: newDepartment,
+      message: 'Department registered successfully.'
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -141,6 +152,27 @@ app.get('/api/admin/users', async (req, res) => {
   } catch (error) {
     console.error('Failed to fetch admin users:', error);
     res.status(500).json({ error: 'Failed to fetch admin users' });
+  }
+});
+
+// Create admin user endpoint
+app.post('/api/admin/users', async (req, res) => {
+  try {
+    console.log('Creating admin user:', req.body);
+    
+    // In a real app, you'd validate and save to database
+    // For demo, just echo back the data with a generated ID
+    const newUser = {
+      id: Math.floor(Math.random() * 1000) + 10, // Random ID
+      ...req.body,
+      createdAt: new Date().toISOString()
+    };
+    
+    console.log('Created new user:', newUser);
+    res.status(201).json(newUser);
+  } catch (error) {
+    console.error('Failed to create admin user:', error);
+    res.status(500).json({ error: 'Failed to create admin user' });
   }
 });
 
@@ -322,6 +354,27 @@ app.get('/api/env-check', (req, res) => {
     nodeEnv: process.env.NODE_ENV || 'not set',
     vercel: process.env.VERCEL ? 'true' : 'false',
     hasDbUrl: process.env.DATABASE_URL ? 'true' : 'false'
+  });
+});
+
+// Request echo endpoint for debugging
+app.all('/api/echo', (req, res) => {
+  console.log('Echo request received:', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body,
+    query: req.query
+  });
+  
+  res.json({
+    success: true,
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body,
+    query: req.query,
+    timestamp: new Date().toISOString()
   });
 });
 
