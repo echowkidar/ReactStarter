@@ -37,7 +37,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Separate init function to support both local server and serverless
+// Initialize app function
 export async function initApp() {
   try {
     // Run database migrations
@@ -53,9 +53,7 @@ export async function initApp() {
       throw err;
     });
 
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
+    // Set up environment
     if (app.get("env") === "development") {
       await setupVite(app, server);
     } else {
@@ -69,13 +67,11 @@ export async function initApp() {
   }
 }
 
-// Support for local development
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+// Start server for local development
+if (process.env.NODE_ENV !== 'production') {
   (async () => {
     try {
       const { app, server } = await initApp();
-      // ALWAYS serve the app on port 5001
-      // this serves both the API and the client
       const PORT = process.env.PORT || 5001;
       server.listen(PORT, "0.0.0.0", () => {
         log(`serving on port ${PORT}`);
@@ -85,17 +81,4 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
       process.exit(1);
     }
   })();
-}
-
-// Export for Vercel serverless function
-export default async function handler(req: Request, res: Response) {
-  await initApp();
-  return new Promise((resolve, reject) => {
-    app(req, res, (result) => {
-      if (result instanceof Error) {
-        return reject(result);
-      }
-      return resolve(result);
-    });
-  });
 }

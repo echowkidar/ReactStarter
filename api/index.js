@@ -1,27 +1,22 @@
 // Vercel API serverless function
 import express from 'express';
-import { createServer } from 'http';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { DbStorage } from '../server/dbStorage';
 
-// Initialize app
+// Create and configure Express app
 const app = express();
 app.use(express.json());
-
-// Ensure __dirname works in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+app.use(express.urlencoded({ extended: false }));
 
 // Initialize database storage
 const db = new DbStorage();
 
-// Basic API endpoint
+// API endpoints
 app.get('/api/test', (req, res) => {
   res.json({ message: 'API is working' });
 });
 
-// Import all your API routes here
 app.get('/api/departments', async (req, res) => {
   try {
     const departments = await db.getAllDepartments();
@@ -31,8 +26,10 @@ app.get('/api/departments', async (req, res) => {
   }
 });
 
-// Create HTTP server
-const server = createServer(app);
+// Add more API routes as needed to match your server routes
 
-// Export for Vercel
-export default app; 
+// Vercel serverless handler
+export default function handler(req, res) {
+  // Run the app with the Vercel request and response
+  return app(req, res);
+} 
