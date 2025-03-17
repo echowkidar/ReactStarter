@@ -2,7 +2,6 @@
 import express from 'express';
 import pg from 'pg';
 import 'dotenv/config';
-const testSocketConnection = require('./socket-test');
 
 // Create and configure Express app
 const app = express();
@@ -28,20 +27,6 @@ async function testDbConnection(forceNew = false) {
 
   console.log('Testing database connection...');
   console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-  
-  // First test direct socket connection
-  const socketConnected = await testSocketConnection();
-  if (!socketConnected) {
-    console.log('Socket connection test failed - network connectivity issue detected');
-    dbConnectionStatus = {
-      connected: false,
-      lastChecked: now,
-      error: 'Socket connection failed - network connectivity issue',
-      host: process.env.DATABASE_URL ? process.env.DATABASE_URL.split('@')[1]?.split('/')[0] || 'unknown' : 'unknown'
-    };
-    return false;
-  }
-  console.log('Socket connection test passed - network route is open');
   
   if (!process.env.DATABASE_URL) {
     dbConnectionStatus = {
@@ -850,52 +835,6 @@ app.get('/api/db-status', async (req, res) => {
       success: false,
       error: error.message,
       stack: process.env.NODE_ENV === 'production' ? 'Hidden in production' : error.stack
-    });
-  }
-});
-
-// Socket connection test endpoint
-app.get('/api/socket-test', async (req, res) => {
-  try {
-    console.log('Socket connection test requested');
-    const socketConnected = await testSocketConnection();
-    
-    // Parse DATABASE_URL for display (hide credentials)
-    let dbHost = 'unknown';
-    let dbPort = 'unknown';
-    
-    if (process.env.DATABASE_URL) {
-      try {
-        const connectionParts = process.env.DATABASE_URL.split('@');
-        const hostPortPart = connectionParts[1]?.split('/')[0];
-        if (hostPortPart) {
-          const [hostPart, portPart] = hostPortPart.split(':');
-          dbHost = hostPart || 'unknown';
-          dbPort = portPart || 'unknown';
-        }
-      } catch (error) {
-        console.error('Error parsing DATABASE_URL for display:', error);
-      }
-    }
-    
-    res.json({
-      success: true,
-      socketConnected,
-      target: {
-        host: dbHost,
-        port: dbPort
-      },
-      serverTime: new Date().toISOString(),
-      message: socketConnected 
-        ? 'Socket connection successful' 
-        : 'Socket connection failed - network connectivity issue detected'
-    });
-  } catch (error) {
-    console.error('Socket test error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: error.message,
-      message: 'Socket test failed with error'
     });
   }
 });
