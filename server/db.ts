@@ -28,16 +28,27 @@ const { Pool } = pg;
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
   // Add connection timeout options
-  connectionTimeoutMillis: 15000, // 15 seconds
+  connectionTimeoutMillis: 30000, // 30 seconds - increased for Vercel
   // Set initial number of clients in Vercel serverless environment
   min: 0,
-  max: 10,
+  max: 5, // Reduced to avoid too many connections
   // Add idle timeout for serverless environment
   idleTimeoutMillis: 30000, // 30 seconds
+  // Add keepalive settings to prevent connection drops
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000, // 10 seconds
+  // Add statement timeout to prevent long-running queries
+  statement_timeout: 60000, // 60 seconds
+  // Add query timeout
+  query_timeout: 30000, // 30 seconds
+  // Add SSL mode for better compatibility
+  ssl: {
+    rejectUnauthorized: false // Allow self-signed certificates
+  }
 });
 
 // Log pool errors
-pool.on('error', (err) => {
+pool.on('error', (err: Error) => {
   console.error('Unexpected error on idle client', err);
 });
 
