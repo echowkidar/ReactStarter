@@ -28,7 +28,7 @@ const { Pool } = pg;
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
   // Add connection timeout options
-  connectionTimeoutMillis: 5000, // 5 seconds
+  connectionTimeoutMillis: 15000, // 15 seconds
   // Set initial number of clients in Vercel serverless environment
   min: 0,
   max: 10,
@@ -58,3 +58,10 @@ export async function testDbConnection() {
     if (client) client.release();
   }
 }
+
+const { Socket } = require('net');
+const socket = new Socket();
+socket.setTimeout(10000);
+socket.connect(5432, '68.183.82.222', () => console.log('Connected!'));
+socket.on('timeout', () => console.log('Connection timed out'));
+socket.on('error', (err) => console.log('Socket error:', err));
