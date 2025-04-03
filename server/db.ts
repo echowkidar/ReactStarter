@@ -2,6 +2,7 @@ import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 import 'dotenv/config';
+import { Socket } from 'net';
 
 console.log('Initializing database connection...');
 
@@ -59,7 +60,6 @@ export async function testDbConnection() {
   }
 }
 
-const { Socket } = require('net');
 const socket = new Socket();
 socket.setTimeout(10000);
 socket.connect(5432, '68.183.82.222', () => console.log('Connected!'));
