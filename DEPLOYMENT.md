@@ -103,7 +103,7 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 - Check status: `pm2 status`
 - Monitor resources: `pm2 monit`
 
-## Troubleshooting
+## Troubleshooting (git check)
 
 - If the site shows a 500 error, check OpenLiteSpeed error logs: `cat /usr/local/lsws/logs/error.log`
 - Check Node.js application logs: `pm2 logs reactstarter`
