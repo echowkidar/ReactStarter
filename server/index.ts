@@ -68,7 +68,7 @@ export async function initApp() {
 }
 
 // Start server for local development
-if (process.env.NODE_ENV !== 'production') {
+
   (async () => {
     try {
       const { app, server } = await initApp();
@@ -81,4 +81,4 @@ if (process.env.NODE_ENV !== 'production') {
       process.exit(1);
     }
   })();
-}
+
