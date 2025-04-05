@@ -383,29 +383,14 @@ export async function registerRoutes(app: Express) {
       
       console.log(`Found ${departments.length} total departments, ${validDepartments.length} have valid emails`);
       
-      const departmentUsers = validDepartments.map((dept, index) => {
-        // Check if the department name starts with "Department ID" and try to resolve it
-        let departmentName = dept.name;
-        if (departmentName.startsWith("Department ID -")) {
-          const idNumber = parseInt(departmentName.replace("Department ID ", ""));
-          if (!isNaN(idNumber)) {
-            const resolvedName = getDepartmentNameFromNegativeId(idNumber);
-            if (resolvedName) {
-              console.log(`Resolved "${departmentName}" to "${resolvedName}"`);
-              departmentName = resolvedName;
-            }
-          }
-        }
-        
-        return {
-          id: index + 3, // Start IDs after hardcoded users
-          name: dept.hodName,
-          email: dept.email,
-          role: "department",
-          departmentId: dept.id,
-          departmentName: departmentName
-        };
-      });
+      const departmentUsers = validDepartments.map((dept, index) => ({
+        id: index + 3, // Start IDs after hardcoded users
+        name: dept.hodName,
+        email: dept.email,
+        role: "department",
+        departmentId: dept.id,
+        departmentName: dept.name
+      }));
       
       // Combine all users
       const allUsers = [...hardcodedUsers, ...departmentUsers];
@@ -888,20 +873,7 @@ export async function registerRoutes(app: Express) {
         return res.status(404).json({ message: "User not found" });
       }
       
-      // Check if the department name starts with "Department ID" and try to resolve it
-      let displayName = departmentToDelete.name;
-      if (displayName.startsWith("Department ID -")) {
-        const idNumber = parseInt(displayName.replace("Department ID ", ""));
-        if (!isNaN(idNumber)) {
-          const resolvedName = getDepartmentNameFromNegativeId(idNumber);
-          if (resolvedName) {
-            console.log(`Resolved "${displayName}" to "${resolvedName}"`);
-            displayName = resolvedName;
-          }
-        }
-      }
-      
-      console.log(`Found department to delete: ${departmentToDelete.id} (${displayName})`);
+      console.log(`Found department to delete: ${departmentToDelete.id} (${departmentToDelete.name})`);
       
       // Delete the department
       await storage.deleteDepartment(departmentToDelete.id);
@@ -910,7 +882,7 @@ export async function registerRoutes(app: Express) {
         message: "User deleted successfully",
         userId: userId,
         departmentId: departmentToDelete.id,
-        departmentName: displayName
+        departmentName: departmentToDelete.name
       });
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -1465,50 +1437,6 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Add a utility endpoint to fix department names
-  app.get("/api/admin/fix-department-names", async (req, res) => {
-    try {
-      // Get all departments
-      const departments = await storage.getAllDepartments();
-      console.log(`Found ${departments.length} departments to check`);
-      
-      // Keep track of fixed departments
-      const fixedDepartments = [];
-      
-      // Check each department
-      for (const dept of departments) {
-        if (dept.name.startsWith("Department ID -")) {
-          const idNumber = parseInt(dept.name.replace("Department ID ", ""));
-          if (!isNaN(idNumber)) {
-            const resolvedName = getDepartmentNameFromNegativeId(idNumber);
-            if (resolvedName) {
-              console.log(`Fixing department ${dept.id}: "${dept.name}" -> "${resolvedName}"`);
-              
-              // Update the department name
-              await storage.updateDepartment(dept.id, { name: resolvedName });
-              fixedDepartments.push({
-                id: dept.id,
-                oldName: dept.name,
-                newName: resolvedName
-              });
-            }
-          }
-        }
-      }
-      
-      return res.json({
-        message: `Fixed ${fixedDepartments.length} department names`,
-        fixed: fixedDepartments
-      });
-    } catch (error) {
-      console.error('Error fixing department names:', error);
-      return res.status(500).json({ 
-        message: "Failed to fix department names", 
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
   return httpServer;
 }
 
@@ -1521,4 +1449,4 @@ function getDepartmentNameFromNegativeId(negativeId: number): string | null {
   }
   return null;
 }
-//check git update-
+//check git update
