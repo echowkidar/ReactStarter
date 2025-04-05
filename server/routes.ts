@@ -1084,7 +1084,29 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      res.json(department);
+      // Check if the department name starts with "Department ID" and resolve it
+      let departmentName = department.name;
+      if (departmentName.startsWith("Department ID -")) {
+        const idNumber = parseInt(departmentName.replace("Department ID ", ""));
+        if (!isNaN(idNumber)) {
+          const resolvedName = getDepartmentNameFromNegativeId(idNumber);
+          if (resolvedName) {
+            console.log(`Login: Resolved "${departmentName}" to "${resolvedName}"`);
+            
+            // Update the department name in the database
+            await storage.updateDepartment(department.id, { name: resolvedName });
+            
+            // Return the updated name
+            departmentName = resolvedName;
+          }
+        }
+      }
+
+      // Return department with resolved name
+      res.json({
+        ...department,
+        name: departmentName
+      });
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).json({ message: "Login failed" });
@@ -1506,6 +1528,52 @@ export async function registerRoutes(app: Express) {
         message: "Failed to fix department names", 
         details: error instanceof Error ? error.message : String(error)
       });
+    }
+  });
+
+  // Add a check-department-name endpoint to fix names for already logged in sessions
+  app.get("/api/departments/:id/check-name", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.id);
+      if (isNaN(departmentId)) {
+        return res.status(400).json({ message: "Invalid department ID" });
+      }
+      
+      // Get the department
+      const department = await storage.getDepartment(departmentId);
+      if (!department) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      // Check if the name needs fixing
+      let needsUpdate = false;
+      let departmentName = department.name;
+      
+      if (departmentName.startsWith("Department ID -")) {
+        const idNumber = parseInt(departmentName.replace("Department ID ", ""));
+        if (!isNaN(idNumber)) {
+          const resolvedName = getDepartmentNameFromNegativeId(idNumber);
+          if (resolvedName) {
+            console.log(`Check-name: Resolved "${departmentName}" to "${resolvedName}"`);
+            departmentName = resolvedName;
+            needsUpdate = true;
+            
+            // Update the department in the database
+            await storage.updateDepartment(department.id, { name: resolvedName });
+          }
+        }
+      }
+      
+      // Return result
+      return res.json({
+        id: department.id,
+        name: departmentName,
+        originalName: department.name,
+        updated: needsUpdate
+      });
+    } catch (error) {
+      console.error('Error checking department name:', error);
+      return res.status(500).json({ message: "Failed to check department name" });
     }
   });
 

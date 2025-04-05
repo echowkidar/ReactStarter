@@ -1,14 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCurrentDepartment } from "@/lib/auth";
+import { getCurrentDepartment, checkDepartmentName } from "@/lib/auth";
 import { Employee, AttendanceReport } from "@shared/schema";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
 import { Users, ClipboardCheck } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function Dashboard() {
-  const department = getCurrentDepartment();
+  const [department, setDepartment] = useState(getCurrentDepartment());
+  
+  // Check and update department name if needed
+  useEffect(() => {
+    const updateDepartmentName = async () => {
+      const updatedDepartment = await checkDepartmentName();
+      if (updatedDepartment) {
+        setDepartment(updatedDepartment);
+      }
+    };
+    
+    updateDepartmentName();
+  }, []);
 
   const { data: employees, isLoading: loadingEmployees } = useQuery<Employee[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],

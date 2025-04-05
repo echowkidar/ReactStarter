@@ -6,22 +6,37 @@ import {
   CalendarCheck,
   LogOut 
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { logout, getCurrentDepartment, checkDepartmentName } from "@/lib/auth";
+import { Department } from "@shared/schema";
 
 export function Navigation() {
-  const department = JSON.parse(localStorage.getItem("department") || "{}");
+  const [department, setDepartment] = useState<Department | null>(getCurrentDepartment());
+  
+  // Check and update department name if needed
+  useEffect(() => {
+    const updateDepartmentName = async () => {
+      const updatedDepartment = await checkDepartmentName();
+      if (updatedDepartment) {
+        setDepartment(updatedDepartment);
+      }
+    };
+    
+    updateDepartmentName();
+  }, []);
   
   const handleLogout = () => {
-    localStorage.removeItem("department");
+    logout();
     window.location.href = "/";
   };
 
   return (
     <nav className="w-64 min-h-screen bg-background border-r">
       <div className="p-6">
-        <h2 className="text-lg font-semibold mb-6">{department.name}</h2>
+        <h2 className="text-lg font-semibold mb-6">{department?.name}</h2>
         
         <p className="mb-4 text-sm text-gray-500">
-          {department.email ? `User: ${department.email}` : ""}
+          {department?.email ? `User: ${department.email}` : ""}
         </p>
         
         <div className="space-y-2">

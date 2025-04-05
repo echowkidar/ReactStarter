@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Pencil, Eye, Plus } from "lucide-react";
 import { EditEmployeeForm } from "@/components/forms/edit-employee-form";
 import { apiRequest } from "@/lib/queryClient";
+import { getCurrentDepartment } from "@/lib/auth";
 import type { Employee } from "@shared/schema";
 
 export default function DepartmentEmployees() {
@@ -14,12 +15,16 @@ export default function DepartmentEmployees() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Get department ID from stored department info
-  const departmentInfo = JSON.parse(localStorage.getItem("department") || "{}");
-  const departmentId = departmentInfo.id;
+  const departmentInfo = getCurrentDepartment();
+  const departmentId = departmentInfo?.id;
 
-  const { data: employees = [], refetch } = useQuery({
+  const { data: employees = [], refetch } = useQuery<Employee[]>({
     queryKey: ["/api/departments", departmentId, "employees"],
-    queryFn: () => apiRequest(`/api/departments/${departmentId}/employees`),
+    queryFn: async () => {
+      const response = await apiRequest(`/api/departments/${departmentId}/employees`);
+      return response.json();
+    },
+    enabled: !!departmentId
   });
 
   const handleEditClick = (employee: Employee) => {

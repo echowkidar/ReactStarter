@@ -1,12 +1,25 @@
-import { getCurrentDepartment } from "@/lib/auth";
+import { getCurrentDepartment, checkDepartmentName } from "@/lib/auth";
 import { User } from "lucide-react";
+import { useState, useEffect } from "react";
 
 interface HeaderProps {
   className?: string;
 }
 
 export default function Header({ className }: HeaderProps) {
-  const department = getCurrentDepartment();
+  const [department, setDepartment] = useState(getCurrentDepartment());
+  
+  // Check and update department name if needed
+  useEffect(() => {
+    const updateDepartmentName = async () => {
+      const updatedDepartment = await checkDepartmentName();
+      if (updatedDepartment) {
+        setDepartment(updatedDepartment);
+      }
+    };
+    
+    updateDepartmentName();
+  }, []);
 
   return (
     <header className={`flex items-center justify-end border-b bg-background p-4 ${className}`}>

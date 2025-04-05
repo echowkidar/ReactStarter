@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { logout, getCurrentDepartment } from "@/lib/auth";
+import { logout, getCurrentDepartment, checkDepartmentName } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -25,9 +25,21 @@ interface SidebarProps {
 
 export default function Sidebar({ className }: SidebarProps) {
   const [location] = useLocation();
-  const department = getCurrentDepartment();
+  const [department, setDepartment] = useState(getCurrentDepartment());
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  
+  // Check and update department name if needed
+  useEffect(() => {
+    const updateDepartmentName = async () => {
+      const updatedDepartment = await checkDepartmentName();
+      if (updatedDepartment) {
+        setDepartment(updatedDepartment);
+      }
+    };
+    
+    updateDepartmentName();
+  }, []);
 
   const handleLogout = () => {
     logout();
