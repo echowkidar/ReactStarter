@@ -1,0 +1,82 @@
+// List of all departments
+export const allDepartmentsList = [
+  "Department of Computer Science",
+  "Department of Mathematics",
+  "Department of Physics",
+  "Department of Chemistry",
+  "Department of Botany",
+  "Department of Zoology",
+  "Department of English",
+  "Department of Hindi",
+  "Department of Urdu",
+  "Department of Arabic",
+  "Department of Persian",
+  "Department of Sanskrit",
+  "Department of Linguistics",
+  "Department of History",
+  "Department of Philosophy",
+  "Department of Psychology",
+  "Department of Education",
+  "Department of Political Science",
+  "Department of Sociology",
+  "Department of Social Work",
+  "Department of West Asian Studies",
+  "Department of Islamic Studies",
+  "Department of Geography",
+  "Department of Economics",
+  "Department of Commerce",
+  "Department of Biochemistry",
+  "Department of Biotechnology",
+  "Department of Geology",
+  "Department of Law",
+  "Department of Fine Arts",
+  "Department of Physical Education",
+  "Department of Statistics",
+  "Department of Library Science",
+  "Department of Music",
+  "Faculty of Engineering & Technology",
+  "Faculty of Agriculture",
+  "Faculty of Medicine",
+  "Faculty of Unani Medicine",
+  "Faculty of Management & Research",
+  "Women's College",
+  "Polytechnic",
+  "Centre for Distance Education",
+  "Academic Staff College",
+  "Interdisciplinary Biotechnology Unit",
+  "Centre for Advanced Studies",
+  "Centre for Women's Studies",
+  "Centre for Promotion of Science",
+  "University Health Service",
+  "Games & Sports Office",
+  "Provost Office (Boys Hostel)",
+  "Provost Office (Girls Hostel)",
+  "Registrar Office",
+  "Finance Office",
+  "Library Office",
+  "Examination Controller Office",
+  "Public Relations Office",
+  "Proctor Office",
+  "Cultural Education Centre",
+  "Department of Kuliyat",
+  "Department of Tashreeh-wa-Munafeul-Aza",
+  "Department of Ilmul Advia",
+  "Department of Tahaffuzi-wa-Samaji Tib"
+];
+
+// Department title options
+export const departmentTitles = [
+  "Chairperson",
+  "Director",
+  "Principal",
+  "Dean",
+  "Coordinator",
+  "Provost",
+  "Member-in-Charge"
+] as const;
+
+// Helper function to generate consistent hash ID for a department name
+export function getDepartmentHashId(name: string): number {
+  const nameHash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return -nameHash; // Negative IDs to distinguish from real database IDs
+} 

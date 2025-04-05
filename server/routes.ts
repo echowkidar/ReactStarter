@@ -15,6 +15,7 @@ import {
   insertDepartmentSchema
 } from "@shared/schema";
 import fs from "fs";
+import { allDepartmentsList, getDepartmentHashId } from "../shared/departments";
 
 // Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -470,8 +471,8 @@ export async function registerRoutes(app: Express) {
           });
         } else {
           try {
-            // Import the departmentList
-            const { allDepartmentsList } = await import('../client/src/lib/departments.js');
+            // Use the imported departments list
+            console.log(`Using shared departments list with ${allDepartmentsList.length} entries`);
             
             // Find the department name by checking the negative IDs
             let departmentName = "";
@@ -672,20 +673,14 @@ export async function registerRoutes(app: Express) {
               if (deptId < 0) {
                 console.log(`Target department with ID ${deptId} doesn't exist, auto-registering`);
                 try {
-                  // Import the department list to find the name
-                  const { allDepartmentsList } = await import('../client/src/lib/departments.js');
+                  // Use the imported departments list
+                  console.log(`Using shared departments list with ${allDepartmentsList.length} entries for lookup`);
                   
                   // Try to determine the department name from the negative ID
                   // This uses the same hashing function as in the GET /api/departments route
                   let departmentName = null;
-                  for (const name of allDepartmentsList) {
-                    const nameHash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                    const negativeId = -nameHash;
-                    
-                    if (negativeId === deptId) {
-                      departmentName = name;
-                      break;
-                    }
+                  if (deptId < 0) {
+                    departmentName = getDepartmentNameFromNegativeId(deptId);
                   }
                   
                   if (!departmentName) {
@@ -793,19 +788,13 @@ export async function registerRoutes(app: Express) {
           } else if (deptId < 0) {
             // Auto-register the department
             try {
-              // Import the department list to find the name
-              const { allDepartmentsList } = await import('../client/src/lib/departments.js');
+              // Use the imported departments list
+              console.log(`Using shared departments list with ${allDepartmentsList.length} entries for lookup`);
               
               // Try to determine the department name from the negative ID
               let departmentName = null;
-              for (const name of allDepartmentsList) {
-                const nameHash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                const negativeId = -nameHash;
-                
-                if (negativeId === deptId) {
-                  departmentName = name;
-                  break;
-                }
+              if (deptId < 0) {
+                departmentName = getDepartmentNameFromNegativeId(deptId);
               }
               
               if (!departmentName) {
@@ -947,9 +936,8 @@ export async function registerRoutes(app: Express) {
       
       // Always try to return the full department list regardless of parameters
       try {
-        // Import the departmentList from the client
-        const { allDepartmentsList } = await import('../client/src/lib/departments.js');
-        console.log(`Loaded department list with ${allDepartmentsList.length} entries`);
+        // Use the imported departments list
+        console.log(`Using shared departments list with ${allDepartmentsList.length} entries`);
         
         // We'll include all departments, regardless of registration status
         let departmentsList = [...allDepartmentsList];
@@ -979,8 +967,7 @@ export async function registerRoutes(app: Express) {
             // For departments not in the database yet, use a consistent ID
             // This ensures the same department name will always return the same ID
             // Note: This is just for display purposes, not for actual database operations
-            const nameHash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            const negativeId = -nameHash;
+            const negativeId = getDepartmentHashId(name);
             console.log(`Department "${name}" does NOT exist in database, using hash ID ${negativeId}`);
             return { 
               id: negativeId, // Negative IDs to distinguish from real database IDs
@@ -1409,5 +1396,56 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Add a test endpoint to check department name lookup
+  app.get("/api/departments/lookup/:id", async (req, res) => {
+    try {
+      const deptId = Number(req.params.id);
+      if (isNaN(deptId)) {
+        return res.status(400).json({ message: "Invalid department ID format" });
+      }
+      
+      // First check if it's a real department ID in the database
+      const department = await storage.getDepartment(deptId);
+      if (department) {
+        return res.json({
+          source: "database",
+          id: department.id,
+          name: department.name
+        });
+      }
+      
+      // If it's a negative ID, try to find it in our list
+      if (deptId < 0) {
+        const departmentName = getDepartmentNameFromNegativeId(deptId);
+        if (departmentName) {
+          return res.json({
+            source: "predefined_list",
+            id: deptId,
+            name: departmentName
+          });
+        }
+      }
+      
+      // No department found
+      return res.status(404).json({
+        message: "Department not found",
+        fallbackName: `Department ID ${deptId}`
+      });
+    } catch (error) {
+      console.error('Error looking up department:', error);
+      res.status(500).json({ message: "Failed to lookup department" });
+    }
+  });
+
   return httpServer;
+}
+
+// Find department by negative ID helper function
+function getDepartmentNameFromNegativeId(negativeId: number): string | null {
+  for (const name of allDepartmentsList) {
+    if (getDepartmentHashId(name) === negativeId) {
+      return name;
+    }
+  }
+  return null;
 }

@@ -1,96 +1,8 @@
 import { apiRequest } from "./queryClient";
+import { allDepartmentsList, departmentTitles } from "../../../shared/departments";
 
-export const departmentTitles = [
-  "Chairperson",
-  "Director",
-  "Principal",
-  "Dean",
-  "Coordinator",
-  "Provost",
-  "Member-in-Charge"
-] as const;
-
-// ALL 350 departments list
-export const allDepartmentsList = [
-  "Department of Computer Science",
-  "Department of Mathematics",
-  "Department of Physics",
-  "Department of Chemistry",
-  "Department of Botany",
-  "Department of Zoology",
-  "Department of English",
-  "Department of Hindi",
-  "Department of Urdu",
-  "Department of Arabic",
-  "Department of Persian",
-  "Department of Sanskrit",
-  "Department of Linguistics",
-  "Department of History",
-  "Department of Philosophy",
-  "Department of Psychology",
-  "Department of Education",
-  "Department of Political Science",
-  "Department of Sociology",
-  "Department of Social Work",
-  "Department of West Asian Studies",
-  "Department of Islamic Studies",
-  "Department of Geography",
-  "Department of Economics",
-  "Department of Commerce",
-  "Department of Biochemistry",
-  "Department of Biotechnology",
-  "Department of Geology",
-  "Department of Law",
-  "Department of Fine Arts",
-  "Department of Physical Education",
-  "Department of Statistics",
-  "Department of Library Science",
-  "Department of Music",
-  // Adding many more departments (truncated for brevity)
-  "Faculty of Engineering & Technology",
-  "Faculty of Agriculture",
-  "Faculty of Medicine",
-  "Faculty of Unani Medicine",
-  "Faculty of Management & Research",
-  "Women's College",
-  "Polytechnic",
-  "Centre for Distance Education",
-  "Academic Staff College",
-  "Interdisciplinary Biotechnology Unit",
-  "Centre for Advanced Studies",
-  "Centre for Women's Studies",
-  "Centre for Promotion of Science",
-  "University Health Service",
-  "Games & Sports Office",
-  "Provost Office (Boys Hostel)",
-  "Provost Office (Girls Hostel)",
-  "Registrar Office",
-  "Finance Office",
-  "Library Office",
-  "Examination Controller Office",
-  "Public Relations Office",
-  "Proctor Office",
-  "Cultural Education Centre",
-  "Department of Kuliyat",
-  "Department of Tashreeh-wa-Munafeul-Aza",
-  "Department of Ilmul Advia",
-  "Department of Tahaffuzi-wa-Samaji Tib",
-  "Department of Moalejat",
-  "Department of Ilmul Saidla",
-  "Department of Amraz-e-Jild-wa-Zohrawiya",
-  "Department of Jarahiyat",
-  "Department of Ilmul Atfal",
-  "Department of Ilmul Qabalat-wa-Amraz-e-Niswan",
-  "Department of Architecture",
-  "Department of Civil Engineering",
-  "Department of Mechanical Engineering",
-  "Department of Electrical Engineering",
-  "Department of Electronics Engineering",
-  "Department of Chemical Engineering",
-  "Department of Petroleum Studies",
-  "Department of Environmental Engineering",
-  // ... and so on
-] as const;
+// Re-export these from the shared file
+export { allDepartmentsList, departmentTitles };
 
 // Development mode - show only a few departments
 const isDevelopment = process.env.NODE_ENV !== 'production';
@@ -148,4 +60,4 @@ export async function fetchAvailableDepartments(showAll = false): Promise<string
     // Fallback to local list if API fails
     return showAll ? [...allDepartmentsList] as string[] : departmentList as unknown as string[];
   }
-}
+} 
