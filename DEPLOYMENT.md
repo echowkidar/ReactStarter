@@ -108,3 +108,18 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 - If the site shows a 500 error, check OpenLiteSpeed error logs: `cat /usr/local/lsws/logs/error.log`
 - Check Node.js application logs: `pm2 logs reactstarter`
 - If SSL shows as untrusted, ensure you're using Let's Encrypt production certificates, not self-signed or staging ones 
+
+### Cursor Commands To add repo in github
+### 1. git status
+### 2. git add . 
+### 3. git commit -m "massage / note"
+### 4. git push origin main
+
+### Console commands To fetch in vps in folder of attendance.echowkidar.in
+### 1. pm2 stop all
+### 2. git checkout main # or git checkout master
+### 3. git pull origin main # or git pull origin master
+### 4. npm install # or yarn install
+### 5. npm run build # or yarn build
+### 6. pm2 start ecosystem.config.cjs --force
+### 7. pm2 logs reactstarter

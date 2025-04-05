@@ -2,6 +2,7 @@ import { db } from "./db";
 import { testDbConnection } from "./db";
 import { departments, employees, attendanceReports, attendanceEntries } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { v4 as uuid } from "uuid";
 import type { IStorage } from "./storage";
 import type {
   Department,
@@ -133,7 +134,13 @@ export class DbStorage implements IStorage {
 
   // Attendance operations
   async createAttendanceReport(report: InsertAttendanceReport): Promise<AttendanceReport> {
-    const [newReport] = await db.insert(attendanceReports).values(report).returning();
+    // Add transaction ID to the report data
+    const reportWithTransactionId = {
+      ...report,
+      transactionId: uuid().slice(0, 8).toUpperCase()
+    };
+    
+    const [newReport] = await db.insert(attendanceReports).values(reportWithTransactionId).returning();
     return newReport;
   }
 
