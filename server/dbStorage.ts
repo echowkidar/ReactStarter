@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { testDbConnection } from "./db";
-import { departments, employees, attendanceReports, attendanceEntries } from "@shared/schema";
+import { departments, employees, attendanceReports, attendanceEntries, departmentNames } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import type { IStorage } from "./storage";
@@ -13,6 +13,7 @@ import type {
   InsertEmployee,
   InsertAttendanceReport,
   InsertAttendanceEntry,
+  DepartmentName,
 } from "@shared/schema";
 
 export class DbStorage implements IStorage {
@@ -33,7 +34,7 @@ export class DbStorage implements IStorage {
     try {
       // This is a simplified version - in a real app you'd verify password with bcrypt
       // For demo purposes, check if this is the admin account (update with your actual admin email)
-      if (email === "admin@amu.ac.in" && password === "admin123") {
+      if (email === "admin@amu.ac.in" && password === "123") {
         return { id: 1, email, role: "admin" };
       }
       return null;
@@ -101,6 +102,25 @@ export class DbStorage implements IStorage {
     return await db.query.departments.findMany();
   }
 
+  // Add new method to get all department names
+  async getAllDepartmentNames(): Promise<DepartmentName[]> {
+    return await db.query.departmentNames.findMany();
+  }
+
+  // Add method to get single department name by ID
+  async getDepartmentName(id: number): Promise<DepartmentName | undefined> {
+     return await db.query.departmentNames.findFirst({
+       where: eq(departmentNames.id, id),
+     });
+  }
+
+  // Add method to get single department by Name
+  async getDepartmentByName(name: string): Promise<Department | undefined> {
+     return await db.query.departments.findFirst({
+       where: eq(departments.name, name),
+     });
+  }
+
   // Employee operations
   async getEmployee(id: number): Promise<Employee | undefined> {
     return await db.query.employees.findFirst({
@@ -109,9 +129,20 @@ export class DbStorage implements IStorage {
   }
 
   async getEmployeesByDepartment(departmentId: number): Promise<Employee[]> {
-    return await db.query.employees.findMany({
-      where: eq(employees.departmentId, departmentId),
-    });
+    try {
+      console.log(`[DbStorage] Fetching employees for department ${departmentId}`);
+      const result = await db.query.employees.findMany({
+        where: eq(employees.departmentId, departmentId),
+      });
+      console.log(`[DbStorage] Found ${result.length} employees`);
+      if (result.length > 0) {
+        console.log('[DbStorage] Sample employee:', result[0]);
+      }
+      return result;
+    } catch (error) {
+      console.error('[DbStorage] Error fetching employees:', error);
+      throw error;
+    }
   }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
@@ -120,7 +151,15 @@ export class DbStorage implements IStorage {
   }
 
   async deleteEmployee(id: number): Promise<void> {
-    await db.delete(employees).where(eq(employees.id, id));
+    // Use a transaction to ensure both deletions succeed or fail together
+    await db.transaction(async (tx) => {
+      console.log(`[DbStorage] Deleting attendance entries for employee ${id}`);
+      await tx.delete(attendanceEntries).where(eq(attendanceEntries.employeeId, id));
+      
+      console.log(`[DbStorage] Deleting employee ${id}`);
+      await tx.delete(employees).where(eq(employees.id, id));
+    });
+    console.log(`[DbStorage] Successfully deleted employee ${id} and related attendance entries`);
   }
 
   async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> {
@@ -130,6 +169,21 @@ export class DbStorage implements IStorage {
       .where(eq(employees.id, id))
       .returning();
     return updatedEmployee;
+  }
+
+  async getAllEmployees(): Promise<Employee[]> {
+    try {
+      console.log('[DbStorage] Fetching all employees');
+      const result = await db.query.employees.findMany();
+      console.log(`[DbStorage] Found ${result.length} total employees`);
+      if (result.length > 0) {
+        console.log('[DbStorage] Sample employee:', result[0]);
+      }
+      return result;
+    } catch (error) {
+      console.error('[DbStorage] Error fetching all employees:', error);
+      throw error;
+    }
   }
 
   // Attendance operations

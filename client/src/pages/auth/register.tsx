@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { register } from "@/lib/auth";
-import { departmentList, departmentTitles, getAllDepartments, fetchAvailableDepartments } from "@/lib/departments";
+import { departmentTitles, fetchDepartmentsForRegistration, DepartmentRegistrationInfo } from "@/lib/departments";
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -44,8 +44,8 @@ export default function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [availableDepartments, setAvailableDepartments] = useState<string[]>([]);
-  const [filteredResults, setFilteredResults] = useState<string[]>([]);
+  const [availableDepartments, setAvailableDepartments] = useState<DepartmentRegistrationInfo[]>([]);
+  const [filteredResults, setFilteredResults] = useState<DepartmentRegistrationInfo[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   
   // Set minimum characters required before search begins
@@ -54,27 +54,25 @@ export default function Register() {
   // Apply debounce to search term to avoid excessive filtering
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  // Load departments from API - always show all departments
+  // Load departments from API
   useEffect(() => {
     const loadDepartments = async () => {
       setIsLoadingDepartments(true);
       try {
-        console.log("Fetching all departments for registration page");
-        const departments = await fetchAvailableDepartments(true); // Always use showAll=true
+        console.log("Fetching available departments for registration page");
+        const departments = await fetchDepartmentsForRegistration();
         console.log(`Fetched ${departments.length} departments`);
         setAvailableDepartments(departments);
+        setFilteredResults(departments);
       } catch (error) {
         console.error("Failed to load departments:", error);
         toast({
           variant: "destructive",
           title: "Error",
-          description: "Failed to load departments. Showing default list instead.",
+          description: "Failed to load departments list.",
         });
-        
-        // Fallback to complete department list
-        const allDepts = getAllDepartments();
-        console.log(`Falling back to local list with ${allDepts.length} departments`);
-        setAvailableDepartments(allDepts);
+        setAvailableDepartments([]);
+        setFilteredResults([]);
       } finally {
         setIsLoadingDepartments(false);
       }
@@ -83,13 +81,13 @@ export default function Register() {
     loadDepartments();
   }, [toast]);
   
-  // Search function that filters departments based on search term
+  // Search function updates
   const performSearch = useCallback(() => {
     setIsSearching(true);
     
     if (debouncedSearchTerm.length >= MIN_SEARCH_CHARS) {
       const results = availableDepartments.filter(dept => 
-        dept.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+        dept.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) // Search by dept.name
       );
       setFilteredResults(results);
     } else {
@@ -123,13 +121,29 @@ export default function Register() {
   async function onSubmit(values: z.infer<typeof registerSchema>) {
     setIsLoading(true);
     try {
-      await register(values);
+      // Find the full DepartmentRegistrationInfo object matching the selected name
+      const selectedDepartment = availableDepartments.find(dept => dept.name === values.name);
+
+      if (!selectedDepartment) {
+        throw new Error("Selected department details not found.");
+      }
+
+      // Pass the necessary details to the register function
+      await register({
+        name: selectedDepartment.name, 
+        id: selectedDepartment.id.toString(), // Convert ID to string
+        hodTitle: values.hodTitle,
+        hodName: values.hodName,
+        email: values.email,
+        password: values.password,
+      });
       setLocation("/dashboard");
     } catch (error) {
+      console.error("Registration failed:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to register department. Please try again.",
+        description: `Failed to register department: ${error instanceof Error ? error.message : String(error)}`,
       });
     } finally {
       setIsLoading(false);
@@ -201,22 +215,29 @@ export default function Register() {
                           )}
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="max-h-[300px]">
-                        {isLoadingDepartments ? (
-                          <div className="p-2 text-center">
-                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                            <span className="text-sm text-muted-foreground">Loading departments...</span>
-                          </div>
-                        ) : debouncedSearchTerm.length > 0 && filteredResults.length === 0 ? (
-                          <div className="p-2 text-center text-sm text-muted-foreground">
-                            No matching departments found
-                          </div>
-                        ) : (
-                          (debouncedSearchTerm.length >= MIN_SEARCH_CHARS ? filteredResults : availableDepartments).map((dept) => (
-                            <SelectItem key={dept} value={dept}>
-                              {dept}
+                      <SelectContent>
+                        {filteredResults.length > 0 ? (
+                          filteredResults.map((dept) => (
+                            <SelectItem key={dept.id} value={dept.name}>
+                              {dept.name}
+                              {/* Optionally show code: ({dept.code}) */} 
                             </SelectItem>
                           ))
+                        ) : searchTerm.length >= MIN_SEARCH_CHARS ? (
+                          <SelectItem value="no-results" disabled>
+                            No matching departments found
+                          </SelectItem>
+                        ) : availableDepartments.length > 0 ? (
+                          availableDepartments.map((dept) => (
+                            <SelectItem key={dept.id} value={dept.name}>
+                              {dept.name}
+                              {/* Optionally show code: ({dept.code}) */} 
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-departments" disabled>
+                            No departments available
+                          </SelectItem>
                         )}
                       </SelectContent>
                     </Select>

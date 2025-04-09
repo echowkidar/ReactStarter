@@ -6,7 +6,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
-import { employmentStatuses, bankNames } from "@/lib/departments";
+import { employmentStatuses } from "@/lib/departments";
 import { Loader2 } from "lucide-react";
 
 const employeeSchema = z.object({
@@ -14,7 +14,6 @@ const employeeSchema = z.object({
   name: z.string().min(1, "Name is required"),
   panNumber: z.string().min(1, "PAN Number is required"),
   bankAccount: z.string().min(1, "Bank Account is required"),
-  bankName: z.enum(bankNames, { message: "Bank Name is required" }),
   aadharCard: z.string().min(1, "Adhar Number is required"),
   designation: z.string().min(1, "Designation is required"),
   employmentStatus: z.enum(employmentStatuses),
@@ -45,7 +44,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       name: "",
       panNumber: "",
       bankAccount: "",
-      bankName: "State Bank",
       aadharCard: "",
       designation: "",
       employmentStatus: "Permanent",
@@ -182,34 +180,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                     <FormControl>
                       <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="bankName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bank Name</FormLabel>
-                    <Select
-                      disabled={isLoading}
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="bg-white dark:bg-slate-800">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {bankNames.map((bank) => (
-                          <SelectItem key={bank} value={bank}>
-                            {bank}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

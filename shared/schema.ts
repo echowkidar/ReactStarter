@@ -32,6 +32,14 @@ export const employees = pgTable("employees", {
   aadharCardUrl: text("aadhar_card_url"),
   officeMemoUrl: text("office_memo_url"),
   joiningReportUrl: text("joining_report_url"),
+  termExtensionUrl: text("term_extension_url"),
+});
+
+export const departmentNames = pgTable("department_names", {
+  id: serial("id").primaryKey(),
+  code: text("dept_code").notNull().unique(),
+  name: text("dept_name").notNull(),
+  dealingAssistantCode: text("d_ast"),
 });
 
 export const attendanceReports = pgTable("attendance_reports", {
@@ -96,6 +104,7 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     aadharCardUrl: z.string().nullable(),
     officeMemoUrl: z.string().nullable(),
     joiningReportUrl: z.string().nullable(),
+    termExtensionUrl: z.string().nullable().optional(),
   });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
   id: true,
@@ -119,18 +128,24 @@ export const insertAttendanceEntrySchema = createInsertSchema(attendanceEntries)
     periods: z.string()
   });
 
+export const insertDepartmentNameSchema = createInsertSchema(departmentNames).omit({ id: true });
+
 export type Department = typeof departments.$inferSelect;
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
 export type Employee = typeof employees.$inferSelect & { 
   departmentName?: string;
-  panCardUrl?: string;
-  bankProofUrl?: string;
-  aadharCardUrl?: string;
-  officeMemoUrl?: string;
-  joiningReportUrl?: string;
+  panCardUrl?: string | null;
+  bankProofUrl?: string | null;
+  aadharCardUrl?: string | null;
+  officeMemoUrl?: string | null;
+  joiningReportUrl?: string | null;
+  termExtensionUrl?: string | null;
 };
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type AttendanceReport = typeof attendanceReports.$inferSelect;
 export type InsertAttendanceReport = z.infer<typeof insertAttendanceReportSchema>;
 export type AttendanceEntry = typeof attendanceEntries.$inferSelect;
 export type InsertAttendanceEntry = z.infer<typeof insertAttendanceEntrySchema>;
+
+export type DepartmentName = typeof departmentNames.$inferSelect;
+export type InsertDepartmentName = z.infer<typeof insertDepartmentNameSchema>;

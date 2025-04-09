@@ -66,7 +66,197 @@ export default function ReportDetails() {
   };
 
   const handlePrint = () => {
-    window.print();
+    setTimeout(() => {
+      const printContent = document.querySelector('.print-content');
+      
+      if (printContent) {
+        const printWindow = window.open('', '_blank');
+        
+        if (!printWindow) {
+          alert('Please allow popups for this website to use the print feature.');
+          return;
+        }
+        
+        // Get the current page's styling
+        const styles = Array.from(document.styleSheets)
+          .map(styleSheet => {
+            try {
+              return Array.from(styleSheet.cssRules)
+                .map(rule => rule.cssText)
+                .join('\n');
+            } catch (e) {
+              // Skip external stylesheets that might cause CORS issues
+              return '';
+            }
+          })
+          .join('\n');
+        
+        // Extract custom print styles from the current page
+        const printStyleElement = document.querySelector('style[media="print"]');
+        const printStyles = printStyleElement ? printStyleElement.textContent : '';
+        
+        // Write the content to the new window with proper styling
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Attendance Report</title>
+              <style>${styles}</style>
+              <style media="all">
+                @page { 
+                  size: portrait;
+                  margin: 5mm;
+                }
+                body {
+                  margin: 0;
+                  padding: 5px;
+                  font-family: system-ui, -apple-system, sans-serif;
+                  font-size: 9pt;
+                }
+                .print-content {
+                  width: 100%;
+                  max-width: 100%;
+                }
+                
+                /* Table styles for compact display */
+                table {
+                  font-size: 8pt;
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-bottom: 5px;
+                  table-layout: fixed;
+                }
+                th, td {
+                  padding: 3px 4px;
+                  border: 1px solid #ddd;
+                  text-align: left;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+                th {
+                  background-color: #f3f4f6;
+                  font-weight: bold;
+                  font-size: 8pt;
+                }
+                
+                /* Card styling */
+                .card {
+                  border: 1px solid #ddd;
+                  margin-bottom: 5px;
+                }
+                .card-header {
+                  padding: 5px 8px;
+                  background-color: #f9fafb;
+                  border-bottom: 1px solid #ddd;
+                }
+                .card-content {
+                  padding: 5px 8px;
+                }
+                .card-title {
+                  font-size: 11pt;
+                  font-weight: bold;
+                  margin: 0;
+                }
+                
+                /* Grid and layout */
+                .grid {
+                  display: grid;
+                  grid-template-columns: repeat(4, 1fr);
+                  gap: 5px;
+                }
+                .info-item {
+                  margin-bottom: 5px;
+                }
+                .info-label {
+                  font-size: 8pt;
+                  color: #6b7280;
+                  margin-bottom: 1px;
+                }
+                .info-value {
+                  font-size: 9pt;
+                }
+                
+                /* Footer section */
+                .certification {
+                  margin-top: 10px;
+                  text-align: right;
+                }
+                .certification p {
+                  margin: 1px 0;
+                  font-size: 9pt;
+                }
+                
+                /* Spacing utilities */
+                .space-y-6 > * + * {
+                  margin-top: 5px;
+                }
+                
+                /* Column widths for table */
+                table th:nth-child(1), table td:nth-child(1) { width: 8%; } /* Employee ID */
+                table th:nth-child(2), table td:nth-child(2) { width: 15%; } /* Name */
+                table th:nth-child(3), table td:nth-child(3) { width: 15%; } /* Designation */
+                table th:nth-child(4), table td:nth-child(4) { width: 20%; } /* Period */
+                table th:nth-child(5), table td:nth-child(5) { width: 7%; } /* Days */
+                table th:nth-child(6), table td:nth-child(6) { width: 35%; } /* Remarks */
+                
+                /* Whitespace control for table cells */
+                .whitespace-nowrap {
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+              </style>
+            </head>
+            <body>
+              ${printContent.outerHTML}
+            </body>
+          </html>
+        `);
+        
+        printWindow.document.close();
+        
+        // Wait for content to load before printing
+        printWindow.onload = function() {
+          // Apply additional class transformations for print window
+          const cards = printWindow.document.querySelectorAll('[class*="card"]');
+          cards.forEach(card => {
+            card.classList.add('card');
+          });
+          
+          const cardHeaders = printWindow.document.querySelectorAll('[class*="cardHeader"]');
+          cardHeaders.forEach(header => {
+            header.classList.add('card-header');
+          });
+          
+          const cardContents = printWindow.document.querySelectorAll('[class*="cardContent"]');
+          cardContents.forEach(content => {
+            content.classList.add('card-content');
+          });
+          
+          const cardTitles = printWindow.document.querySelectorAll('[class*="cardTitle"]');
+          cardTitles.forEach(title => {
+            title.classList.add('card-title');
+          });
+          
+          const infoItems = printWindow.document.querySelectorAll('.text-sm.font-medium');
+          infoItems.forEach(item => {
+            item.classList.add('info-label');
+          });
+          
+          const certificationSection = printWindow.document.querySelector('.mt-8');
+          if (certificationSection) {
+            certificationSection.classList.add('certification');
+          }
+          
+          setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            printWindow.onafterprint = function() {
+              printWindow.close();
+            };
+          }, 300);
+        };
+      }
+    }, 100);
   };
 
   const handleDownload = () => {
@@ -155,12 +345,14 @@ export default function ReportDetails() {
 
         <style type="text/css" media="print">{`
           @page { 
-            size: auto;
-            margin: 10mm 15mm;
+            size: portrait;
+            margin: 5mm;
           }
           @media print {
             body { 
               visibility: hidden;
+              margin: 0;
+              padding: 0;
             }
             .print-content { 
               visibility: visible;
@@ -168,17 +360,106 @@ export default function ReportDetails() {
               left: 0;
               top: 0;
               width: 100%;
+              padding: 5px;
             }
             .no-print {
-              display: none;
+              display: none !important;
             }
+            
+            /* Reduce spacing */
+            .print-content .space-y-6 {
+              margin-top: 0 !important;
+              margin-bottom: 0 !important;
+            }
+            
+            /* Make table more compact */
+            .print-content table {
+              font-size: 8pt;
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            
+            .print-content tr {
+              page-break-inside: avoid;
+            }
+            
+            .print-content th, 
+            .print-content td {
+              padding: 3px 4px !important;
+              border: 1px solid #ddd;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            
+            .print-content th {
+              background-color: #f3f4f6 !important;
+              color: #000 !important;
+              font-weight: bold;
+              font-size: 8pt !important;
+            }
+            
+            /* Card styling for print */
+            .print-content [class*="card"] {
+              box-shadow: none !important;
+              border: 1px solid #ddd !important;
+              margin-bottom: 5px !important;
+            }
+            
+            .print-content [class*="cardHeader"] {
+              padding: 5px 8px !important;
+              background-color: #f9fafb !important;
+              border-bottom: 1px solid #ddd !important;
+            }
+            
+            .print-content [class*="cardContent"] {
+              padding: 5px 8px !important;
+            }
+            
+            /* Reduce space between items */
+            .print-content [class*="grid"] {
+              gap: 5px !important;
+            }
+            
+            /* Header title */
+            .print-content [class*="cardTitle"] {
+              font-size: 11pt !important;
+              font-weight: bold !important;
+              margin: 0 !important;
+            }
+            
+            /* Certification section */
+            .print-content .mt-8 {
+              margin-top: 5px !important;
+              position: relative !important;
+              page-break-inside: avoid;
+            }
+            
+            /* Typography adjustments */
+            .print-content p {
+              margin: 1px 0 !important;
+              font-size: 9pt !important;
+            }
+            
+            /* Adjust item spacing */
+            .print-content div > div {
+              margin-top: 2px !important;
+            }
+
+            /* Column widths for table */
+            .print-content th:nth-child(1), .print-content td:nth-child(1) { width: 8% !important; } /* Employee ID */
+            .print-content th:nth-child(2), .print-content td:nth-child(2) { width: 15% !important; } /* Name */
+            .print-content th:nth-child(3), .print-content td:nth-child(3) { width: 15% !important; } /* Designation */
+            .print-content th:nth-child(4), .print-content td:nth-child(4) { width: 20% !important; } /* Period */
+            .print-content th:nth-child(5), .print-content td:nth-child(5) { width: 7% !important; } /* Days */
+            .print-content th:nth-child(6), .print-content td:nth-child(6) { width: 35% !important; } /* Remarks */
           }
         `}</style>
 
         <div className="print-content space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Attendance Report Details</CardTitle>
+              <CardTitle>Attendance Report</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -208,18 +489,20 @@ export default function ReportDetails() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Attendance Entries</CardTitle>
+              <CardTitle></CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employee ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Designation</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Days</TableHead>
-                    <TableHead>Remarks</TableHead>
+                    <TableHead className="whitespace-nowrap">ID</TableHead>
+                    <TableHead className="whitespace-nowrap">Name</TableHead>
+                    <TableHead className="whitespace-nowrap">Designation</TableHead>
+                    <TableHead className="whitespace-nowrap">Emp Status</TableHead>
+                    <TableHead className="whitespace-nowrap">Reg.No</TableHead>
+                    <TableHead className="whitespace-nowrap">Period</TableHead>
+                    <TableHead className="whitespace-nowrap">Days</TableHead>
+                    <TableHead className="whitespace-nowrap">Remarks</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -231,13 +514,15 @@ export default function ReportDetails() {
 
                       return periods.map((period: any, periodIndex: number) => (
                         <TableRow key={`${entry.id}-${periodIndex}`}>
-                          <TableCell>{entry.employee?.epid}</TableCell>
-                          <TableCell>{entry.employee?.name}</TableCell>
-                          <TableCell>{entry.employee?.designation}</TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.name}</TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.designation}</TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.employmentStatus || "-"}</TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                          <TableCell className="whitespace-nowrap">
                             {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
                           </TableCell>
-                          <TableCell>{period.days}</TableCell>
+                          <TableCell className="whitespace-nowrap">{period.days}</TableCell>
                           <TableCell>{period.remarks || "-"}</TableCell>
                         </TableRow>
                       ));
@@ -253,7 +538,9 @@ export default function ReportDetails() {
 
           <div className="mt-8 space-y-4 text-right">
             <p>Certified that the above attendance report is correct.</p>
+            
             <div className="space-y-1">
+            <div style={{ height: '3em' }}></div>
               <p>{report.department?.hodTitle}</p>
               <p>{report.department?.hodName}</p>
               <p>{report.department?.name}</p>

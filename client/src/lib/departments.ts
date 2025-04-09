@@ -1,21 +1,5 @@
 import { apiRequest } from "./queryClient";
-import { allDepartmentsList, departmentTitles } from "../../../shared/departments";
-
-// Re-export these from the shared file
-export { allDepartmentsList, departmentTitles };
-
-// Development mode - show only a few departments
-const isDevelopment = process.env.NODE_ENV !== 'production';
-
-// Using only 6 departments for development, all departments for production
-export const departmentList = isDevelopment ? 
-  ["Department of Computer Science",
-  "Department of Mathematics",
-  "Department of Physics",
-  "Department of Chemistry",
-  "Department of Botany",
-  "Department of Zoology"] as const : 
-  allDepartmentsList;
+import { DepartmentName } from "../../../shared/schema";
 
 export const employmentStatuses = [
   "Permanent",
@@ -23,41 +7,60 @@ export const employmentStatuses = [
   "Temporary"
 ] as const;
 
-export const bankNames = [
-  "State Bank",
-  "Indian Bank",
-  "Bank of Baroda",
-  "Central Bank of India",
-  "Canara Bank",
-  "Punjab National Bank",
-  "Union Bank of India"
+// Define the type for the response from /api/departments
+export type DepartmentRegistrationInfo = DepartmentName;
+
+export const departmentTitles = [
+  "Chairperson",
+  "Director",
+  "Principal",
+  "Dean",
+  "Coordinator",
+  "Provost",
+  "Member-in-Charge"
 ] as const;
 
-// Helper function to get all departments list regardless of environment
-export const getAllDepartments = () => [...allDepartmentsList] as string[];
-
-// Helper function to fetch departments from API
-// This will automatically filter out already registered departments
-export async function fetchAvailableDepartments(showAll = false): Promise<string[]> {
+// Updated function to fetch departments
+export async function fetchDepartmentsForRegistration(showAll = false): Promise<DepartmentRegistrationInfo[]> {
   try {
-    // When showAll is true, we want to show all departments including registered ones
-    // When showAll is false, we want to only show departments that are not yet registered
-    const url = showAll 
-      ? `/api/departments?showAll=${showAll}&showRegistered=true` 
-      : `/api/departments?showAll=${showAll}&showRegistered=false`;
-      
-    console.log(`Fetching departments with URL: ${url}`);
+    const url = `/api/departments?showAll=${showAll}`;
+    console.log(`[fetchDepartmentsForRegistration] Fetching from URL: ${url}`);
+    
     const response = await apiRequest("GET", url);
-    const departments = await response.json();
-    
-    console.log(`Received ${departments.length} departments from API`);
-    
-    // Both API response formats include a 'name' property we can extract
-    // For both formats (showAll=true and showAll=false)
-    return departments.map((dept: { name: string }) => dept.name);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[fetchDepartmentsForRegistration] API request failed:`, {
+        status: response.status,
+        statusText: response.statusText,
+        errorText
+      });
+      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const departments: DepartmentRegistrationInfo[] = await response.json();
+    console.log(`[fetchDepartmentsForRegistration] Success! Received ${departments.length} departments:`, departments);
+    return departments;
+
   } catch (error) {
-    console.error("Error fetching departments:", error);
-    // Fallback to local list if API fails
-    return showAll ? [...allDepartmentsList] as string[] : departmentList as unknown as string[];
+    console.error("[fetchDepartmentsForRegistration] Error:", error);
+    throw error;
   }
-} 
+}
+
+// Keep the old function if it's used elsewhere to specifically get all names
+export async function fetchAllDepartmentBaseNames(): Promise<DepartmentName[]> {
+  try {
+    const url = `/api/department-names`;
+    console.log(`Fetching all base department names with URL: ${url}`);
+    const response = await apiRequest("GET", url);
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+    const departments: DepartmentName[] = await response.json();
+    console.log(`Received ${departments.length} base department names from API`);
+    return departments;
+  } catch (error) {
+    console.error("Error fetching all base department names:", error);
+    return [];
+  }
+}

@@ -62,6 +62,6 @@ export async function testDbConnection() {
 
 const socket = new Socket();
 socket.setTimeout(10000);
-socket.connect(5432, '68.183.82.222', () => console.log('Connected!'));
+socket.connect(5432, '139.59.1.5', () => console.log('Connected!'));
 socket.on('timeout', () => console.log('Connection timed out'));
 socket.on('error', (err) => console.log('Socket error:', err));

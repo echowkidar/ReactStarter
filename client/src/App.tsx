@@ -2,6 +2,8 @@ import { Switch, Route } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import ProtectedAdminRoute from "@/components/ProtectedAdminRoute";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/login";
 import Register from "@/pages/auth/register";
@@ -21,16 +23,16 @@ function Router() {
     <Switch>
       <Route path="/" component={Login} />
       <Route path="/register" component={Register} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/dashboard/employees" component={Employees} />
-      <Route path="/dashboard/attendance" component={Attendance} />
-      <Route path="/dashboard/reports/:id" component={ReportDetails} />
+      <ProtectedRoute path="/dashboard" component={Dashboard} />
+      <ProtectedRoute path="/dashboard/employees" component={Employees} />
+      <ProtectedRoute path="/dashboard/attendance" component={Attendance} />
+      <ProtectedRoute path="/dashboard/reports/:id" component={ReportDetails} />
       <Route path="/admin/login" component={AdminLogin} />
-      <Route path="/admin/dashboard" component={AdminDashboard} />
-      <Route path="/admin/employees" component={AdminEmployees} />
-      <Route path="/admin/users" component={AdminUsers} />
-      <Route path="/admin/reports/:id" component={AdminReportDetails} />
-      <Route path="/admin/attendance-reports" component={AttendanceReports} />
+      <ProtectedAdminRoute path="/admin/dashboard" component={AdminDashboard} />
+      <ProtectedAdminRoute path="/admin/employees" component={AdminEmployees} />
+      <ProtectedAdminRoute path="/admin/users" component={AdminUsers} />
+      <ProtectedAdminRoute path="/admin/reports/:id" component={AdminReportDetails} />
+      <ProtectedAdminRoute path="/admin/attendance-reports" component={AttendanceReports} />
       <Route component={NotFound} />
     </Switch>
   );

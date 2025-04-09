@@ -50,6 +50,18 @@ export async function registerRoutes(app: Express) {
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
       
       console.log(`Validating file: ${file.originalname}, mimetype: ${file.mimetype}`);
+      console.log(`Request URL: ${req.originalUrl}`);
+      
+      // For PDF upload endpoint, provide more details
+      if (req.originalUrl.includes('/attendance/') && req.originalUrl.includes('/upload')) {
+        console.log('PDF Upload detected for attendance report');
+        
+        // Ensure we accept PDFs regardless of mimetype variations
+        if (file.originalname.toLowerCase().endsWith('.pdf')) {
+          console.log(`File accepted (by extension): ${file.originalname}`);
+          return cb(null, true);
+        }
+      }
       
       if (allowedTypes.includes(file.mimetype)) {
         console.log(`File accepted: ${file.originalname} (${file.mimetype})`);
@@ -1182,6 +1194,23 @@ export async function registerRoutes(app: Express) {
         }
       }
       
+      // Log file URL updates
+      if (updates.fileUrl) {
+        console.log(`Updating attendance report ${req.params.id} with fileUrl: ${updates.fileUrl}`);
+        
+        // Verify the file exists if it's a local path
+        if (updates.fileUrl.startsWith('/uploads/')) {
+          const filename = updates.fileUrl.split('/').pop();
+          const fullPath = path.join(uploadDir, filename);
+          const fileExists = fs.existsSync(fullPath);
+          console.log(`File exists at ${fullPath}: ${fileExists}`);
+          
+          if (!fileExists) {
+            console.warn(`Warning: File ${fullPath} does not exist on the server`);
+          }
+        }
+      }
+      
       const report = await storage.updateAttendanceReport(Number(req.params.id), updates);
       res.json(report);
     } catch (error) {
@@ -1375,15 +1404,39 @@ export async function registerRoutes(app: Express) {
       const reportId = Number(req.params.reportId);
       const file = req.file;
       
+      console.log("==== Attendance PDF Upload ====");
+      console.log(`Upload directory: ${uploadDir}`);
+      console.log(`reportId: ${reportId}`);
+      console.log(`File received: ${file ? 'Yes' : 'No'}`);
+      
+      if (file) {
+        console.log(`File details:`, {
+          originalname: file.originalname,
+          encoding: file.encoding,
+          mimetype: file.mimetype,
+          destination: file.destination,
+          filename: file.filename,
+          path: file.path,
+          size: file.size
+        });
+      }
+      
       if (!file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
       const fileUrl = `/uploads/${file.filename}`;
+      console.log(`Generated fileUrl: ${fileUrl}`);
+      
+      // Verify file exists on disk
+      const fullFilePath = path.join(uploadDir, file.filename);
+      const fileExists = fs.existsSync(fullFilePath);
+      console.log(`File exists at ${fullFilePath}: ${fileExists}`);
       
       // Update the report with the file URL
       try {
         const report = await storage.updateAttendanceReport(reportId, { fileUrl });
+        console.log(`Database updated with fileUrl: ${fileUrl}`);
         return res.status(200).json({ fileUrl, report });
       } catch (dbError) {
         console.error('Database error during upload:', dbError);

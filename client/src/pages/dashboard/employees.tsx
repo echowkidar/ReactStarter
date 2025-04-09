@@ -204,6 +204,11 @@ export default function Employees() {
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/departments/${department?.id}/employees`);
+      return response.json();
+    },
+    enabled: !!department?.id
   });
 
   const addEmployee = useMutation({

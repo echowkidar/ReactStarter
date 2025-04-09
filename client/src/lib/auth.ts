@@ -8,16 +8,28 @@ interface LoginCredentials {
 
 export async function login(credentials: LoginCredentials) {
   const res = await apiRequest("POST", "/api/auth/login", credentials);
-  const department = await res.json();
-  localStorage.setItem("department", JSON.stringify(department));
-  return department;
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.message || "Login failed");
+  }
+  localStorage.setItem("department", JSON.stringify(data.department));
+  return data.department;
 }
 
 export async function register(departmentData: Record<string, string>) {
-  const res = await apiRequest("POST", "/api/auth/register", departmentData);
-  const department = await res.json();
-  localStorage.setItem("department", JSON.stringify(department));
-  return department;
+  try {
+    const res = await apiRequest("POST", "/api/auth/register", departmentData);
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Registration failed');
+    }
+    const department = await res.json();
+    localStorage.setItem("department", JSON.stringify(department));
+    return department;
+  } catch (error) {
+    console.error('Registration error:', error);
+    throw error;
+  }
 }
 
 export function logout() {
@@ -27,6 +39,23 @@ export function logout() {
 export function getCurrentDepartment(): Department | null {
   const data = localStorage.getItem("department");
   return data ? JSON.parse(data) : null;
+}
+
+interface AdminInfo {
+  email: string;
+  role: "superadmin" | "salary";
+}
+
+export function getCurrentAdmin(): AdminInfo | null {
+  const data = localStorage.getItem("admin");
+  try {
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    console.error("Failed to parse admin data from localStorage", e);
+    localStorage.removeItem("admin"); // Clear corrupted data
+    localStorage.removeItem("adminType"); // Also clear related type
+    return null;
+  }
 }
 
 // Function to check for department name updates

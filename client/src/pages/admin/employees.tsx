@@ -12,8 +12,9 @@ import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft } from "lucide-react
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
-import { employmentStatuses, bankNames } from "@/lib/departments";
+import { employmentStatuses } from "@/lib/departments";
 import AdminHeader from "@/components/layout/admin-header";
+import { format } from "date-fns";
 
 interface FileUpload {
   file: File | null;
@@ -33,11 +34,77 @@ export default function AdminEmployees() {
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus?.toLowerCase() || "permanent");
+  const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus || "Permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
-  const [selectedBankName, setSelectedBankName] = useState<string>("State Bank");
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
+
+  // Function to find the correct department ID from the departments list
+  const findMatchingDepartment = (employee: Employee, departments: Department[]) => {
+    // First try direct ID match
+    const directMatch = departments.find(d => d.id === employee.departmentId);
+    if (directMatch) {
+      return directMatch.id.toString();
+    }
+    
+    // If no direct match, try matching by name (if departmentName is available)
+    if (employee.departmentName) {
+      const nameMatch = departments.find(d => 
+        d.name.toLowerCase() === employee.departmentName?.toLowerCase()
+      );
+      if (nameMatch) {
+        return nameMatch.id.toString();
+      }
+    }
+    
+    // Return the original ID as string if no match found
+    return employee.departmentId?.toString() || "";
+  };
+
+  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
+    queryKey: ['/api/admin/employees'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/employees");
+      return response.json();
+    }
+  });
+
+  const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({ 
+    queryKey: ['/api/departments'], 
+    queryFn: async () => {
+      try {
+        // Remove the registeredOnly parameter which might be limiting results
+        const response = await apiRequest("GET", "/api/departments");
+        if (!response.ok) {
+          console.error("Failed to fetch departments:", response.status, response.statusText);
+          throw new Error("Failed to fetch departments");
+        }
+        const data = await response.json();
+        console.log("Successfully fetched departments:", data);
+        return data;
+      } catch (error) {
+        console.error("Error in department fetch:", error);
+        throw error;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (selectedEmployee && departments.length > 0) {
+      const initialDeptId = selectedEmployee.departmentId?.toString() || "";
+      if (departments.some(dept => dept.id.toString() === initialDeptId)) {
+        setSelectedDepartmentId(initialDeptId);
+        console.log(`Initial department set for employee ${selectedEmployee.id}: ${initialDeptId}`);
+      } else {
+        console.warn(`Employee's department ID (${initialDeptId}) not found in registered departments list. Resetting selection.`);
+        setSelectedDepartmentId("");
+      }
+    } else if (!selectedEmployee) {
+      setSelectedDepartmentId("");
+    }
+  }, [selectedEmployee, departments]);
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -63,19 +130,15 @@ export default function AdminEmployees() {
       }
 
       setUploads(existingUploads);
+      
+      // Debug the department ID
+      console.log("Selected employee department ID:", selectedEmployee.departmentId);
+      console.log("Department IDs in dropdown:", departments.map(d => d.id));
+      console.log("Department ID match exists:", departments.some(d => d.id === selectedEmployee.departmentId));
     } else {
       setUploads({});
     }
-  }, [selectedEmployee]);
-
-
-  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
-    queryKey: ['/api/admin/employees']
-  });
-
-  const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({
-    queryKey: ['/api/departments']
-  });
+  }, [selectedEmployee, departments]);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -158,7 +221,7 @@ export default function AdminEmployees() {
         toast({
           variant: "destructive",
           title: "Error",
-          description: `Error removing file: ${error instanceof Error ? error.message : String(error)}`,
+          description: error instanceof Error ? error.message : String(error)
         });
       }
     }
@@ -173,26 +236,55 @@ export default function AdminEmployees() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: Partial<InsertEmployee>) => {
-      const fileUrls: Record<string, string> = {};
-
+      // Ensure department ID is present
+      const departmentId = selectedDepartmentId ? parseInt(selectedDepartmentId, 10) : NaN;
+      
+      if (isNaN(departmentId)) {
+        throw new Error("Please select a department");
+      }
+      
+      // Create a FormData instance for file uploads
+      const formData = new FormData();
+      
+      // Explicitly add department ID from state
+      formData.append('departmentId', departmentId.toString());
+      
+      // Add files from uploads to FormData
       for (const [key, upload] of Object.entries(uploads)) {
         if (upload?.file) {
-          const result = await uploadMutation.mutateAsync(upload.file);
-          fileUrls[key + 'Url'] = result.fileUrl;
-        } else if (upload?.preview) {
-          fileUrls[key + 'Url'] = upload.preview;
+          // Use the appropriate field name for the server endpoint
+          const fieldName = key === 'panCard' ? 'panCardDoc' :
+                           key === 'bankProof' ? 'bankAccountDoc' :
+                           key === 'aadharCard' ? 'aadharCardDoc' :
+                           key === 'officeMemo' ? 'officeMemoDoc' :
+                           key === 'joiningReport' ? 'joiningReportDoc' :
+                           key === 'termExtension' ? 'termExtensionDoc' : key;
+          
+          formData.append(fieldName, upload.file);
+        }
+      }
+      
+      // Add other employee data to FormData
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && key !== 'departmentId') { // Skip departmentId as we already added it
+          formData.append(key, String(value));
+        }
+      });
+      
+      // Use existing URLs if files weren't changed
+      for (const [key, upload] of Object.entries(uploads)) {
+        if (!upload?.file && upload?.preview && !upload.preview.startsWith('data:')) {
+          const urlKey = key + 'Url';
+          formData.append(urlKey, upload.preview);
         }
       }
 
-      const employeeData = {
-        ...data,
-        ...fileUrls
-      };
+      console.log("Submitting form with departmentId:", departmentId);
 
       if (selectedEmployee) {
-        await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, employeeData);
+        await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, formData, false);
       } else {
-        await apiRequest('POST', '/api/admin/employees', employeeData);
+        await apiRequest('POST', '/api/admin/employees', formData, false);
       }
     },
     onSuccess: () => {
@@ -203,6 +295,14 @@ export default function AdminEmployees() {
       toast({
         title: "Success",
         description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
+      });
+    },
+    onError: (error) => {
+      console.error("Error in saveMutation:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save employee data"
       });
     }
   });
@@ -224,24 +324,99 @@ export default function AdminEmployees() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-
+    
+    // Create data object from form entries, excluding file inputs
     const data: Record<string, any> = {};
     const formDataEntries: [string, FormDataEntryValue][] = Array.from(formData.entries());
     for (const [key, value] of formDataEntries) {
-      if (!['panCard', 'bankProof', 'aadharCard', 'officeMemo', 'joiningReport'].includes(key)) {
+      if (!['panCard', 'bankProof', 'aadharCard', 'officeMemo', 'joiningReport', 'termExtension'].includes(key)) {
         data[key] = value;
       }
     }
-
-    data.aadharCard = formData.get('aadharCard') || '';
-    data.departmentId = parseInt(data.departmentId as string, 10);
-
-    console.log("Form data being submitted:", data); 
-    saveMutation.mutate(data as InsertEmployee);
+    
+    // Explicitly get the aadharCard value and ensure it's included
+    const aadharInputValue = (document.getElementById('aadharCard') as HTMLInputElement)?.value || '';
+    data.aadharCard = aadharInputValue;
+    
+    // Log the form data for debugging
+    console.log("Form data being submitted:", data);
+    console.log("Department ID being submitted:", selectedDepartmentId);
+    
+    // Use the selectedDepartmentId from state instead of form data
+    const departmentId = selectedDepartmentId ? parseInt(selectedDepartmentId, 10) : NaN;
+    data.departmentId = departmentId;
+    
+    if (isNaN(departmentId)) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select a department"
+      });
+      return;
+    }
+    
+    // Create a new FormData for the API request
+    const apiFormData = new FormData();
+    
+    // Add all form fields to the API FormData
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        apiFormData.append(key, String(value));
+      }
+    });
+    
+    // Add files from uploads to FormData with proper field names
+    for (const [key, upload] of Object.entries(uploads)) {
+      if (upload?.file) {
+        // Map UI field names to API field names
+        const fieldName = key === 'panCard' ? 'panCardDoc' :
+                         key === 'bankProof' ? 'bankAccountDoc' :
+                         key === 'aadharCard' ? 'aadharCardDoc' :
+                         key === 'officeMemo' ? 'officeMemoDoc' :
+                         key === 'joiningReport' ? 'joiningReportDoc' :
+                         key === 'termExtension' ? 'termExtensionDoc' : key;
+        
+        apiFormData.append(fieldName, upload.file);
+      } else if (upload?.preview && !upload.preview.startsWith('data:')) {
+        // Preserve existing URLs for files that weren't changed
+        const urlKey = key + 'Url';
+        apiFormData.append(urlKey, upload.preview);
+      }
+    }
+    
+    console.log("Form data being submitted with files", {
+      departmentId: data.departmentId,
+      selectedDepartmentId
+    });
+    
+    try {
+      if (selectedEmployee) {
+        await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, apiFormData, false);
+      } else {
+        await apiRequest('POST', '/api/admin/employees', apiFormData, false);
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
+      setIsDialogOpen(false);
+      setSelectedEmployee(null);
+      setUploads({});
+      toast({
+        title: "Success",
+        description: `Employee ${selectedEmployee ? 'updated' : 'created'} successfully`
+      });
+    } catch (error) {
+      console.error("Error saving employee:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save employee data. Please check the form and try again."
+      });
+    }
   };
 
   const renderUploadPreview = (type: keyof UploadState, label: string) => {
     const upload = uploads[type];
+    const isPDF = upload?.preview?.toLowerCase().endsWith('.pdf');
 
     return (
       <div className="space-y-2">
@@ -250,11 +425,35 @@ export default function AdminEmployees() {
           <div className="relative w-32 h-32 border rounded-lg overflow-hidden bg-slate-50">
             {upload ? (
               <>
-                <img
-                  src={upload.preview}
-                  alt={`${label} preview`}
-                  className="w-full h-full object-cover"
-                />
+                {isPDF ? (
+                  <div className="w-full h-full flex items-center justify-center bg-slate-100">
+                    <a 
+                      href={upload.preview} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex flex-col items-center justify-center text-primary hover:text-primary/80"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <line x1="9" y1="15" x2="15" y2="15"/>
+                      </svg>
+                      <span className="text-xs">View PDF</span>
+                    </a>
+                  </div>
+                ) : (
+                  <img
+                    src={upload.preview}
+                    alt={`${label} preview`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+                      target.style.padding = '2rem';
+                    }}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => handleRemoveFile(type)}
@@ -311,9 +510,8 @@ export default function AdminEmployees() {
                     className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
                     onClick={() => {
                       setSelectedEmployee(null);
-                      setEmploymentStatus("permanent");
+                      setEmploymentStatus("Permanent");
                       setSelectedDepartmentId("");
-                      setSelectedBankName("State Bank");
                       setUploads({});
                     }}
                   >
@@ -373,13 +571,13 @@ export default function AdminEmployees() {
                                 <SelectValue placeholder="Select status" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="permanent">Permanent</SelectItem>
-                                <SelectItem value="probation">Probation</SelectItem>
-                                <SelectItem value="temporary">Temporary</SelectItem>
+                                <SelectItem value="Permanent">Permanent</SelectItem>
+                                <SelectItem value="Probation">Probation</SelectItem>
+                                <SelectItem value="Temporary">Temporary</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
-                          {(employmentStatus === "probation" || employmentStatus === "temporary") && (
+                          {(employmentStatus === "Probation" || employmentStatus === "Temporary") && (
                             <div>
                               <Label htmlFor="termExpiry">Term Expiry Date</Label>
                               <Input
@@ -419,32 +617,14 @@ export default function AdminEmployees() {
                             />
                           </div>
                           <div>
-                            <Label htmlFor="bankName">Bank Name</Label>
-                            <Select
-                              name="bankName"
-                              value={selectedBankName}
-                              onValueChange={setSelectedBankName}
-                            >
-                              <SelectTrigger className="bg-white dark:bg-slate-800">
-                                <SelectValue placeholder="Select bank" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {bankNames.map((bank) => (
-                                  <SelectItem key={bank} value={bank}>
-                                    {bank}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
                             <Label htmlFor="aadharCard">Adhar Number</Label>
                             <Input
                               id="aadharCard"
                               name="aadharCard"
-                              defaultValue={selectedEmployee?.aadharCard}
+                              defaultValue={selectedEmployee?.aadharCard || ""}
                               className="bg-white dark:bg-slate-800"
                               required
+                              onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
                             />
                           </div>
                         </div>
@@ -503,20 +683,42 @@ export default function AdminEmployees() {
                             <Label htmlFor="departmentId">Department</Label>
                             <Select
                               name="departmentId"
-                              value={selectedDepartmentId || (selectedEmployee?.departmentId?.toString() || "")}
-                              onValueChange={setSelectedDepartmentId}
+                              value={selectedDepartmentId}
+                              onValueChange={(value) => {
+                                console.log("Department selected:", value);
+                                setSelectedDepartmentId(value);
+                              }}
+                              required
                             >
                               <SelectTrigger className="bg-white dark:bg-slate-800">
-                                <SelectValue placeholder={isDepartmentsLoading ? "Loading..." : "Select department"} />
+                                <SelectValue placeholder={isDepartmentsLoading ? "Loading departments..." : "Select department"} />
                               </SelectTrigger>
-                              <SelectContent>
-                                {departments.map((dept) => (
-                                  <SelectItem key={dept.id} value={dept.id.toString()}>
-                                    {dept.name}
+                              <SelectContent className="max-h-[200px]">
+                                {isDepartmentsLoading ? (
+                                  <div className="flex items-center justify-center p-2">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900" />
+                                    <span className="ml-2">Loading departments...</span>
+                                  </div>
+                                ) : departments && departments.length > 0 ? (
+                                  departments.map((dept) => (
+                                    <SelectItem key={dept.id} value={dept.id.toString()}>
+                                      {dept.name} ({dept.code})
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <SelectItem value="" disabled>
+                                    No departments available
                                   </SelectItem>
-                                ))}
+                                )}
                               </SelectContent>
                             </Select>
+                            {isDepartmentsLoading ? (
+                              <p className="text-blue-500 text-xs mt-1">Loading departments...</p>
+                            ) : departments.length === 0 ? (
+                              <p className="text-orange-500 text-xs mt-1">No departments available. Please add departments first.</p>
+                            ) : !selectedDepartmentId ? (
+                              <p className="text-red-500 text-xs mt-1">Department is required</p>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -529,7 +731,7 @@ export default function AdminEmployees() {
                           {renderUploadPreview('aadharCard', 'Adhar Number')}
                           {renderUploadPreview('officeMemo', 'Office Memo')}
                           {renderUploadPreview('joiningReport', 'Joining Report')}
-                          {(employmentStatus === "probation" || employmentStatus === "temporary") && 
+                          {(employmentStatus === "Probation" || employmentStatus === "Temporary") && 
                             renderUploadPreview('termExtension', 'Term Extension Office Memo')
                           }
                         </div>
@@ -561,53 +763,79 @@ export default function AdminEmployees() {
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>EPID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {employees.map((employee) => (
-                  <TableRow key={employee.id}>
-                    <TableCell>{employee.epid}</TableCell>
-                    <TableCell>{employee.name}</TableCell>
-                    <TableCell>{employee.departmentName}</TableCell>
-                    <TableCell>{employee.designation}</TableCell>
-                    <TableCell>{employee.employmentStatus}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          console.log("Selected employee for edit:", employee);
-                          setSelectedEmployee(employee);
-                          setEmploymentStatus(employee.employmentStatus.toLowerCase());
-                          setSelectedDepartmentId(employee.departmentId.toString());
-                          setSelectedBankName(employee.bankName || "State Bank");
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => handleDelete(employee)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
+            {isEmployeesLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+              </div>
+            ) : employees.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No employees found. Add your first employee using the button above.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>EPID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Designation</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Term Expiry Date</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {employees.map((employee) => (
+                    <TableRow key={employee.id}>
+                      <TableCell>{employee.epid}</TableCell>
+                      <TableCell>{employee.name}</TableCell>
+                      <TableCell>{employee.departmentName}</TableCell>
+                      <TableCell>{employee.designation}</TableCell>
+                      <TableCell>{employee.employmentStatus}</TableCell>
+                      <TableCell>
+                        {(employee.employmentStatus === "Probation" ||
+                          employee.employmentStatus === "Temporary") &&
+                          employee.termExpiry ? (
+                            format(new Date(employee.termExpiry), "dd MMM yyyy")
+                          ) : (
+                            "-"
+                          )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            console.log("Selected employee for edit:", employee);
+                            // Output the employee properties for debugging
+                            console.log("Employee properties:", Object.keys(employee));
+                            console.log("Employee aadharCard:", employee.aadharCard);
+                            console.log("Employee departmentId:", employee.departmentId);
+                            console.log("Employee departmentName:", employee.departmentName);
+                            
+                            setSelectedEmployee(employee);
+                            setEmploymentStatus(employee.employmentStatus);
+                            
+                            // The department ID will be set by the useEffect when departments are available
+                            setIsDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => handleDelete(employee)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

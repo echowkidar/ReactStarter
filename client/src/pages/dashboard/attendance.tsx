@@ -74,6 +74,16 @@ export default function Attendance() {
 
   const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
     queryKey: [`/api/departments/${department?.id}/attendance`],
+    // Sort reports by receiptNo in descending order
+    select: (data) => {
+      if (!Array.isArray(data)) return [];
+      // Sort a shallow copy to avoid potential mutation issues
+      return [...data].sort((a, b) => { 
+        const aValue = a.receiptNo ?? -Infinity; // Treat null/undefined as lowest
+        const bValue = b.receiptNo ?? -Infinity;
+        return bValue - aValue; // Descending order
+      });
+    },
   });
 
   const { data: entries = [], isLoading: loadingEntries } = useQuery<AttendanceEntry[]>({
@@ -140,63 +150,60 @@ export default function Attendance() {
     despatchDetails?: DespatchDetails,
   ) => {
     try {
-      // Create form data
+      // FIXED APPROACH: First upload the file using the general file upload endpoint
+      // which is known to work correctly with other uploads
+      console.log("Starting PDF upload for report", reportId);
+      
+      // Step 1: Upload the file to the general upload endpoint
       const formData = new FormData();
       formData.append("file", file);
       
-      // Upload the file
-      const response = await fetch(`/api/attendance/${reportId}/upload`, {
+      console.log("Uploading PDF file to general upload endpoint");
+      const uploadResponse = await fetch(`/api/upload`, {
         method: "POST",
         body: formData,
       });
 
-      if (!response.ok) {
-        // Try to safely parse the error response
-        try {
-          const errorData = await response.json();
-          console.error("Upload error:", errorData);
-          throw new Error(errorData.message || "Upload failed");
-        } catch (parseError) {
-          // If we can't parse JSON (e.g., got HTML), use text instead
-          const errorText = await response.text();
-          console.error("Upload error (non-JSON):", errorText);
-          throw new Error("Server error during upload");
-        }
+      if (!uploadResponse.ok) {
+        console.error("General upload failed with status:", uploadResponse.status);
+        const errorText = await uploadResponse.text();
+        console.error("Upload error response:", errorText);
+        throw new Error("Failed to upload PDF file");
       }
 
-      // Safely handle the response - it might not be valid JSON
-      let data;
-      try {
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          data = await response.json();
-        } else {
-          const text = await response.text();
-          console.log("Non-JSON response:", text);
-          // Create fallback data if needed
-          data = { fileUrl: `/uploads/${file.name}` };
-        }
-      } catch (parseError) {
-        console.error("Error parsing response:", parseError);
-        // Create fallback data
-        data = { fileUrl: `/uploads/${file.name}` };
-      }
-
-      setUploadedPdfUrl(data.fileUrl);
-      setSelectedReport(reportId);
-
-      // Update status to "sent" after successful PDF upload along with despatch details
-      const updateResponse = await apiRequest("PATCH", `/api/attendance/${reportId}`, {
-        status: "sent",
-        fileUrl: data.fileUrl,
-        despatchNo: despatchDetails?.despatchNo,
-        despatchDate: despatchDetails?.despatchDate ? new Date(despatchDetails.despatchDate) : undefined,
-        receiptDate: new Date(),
+      // Parse the upload response to get the file URL
+      const uploadData = await uploadResponse.json();
+      console.log("Upload successful, received URL:", uploadData.fileUrl);
+      
+      // Step 2: Now update the attendance report with the file URL
+      console.log("Updating attendance report with file URL");
+      const updateResponse = await fetch(`/api/attendance/${reportId}`, {
+        method: "PATCH",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: "sent",
+          fileUrl: uploadData.fileUrl,
+          despatchNo: despatchDetails?.despatchNo,
+          despatchDate: despatchDetails?.despatchDate ? new Date(despatchDetails.despatchDate) : undefined,
+          receiptDate: new Date(),
+        }),
       });
 
       if (!updateResponse.ok) {
-        throw new Error("Failed to update report status");
+        console.error("Report update failed with status:", updateResponse.status);
+        const errorText = await updateResponse.text();
+        console.error("Update error response:", errorText);
+        throw new Error("Failed to update report with file URL");
       }
+
+      const updateData = await updateResponse.json();
+      console.log("Report updated successfully:", updateData);
+
+      // Update local state
+      setUploadedPdfUrl(uploadData.fileUrl);
+      setSelectedReport(reportId);
 
       // Update local state with the new data
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
@@ -205,9 +212,9 @@ export default function Attendance() {
         description: "PDF uploaded successfully",
       });
 
-      return data;
+      return { fileUrl: uploadData.fileUrl, report: updateData };
     } catch (error) {
-      console.error("Error uploading PDF:", error);
+      console.error("Error in handleUpload:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -515,7 +522,23 @@ export default function Attendance() {
                                         <label htmlFor="pdfFile" className="text-sm font-medium">
                                           PDF File
                                         </label>
-                                        <Input id="pdfFile" type="file" accept=".pdf" />
+                                        <Input 
+                                          id="pdfFile" 
+                                          type="file" 
+                                          accept=".pdf,application/pdf" 
+                                          className="cursor-pointer"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file && !file.type.includes('pdf')) {
+                                              toast({
+                                                variant: "destructive",
+                                                title: "Error",
+                                                description: "Please select a PDF file"
+                                              });
+                                              e.target.value = '';
+                                            }
+                                          }}
+                                        />
                                       </div>
                                     </div>
                                     <DialogFooter>

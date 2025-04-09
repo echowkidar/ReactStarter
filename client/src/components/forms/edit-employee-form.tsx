@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { employmentStatuses, bankNames } from "@/lib/departments";
+import { employmentStatuses } from "@/lib/departments";
 import { Employee, InsertEmployee, insertEmployeeSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -177,7 +177,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     officeMemoUrl: z.string().optional(),
     joiningReportUrl: z.string().optional(),
     termExtensionUrl: z.string().optional(),
-    bankName: z.string().optional(),
   });
 
   const form = useForm<InsertEmployee & {
@@ -193,7 +192,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     officeMemoUrl?: string;
     joiningReportUrl?: string;
     termExtensionUrl?: string;
-    bankName?: string;
   }>({
     resolver: zodResolver(editEmployeeSchema),
     defaultValues: {
@@ -204,7 +202,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       termExpiry: employee.termExpiry || "",
       panNumber: employee.panNumber || "",
       bankAccount: employee.bankAccount || "",
-      bankName: employee.bankName || "State Bank",
       aadharCard: employee.aadharCard || "",
       officeMemoNo: employee.officeMemoNo || "",
       joiningDate: employee.joiningDate || "",
@@ -403,13 +400,12 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           termExpiry: data.termExpiry || null,
           panNumber: data.panNumber || "",
           bankAccount: data.bankAccount || "",
-          bankName: data.bankName || "State Bank",
           aadharCard: data.aadharCard || "",
           officeMemoNo: data.officeMemoNo || "",
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
           salaryRegisterNo: data.salaryRegisterNo || "",
-          departmentId: employee.departmentId,
+          departmentId: Number(data.departmentId),
           panCardUrl: results[0] || fileUrls.panCardUrl,
           bankProofUrl: results[1] || fileUrls.bankProofUrl,
           aadharCardUrl: results[2] || fileUrls.aadharCardUrl,
@@ -451,14 +447,12 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           termExpiry: data.termExpiry || null,
           panNumber: data.panNumber || "",
           bankAccount: data.bankAccount || "",
-          bankName: data.bankName || "State Bank",
           aadharCard: data.aadharCard || "",
           officeMemoNo: data.officeMemoNo || "",
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
           salaryRegisterNo: data.salaryRegisterNo || "",
-          departmentId: employee.departmentId,
-          // फाइल URL स्टेट से URL लें (जिससे हटाई गई फाइलें भी रिफ्लेक्ट होंगी)
+          departmentId: Number(data.departmentId),
           panCardUrl: fileUrls.panCardUrl,
           bankProofUrl: fileUrls.bankProofUrl,
           aadharCardUrl: fileUrls.aadharCardUrl,
@@ -560,7 +554,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 {...register("employmentStatus")}
                 className="w-full p-2 border rounded-md"
               >
-                <option value="">Select status</option>
                 {employmentStatuses.map(status => (
                   <option key={status} value={status}>
                     {status}
@@ -569,6 +562,18 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
               </select>
               {errors.employmentStatus && <p className="text-red-500 text-xs">{errors.employmentStatus.message}</p>}
             </div>
+
+            {showTermExpiry && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Term Expiry Date</label>
+                <input
+                  type="date"
+                  {...register("termExpiry")}
+                  className="w-full p-2 border rounded-md"
+                />
+                {errors.termExpiry && <p className="text-red-500 text-xs">{errors.termExpiry.message}</p>}
+              </div>
+            )}
 
             {/* Document upload fields */}
             <div className="space-y-2">
@@ -594,6 +599,15 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                   </button>
                 </div>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Bank Account</label>
+              <input
+                {...register("bankAccount")}
+                className="w-full p-2 border rounded-md"
+              />
+              {errors.bankAccount && <p className="text-red-500 text-xs">{errors.bankAccount.message}</p>}
             </div>
 
             <div className="space-y-2">
@@ -624,26 +638,10 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             <div className="space-y-2">
               <label className="block text-sm font-medium">Adhar Number</label>
               <input
-                type="file"
-                accept="image/*,.pdf"
+                {...register("aadharCard")}
                 className="w-full p-2 border rounded-md"
-                ref={aadharCardFileRef}
-                onChange={(e) => handleFileChange(e, 'aadharCardDoc')}
               />
-              {fileUrls.aadharCardUrl && (
-                <div className="flex items-center mt-1 space-x-2">
-                  <a href={fileUrls.aadharCardUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600">
-                    View existing document
-                  </a>
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveFile('aadharCardDoc')}
-                    className="text-sm text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
+              {errors.aadharCard && <p className="text-red-500 text-xs">{errors.aadharCard.message}</p>}
             </div>
 
             <div className="space-y-2">
@@ -735,40 +733,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium">Bank Account</label>
-              <input
-                {...register("bankAccount")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.bankAccount && <p className="text-red-500 text-xs">{errors.bankAccount.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Bank Name</label>
-              <select
-                {...register("bankName")}
-                className="w-full p-2 border rounded-md"
-              >
-                <option value="">Select bank</option>
-                {bankNames.map(bank => (
-                  <option key={bank} value={bank}>
-                    {bank}
-                  </option>
-                ))}
-              </select>
-              {errors.bankName && <p className="text-red-500 text-xs">{errors.bankName.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Adhar Number</label>
-              <input
-                {...register("aadharCard")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.aadharCard && <p className="text-red-500 text-xs">{errors.aadharCard.message}</p>}
-            </div>
-
-            <div className="space-y-2">
               <label className="block text-sm font-medium">Office Memo No</label>
               <input
                 {...register("officeMemoNo")}
@@ -786,19 +750,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
               />
               {errors.joiningDate && <p className="text-red-500 text-xs">{errors.joiningDate.message}</p>}
             </div>
-
-            {/* Term Expiry Field - Only displayed for Probation or Temporary */}
-            {showTermExpiry && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">Term Expiry Date</label>
-                <input
-                  type="date"
-                  {...register("termExpiry")}
-                  className="w-full p-2 border rounded-md"
-                />
-                {errors.termExpiry && <p className="text-red-500 text-xs">{errors.termExpiry.message}</p>}
-              </div>
-            )}
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">Salary Register No</label>

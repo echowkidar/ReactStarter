@@ -39,6 +39,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search as SearchIcon, Plus, Pencil, Trash2, Users, LogOut } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -46,6 +47,7 @@ import * as z from "zod";
 
 import AdminHeader from "@/components/layout/admin-header";
 import Loading from "@/components/layout/loading";
+import { DepartmentRegistrationInfo } from "@/lib/departments";
 
 // User type
 interface User {
@@ -57,16 +59,6 @@ interface User {
   departmentName?: string | null;
 }
 
-// Department type
-interface Department {
-  id: number;
-  name: string;
-  hodTitle: string;
-  hodName: string;
-  email: string;
-  isRegistered?: boolean;
-}
-
 // Form schema for creating/editing users
 const userFormSchema = z.object({
   name: z.string().min(3, { message: "Name must be at least 3 characters" }),
@@ -75,7 +67,7 @@ const userFormSchema = z.object({
     .or(z.literal('')) // Allow empty string for editing
     .transform(val => val === '' ? undefined : val), // Convert empty string to undefined
   role: z.enum(["superadmin", "salary", "department"]),
-  departmentId: z.number().optional().nullable(),
+  departmentId: z.number({ coerce: true }).optional().nullable(),
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
@@ -89,21 +81,24 @@ export default function AdminUsers() {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filteredDepartments, setFilteredDepartments] = useState<DepartmentRegistrationInfo[]>([]);
 
   // Fetch departments for department selection
-  const { data: departments = [] } = useQuery<Department[]>({
-    queryKey: ["/api/departments"],
+  const { data: departments = [], isLoading: isLoadingDepartments } = useQuery<DepartmentRegistrationInfo[]>({
+    queryKey: ["/api/departments?showAll=true"],
     queryFn: async () => {
-      const response = await fetch("/api/departments?showAll=true&showRegistered=true");
+      const response = await fetch("/api/departments?showAll=true");
       if (!response.ok) {
         throw new Error("Failed to fetch departments");
       }
-      return response.json();
-    }
+      const data = await response.json();
+      data.sort((a: DepartmentRegistrationInfo, b: DepartmentRegistrationInfo) => a.name.localeCompare(b.name));
+      return data;
+    },
   });
 
   // Fetch users
-  const { data: users, isLoading } = useQuery<User[]>({
+  const { data: users, isLoading: isLoadingUsers } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
   });
 
@@ -138,14 +133,30 @@ export default function AdminUsers() {
   const openUserDialog = (user?: User) => {
     if (user) {
       setSelectedUser(user);
+      
+      let targetDepartmentId: number | null = null;
+      // If editing a department user, find the corresponding ID from the department_names list
+      if (user.role === 'department' && user.departmentName) {
+        // Find the department in the fetched list that matches the user's department name
+        const matchingDept = departments.find(deptInfo => deptInfo.name === user.departmentName);
+        if (matchingDept) {
+          targetDepartmentId = matchingDept.id; // Use the ID from department_names (fetched list)
+          console.log(`Editing user ${user.name}, found matching department: ID ${targetDepartmentId}, Name: ${matchingDept.name}`);
+        } else {
+           console.warn(`Could not find matching department ID for user ${user.name} with department name "${user.departmentName}". Check consistency.`);
+           // Keep targetDepartmentId as null, dropdown will show placeholder
+        }
+      }
+      
       form.reset({
         name: user.name,
         email: user.email,
         password: "", // Don't fill password for editing
         role: user.role,
-        departmentId: user.departmentId || null,
+        departmentId: targetDepartmentId, // Set the ID found from the departments list
       });
     } else {
+      // Reset for creating a new user
       setSelectedUser(null);
       form.reset({
         name: "",
@@ -169,106 +180,57 @@ export default function AdminUsers() {
     try {
       console.log("Submitting user form with data:", data);
 
-      // Type safety check for department ID
       if (data.role === "department") {
-        // Ensure departmentId is a valid number
-        const deptId = Number(data.departmentId);
-        if (isNaN(deptId)) {
-          console.error("Department ID is not a valid number:", data.departmentId);
-          toast({
-            title: "त्रुटि",
-            description: "अमान्य विभाग ID (Invalid department ID)",
-            variant: "destructive",
-          });
-          return;
+        if (!data.departmentId) {
+           toast({ title: "Error", description: "Please select a department for this user.", variant: "destructive" });
+           return;
         }
-
-        // Verify department exists in our list
+        const deptId = data.departmentId;
         const selectedDept = departments.find(d => d.id === deptId);
         if (!selectedDept) {
-          console.warn(`Selected department ID ${deptId} not found in departments list. Available departments:`, 
-            departments.map(d => ({ id: d.id, name: d.name }))
-          );
-          
-          // Double-check if there's a close match (type conversion issue)
-          const stringMatch = departments.find(d => String(d.id) === String(deptId));
-          if (stringMatch) {
-            console.log("Found matching department using string comparison:", stringMatch);
-            // Continue with the matched department's ID instead
-            data.departmentId = stringMatch.id;
-          } else {
-            toast({
-              title: "त्रुटि",
-              description: "चयनित विभाग नहीं मिला। कृपया दूसरा विभाग चुनें। (Selected department not found. Please select another department.)",
-              variant: "destructive",
-            });
-            return;
-          }
-        } else {
-          console.log("Found matching department:", selectedDept);
-          // Ensure we're using the correct ID type
-          data.departmentId = selectedDept.id;
+           console.error(`Selected department ID ${deptId} not found in departments list.`);
+           toast({ title: "Error", description: "Selected department not found. Please refresh and try again.", variant: "destructive" });
+           return;
         }
+        console.log("Validated selected department:", selectedDept);
+      }
+      
+      if (data.role !== "department") {
+         data.departmentId = null;
       }
 
       let response;
-      
-      if (selectedUser) {
-        // Update existing user
-        console.log(`PUT /api/admin/users/${selectedUser.id}`, data);
-        response = await fetch(`/api/admin/users/${selectedUser.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-      } else {
-        // Create new user
-        console.log("POST /api/admin/users", data);
-        response = await fetch("/api/admin/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-      }
+      const apiUrl = selectedUser ? `/api/admin/users/${selectedUser.id}` : "/api/admin/users";
+      const method = selectedUser ? "PUT" : "POST";
 
-      // Try to get response as JSON
+      console.log(`${method} ${apiUrl}`, data);
+      response = await fetch(apiUrl, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
       let responseData;
       try {
         responseData = await response.json();
         console.log("API response:", response.status, responseData);
       } catch (e) {
         console.error("Failed to parse response as JSON:", e);
-        responseData = null;
+        responseData = { message: response.statusText }; 
       }
       
       if (!response.ok) {
-        // Get a generic error message from the response
         const errorMessage = responseData?.message || (selectedUser ? "Failed to update user" : "Failed to create user");
-        
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: errorMessage
-        });
-        
-        return;
+        toast({ variant: "destructive", title: "Error", description: errorMessage });
+      } else {
+        toast({ title: "Success", description: selectedUser ? "User updated successfully" : "User created successfully" });
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+        setIsUserDialogOpen(false);
       }
 
-      toast({
-        title: "सफलता",
-        description: selectedUser ? "उपयोगकर्ता अपडेट किया गया" : "नया उपयोगकर्ता बनाया गया",
-      });
-
-      // Refresh user list
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      setIsUserDialogOpen(false);
     } catch (error) {
-      console.error("Form submission error:", error);
-      toast({
-        title: "त्रुटि",
-        description: `${selectedUser ? "अपडेट" : "निर्माण"} असफल: ${error instanceof Error ? error.message : "अज्ञात त्रुटि"}`,
-        variant: "destructive",
-      });
+      console.error("Error submitting user form:", error);
+      toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
     }
   };
 
@@ -279,14 +241,10 @@ export default function AdminUsers() {
     try {
       console.log("Deleting user:", selectedUser);
       
-      // Set loading state if needed
-      // setIsLoading(true);
-      
       const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
         method: "DELETE",
       });
 
-      // Try to get JSON response
       let responseData;
       try {
         responseData = await response.json();
@@ -300,19 +258,15 @@ export default function AdminUsers() {
         throw new Error(responseData?.message || responseData?.details || "Failed to delete user");
       }
 
-      // Close the dialog
       setIsDeleteDialogOpen(false);
       
-      // Show success message
       toast({
         title: "सफलता",
         description: "उपयोगकर्ता हटा दिया गया",
       });
 
-      // Force refresh the user list
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       
-      // Wait a moment before refetching to ensure server has updated
       setTimeout(async () => {
         await queryClient.refetchQueries({ queryKey: ["/api/admin/users"] });
       }, 500);
@@ -324,9 +278,6 @@ export default function AdminUsers() {
         description: `डिलीट असफल: ${error instanceof Error ? error.message : "अज्ञात त्रुटि"}`,
         variant: "destructive",
       });
-    } finally {
-      // Clear loading state if needed
-      // setIsLoading(false);
     }
   };
 
@@ -337,9 +288,25 @@ export default function AdminUsers() {
     setLocation("/admin/login");
   };
 
-  if (isLoading) return <Loading />;
+  // Update filteredDepartments when departments data loads or searchTerm changes
+  useEffect(() => {
+    if (departments) { 
+       if (searchTerm === "") {
+         setFilteredDepartments(departments);
+       } else {
+         setFilteredDepartments(
+           departments.filter(dept => 
+             dept.name && dept.name.toLowerCase().includes(searchTerm.toLowerCase())
+           )
+         );
+       }
+    }
+  }, [searchTerm, departments]);
 
-  // Filter users by search term
+  if (isLoadingUsers) {
+    return <Loading />;
+  }
+
   const filteredUsers = users?.filter(user => 
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -472,17 +439,15 @@ export default function AdminUsers() {
 
         {/* Create/Edit User Dialog */}
         <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>{selectedUser ? "Edit User" : "Create New User"}</DialogTitle>
               <DialogDescription>
-                {selectedUser
-                  ? "Edit user information"
-                  : "Fill in the details to add a new user"}
+                {selectedUser ? "Update the user details." : "Enter details for the new user."}
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -532,19 +497,16 @@ export default function AdminUsers() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Role</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a role" />
+                            <SelectValue placeholder="Select role" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
+                          <SelectItem value="department">Department</SelectItem>
+                          <SelectItem value="salary">Salary</SelectItem>
                           <SelectItem value="superadmin">Super Admin</SelectItem>
-                          <SelectItem value="salary">Salary Admin</SelectItem>
-                          <SelectItem value="department">Department Admin</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -558,53 +520,33 @@ export default function AdminUsers() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Department</FormLabel>
-                        <Select
-                          onValueChange={(value) => {
-                            console.log("Department selected value:", value, "type:", typeof value);
-                            
-                            // Explicitly try number conversion and log the result
-                            const numValue = Number(value);
-                            console.log("After Number() conversion:", numValue, "type:", typeof numValue, "isNaN:", isNaN(numValue));
-                            
-                            // Only use departmentId if it's a valid number
-                            if (!isNaN(numValue)) {
-                              console.log("Setting departmentId to:", numValue);
-                              field.onChange(numValue);
-                            } else {
-                              console.error("Failed to convert department ID to number:", value);
-                              toast({
-                                title: "Error",
-                                description: "Invalid department selection",
-                                variant: "destructive"
-                              });
-                            }
-                          }}
-                          defaultValue={field.value?.toString()}
-                          value={field.value?.toString()}
+                        <Select 
+                          onValueChange={(value) => field.onChange(value ? Number(value) : null)}
+                          value={field.value?.toString() ?? ""}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select a department" />
+                              {isLoadingDepartments ? (
+                                 <span className="flex items-center text-muted-foreground">
+                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading...
+                                 </span>
+                               ) : ( 
+                                 <SelectValue placeholder="Select department" />
+                               )}
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
-                            {departments && departments.length > 0 ? 
-                              departments
-                                // Show all departments
-                                .map((department: Department) => (
-                                <SelectItem 
-                                  key={department.id} 
-                                  value={department.id.toString()}
-                                >
-                                  <span>
-                                    {department.name}
-                                  </span>
-                                </SelectItem>
-                              )) : (
-                              <div className="p-2 text-center text-sm text-muted-foreground">
-                                No departments available
-                              </div>
-                            )}
+                          <SelectContent className="max-h-[300px]">
+                            {isLoadingDepartments ? (
+                               <SelectItem value="loading" disabled>Loading...</SelectItem>
+                             ) : departments.length > 0 ? (
+                               departments.map((dept) => (
+                                 <SelectItem key={dept.id} value={dept.id.toString()}>
+                                   {dept.name}
+                                 </SelectItem>
+                               ))
+                             ) : (
+                               <SelectItem value="no-dept" disabled>No departments found</SelectItem>
+                             )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -613,8 +555,10 @@ export default function AdminUsers() {
                   />
                 )}
                 <DialogFooter>
-                  <Button type="submit">
-                    {selectedUser ? "Update" : "Create User"}
+                  <Button type="button" variant="outline" onClick={() => setIsUserDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {selectedUser ? "Save Changes" : "Create User"}
                   </Button>
                 </DialogFooter>
               </form>
