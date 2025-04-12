@@ -87,3 +87,41 @@ export async function checkDepartmentName() {
   
   return department;
 }
+
+// Function to update department profile
+export async function updateDepartmentProfile(id: string, data: {
+  name?: string;
+  email?: string;
+  hodName?: string;
+  hodTitle?: string;
+  password?: string;
+  currentPassword?: string;
+}) {
+  try {
+    const res = await apiRequest("PUT", `/api/departments/${id}/profile`, data);
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Profile update failed');
+    }
+    
+    const updatedDepartment = await res.json();
+    
+    // Update local storage with the new department data
+    const currentDepartment = getCurrentDepartment();
+    if (currentDepartment) {
+      const newDepartmentData = {
+        ...currentDepartment,
+        name: updatedDepartment.name || currentDepartment.name,
+        email: updatedDepartment.email || currentDepartment.email,
+        hodName: updatedDepartment.hodName || currentDepartment.hodName,
+        hodTitle: updatedDepartment.hodTitle || currentDepartment.hodTitle
+      };
+      localStorage.setItem("department", JSON.stringify(newDepartmentData));
+    }
+    
+    return updatedDepartment;
+  } catch (error) {
+    console.error('Profile update error:', error);
+    throw error;
+  }
+}

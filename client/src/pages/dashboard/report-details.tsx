@@ -78,9 +78,59 @@ export default function ReportDetails() {
 
     const day = parts[0].padStart(2, '0');
     const month = parts[1].padStart(2, '0');
-    const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+    const year = parts[2].length === 2 ? parts[2] : parts[2].slice(-2);
 
-    return `${day}-${month}-${year.slice(-2)}`;
+    return `${day}-${month}-${year}`;
+  };
+
+  const formatDispatchDate = (date: string | Date) => {
+    const d = new Date(date);
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const year = d.getFullYear().toString().slice(-2);
+    return `${day}${month}${year}`;
+  };
+
+  const formatTermExpiry = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return "-";
+    
+    try {
+      const date = new Date(dateStr);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear().toString().slice(-2);
+      
+      return `${day}-${month}-${year}`;
+    } catch (error) {
+      console.error("Error formatting term expiry date:", error);
+      return dateStr;
+    }
+  };
+
+  const isWholeMonth = (fromDate: string, toDate: string): boolean => {
+    // Check if period starts from day 1
+    const fromParts = fromDate.split('-');
+    if (fromParts.length !== 3 || fromParts[0] !== '01') return false;
+    
+    // Extract month and year
+    const fromMonth = parseInt(fromParts[1]);
+    const fromYear = parseInt(fromParts[2].length === 2 ? `20${fromParts[2]}` : fromParts[2]);
+    
+    // Check if period ends on the last day of month
+    const toParts = toDate.split('-');
+    if (toParts.length !== 3) return false;
+    
+    const toMonth = parseInt(toParts[1]);
+    const toYear = parseInt(toParts[2].length === 2 ? `20${toParts[2]}` : toParts[2]);
+    
+    // Months should be same for whole month period
+    if (fromMonth !== toMonth || fromYear !== toYear) return false;
+    
+    // Calculate last day of the month
+    const lastDay = new Date(fromYear, fromMonth, 0).getDate();
+    
+    // Check if end date is the last day of month
+    return parseInt(toParts[0]) === lastDay;
   };
 
   const handlePrint = () => {
@@ -129,10 +179,20 @@ export default function ReportDetails() {
                   padding: 5px;
                   font-family: system-ui, -apple-system, sans-serif;
                   font-size: 9pt;
+                  counter-reset: page;
                 }
                 .print-content {
                   width: 100%;
                   max-width: 100%;
+                  padding: 0 2mm;
+                }
+                
+                /* Simple page numbering that won't duplicate */
+                @page {
+                  @bottom-right {
+                    content: counter(page) "/" counter(pages);
+                    margin-bottom: 10mm;
+                  }
                 }
                 
                 /* Table styles for compact display */
@@ -142,9 +202,12 @@ export default function ReportDetails() {
                   border-collapse: collapse;
                   margin-bottom: 5px;
                   table-layout: fixed;
+                  margin-left: 0;
+                  margin-right: 0;
+                  max-width: 100vw;
                 }
                 th, td {
-                  padding: 3px 4px;
+                  padding: 3px 2px;
                   border: 1px solid #ddd;
                   text-align: left;
                   overflow: hidden;
@@ -155,6 +218,17 @@ export default function ReportDetails() {
                   font-weight: bold;
                   font-size: 8pt;
                 }
+                
+                /* Column widths for popup print window */
+                table th:nth-child(1), table td:nth-child(1) { width: 4%; } /* S.No. */
+                table th:nth-child(2), table td:nth-child(2) { width: 8%; } /* Employee ID */
+                table th:nth-child(3), table td:nth-child(3) { width: 22%; } /* Name */
+                table th:nth-child(4), table td:nth-child(4) { width: 22%; } /* Designation */
+                table th:nth-child(5), table td:nth-child(5) { width: 7%; } /* Term_Expiry */
+                table th:nth-child(6), table td:nth-child(6) { width: 7%; } /* Salary Register */
+                table th:nth-child(7), table td:nth-child(7) { width: 17%; } /* Period */
+                table th:nth-child(8), table td:nth-child(8) { width: 5%; } /* Days */
+                table th:nth-child(9), table td:nth-child(9) { width: 8%; } /* Remarks */
                 
                 /* Card styling */
                 .card {
@@ -208,21 +282,19 @@ export default function ReportDetails() {
                   margin-top: 5px;
                 }
                 
-                /* Column widths for table */
-                table th:nth-child(1), table td:nth-child(1) { width: 6%; } /* Employee ID */
-                table th:nth-child(2), table td:nth-child(2) { width: 12%; } /* Name */
-                table th:nth-child(3), table td:nth-child(3) { width: 12%; } /* Designation */
-                table th:nth-child(4), table td:nth-child(4) { width: 12%; } /* Employment Status */
-                table th:nth-child(5), table td:nth-child(5) { width: 12%; } /* Salary Register */
-                table th:nth-child(6), table td:nth-child(6) { width: 15%; } /* Period */
-                table th:nth-child(7), table td:nth-child(7) { width: 6%; } /* Days */
-                table th:nth-child(8), table td:nth-child(8) { width: 25%; } /* Remarks */
-                
                 /* Whitespace control for table cells */
                 .whitespace-nowrap {
                   white-space: nowrap;
                   overflow: hidden;
                   text-overflow: ellipsis;
+                }
+                
+                /* Force page breaks */
+                tr {
+                  page-break-inside: avoid;
+                }
+                .certification-section {
+                  page-break-inside: avoid;
                 }
               </style>
             </head>
@@ -290,24 +362,28 @@ export default function ReportDetails() {
       ['Transaction ID:', report.transactionId || '-'],
       ['Status:', report.status],
       ['Despatch No:', report.despatchNo || '-'],
-      ['Despatch Date:', report.despatchDate ? format(new Date(report.despatchDate), "dd MMM yyyy") : '-'],
+      ['Despatch Date:', report.despatchDate ? formatDispatchDate(report.despatchDate) : '-'],
       ['']
     ];
 
     const attendanceData = [
-      ['Employee ID', 'Name', 'Designation', 'Employment Status', 'Salary Register No', 'Period', 'Days', 'Remarks']
+      ['S.No.', 'Employee ID', 'Name', 'Designation', 'Term_Expiry', 'Salary Register No', 'Period', 'Days', 'Remarks']
     ];
 
+    let serialNumber = 1;
     report.entries?.forEach(entry => {
       const periods = typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods;
       periods.forEach((period: any) => {
         attendanceData.push([
+          serialNumber++,
           entry.employee?.epid,
           entry.employee?.name,
           entry.employee?.designation,
-          entry.employee?.employmentStatus || '-',
+          formatTermExpiry(entry.employee?.termExpiry),
           entry.employee?.salaryRegisterNo || '-',
-          `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
+          isWholeMonth(period.fromDate, period.toDate) 
+            ? "- " 
+            : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
           period.days,
           period.remarks || '-'
         ]);
@@ -327,14 +403,15 @@ export default function ReportDetails() {
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
     const colWidths = [
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 25 },
-      { wch: 25 },
-      { wch: 10 },
-      { wch: 30 }
+      { wch: 4 },  // S.No.
+      { wch: 8 },  // Employee ID
+      { wch: 22 }, // Name
+      { wch: 22 }, // Designation
+      { wch: 7 },  // Term_Expiry
+      { wch: 7 },  // Salary Register No
+      { wch: 17 }, // Period
+      { wch: 5 },  // Days
+      { wch: 8 }   // Remarks
     ];
     ws['!cols'] = colWidths;
 
@@ -354,6 +431,7 @@ export default function ReportDetails() {
             visibility: hidden;
             margin: 0;
             padding: 0;
+            counter-reset: page;
           }
           .print-content { 
             visibility: visible;
@@ -361,16 +439,18 @@ export default function ReportDetails() {
             left: 0;
             top: 0;
             width: 100%;
-            padding: 5px;
+            padding: 0 2mm; /* Reduce side padding */
           }
           .no-print {
             display: none !important;
           }
           
-          /* Reduce spacing */
-          .print-content .space-y-6 {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
+          /* Simple page numbering at the bottom right */
+          @page {
+            @bottom-right {
+              content: counter(page) "/" counter(pages);
+              margin-bottom: 10mm;
+            }
           }
           
           /* Make table more compact */
@@ -379,6 +459,9 @@ export default function ReportDetails() {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
+            margin-left: 0;
+            margin-right: 0;
+            max-width: 100vw;
           }
           
           .print-content tr {
@@ -387,7 +470,7 @@ export default function ReportDetails() {
           
           .print-content th, 
           .print-content td {
-            padding: 3px 4px !important;
+            padding: 3px 2px !important;
             border: 1px solid #ddd;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -448,14 +531,15 @@ export default function ReportDetails() {
           }
 
           /* Column widths for table */
-          .print-content th:nth-child(1), .print-content td:nth-child(1) { width: 6% !important; } /* Employee ID */
-          .print-content th:nth-child(2), .print-content td:nth-child(2) { width: 12% !important; } /* Name */
-          .print-content th:nth-child(3), .print-content td:nth-child(3) { width: 12% !important; } /* Designation */
-          .print-content th:nth-child(4), .print-content td:nth-child(4) { width: 12% !important; } /* Employment Status */
-          .print-content th:nth-child(5), .print-content td:nth-child(5) { width: 12% !important; } /* Salary Register */
-          .print-content th:nth-child(6), .print-content td:nth-child(6) { width: 15% !important; } /* Period */
-          .print-content th:nth-child(7), .print-content td:nth-child(7) { width: 6% !important; } /* Days */
-          .print-content th:nth-child(8), .print-content td:nth-child(8) { width: 25% !important; } /* Remarks */
+          .print-content th:nth-child(1), .print-content td:nth-child(1) { width: 4% !important; } /* S.No. */
+          .print-content th:nth-child(2), .print-content td:nth-child(2) { width: 6% !important; } /* Employee ID */
+          .print-content th:nth-child(3), .print-content td:nth-child(3) { width: 26% !important; } /* Name */
+          .print-content th:nth-child(4), .print-content td:nth-child(4) { width: 20% !important; } /* Designation */
+          .print-content th:nth-child(5), .print-content td:nth-child(5) { width: 7% !important; } /* Term_Expiry */
+          .print-content th:nth-child(6), .print-content td:nth-child(6) { width: 7% !important; } /* Salary Register */
+          .print-content th:nth-child(7), .print-content td:nth-child(7) { width: 17% !important; } /* Period */
+          .print-content th:nth-child(8), .print-content td:nth-child(8) { width: 5% !important; } /* Days */
+          .print-content th:nth-child(9), .print-content td:nth-child(9) { width: 8% !important; } /* Remarks */
         }
       `}</style>
 
@@ -507,63 +591,77 @@ export default function ReportDetails() {
               {report.despatchDate && (
                 <InfoItem 
                   label="Despatch Date" 
-                  value={format(new Date(report.despatchDate), "dd MMM yyyy")} 
+                  value={report.despatchDate ? formatDispatchDate(report.despatchDate) : '-'} 
                 />
               )}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle></CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="whitespace-nowrap">ID</TableHead>
-                  <TableHead className="whitespace-nowrap">Name</TableHead>
-                  <TableHead className="whitespace-nowrap">Designation</TableHead>
-                  <TableHead className="whitespace-nowrap">Emp Status</TableHead>
-                  <TableHead className="whitespace-nowrap">Reg.No</TableHead>
-                  <TableHead className="whitespace-nowrap">Period</TableHead>
-                  <TableHead className="whitespace-nowrap">Days</TableHead>
-                  <TableHead className="whitespace-nowrap">Remarks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {report.entries?.map((entry) => {
-                  try {
-                    const periods = typeof entry.periods === 'string' 
-                      ? JSON.parse(entry.periods) 
-                      : entry.periods;
+        <div className="mt-4 overflow-x-auto">
+          <Table className="w-full border-collapse">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="whitespace-nowrap">Srl</TableHead>
+                <TableHead className="whitespace-nowrap">ID</TableHead>
+                <TableHead className="whitespace-nowrap">Name</TableHead>
+                <TableHead className="whitespace-nowrap">Designation</TableHead>
+                <TableHead className="whitespace-nowrap">Term</TableHead>
+                <TableHead className="whitespace-nowrap">Reg.No</TableHead>
+                <TableHead className="whitespace-nowrap">Period</TableHead>
+                <TableHead className="whitespace-nowrap">Days</TableHead>
+                <TableHead className="whitespace-nowrap">Remarks</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.entries?.flatMap((entry, entryIndex) => {
+                try {
+                  const periods = typeof entry.periods === 'string' 
+                    ? JSON.parse(entry.periods) 
+                    : entry.periods;
 
-                    return periods.map((period: any, periodIndex: number) => (
+                  return periods.map((period: any, periodIndex: number) => {
+                    // Calculate serial number based on flattened entries array
+                    const serialNumber = 
+                      (report.entries
+                        ? report.entries
+                            .slice(0, entryIndex)
+                            .reduce((count, prevEntry) => {
+                              const prevPeriods = typeof prevEntry.periods === 'string'
+                                ? JSON.parse(prevEntry.periods)
+                                : prevEntry.periods || [];
+                              return count + (prevPeriods?.length || 0);
+                            }, 0)
+                        : 0) + periodIndex + 1;
+
+                    return (
                       <TableRow key={`${entry.id}-${periodIndex}`}>
+                        <TableCell className="whitespace-nowrap">{serialNumber}</TableCell>
                         <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
                         <TableCell className="whitespace-nowrap">{entry.employee?.name}</TableCell>
                         <TableCell className="whitespace-nowrap">{entry.employee?.designation}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.employee?.employmentStatus || "-"}</TableCell>
+                        <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
                         <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
+                          {isWholeMonth(period.fromDate, period.toDate) 
+                            ? "- " 
+                            : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">{period.days}</TableCell>
                         <TableCell>{period.remarks || "-"}</TableCell>
                       </TableRow>
-                    ));
-                  } catch (error) {
-                    console.error('Error parsing periods:', error);
-                    return null;
-                  }
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                    );
+                  });
+                } catch (error) {
+                  console.error('Error parsing periods:', error);
+                  return null;
+                }
+              })}
+            </TableBody>
+          </Table>
+        </div>
 
-        <div className="mt-8 space-y-4 text-right">
+        <div className="mt-8 space-y-4 text-right certification-section">
           <p>.Certified that the above attendance report is correct.</p>
           <div className="space-y-1">
           <div style={{ height: '3em' }}></div>

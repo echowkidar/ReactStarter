@@ -50,10 +50,6 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
           <p>{employee.bankAccount}</p>
         </div>
         <div>
-          <label className="text-sm font-medium text-muted-foreground">Bank Name</label>
-          <p>{employee.bankName || "Not specified"}</p>
-        </div>
-        <div>
           <label className="text-sm font-medium text-muted-foreground">Adhar Number</label>
           <p>{employee.aadharCard}</p>
         </div>
@@ -211,6 +207,11 @@ export default function Employees() {
     enabled: !!department?.id
   });
 
+  // Sort employees by EPID in ascending order
+  const sortedEmployees = [...(employees || [])].sort((a, b) => 
+    a.epid.localeCompare(b.epid, undefined, { numeric: true })
+  );
+
   const addEmployee = useMutation({
     mutationFn: async (data: any) => {
       const formData = new FormData();
@@ -308,7 +309,7 @@ export default function Employees() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employees.map((employee) => (
+                {sortedEmployees.map((employee) => (
                   <TableRow key={employee.id}>
                     <TableCell>{employee.epid}</TableCell>
                     <TableCell>{employee.name}</TableCell>

@@ -108,13 +108,38 @@ interface AttendanceFormProps {
   };
 }
 
+// Add the formatTermExpiry function
+const formatTermExpiry = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return "-";
+  
+  try {
+    const date = new Date(dateStr);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(-2);
+    
+    return `${day}-${month}-${year}`;
+  } catch (error) {
+    console.error("Error formatting term expiry date:", error);
+    return dateStr;
+  }
+};
+
 export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData }: AttendanceFormProps) {
   const department = getCurrentDepartment();
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
 
   const { data: employees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
-    select: (data: any) => data || [],
+    select: (data: any) => {
+      // Sort employees by EPID in ascending order
+      return [...data].sort((a, b) => {
+        // Handle null or undefined EPID values
+        if (!a.epid) return 1;
+        if (!b.epid) return -1;
+        return a.epid.localeCompare(b.epid);
+      });
+    },
   });
 
   const selectedMonth = parseInt(initialData?.month || String(new Date().getMonth() + 1));
@@ -252,6 +277,32 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     }
   }, [initialData, form]);
 
+  // Add a function to select/deselect all employees
+  const toggleAllEmployees = () => {
+    if (includedEmployees.size === employees.length) {
+      // Deselect all
+      setIncludedEmployees(new Set());
+      form.setValue("entries", []);
+    } else {
+      // Select all
+      const allEmployeeIds = new Set(employees.map((employee: any) => employee.id));
+      setIncludedEmployees(allEmployeeIds);
+      
+      // Initialize entries for all employees
+      const allEntries = employees.map((employee: any) => ({
+        employeeId: employee.id,
+        periods: [{
+          fromDate: formatDateForDisplay(defaultStartDate),
+          toDate: formatDateForDisplay(defaultEndDate),
+          days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
+          remarks: "",
+        }],
+      }));
+      
+      form.setValue("entries", allEntries);
+    }
+  };
+
   if (loadingEmployees) {
     return (
       <div className="flex justify-center p-4">
@@ -326,11 +377,21 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]">Include</TableHead>
+                <TableHead className="w-[50px]">
+                  <div className="flex flex-col items-center">
+                    <Checkbox
+                      checked={includedEmployees.size === employees.length && employees.length > 0}
+                      onCheckedChange={toggleAllEmployees}
+                      disabled={isLoading}
+                    />
+                    <span className="text-xs mt-1">All</span>
+                  </div>
+                </TableHead>
+                <TableHead className="w-[60px]">S.No.</TableHead>
                 <TableHead className="w-[80px]">EPID</TableHead>
                 <TableHead className="w-[120px]">Name</TableHead>
                 <TableHead className="w-[120px]">Designation</TableHead>
-                <TableHead className="w-[120px]">Employment Status</TableHead>
+                <TableHead className="w-[120px]">Term_Expiry</TableHead>
                 <TableHead className="w-[100px]">Reg No.</TableHead>
                 <TableHead className="min-w-[500px] px-0">
                   <div className="text-left mb-2">Attendance Periods</div>
@@ -354,10 +415,22 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                       disabled={isLoading}
                     />
                   </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {includedEmployees.has(employee.id) ? 
+                      Array.from(includedEmployees)
+                        .filter(id => includedEmployees.has(id))
+                        .sort((a, b) => {
+                          const empA = employees.find((e: any) => e.id === a);
+                          const empB = employees.find((e: any) => e.id === b);
+                          return empA?.epid?.localeCompare(empB?.epid || '') || 0;
+                        })
+                        .indexOf(employee.id) + 1 
+                      : '-'}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">{employee.epid}</TableCell>
                   <TableCell className="whitespace-nowrap">{employee.name}</TableCell>
                   <TableCell className="whitespace-nowrap">{employee.designation}</TableCell>
-                  <TableCell className="whitespace-nowrap">{employee.employmentStatus || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatTermExpiry(employee.termExpiry)}</TableCell>
                   <TableCell className="whitespace-nowrap">{employee.salaryRegisterNo || '-'}</TableCell>
                   <TableCell>
                     <div className="space-y-1">

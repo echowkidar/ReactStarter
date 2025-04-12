@@ -16,6 +16,15 @@ import type {
   DepartmentName,
 } from "@shared/schema";
 
+// Create a temporary in-memory storage for reset tokens
+// In a production app, these would be stored in the database
+type ResetToken = {
+  token: string;
+  expiry: Date;
+};
+
+const resetTokens = new Map<number, ResetToken>();
+
 export class DbStorage implements IStorage {
   // Database connection check
   async checkConnection(): Promise<boolean> {
@@ -279,5 +288,30 @@ export class DbStorage implements IStorage {
       .where(eq(attendanceEntries.id, id))
       .returning();
     return updatedEntry;
+  }
+
+  // Password reset token methods
+  async storeResetToken(departmentId: number, token: string, expiry: Date): Promise<void> {
+    resetTokens.set(departmentId, { token, expiry });
+  }
+
+  async validateResetToken(departmentId: number, token: string): Promise<boolean> {
+    const tokenData = resetTokens.get(departmentId);
+    if (!tokenData) return false;
+    
+    if (tokenData.token !== token) return false;
+    
+    // Check if token has expired
+    if (tokenData.expiry < new Date()) {
+      // Token expired, clean it up
+      resetTokens.delete(departmentId);
+      return false;
+    }
+    
+    return true;
+  }
+
+  async clearResetToken(departmentId: number): Promise<void> {
+    resetTokens.delete(departmentId);
   }
 } 

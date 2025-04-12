@@ -27,7 +27,7 @@ export default function Header({ className }: HeaderProps) {
         <User className="h-5 w-5 text-muted-foreground" />
         <div className="text-sm">
           <p className="font-medium">{department?.name}</p>
-          <p className="text-muted-foreground">{department?.email}</p>
+          <p className="text-muted-foreground">{department?.hodName || department?.email}</p>
         </div>
       </div>
     </header>

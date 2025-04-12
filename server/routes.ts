@@ -18,6 +18,12 @@ import {
 } from "../shared/schema";
 import fs from "fs";
 import { v4 as uuid } from "uuid";
+import { setupTestEmailAccount, sendPasswordResetEmail } from "./emailService";
+
+// Add type declaration for global adminResetTokens
+declare global {
+  var adminResetTokens: Map<string, { token: string; expiry: Date }>;
+}
 
 // Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +37,13 @@ const storage = new DbStorage();
 
 export async function registerRoutes(app: Express) {
   const httpServer = createServer(app);
+
+  // Initialize test email service (in development)
+  try {
+    await setupTestEmailAccount();
+  } catch (error) {
+    console.error("Failed to setup test email account:", error);
+  }
 
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
@@ -60,6 +73,189 @@ export async function registerRoutes(app: Express) {
     }
 
     return res.status(401).json({ message: "Invalid admin credentials" });
+  });
+
+  // Password reset routes
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const { email } = req.body;
+    
+    try {
+      // Check if email exists in departments
+      const department = await storage.getDepartmentByEmail(email);
+      if (!department) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+      
+      // Generate reset token (expires in 1 hour)
+      const resetToken = uuid();
+      const tokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+      
+      // Store token in database
+      await storage.storeResetToken(department.id, resetToken, tokenExpiry);
+      
+      // Create reset URL
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://amu-salary.example.com' 
+        : 'http://localhost:5001';
+      
+      const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      
+      // Send email with reset link
+      const emailResult = await sendPasswordResetEmail(email, resetUrl, false);
+      
+      const response: any = { 
+        message: "Password reset link has been sent to your email"
+      };
+      
+      // For development only - include reset token and preview URL
+      if (process.env.NODE_ENV !== 'production') {
+        response.resetToken = resetToken;
+        response.resetUrl = resetUrl;
+        
+        if (emailResult.previewUrl) {
+          response.emailPreviewUrl = emailResult.previewUrl;
+        }
+        
+        // Include isEthereal flag for UI customization
+        response.isEthereal = emailResult.isEthereal;
+      }
+      
+      return res.json(response);
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      return res.status(500).json({ message: "Failed to process password reset request" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { email, token, newPassword } = req.body;
+    
+    try {
+      // Validate that all required fields are present
+      if (!email || !token || !newPassword) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      // Find department by email
+      const department = await storage.getDepartmentByEmail(email);
+      if (!department) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+      
+      // Verify token validity
+      const isValidToken = await storage.validateResetToken(department.id, token);
+      if (!isValidToken) {
+        return res.status(400).json({ message: "Invalid or expired token" });
+      }
+      
+      // Update password
+      await storage.updateDepartment(department.id, { password: newPassword });
+      
+      // Clear used token
+      await storage.clearResetToken(department.id);
+      
+      return res.json({ message: "Password has been reset successfully" });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      return res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  // Admin forgot/reset password routes
+  app.post("/api/auth/admin/forgot-password", async (req, res) => {
+    const { email } = req.body;
+    
+    try {
+      // For demo purposes, we'll only handle the two hardcoded admin accounts
+      const ADMIN_EMAIL = "admin@amu.ac.in";
+      const SALARY_ADMIN_EMAIL = "salary@amu.ac.in";
+      
+      if (email !== ADMIN_EMAIL && email !== SALARY_ADMIN_EMAIL) {
+        return res.status(404).json({ message: "Admin email not found" });
+      }
+      
+      // Generate reset token (expires in 1 hour)
+      const resetToken = uuid();
+      const tokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+      
+      // Store token (in a real app this would be in the database)
+      // For demo, we'll use a global Map to store tokens
+      if (!global.adminResetTokens) {
+        global.adminResetTokens = new Map();
+      }
+      global.adminResetTokens.set(email, { token: resetToken, expiry: tokenExpiry });
+      
+      // Create reset URL
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://amu-salary.example.com' 
+        : 'http://localhost:5001';
+      
+      const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      
+      // Send email with reset link
+      const emailResult = await sendPasswordResetEmail(email, resetUrl, true);
+      
+      const response: any = { 
+        message: "Password reset link has been sent to your email"
+      };
+      
+      // For development only - include reset token and preview URL
+      if (process.env.NODE_ENV !== 'production') {
+        response.resetToken = resetToken;
+        response.resetUrl = resetUrl;
+        
+        if (emailResult.previewUrl) {
+          response.emailPreviewUrl = emailResult.previewUrl;
+        }
+        
+        // Include isEthereal flag for UI customization
+        response.isEthereal = emailResult.isEthereal;
+      }
+      
+      return res.json(response);
+    } catch (error) {
+      console.error("Admin forgot password error:", error);
+      return res.status(500).json({ message: "Failed to process admin password reset request" });
+    }
+  });
+
+  app.post("/api/auth/admin/reset-password", async (req, res) => {
+    const { email, token, newPassword } = req.body;
+    
+    try {
+      // Validate that all required fields are present 
+      if (!email || !token || !newPassword) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      // For demo purposes only
+      const ADMIN_EMAIL = "admin@amu.ac.in";
+      const SALARY_ADMIN_EMAIL = "salary@amu.ac.in";
+      
+      if (email !== ADMIN_EMAIL && email !== SALARY_ADMIN_EMAIL) {
+        return res.status(404).json({ message: "Admin email not found" });
+      }
+      
+      // Check if token is valid
+      if (!global.adminResetTokens || !global.adminResetTokens.has(email)) {
+        return res.status(400).json({ message: "Invalid or expired token" });
+      }
+      
+      const tokenData = global.adminResetTokens.get(email);
+      if (!tokenData || tokenData.token !== token || tokenData.expiry < new Date()) {
+        return res.status(400).json({ message: "Invalid or expired token" });
+      }
+      
+      // In a real app, you would update the admin password in the database
+      
+      // Clear used token
+      global.adminResetTokens.delete(email);
+      
+      return res.json({ message: "Admin password has been reset successfully" });
+    } catch (error) {
+      console.error("Admin reset password error:", error);
+      return res.status(500).json({ message: "Failed to reset admin password" });
+    }
   });
 
   // Auth routes
@@ -1251,6 +1447,51 @@ export async function registerRoutes(app: Express) {
           details: String(error)
         });
       }
+    }
+  });
+
+  // Department profile update
+  app.put("/api/departments/:id/profile", async (req, res) => {
+    const departmentId = parseInt(req.params.id);
+    const { name, email, hodName, hodTitle, password, currentPassword } = req.body;
+    
+    try {
+      // Get current department data
+      const department = await storage.getDepartment(departmentId);
+      if (!department) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      // If updating password, verify current password
+      if (password) {
+        if (!currentPassword) {
+          return res.status(400).json({ message: "Current password is required to update password" });
+        }
+        
+        // Verify current password
+        if (department.password !== currentPassword) {
+          return res.status(401).json({ message: "Current password is incorrect" });
+        }
+      }
+      
+      // Build update object
+      const updates: Partial<Department> = {};
+      if (name) updates.name = name;
+      if (email) updates.email = email;
+      if (hodName) updates.hodName = hodName;
+      if (hodTitle) updates.hodTitle = hodTitle;
+      if (password) updates.password = password;
+      
+      // Update department
+      const updatedDepartment = await storage.updateDepartment(departmentId, updates);
+      
+      // Return updated department data (excluding sensitive info)
+      const { password: _, ...safeData } = updatedDepartment;
+      
+      return res.json(safeData);
+    } catch (error) {
+      console.error("Department profile update error:", error);
+      return res.status(500).json({ message: "Failed to update department profile" });
     }
   });
 

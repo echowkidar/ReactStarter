@@ -99,13 +99,6 @@ export default function Login() {
         <CardFooter className="flex flex-col space-y-2">
           <Button
             variant="link"
-            onClick={() => setLocation("/register")}
-            disabled={isLoading}
-          >
-            Don't have an account? Register
-          </Button>
-          <Button
-            variant="link"
             onClick={() => setLocation("/forgot-password")}
             disabled={isLoading}
             className="text-sm text-muted-foreground hover:text-primary"

@@ -126,10 +126,10 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 
 
 ### Windsurf Commands To add repo in GitHub branch
+## git branch complete_ptoject
 ## git config --global core.autocrlf true
 ## git push origin complete_ptoject # Replace your-branch-name
 ## git branch
-## git branch complete_ptoject
 ## git fetch origin
 ## git checkout -b complete_project origin/complete_project
 ## git add .
