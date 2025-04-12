@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { employmentStatuses } from "@/lib/departments";
 import { Employee, InsertEmployee, insertEmployeeSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
+import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
+import { FileUpload } from "@/components/ui/file-upload";
 
 interface EditEmployeeFormProps {
   employee: Employee;
@@ -18,8 +21,9 @@ interface EditEmployeeFormProps {
 export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditEmployeeFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
   
-  // रीफ़्स फाइल इनपुट्स के लिए
+  // File input references
   const panCardFileRef = useRef<HTMLInputElement>(null);
   const bankAccountFileRef = useRef<HTMLInputElement>(null);
   const aadharCardFileRef = useRef<HTMLInputElement>(null);
@@ -27,17 +31,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const joiningReportFileRef = useRef<HTMLInputElement>(null);
   const termExtensionFileRef = useRef<HTMLInputElement>(null);
   
-  // फाइल URL स्टेट - फाइलों को हटाने या रखने के लिए
-  const [fileUrls, setFileUrls] = useState({
-    panCardUrl: employee.panCardUrl || "",
-    bankProofUrl: employee.bankProofUrl || "",
-    aadharCardUrl: employee.aadharCardUrl || "",
-    officeMemoUrl: employee.officeMemoUrl || "",
-    joiningReportUrl: employee.joiningReportUrl || "",
-    termExtensionUrl: employee.termExtensionUrl || ""
-  });
-  
-  // फाइल स्टेट ट्रैकिंग
+  // File state tracking
   const [selectedFiles, setSelectedFiles] = useState<{
     panCardDoc: File | null,
     bankAccountDoc: File | null,
@@ -54,23 +48,97 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     termExtensionDoc: null
   });
   
+  // File URL State - to handle file removal or replacement
+  const [fileUrls, setFileUrls] = useState({
+    panCardUrl: employee.panCardUrl || "",
+    bankProofUrl: employee.bankProofUrl || "",
+    aadharCardUrl: employee.aadharCardUrl || "",
+    officeMemoUrl: employee.officeMemoUrl || "",
+    joiningReportUrl: employee.joiningReportUrl || "",
+    termExtensionUrl: employee.termExtensionUrl || ""
+  });
+  
   // File change handler
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
-    const file = event.target.files?.[0] || null;
-    console.log(`File selected: ${fieldName} - ${file ? file.name : 'No file'}`);
+  const handleFileChange = async (file: File | null, fieldName: string) => {
+    // Clear any previous errors for this field
+    setFileErrors(prev => ({ ...prev, [fieldName]: "" }));
     
+    // Update selected files state
     setSelectedFiles(prev => ({
       ...prev,
       [fieldName]: file
     }));
+    
+    if (!file) {
+      // Clear the URL for this field
+      let urlField: keyof typeof fileUrls;
+      
+      // Special case for bank account proof which has a different URL field name
+      if (fieldName === 'bankAccountDoc') {
+        urlField = 'bankProofUrl';
+      } else {
+        // Normal case: convert 'typeDoc' to 'typeUrl'
+        urlField = `${fieldName.replace('Doc', '')}Url` as keyof typeof fileUrls;
+      }
+      
+      setFileUrls(prev => ({
+        ...prev,
+        [urlField]: ""
+      }));
+      return;
+    }
+    
+    // Validate that it's an image
+    if (!isImageFile(file)) {
+      setFileErrors(prev => ({ ...prev, [fieldName]: "Only image files are allowed" }));
+      return;
+    }
+    
+    try {
+      // Compress the image to WebP format
+      const result = await compressImageToWebP(file);
+      
+      // Log the conversion to verify WebP format
+      console.log(`Converted ${file.name} to WebP: ${result.fileName}`);
+      console.log(`Blob type: ${result.blob.type}`);
+      
+      // Set the URL in fileUrls state
+      let urlField: keyof typeof fileUrls;
+      
+      // Special case for bank account proof which has a different URL field name
+      if (fieldName === 'bankAccountDoc') {
+        urlField = 'bankProofUrl';
+      } else {
+        // Normal case: convert 'typeDoc' to 'typeUrl'
+        urlField = `${fieldName.replace('Doc', '')}Url` as keyof typeof fileUrls;
+      }
+      
+      setFileUrls(prev => ({
+        ...prev,
+        [urlField]: result.url
+      }));
+      
+    } catch (error) {
+      console.error(`Error processing ${fieldName}:`, error);
+      setFileErrors(prev => ({ ...prev, [fieldName]: "Failed to process image" }));
+    }
   };
   
   // File removal handler
   const handleRemoveFile = async (fileType: string) => {
     console.log(`File being removed: ${fileType}`);
     
-    // Get the file URL field name
-    const urlField = `${fileType.replace('Doc', '')}Url` as keyof typeof fileUrls;
+    // Get the file URL field name based on the file type
+    let urlField: keyof typeof fileUrls;
+    
+    // Special case for bank account proof which has a different URL field name
+    if (fileType === 'bankAccountDoc') {
+      urlField = 'bankProofUrl';
+    } else {
+      // Normal case: convert 'typeDoc' to 'typeUrl'
+      urlField = `${fileType.replace('Doc', '')}Url` as keyof typeof fileUrls;
+    }
+    
     const currentFileUrl = fileUrls[urlField];
     
     // Directly check if in admin or department mode
@@ -168,7 +236,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       [fileType]: null
     }));
   };
-
+  
   // Create a modified schema that makes URL fields optional
   const editEmployeeSchema = insertEmployeeSchema.extend({
     panCardUrl: z.string().optional(),
@@ -515,274 +583,231 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     }}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Employee</DialogTitle>
+          <DialogTitle className="text-xl font-semibold">Edit Employee</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" encType="multipart/form-data">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Basic Information */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">EPID</label>
-              <input
-                {...register("epid")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.epid && <p className="text-red-500 text-xs">{errors.epid.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Name</label>
-              <input
-                {...register("name")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.name && <p className="text-red-500 text-xs">{errors.name.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Designation</label>
-              <input
-                {...register("designation")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.designation && <p className="text-red-500 text-xs">{errors.designation.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Employment Status</label>
-              <select
-                {...register("employmentStatus")}
-                className="w-full p-2 border rounded-md"
-              >
-                {employmentStatuses.map(status => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-              {errors.employmentStatus && <p className="text-red-500 text-xs">{errors.employmentStatus.message}</p>}
-            </div>
-
-            {showTermExpiry && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">Term Expiry Date</label>
+          {/* Basic Information */}
+          <div className="bg-slate-50 p-4 rounded-lg">
+            <h3 className="text-md font-medium mb-4 text-slate-700 border-b pb-2">Basic Information</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">EPID</label>
                 <input
-                  type="date"
-                  {...register("termExpiry")}
-                  className="w-full p-2 border rounded-md"
+                  {...register("epid")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 />
-                {errors.termExpiry && <p className="text-red-500 text-xs">{errors.termExpiry.message}</p>}
+                {errors.epid && <p className="text-red-500 text-xs mt-1">{errors.epid.message}</p>}
               </div>
-            )}
 
-            {/* Document upload fields */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">PAN Card</label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                className="w-full p-2 border rounded-md"
-                ref={panCardFileRef}
-                onChange={(e) => handleFileChange(e, 'panCardDoc')}
-              />
-              {fileUrls.panCardUrl && (
-                <div className="flex items-center mt-1 space-x-2">
-                  <a href={fileUrls.panCardUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600">
-                    View existing document
-                  </a>
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveFile('panCardDoc')}
-                    className="text-sm text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Bank Account</label>
-              <input
-                {...register("bankAccount")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.bankAccount && <p className="text-red-500 text-xs">{errors.bankAccount.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Bank Account Proof</label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                className="w-full p-2 border rounded-md"
-                ref={bankAccountFileRef}
-                onChange={(e) => handleFileChange(e, 'bankAccountDoc')}
-              />
-              {fileUrls.bankProofUrl && (
-                <div className="flex items-center mt-1 space-x-2">
-                  <a href={fileUrls.bankProofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600">
-                    View existing document
-                  </a>
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveFile('bankAccountDoc')}
-                    className="text-sm text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Adhar Number</label>
-              <input
-                {...register("aadharCard")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.aadharCard && <p className="text-red-500 text-xs">{errors.aadharCard.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Office Memo</label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                className="w-full p-2 border rounded-md"
-                ref={officeMemoFileRef}
-                onChange={(e) => handleFileChange(e, 'officeMemoDoc')}
-              />
-              {fileUrls.officeMemoUrl && (
-                <div className="flex items-center mt-1 space-x-2">
-                  <a href={fileUrls.officeMemoUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600">
-                    View existing document
-                  </a>
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveFile('officeMemoDoc')}
-                    className="text-sm text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Joining Report</label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                className="w-full p-2 border rounded-md"
-                ref={joiningReportFileRef}
-                onChange={(e) => handleFileChange(e, 'joiningReportDoc')}
-              />
-              {fileUrls.joiningReportUrl && (
-                <div className="flex items-center mt-1 space-x-2">
-                  <a href={fileUrls.joiningReportUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600">
-                    View existing document
-                  </a>
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveFile('joiningReportDoc')}
-                    className="text-sm text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Term Extension Office Memo - Only for Probation or Temporary */}
-            {(watch("employmentStatus") === "Probation" || watch("employmentStatus") === "Temporary") && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">Term Extension Office Memo</label>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
                 <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="w-full p-2 border rounded-md"
-                  ref={termExtensionFileRef}
-                  onChange={(e) => handleFileChange(e, 'termExtensionDoc')}
+                  {...register("name")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 />
-                {fileUrls.termExtensionUrl && (
-                  <div className="flex items-center mt-1 space-x-2">
-                    <a href={fileUrls.termExtensionUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600">
-                      View existing document
-                    </a>
-                    <button 
-                      type="button" 
-                      onClick={() => handleRemoveFile('termExtensionDoc')}
-                      className="text-sm text-red-600 hover:text-red-800"
-                    >
-                      Remove
-                    </button>
+                {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Designation</label>
+                <input
+                  {...register("designation")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+                {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation.message}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Employment Status</label>
+                <select
+                  {...register("employmentStatus")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                >
+                  {employmentStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                {errors.employmentStatus && <p className="text-red-500 text-xs mt-1">{errors.employmentStatus.message}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Document upload fields */}
+          <div className="bg-slate-50 p-4 rounded-lg">
+            <h3 className="text-md font-medium mb-4 text-slate-700 border-b pb-2">Documents</h3>
+            
+            {/* Term Expiry Date and Term Extension Letter - Only for non-Permanent employees */}
+            {watch("employmentStatus") !== "Permanent" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 pb-6 border-b">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Term Expiry Date</label>
+                  <input
+                    type="date"
+                    {...register("termExpiry")}
+                    className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                  {errors.termExpiry && <p className="text-red-500 text-xs mt-1">{errors.termExpiry.message}</p>}
+                </div>
+
+                {(watch("employmentStatus") === "Probation" || watch("employmentStatus") === "Temporary") && (
+                  <div className="border-l pl-4">
+                    <FileUpload
+                      label="Term Extension Letter"
+                      name="termExtensionDoc"
+                      value={fileUrls.termExtensionUrl}
+                      onChange={(file) => handleFileChange(file, "termExtensionDoc")}
+                      onRemove={() => handleRemoveFile("termExtensionDoc")}
+                      disabled={isSubmitting}
+                      onlyImages={true}
+                      errorMessage={fileErrors.termExtensionDoc}
+                    />
                   </div>
                 )}
               </div>
             )}
+            
+            {/* Other document fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">PAN Number</label>
+                <input
+                  {...register("panNumber")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+                {errors.panNumber && <p className="text-red-500 text-xs mt-1">{errors.panNumber.message}</p>}
+              </div>
+              
+              <div className="border-l pl-4">
+                <FileUpload
+                  label="PAN Card"
+                  name="panCardDoc"
+                  value={fileUrls.panCardUrl}
+                  onChange={(file) => handleFileChange(file, "panCardDoc")}
+                  onRemove={() => handleRemoveFile("panCardDoc")}
+                  disabled={isSubmitting}
+                  onlyImages={true}
+                  errorMessage={fileErrors.panCardDoc}
+                />
+              </div>
 
-            {/* Other fields */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">PAN Number</label>
-              <input
-                {...register("panNumber")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.panNumber && <p className="text-red-500 text-xs">{errors.panNumber.message}</p>}
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Bank Account</label>
+                <input
+                  {...register("bankAccount")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+                {errors.bankAccount && <p className="text-red-500 text-xs mt-1">{errors.bankAccount.message}</p>}
+              </div>
+              
+              <div className="border-l pl-4">
+                <FileUpload
+                  label="Bank Account Proof"
+                  name="bankAccountDoc"
+                  value={fileUrls.bankProofUrl}
+                  onChange={(file) => handleFileChange(file, "bankAccountDoc")}
+                  onRemove={() => handleRemoveFile("bankAccountDoc")}
+                  disabled={isSubmitting}
+                  onlyImages={true}
+                  errorMessage={fileErrors.bankAccountDoc}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Office Memo No</label>
-              <input
-                {...register("officeMemoNo")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.officeMemoNo && <p className="text-red-500 text-xs">{errors.officeMemoNo.message}</p>}
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Aadhar Number</label>
+                <input
+                  {...register("aadharCard")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+                {errors.aadharCard && <p className="text-red-500 text-xs mt-1">{errors.aadharCard.message}</p>}
+              </div>
+              
+              <div className="border-l pl-4">
+                <FileUpload
+                  label="Aadhar Card"
+                  name="aadharCardDoc"
+                  value={fileUrls.aadharCardUrl}
+                  onChange={(file) => handleFileChange(file, "aadharCardDoc")}
+                  onRemove={() => handleRemoveFile("aadharCardDoc")}
+                  disabled={isSubmitting}
+                  onlyImages={true}
+                  errorMessage={fileErrors.aadharCardDoc}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Office Memo No</label>
+                <input
+                  {...register("officeMemoNo")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+                {errors.officeMemoNo && <p className="text-red-500 text-xs mt-1">{errors.officeMemoNo.message}</p>}
+              </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Joining Date</label>
-              <input
-                type="date"
-                {...register("joiningDate")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.joiningDate && <p className="text-red-500 text-xs">{errors.joiningDate.message}</p>}
-            </div>
+              <div className="border-l pl-4">
+                <FileUpload
+                  label="Office Memo"
+                  name="officeMemoDoc"
+                  value={fileUrls.officeMemoUrl}
+                  onChange={(file) => handleFileChange(file, "officeMemoDoc")}
+                  onRemove={() => handleRemoveFile("officeMemoDoc")}
+                  disabled={isSubmitting}
+                  onlyImages={true}
+                  errorMessage={fileErrors.officeMemoDoc}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Salary Register No</label>
-              <input
-                {...register("salaryRegisterNo")}
-                className="w-full p-2 border rounded-md"
-              />
-              {errors.salaryRegisterNo && <p className="text-red-500 text-xs">{errors.salaryRegisterNo.message}</p>}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Joining Date</label>
+                <input
+                  type="date"
+                  {...register("joiningDate")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+                {errors.joiningDate && <p className="text-red-500 text-xs mt-1">{errors.joiningDate.message}</p>}
+              </div>
+
+              <div className="border-l pl-4">
+                <FileUpload
+                  label="Joining Report"
+                  name="joiningReportDoc"
+                  value={fileUrls.joiningReportUrl}
+                  onChange={(file) => handleFileChange(file, "joiningReportDoc")}
+                  onRemove={() => handleRemoveFile("joiningReportDoc")}
+                  disabled={isSubmitting}
+                  onlyImages={true}
+                  errorMessage={fileErrors.joiningReportDoc}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-end space-x-2">
-            <button 
+          {/* Submit Button */}
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button 
               type="button" 
-              className="px-4 py-2 border rounded-md bg-white hover:bg-gray-50"
+              variant="outline" 
               onClick={onClose}
+              className="px-4 py-2"
             >
               Cancel
-            </button>
-            <button 
+            </Button>
+            <Button 
               type="submit" 
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50"
               disabled={isSubmitting}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="inline mr-2 h-4 w-4 animate-spin" />
-                  Updating...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
                 </>
               ) : (
-                "Update Employee"
+                "Save Changes"
               )}
-            </button>
+            </Button>
           </div>
         </form>
       </DialogContent>

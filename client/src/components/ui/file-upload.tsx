@@ -1,8 +1,9 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, X } from "lucide-react";
+import { Upload, X, AlertTriangle } from "lucide-react";
+import { isImageFile } from "@/lib/image-utils";
 
 interface FileUploadProps {
   label: string;
@@ -10,23 +11,45 @@ interface FileUploadProps {
   accept?: string;
   value?: string;
   onChange?: (file: File | null) => void;
+  onRemove?: () => void;
   disabled?: boolean;
+  onlyImages?: boolean;
+  errorMessage?: string;
 }
 
 export function FileUpload({
   label,
   name,
-  accept = "image/*,.pdf",
+  accept = "image/*",
   value,
   onChange,
+  onRemove,
   disabled = false,
+  onlyImages = true,
+  errorMessage,
 }: FileUploadProps) {
   const [preview, setPreview] = useState<string | null>(value || null);
+  const [error, setError] = useState<string | null>(errorMessage || null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Update preview when value changes
+  useEffect(() => {
+    setPreview(value || null);
+  }, [value]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Validate file type if onlyImages is true
+      if (onlyImages && !isImageFile(file)) {
+        setError("Only image files are allowed");
+        if (inputRef.current) {
+          inputRef.current.value = '';
+        }
+        return;
+      }
+      
+      setError(null);
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
@@ -41,7 +64,9 @@ export function FileUpload({
       inputRef.current.value = '';
     }
     setPreview(null);
+    setError(null);
     onChange?.(null);
+    onRemove?.();
   };
 
   return (
@@ -50,7 +75,7 @@ export function FileUpload({
       <div className="flex flex-col gap-2">
         {preview && (
           <div className="relative w-full max-w-[200px] aspect-square">
-            {preview.startsWith('data:image') ? (
+            {preview.startsWith('data:image') || preview.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
               <img 
                 src={preview} 
                 alt={label}
@@ -58,7 +83,7 @@ export function FileUpload({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">PDF Document</p>
+                <p className="text-sm text-muted-foreground">Document</p>
               </div>
             )}
             <Button
@@ -70,6 +95,12 @@ export function FileUpload({
             >
               <X className="h-4 w-4" />
             </Button>
+          </div>
+        )}
+        {error && (
+          <div className="flex items-center text-destructive gap-1 text-sm">
+            <AlertTriangle className="h-4 w-4" />
+            <span>{error}</span>
           </div>
         )}
         <div className="flex items-center gap-2">
@@ -92,6 +123,9 @@ export function FileUpload({
             <Upload className="h-4 w-4 mr-2" />
             Upload {label}
           </Button>
+          {onlyImages && (
+            <p className="text-xs text-muted-foreground">Only image files are allowed</p>
+          )}
         </div>
       </div>
     </div>

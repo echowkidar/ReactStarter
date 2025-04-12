@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileUpload } from "@/components/ui/file-upload";
 import { employmentStatuses } from "@/lib/departments";
 import { Loader2 } from "lucide-react";
+import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
+import { useState } from "react";
 
 const employeeSchema = z.object({
   epid: z.string().min(1, "EPID is required"),
@@ -37,6 +39,8 @@ interface EmployeeFormProps {
 }
 
 export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps) {
+  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+  
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
@@ -60,6 +64,38 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       termExtensionDoc: "",
     },
   });
+
+  // Handle file compression and validation
+  const handleFileChange = async (file: File | null, fieldName: string) => {
+    // Clear any previous errors for this field
+    setFileErrors(prev => ({ ...prev, [fieldName]: "" }));
+    
+    if (!file) {
+      form.setValue(fieldName as any, "");
+      return;
+    }
+    
+    // Validate that it's an image
+    if (!isImageFile(file)) {
+      setFileErrors(prev => ({ ...prev, [fieldName]: "Only image files are allowed" }));
+      return;
+    }
+    
+    try {
+      // Compress the image to WebP format
+      const result = await compressImageToWebP(file);
+      
+      // Log the conversion to verify WebP format
+      console.log(`Converted ${file.name} to WebP: ${result.fileName}`);
+      console.log(`Blob type: ${result.blob.type}`);
+      
+      // Set the field value with the WebP image URL
+      form.setValue(fieldName as any, result.url);
+    } catch (error) {
+      console.error(`Error processing ${fieldName}:`, error);
+      setFileErrors(prev => ({ ...prev, [fieldName]: "Failed to process image" }));
+    }
+  };
 
   return (
     <Form {...form}>
@@ -284,14 +320,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="PAN Card"
                       name="panCardDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => handleFileChange(file, "panCardDoc")}
                       disabled={isLoading}
+                      onlyImages={true}
+                      errorMessage={fileErrors.panCardDoc}
                     />
                     <FormMessage />
                   </FormItem>
@@ -306,14 +338,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Bank Account Proof"
                       name="bankAccountDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => handleFileChange(file, "bankAccountDoc")}
                       disabled={isLoading}
+                      onlyImages={true}
+                      errorMessage={fileErrors.bankAccountDoc}
                     />
                     <FormMessage />
                   </FormItem>
@@ -328,14 +356,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Adhar Number"
                       name="aadharCardDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => handleFileChange(file, "aadharCardDoc")}
                       disabled={isLoading}
+                      onlyImages={true}
+                      errorMessage={fileErrors.aadharCardDoc}
                     />
                     <FormMessage />
                   </FormItem>
@@ -350,14 +374,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Office Memo"
                       name="officeMemoDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => handleFileChange(file, "officeMemoDoc")}
                       disabled={isLoading}
+                      onlyImages={true}
+                      errorMessage={fileErrors.officeMemoDoc}
                     />
                     <FormMessage />
                   </FormItem>
@@ -372,14 +392,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                       label="Joining Report"
                       name="joiningReportDoc"
                       value={field.value}
-                      onChange={(file) => {
-                        if (file) {
-                          field.onChange(URL.createObjectURL(file));
-                        } else {
-                          field.onChange("");
-                        }
-                      }}
+                      onChange={(file) => handleFileChange(file, "joiningReportDoc")}
                       disabled={isLoading}
+                      onlyImages={true}
+                      errorMessage={fileErrors.joiningReportDoc}
                     />
                     <FormMessage />
                   </FormItem>
@@ -396,14 +412,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                         label="Term Extension Office Memo"
                         name="termExtensionDoc"
                         value={field.value}
-                        onChange={(file) => {
-                          if (file) {
-                            field.onChange(URL.createObjectURL(file));
-                          } else {
-                            field.onChange("");
-                          }
-                        }}
+                        onChange={(file) => handleFileChange(file, "termExtensionDoc")}
                         disabled={isLoading}
+                        onlyImages={true}
+                        errorMessage={fileErrors.termExtensionDoc}
                       />
                       <FormMessage />
                     </FormItem>
