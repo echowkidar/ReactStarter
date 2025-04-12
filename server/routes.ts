@@ -93,11 +93,10 @@ export async function registerRoutes(app: Express) {
       // Store token in database
       await storage.storeResetToken(department.id, resetToken, tokenExpiry);
       
-      // Create reset URL with configurable base URL
-      const baseUrl = process.env.APP_URL || 
-        (process.env.NODE_ENV === 'production' 
-          ? 'https://amu-salary.com'  // Replace with your actual production domain
-          : 'http://localhost:5001');
+      // Create reset URL
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://attendance.echowkidar.in' 
+        : 'http://localhost:5001';
       
       const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
       
@@ -186,11 +185,10 @@ export async function registerRoutes(app: Express) {
       }
       global.adminResetTokens.set(email, { token: resetToken, expiry: tokenExpiry });
       
-      // Create reset URL with configurable base URL
-      const baseUrl = process.env.APP_URL || 
-        (process.env.NODE_ENV === 'production' 
-          ? 'https://amu-salary.com'  // Replace with your actual production domain
-          : 'http://localhost:5001');
+      // Create reset URL
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://attendance.echowkidar.in' 
+        : 'http://localhost:5001';
       
       const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
       
@@ -860,4 +858,642 @@ export async function registerRoutes(app: Express) {
         const deptNameDetails = await storage.getDepartmentName(selectedDeptNameId);
 
         if (!deptNameDetails) {
-            return res.status(404).json({ message: `
+            return res.status(404).json({ message: `Department details not found for ID ${selectedDeptNameId}. Cannot create user.` });
+        }
+
+        console.log(`Found details: ${deptNameDetails.name} (Code: ${deptNameDetails.code})`);
+
+        // Check if a department with this NAME is already registered in the 'departments' table
+        const existingRegisteredDept = await storage.getDepartmentByName(deptNameDetails.name);
+
+        if (existingRegisteredDept) {
+            // If it exists and has a valid email, prevent creating another user for it.
+            if (existingRegisteredDept.email && !existingRegisteredDept.email.includes('unused_dept_') && !existingRegisteredDept.email.includes('@placeholder.com')) {
+                console.log(`Department "${deptNameDetails.name}" is already registered with user ${existingRegisteredDept.email}.`);
+                return res.status(400).json({ message: `Department "${deptNameDetails.name}" is already registered.` });
+            } else {
+                // If it exists but has a placeholder email, we can update it (effectively assigning the new user)
+                console.log(`Department "${deptNameDetails.name}" exists but has no active user. Updating it.`);
+                const updatedDepartment = await storage.updateDepartment(existingRegisteredDept.id, {
+            hodName: name,
+            email: email,
+                    password: password // Consider hashing
+                });
+                // Recalculate UI ID (Fragile)
+                const allDepts = await storage.getAllDepartments();
+                const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
+                const userIndex = validDepts.findIndex(d => d.id === updatedDepartment.id);
+                const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); 
+                return res.status(200).json({ // 200 OK for update
+                    id: uiId,
+            name: name,
+            email: email,
+            role: "department",
+                    departmentId: updatedDepartment.id,
+                    departmentName: updatedDepartment.name
+                });
+            }
+        }
+
+        // If not found in 'departments', create a new department entry
+        console.log(`Creating new entry in 'departments' table for "${deptNameDetails.name}"`);
+        try {
+            const newDepartment = await storage.createDepartment({
+                name: deptNameDetails.name, // Use name from department_names
+                hodTitle: "Chairperson", // Default or fetch from somewhere?
+              hodName: name,
+              email: email,
+                password: password // Consider hashing
+            });
+            console.log(`Created new registered department: ${newDepartment.id} "${newDepartment.name}"`);
+
+            // Recalculate UI ID (Fragile)
+            const allDepts = await storage.getAllDepartments();
+            const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
+            const userIndex = validDepts.findIndex(d => d.id === newDepartment.id);
+            const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); 
+            
+            return res.status(201).json({
+                id: uiId, 
+              name: name,
+              email: email,
+              role: "department",
+                departmentId: newDepartment.id, // The new ID from the 'departments' table
+              departmentName: newDepartment.name
+            });
+        } catch (creationError) {
+            console.error('Error creating new department entry:', creationError);
+            return res.status(500).json({ message: "Failed to register new department user." });
+        }
+      }
+      
+      // Handle other roles (superadmin, salary) - For MVP, these are not stored/created via API
+      if (role === "superadmin" || role === "salary") {
+         return res.status(400).json({ message: `Cannot create '${role}' user via API in this version.` });
+      }
+
+      // Fallback for unhandled roles or errors
+      res.status(400).json({ message: "Invalid role or parameters for user creation." });
+
+    } catch (error) {
+      console.error('Error creating user:', error);
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+  
+  // Update an existing user
+  app.put("/api/admin/users/:id", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { name, email, password, role, departmentId } = req.body;
+      
+      console.log("PUT /api/admin/users/:id - Updating user:", {
+        userId, name, email, role, departmentId
+      });
+      
+      // Handle hardcoded users (superadmin, salary) - cannot be updated via API
+      if (userId <= 2) {
+        return res.json({ message: "System users cannot be modified via API." });
+      }
+      
+      // Find the current department for this user
+        const allDepts = await storage.getAllDepartments();
+      const validDepartments = allDepts.filter(dept => 
+        dept.email && !dept.email.includes('unused_dept_') && !dept.email.includes('@placeholder.com')
+      );
+
+      const currentDepartment = validDepartments.find((dept, index) => {
+         const calculatedUserId = index + 3;
+         return calculatedUserId === userId;
+      });
+
+      if (!currentDepartment) {
+         return res.status(404).json({ message: `User with UI ID ${userId} not found (no corresponding department).` });
+      }
+
+      console.log(`Found current department for UI user ID ${userId}: Dept ID ${currentDepartment.id} (${currentDepartment.name})`);
+
+      // Get the target department name from department_names
+      const targetDeptNameId = Number(departmentId);
+      if (isNaN(targetDeptNameId)) {
+         return res.status(400).json({ message: "Invalid target department ID format." });
+      }
+
+      const targetDeptNameDetails = await storage.getDepartmentName(targetDeptNameId);
+      if (!targetDeptNameDetails) {
+          return res.status(404).json({ message: `Target department details not found for ID ${targetDeptNameId}.` });
+      }
+
+      // Check for email conflict with other departments
+      if (email !== currentDepartment.email) {
+          const existingUserWithEmail = await storage.getDepartmentByEmail(email);
+          if (existingUserWithEmail && existingUserWithEmail.id !== currentDepartment.id) {
+             return res.status(400).json({ message: `Email ${email} is already in use by department ${existingUserWithEmail.name}.` });
+          }
+      }
+
+      // Update the current department with new details
+      console.log(`Updating department ${currentDepartment.id} with new name "${targetDeptNameDetails.name}" and user details`);
+      await storage.updateDepartment(currentDepartment.id, {
+          name: targetDeptNameDetails.name, // Update the department name
+              hodName: name,
+              email: email,
+              ...(password && password.trim() !== '' ? { password } : {})
+            });
+            
+            return res.json({
+              id: userId,
+              name,
+              email,
+              role: "department",
+          departmentId: currentDepartment.id,
+          departmentName: targetDeptNameDetails.name
+      });
+
+    } catch (error) {
+      console.error('Error updating user:', error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+  
+  // Delete a user
+  app.delete("/api/admin/users/:id", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id); // Fragile UI ID
+      console.log(`Attempting to delete user with UI ID: ${userId}`);
+      
+      // Prevent deleting hardcoded users
+      if (userId <= 2) {
+        console.log(`Cannot delete system user with ID: ${userId}`);
+        return res.status(403).json({ message: "Cannot delete system users" });
+      }
+      
+      // Find the department matching this UI user ID using .find()
+      const allDepts = await storage.getAllDepartments();
+      
+      const validDepartments = allDepts.filter(dept => 
+         dept.email && !dept.email.includes('unused_dept_') && !dept.email.includes('@placeholder.com')
+      );
+
+      const departmentToDelete = validDepartments.find((dept, index) => {
+         const calculatedUserId = index + 3;
+         return calculatedUserId === userId;
+      });
+      
+      if (!departmentToDelete) {
+        // No need for extra null check here
+        console.log(`No department found for user ID: ${userId}`);
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // departmentToDelete is guaranteed to be a Department object here
+      const deptId = departmentToDelete.id;
+      const deptName = departmentToDelete.name;
+
+      console.log(`Found department to delete: ${deptId} (${deptName})`);
+
+      // Check for associated employees before deleting
+      const employees = await storage.getEmployeesByDepartment(deptId);
+      if (employees.length > 0) {
+         console.log(`Cannot delete department ${deptId} - it has ${employees.length} employees. Clearing user info instead.`);
+         // Instead of deleting, clear the user-specific info (email, HOD, password)
+         try {
+            const placeholderEmail = `unused_dept_${deptId}_${Date.now()}@placeholder.com`;
+            await storage.updateDepartment(deptId, {
+               email: placeholderEmail,
+               hodName: "(User Deleted)",
+               password: uuid()
+            });
+      return res.json({ 
+               message: `User (department ${deptId}) cannot be deleted due to associated employees. User info cleared.`,
+        userId: userId,
+               departmentId: deptId,
+               departmentName: deptName
+            });
+         } catch (clearError) {
+            console.error(`Error clearing user info for department ${deptId} during delete:`, clearError);
+            return res.status(500).json({ message: "Failed to clear user info during deletion." });
+         }
+          } else {
+         // No employees, safe to delete the department record
+         await storage.deleteDepartment(deptId);
+         console.log(`Department ${deptId} deleted successfully.`);
+         return res.json({ 
+           message: "User deleted successfully",
+           userId: userId,
+           departmentId: deptId,
+           departmentName: deptName // Return the name before deletion
+         });
+      }
+      
+      // REMOVED: Old logic trying to resolve names with getDepartmentNameFromNegativeId
+
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      console.error('Error fetching department employees:', error);
+      res.status(500).json({ message: "Failed to fetch employees" });
+    }
+  });
+
+  app.delete("/api/employees/:id", async (req, res) => {
+    await storage.deleteEmployee(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // Attendance routes
+  app.get("/api/departments/:departmentId/attendance", async (req, res) => {
+    const reports = await storage.getAttendanceReportsByDepartment(Number(req.params.departmentId));
+    res.json(reports);
+  });
+
+  app.post("/api/departments/:departmentId/attendance", async (req, res) => {
+    try {
+      const reportData = insertAttendanceReportSchema.parse({
+        ...req.body,
+        departmentId: Number(req.params.departmentId)
+      });
+      const report = await storage.createAttendanceReport(reportData);
+      res.status(201).json(report);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid report data" });
+    }
+  });
+
+  app.patch("/api/attendance/:id", async (req, res) => {
+    try {
+      // Create a safe copy of the request body
+      const updates = { ...req.body };
+      
+      // Handle date fields properly for PostgreSQL
+      if (updates.despatchDate && typeof updates.despatchDate === 'string') {
+        updates.despatchDate = new Date(updates.despatchDate);
+      }
+      
+      // Handle receipt date
+      if (updates.receiptDate) {
+        if (typeof updates.receiptDate === 'string') {
+          updates.receiptDate = new Date(updates.receiptDate);
+        } else if (updates.receiptDate instanceof Date) {
+          // Keep it as is (already a Date object)
+        } else {
+          // If it's neither a string nor a Date, remove it to prevent errors
+          delete updates.receiptDate;
+        }
+      }
+      
+      const report = await storage.updateAttendanceReport(Number(req.params.id), updates);
+      res.json(report);
+    } catch (error) {
+      console.error(error);
+      res.status(400).json({ message: "Failed to update attendance report" });
+    }
+  });
+
+  app.get("/api/attendance/:reportId/entries", async (req, res) => {
+    const entries = await storage.getAttendanceEntriesByReport(Number(req.params.reportId));
+    res.json(entries);
+  });
+
+  app.post("/api/attendance/:reportId/entries", async (req, res) => {
+    try {
+      const reportId = Number(req.params.reportId);
+      const { employeeId, periods } = req.body;
+
+      if (!periods || !Array.isArray(periods)) {
+        return res.status(400).json({ message: "Invalid periods data" });
+      }
+
+      // Calculate total days and combine remarks
+      const totalDays = periods.reduce((sum, period) => sum + (period.days || 0), 0);
+      const remarks = periods.map(p => p.remarks).filter(Boolean).join("; ");
+
+      // Get the first and last period dates
+      const firstPeriod = periods[0];
+      const lastPeriod = periods[periods.length - 1];
+
+      // Log the received data for debugging
+      console.log('Received periods:', periods);
+      console.log('First period:', firstPeriod);
+      console.log('Last period:', lastPeriod);
+
+      const entryData = insertAttendanceEntrySchema.parse({
+        reportId: reportId,
+        employeeId: Number(employeeId),
+        days: totalDays,
+        fromDate: firstPeriod?.fromDate || "",
+        toDate: lastPeriod?.toDate || "",
+        periods: JSON.stringify(periods), // Store all periods as JSON string
+        remarks: remarks || ""
+      });
+
+      const entry = await storage.createAttendanceEntry(entryData);
+      res.status(201).json(entry);
+    } catch (error) {
+      console.error('Error creating attendance entry:', error);
+      res.status(400).json({ message: "Invalid entry data", error: String(error) });
+    }
+  });
+
+  app.patch("/api/attendance/:reportId/entries/:entryId", async (req, res) => {
+    try {
+      const entry = await storage.updateAttendanceEntry(
+        Number(req.params.entryId),
+        { days: req.body.days, remarks: req.body.remarks }
+      );
+      res.json(entry);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid entry update" });
+    }
+  });
+
+  // Admin routes
+  app.get("/api/admin/attendance", async (req, res) => {
+    try {
+      const reports = await storage.getAllAttendanceReports();
+      const reportsWithDetailsPromises = reports.map(async (report) => {
+        const department = await storage.getDepartment(report.departmentId);
+        
+        // Provide explicit type for entriesWithDetails
+        let entriesWithDetails: (AttendanceEntry & { employee?: Employee | undefined })[] = [];
+        if (report.status === "sent") {
+          const entries = await storage.getAttendanceEntriesByReport(report.id);
+          entriesWithDetails = await Promise.all(
+            entries.map(async (entry) => {
+              const employee = await storage.getEmployee(entry.employeeId);
+              return {
+                ...entry,
+                employee // employee is already Employee | undefined
+              };
+            })
+          );
+        }
+        
+        return {
+          ...report,
+          department, // department is already Department | undefined
+          entries: entriesWithDetails, // Use explicitly typed array
+          receiptNo: report.receiptNo,
+          receiptDate: report.receiptDate,
+        };
+      });
+      
+      const reportsWithDetails = await Promise.all(reportsWithDetailsPromises);
+      res.json(reportsWithDetails);
+    } catch (error) {
+      console.error('Error fetching attendance reports with details:', error);
+      res.status(500).json({ message: "Failed to fetch attendance reports with details" });
+    }
+  });
+
+  // Add receipt details to single report endpoint
+  app.get("/api/admin/attendance/:id", async (req, res) => {
+    try {
+      const report = await storage.getAttendanceReport(Number(req.params.id));
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      const department = await storage.getDepartment(report.departmentId);
+      const entries = await storage.getAttendanceEntriesByReport(report.id);
+
+      // Fetch all employees for this department
+      const employees = await storage.getEmployeesByDepartment(report.departmentId);
+      const employeesMap = new Map(employees.map(emp => [emp.id, emp]));
+
+      // Add employee details to entries
+      const entriesWithEmployeeDetails = entries.map(entry => ({
+        ...entry,
+        employee: employeesMap.get(entry.employeeId)
+      }));
+
+      res.json({
+        ...report,
+        department,
+        entries: entriesWithEmployeeDetails,
+        // Ensure these fields are included
+        receiptNo: report.receiptNo,
+        receiptDate: report.receiptDate,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch report details" });
+    }
+  });
+
+  app.delete("/api/attendance/:id", async (req, res) => {
+    try {
+      await storage.deleteAttendanceReport(Number(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting attendance report:', error);
+      res.status(500).json({ message: "Failed to delete attendance report" });
+    }
+  });
+
+  // Get all employees (admin)
+  app.get("/api/admin/employees", async (req, res) => {
+    try {
+      console.log('[GET /api/admin/employees] Fetching all employees');
+      const employees = await storage.getAllEmployees();
+      
+      // Get all departments to add department names
+      const departments = await storage.getAllDepartments();
+      const departmentMap = new Map(departments.map(d => [d.id, d]));
+
+      // Add department names to employees
+      const employeesWithDepartments = employees.map(emp => ({
+          ...emp,
+        departmentName: departmentMap.get(emp.departmentId)?.name || 'Unknown Department'
+      }));
+
+      console.log(`[GET /api/admin/employees] Returning ${employeesWithDepartments.length} employees`);
+      res.json(employeesWithDepartments);
+    } catch (error) {
+      console.error('[GET /api/admin/employees] Error:', error);
+      res.status(500).json({ message: "Failed to fetch employees" });
+    }
+  });
+
+  app.get("/api/departments/registered", async (req, res) => {
+    try {
+      const registeredDepartments = await storage.getAllDepartments();
+      console.log(`Fetched ${registeredDepartments.length} registered departments`);
+      res.json(registeredDepartments);
+    } catch (error) {
+      console.error("Error fetching registered departments:", error);
+      res.status(500).json({ error: "Failed to fetch registered departments" });
+    }
+  });
+
+  // Create employee (admin)
+  app.post("/api/admin/employees", upload.fields(documentFields), async (req, res) => {
+    try {
+      console.log("Admin - Received raw employee data:", req.body);
+      
+      // Parse departmentId from the request
+      const departmentId = Number(req.body.departmentId);
+      console.log(`Processing department ID: ${departmentId}`);
+      
+      // Check if department ID exists in departments table
+      let departmentExists = false;
+      let actualDepartmentId = departmentId; // The ID to use for employee creation
+      
+      try {
+        const department = await storage.getDepartment(departmentId);
+        if (department) {
+          departmentExists = true;
+          console.log(`Department ${departmentId} exists in departments table: ${department.name}`);
+        } else {
+          console.log(`Department ${departmentId} does not exist in departments table`);
+          
+          // Try to find the department in department_names table
+          const departmentNameRecord = await storage.getDepartmentName(departmentId);
+          
+          if (departmentNameRecord) {
+            console.log(`Found department in department_names: ${departmentId} - ${departmentNameRecord.name}`);
+            
+            // Create a placeholder entry in departments table
+            try {
+              const placeholderDepartment = await storage.createDepartment({
+                name: departmentNameRecord.name,
+                hodTitle: "Placeholder",
+                hodName: "Placeholder", 
+                email: `placeholder_${departmentId}@placeholder.com`,
+                password: "placeholder_password"
+              });
+              
+              console.log(`Created placeholder department: ID=${placeholderDepartment.id}, Name=${placeholderDepartment.name}`);
+              
+              // Use the newly created department ID instead of the original one
+              actualDepartmentId = placeholderDepartment.id;
+              departmentExists = true;
+            } catch (createDeptError) {
+              console.error("Error creating placeholder department:", createDeptError);
+              return res.status(500).json({
+                message: "Failed to create required department",
+                details: createDeptError instanceof Error ? createDeptError.message : String(createDeptError)
+              });
+            }
+          } else {
+            console.log(`Department ${departmentId} not found in department_names table either`);
+            return res.status(400).json({
+              message: "Invalid department ID",
+              details: `Department ID ${departmentId} not found in department_names table`
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error checking department:", error);
+        return res.status(500).json({
+          message: "Error checking department existence",
+          details: error instanceof Error ? error.message : String(error)
+        });
+      }
+      
+      if (!departmentExists) {
+        return res.status(400).json({
+          message: "Invalid department ID",
+          details: `Department ID ${departmentId} does not exist`
+        });
+      }
+
+      // Handle uploaded files
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const employeeData = {
+        ...req.body,
+        departmentId: actualDepartmentId, // Use the department ID we determined above
+        joiningDate: req.body.joiningDate || new Date().toISOString().split('T')[0],
+        employmentStatus: req.body.employmentStatus || "Permanent",
+        joiningShift: req.body.joiningShift || "FN",
+        officeMemoNo: req.body.officeMemoNo || "",
+        salaryRegisterNo: req.body.salaryRegisterNo || "",
+        bankAccount: req.body.bankAccount || "",
+        panNumber: req.body.panNumber || "",
+        aadharCard: req.body.aadharCard || "",
+        // Map file URLs from the uploaded files
+        panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : req.body.panCardUrl || null,
+        bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : req.body.bankProofUrl || null,
+        aadharCardUrl: files?.aadharCardDoc ? `/uploads/${files.aadharCardDoc[0].filename}` : req.body.aadharCardUrl || null,
+        officeMemoUrl: files?.officeMemoDoc ? `/uploads/${files.officeMemoDoc[0].filename}` : req.body.officeMemoUrl || null,
+        joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : req.body.joiningReportUrl || null,
+        termExtensionUrl: files?.termExtensionDoc ? `/uploads/${files.termExtensionDoc[0].filename}` : req.body.termExtensionUrl || null,
+      };
+
+      console.log(`Final employee data using department ID: ${actualDepartmentId}`);
+      const parsedData = insertEmployeeSchema.parse(employeeData);
+      console.log("Admin - Parsed employee data:", parsedData);
+      
+      try {
+        const employee = await storage.createEmployee(parsedData);
+        console.log(`Employee created successfully with ID: ${employee.id}`);
+        res.status(201).json(employee);
+      } catch (createEmployeeError) {
+        console.error("Error creating employee:", createEmployeeError);
+        return res.status(400).json({ 
+          message: "Failed to create employee in database",
+          details: createEmployeeError instanceof Error ? createEmployeeError.message : String(createEmployeeError)
+        });
+      }
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      if (error instanceof Error) {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: error.message,
+          stack: error.stack
+        });
+      } else {
+        res.status(400).json({ 
+          message: "Invalid employee data",
+          details: String(error)
+        });
+      }
+    }
+  });
+
+  // Department profile update
+  app.put("/api/departments/:id/profile", async (req, res) => {
+    const departmentId = parseInt(req.params.id);
+    const { name, email, hodName, hodTitle, password, currentPassword } = req.body;
+    
+    try {
+      // Get current department data
+      const department = await storage.getDepartment(departmentId);
+      if (!department) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      // If updating password, verify current password
+      if (password) {
+        if (!currentPassword) {
+          return res.status(400).json({ message: "Current password is required to update password" });
+        }
+        
+        // Verify current password
+        if (department.password !== currentPassword) {
+          return res.status(401).json({ message: "Current password is incorrect" });
+        }
+      }
+      
+      // Build update object
+      const updates: Partial<Department> = {};
+      if (name) updates.name = name;
+      if (email) updates.email = email;
+      if (hodName) updates.hodName = hodName;
+      if (hodTitle) updates.hodTitle = hodTitle;
+      if (password) updates.password = password;
+      
+      // Update department
+      const updatedDepartment = await storage.updateDepartment(departmentId, updates);
+      
+      // Return updated department data (excluding sensitive info)
+      const { password: _, ...safeData } = updatedDepartment;
+      
+      return res.json(safeData);
+    } catch (error) {
+      console.error("Department profile update error:", error);
+      return res.status(500).json({ message: "Failed to update department profile" });
+    }
+  });
+
+  return httpServer;
+}
