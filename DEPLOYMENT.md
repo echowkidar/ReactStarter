@@ -1,3 +1,103 @@
+# Deployment Guide for AMU Salary Section
+
+This document provides the necessary steps to deploy and configure the AMU Salary Section application in production.
+
+## Environment Configuration
+
+The application uses environment variables for configuration. In production, you'll need to set these properly.
+
+### Required Environment Variables
+
+Copy the `.env.production` file to your production server and rename it to `.env`. Then update the values with your actual production settings:
+
+```bash
+# Base URL for application (used for email links)
+# THIS IS CRITICAL for password reset emails to work correctly
+APP_URL=https://your-actual-production-domain.com
+
+# Database settings
+DB_HOST=your-production-db-host
+DB_PORT=5432
+DB_NAME=your_production_db_name
+DB_USER=your_production_db_user
+DB_PASSWORD=your_secure_production_password
+
+# SMTP Settings for real emails
+SMTP_HOST=smtp.your-provider.com
+SMTP_PORT=587
+SMTP_SECURE=false  # Set to true for port 465
+SMTP_USER=your-email@your-domain.com
+SMTP_PASS=your-smtp-password
+SMTP_FROM="AMU Salary Section <your-email@your-domain.com>"
+```
+
+### Critical Settings for Password Reset
+
+The most important setting for password reset functionality is `APP_URL`. This **must** be set to your actual production domain, including the protocol (http:// or https://). 
+
+For example:
+- If your site is hosted at `salary.amu.ac.in`, set `APP_URL=https://salary.amu.ac.in`
+- If using a subdirectory, include it: `APP_URL=https://amu.ac.in/salary`
+
+Without the correct `APP_URL`, password reset links in emails will point to non-existent domains.
+
+## Building for Production
+
+To create a production build:
+
+```bash
+# Install dependencies
+npm install
+
+# Build the client
+npm run build
+
+# Start the production server
+npm start
+```
+
+## Email Configuration
+
+The application sends emails for password reset functionality. In production, you'll need to configure a real SMTP service:
+
+### Using Gmail SMTP
+
+If using Gmail, you'll need to:
+1. Create an "App Password" in your Google Account settings
+2. Use that password in your `SMTP_PASS` environment variable
+
+### Other SMTP Providers
+
+You can use any SMTP provider by adjusting the settings accordingly:
+
+- SendGrid: `SMTP_HOST=smtp.sendgrid.net`
+- Mailgun: `SMTP_HOST=smtp.mailgun.org`
+- Office 365: `SMTP_HOST=smtp.office365.com`
+
+## SSL Configuration
+
+For security, especially for features like password reset, we recommend using HTTPS in production.
+
+If you're using a reverse proxy like Nginx or Apache, configure SSL there and point to the Node.js application.
+
+## Troubleshooting
+
+### Password Reset Links Not Working
+
+If users report that password reset links in emails don't work:
+
+1. Verify the `APP_URL` environment variable is correctly set to your production domain
+2. Check that emails are being delivered (not in spam folders)
+3. Ensure your server is accessible at the configured `APP_URL`
+4. Check server logs for any errors in the password reset process
+
+## Security Considerations
+
+- Store your `.env` file securely and don't commit it to version control
+- Use strong, unique passwords for database and SMTP accounts
+- Keep your server up to date with security patches
+- Consider adding rate limiting to prevent abuse of the password reset functionality
+
 # ReactStarter Deployment Guide
 
 This document provides step-by-step instructions for deploying this application on a VPS with CyberPanel.
@@ -137,6 +237,14 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 ## git config --global user.name "echowkidar@gmail.com"
 ## git commit -m "complete project"
 ## git push origin complete_project
+
+
+## Cursor
+## git add .
+## git commit -m "Your descriptive commit message"
+## git checkout -b done # command does two things: -b done: Creates a new branch named "done" and checkout: Switches your current working branch to the newly created "done" branch.
+## git push origin done # Push the new branch to GitHub:
+
 
 
 ### Console commands To fetch in vps in folder of attendance.echowkidar.in (if have any branch)
