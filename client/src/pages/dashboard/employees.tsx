@@ -10,10 +10,11 @@ import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
 import EmployeeForm from "@/components/forms/employee-form";
-import { Plus, Eye, Pencil } from "lucide-react";
+import { Plus, Eye, Pencil, Search, X } from "lucide-react";
 import { Employee } from "@shared/schema";
 import { format } from "date-fns";
 import { EditEmployeeForm } from "@/components/forms/edit-employee-form";
+import { Input } from "@/components/ui/input";
 
 const EmployeeDetails = ({ employee }: { employee: Employee }) => {
   return (
@@ -197,6 +198,7 @@ export default function Employees() {
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],
@@ -212,40 +214,99 @@ export default function Employees() {
     a.epid.localeCompare(b.epid, undefined, { numeric: true })
   );
 
+  // Filter employees based on search query
+  const filteredEmployees = searchQuery.trim() 
+    ? sortedEmployees.filter(employee => 
+        employee.epid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.designation.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : sortedEmployees;
+
   const addEmployee = useMutation({
     mutationFn: async (data: any) => {
-      const formData = new FormData();
-      
-      const fileFields = {
-        panCardDoc: data.panCardDoc,
-        bankAccountDoc: data.bankAccountDoc,
-        aadharCardDoc: data.aadharCardDoc,
-        officeMemoDoc: data.officeMemoDoc,
-        joiningReportDoc: data.joiningReportDoc,
-        termExtensionDoc: data.termExtensionDoc,
-      };
-      
-      for (const [key, value] of Object.entries(fileFields)) {
-        if (value && typeof value === 'string' && value.startsWith('blob:')) {
-          try {
-            const response = await fetch(value);
-            const blob = await response.blob();
-            const file = new File([blob], `${key}.jpg`, { type: 'image/jpeg' });
-            formData.append(key, file);
-          } catch (error) {
-            console.error(`Error processing ${key}:`, error);
+      // First check if the EPID already exists
+      try {
+        const response = await apiRequest("GET", `/api/departments/${department?.id}/employees`);
+        const existingEmployees = await response.json();
+        
+        const existingEpid = existingEmployees.find((emp: Employee) => emp.epid === data.epid);
+        if (existingEpid) {
+          throw new Error("An employee with this EPID already exists. Please use a unique EPID.");
+        }
+        
+        const formData = new FormData();
+        
+        // Log the form data for debugging
+        console.log("Form data before processing:", data);
+        
+        // Handle file uploads - improved method
+        const fileFields = {
+          panCardDoc: data.panCardDoc,
+          bankAccountDoc: data.bankAccountDoc,
+          aadharCardDoc: data.aadharCardDoc,
+          officeMemoDoc: data.officeMemoDoc,
+          joiningReportDoc: data.joiningReportDoc,
+          termExtensionDoc: data.termExtensionDoc,
+        };
+        
+        // Process each file field
+        for (const [key, value] of Object.entries(fileFields)) {
+          if (value && typeof value === 'string') {
+            try {
+              // If it's a data URL, convert it to a blob
+              if (value.startsWith('data:')) {
+                console.log(`Processing ${key} from data URL`);
+                const response = await fetch(value);
+                const blob = await response.blob();
+                const filename = `${key}-${Date.now()}.jpg`;
+                console.log(`Created blob for ${key}, size: ${blob.size}`);
+                
+                // Create a File object from the blob
+                const file = new File([blob], filename, { type: blob.type });
+                formData.append(key, file);
+              }
+              // If it's a blob URL, fetch the blob and create a file
+              else if (value.startsWith('blob:')) {
+                console.log(`Processing ${key} from blob URL: ${value}`);
+                const response = await fetch(value);
+                const blob = await response.blob();
+                const filename = `${key}-${Date.now()}.jpg`;
+                console.log(`Created blob for ${key}, size: ${blob.size}, type: ${blob.type}`);
+                
+                // Create a File object from the blob
+                const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+                formData.append(key, file);
+              }
+            } catch (error) {
+              console.error(`Error processing ${key}:`, error);
+            }
           }
         }
-      }
-      
-      Object.entries(data).forEach(([key, value]) => {
-        if (key.endsWith("Doc")) return;
-        if (value !== null && value !== undefined) {
-          formData.append(key, String(value));
+        
+        // Add all other form fields
+        Object.entries(data).forEach(([key, value]) => {
+          if (key.endsWith("Doc")) return; // Skip document fields, already handled
+          if (value !== null && value !== undefined) {
+            formData.append(key, String(value));
+          }
+        });
+        
+        // Log FormData entries for debugging
+        console.log("FormData contents:");
+        Array.from(formData.entries()).forEach(pair => {
+          console.log(`${pair[0]}: ${pair[1] instanceof File ? `File: ${pair[1].name}, ${pair[1].size} bytes` : pair[1]}`);
+        });
+        
+        // Make the API request with the FormData
+        const result = await apiRequest("POST", `/api/departments/${department?.id}/employees`, formData, false);
+        return result.json();
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new Error(error.message);
         }
-      });
-      
-      await apiRequest("POST", `/api/departments/${department?.id}/employees`, formData, false);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
@@ -275,7 +336,13 @@ export default function Employees() {
         <main className="flex-1 p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Employees</h1>
-            <Dialog open={isAddingEmployee} onOpenChange={setIsAddingEmployee}>
+            <Dialog open={isAddingEmployee} onOpenChange={(open) => {
+              setIsAddingEmployee(open);
+              if (open) {
+                // Reset the error state when dialog is opened
+                addEmployee.reset();
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary">
                   <Plus className="h-4 w-4 mr-2" />
@@ -286,6 +353,11 @@ export default function Employees() {
                 <DialogHeader>
                   <DialogTitle className="text-xl font-semibold">Add New Employee</DialogTitle>
                 </DialogHeader>
+                {addEmployee.error instanceof Error && (
+                  <div className="bg-destructive/15 p-3 rounded-md mb-4">
+                    <p className="text-destructive text-sm">{addEmployee.error.message}</p>
+                  </div>
+                )}
                 <EmployeeForm
                   onSubmit={async (data) => {
                     await addEmployee.mutateAsync(data);
@@ -294,6 +366,27 @@ export default function Employees() {
                 />
               </DialogContent>
             </Dialog>
+          </div>
+
+          {/* Search input */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by any (ID, Name, or Designation...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
+                onClick={() => setSearchQuery("")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
           <div className="rounded-md border">
@@ -309,7 +402,7 @@ export default function Employees() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedEmployees.map((employee) => (
+                {filteredEmployees.map((employee) => (
                   <TableRow key={employee.id}>
                     <TableCell>{employee.epid}</TableCell>
                     <TableCell>{employee.name}</TableCell>
@@ -359,6 +452,13 @@ export default function Employees() {
                     </TableCell>
                   </TableRow>
                 ))}
+                {filteredEmployees.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                      No employees found matching your search.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>

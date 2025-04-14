@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { testDbConnection } from "./db";
-import { departments, employees, attendanceReports, attendanceEntries, departmentNames } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents } from "@shared/schema";
+import { eq, and, or, like } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import type { IStorage } from "./storage";
 import type {
@@ -14,7 +14,10 @@ import type {
   InsertAttendanceReport,
   InsertAttendanceEntry,
   DepartmentName,
+  Document,
+  InsertDocument
 } from "@shared/schema";
+import { sql } from "drizzle-orm";
 
 // Create a temporary in-memory storage for reset tokens
 // In a production app, these would be stored in the database
@@ -155,8 +158,22 @@ export class DbStorage implements IStorage {
   }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
-    const [newEmployee] = await db.insert(employees).values(employee).returning();
-    return newEmployee;
+    // Use a transaction to ensure sequence reset and insert happen together
+    return await db.transaction(async (tx) => {
+      try {
+        // First ensure the sequence is properly set
+        await tx.execute(sql`
+          SELECT setval('employees_id_seq', coalesce((SELECT MAX(id) FROM employees), 0) + 1, false);
+        `);
+        
+        // Now perform the insert within the same transaction
+        const [newEmployee] = await tx.insert(employees).values(employee).returning();
+        return newEmployee;
+      } catch (error) {
+        console.error("Error in createEmployee transaction:", error);
+        throw error;
+      }
+    });
   }
 
   async deleteEmployee(id: number): Promise<void> {
@@ -313,5 +330,51 @@ export class DbStorage implements IStorage {
 
   async clearResetToken(departmentId: number): Promise<void> {
     resetTokens.delete(departmentId);
+  }
+
+  // Document operations
+  async createDocument(document: InsertDocument): Promise<Document> {
+    const [newDocument] = await db.insert(documents).values(document).returning();
+    return newDocument;
+  }
+
+  async getAllDocuments(): Promise<Document[]> {
+    return await db.query.documents.findMany({
+      orderBy: (documents, { desc }) => [desc(documents.uploadedAt)]
+    });
+  }
+
+  async getDocumentsByDepartment(departmentId: number): Promise<Document[]> {
+    return await db.query.documents.findMany({
+      where: eq(documents.departmentId, departmentId),
+      orderBy: (documents, { desc }) => [desc(documents.uploadedAt)]
+    });
+  }
+
+  async searchDocuments(searchTerm: string): Promise<Document[]> {
+    return await db.query.documents.findMany({
+      where: or(
+        like(documents.documentType, `%${searchTerm}%`),
+        like(documents.issuingAuthority, `%${searchTerm}%`),
+        like(documents.subject, `%${searchTerm}%`),
+        like(documents.refNo, `%${searchTerm}%`),
+        like(documents.date, `%${searchTerm}%`),
+        like(documents.departmentName, `%${searchTerm}%`)
+      ),
+      orderBy: (documents, { desc }) => [desc(documents.uploadedAt)]
+    });
+  }
+
+  async getDocumentByRefNoAndDate(refNo: string, date: string): Promise<Document | undefined> {
+    return await db.query.documents.findFirst({
+      where: and(
+        eq(documents.refNo, refNo),
+        eq(documents.date, date)
+      )
+    });
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    await db.delete(documents).where(eq(documents.id, id));
   }
 } 

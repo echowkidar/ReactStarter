@@ -7,9 +7,11 @@ import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
 import { Users, ClipboardCheck } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 
 export default function Dashboard() {
   const [department, setDepartment] = useState(getCurrentDepartment());
+  const [, setLocation] = useLocation();
   
   // Check and update department name if needed
   useEffect(() => {
@@ -17,11 +19,19 @@ export default function Dashboard() {
       const updatedDepartment = await checkDepartmentName();
       if (updatedDepartment) {
         setDepartment(updatedDepartment);
+        
+        // Check if HOD name is default or email contains @example.com
+        if (
+          updatedDepartment.hodName === "Default HOD Name" || 
+          updatedDepartment.email?.includes("@example.com")
+        ) {
+          setLocation("/dashboard/settings");
+        }
       }
     };
     
     updateDepartmentName();
-  }, []);
+  }, [setLocation]);
 
   const { data: employees, isLoading: loadingEmployees } = useQuery<Employee[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],

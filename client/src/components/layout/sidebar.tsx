@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   Settings,
+  FileImage,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -18,6 +19,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Employees", href: "/dashboard/employees", icon: Users },
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
+  { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -45,7 +47,6 @@ export default function Sidebar({ className }: SidebarProps) {
 
   const handleLogout = () => {
     logout();
-    window.location.href = "/";
   };
 
   const content = (
@@ -55,7 +56,7 @@ export default function Sidebar({ className }: SidebarProps) {
           {department?.name}
         </h2>
         <p className="mb-4 px-4 text-sm text-gray-500">
-          {department?.email ? `User: ${department.email}` : ""}
+          {department?.email ? `${department.email}` : ""}
         </p>
         <div className="space-y-1">
           {navigation.map((item) => (

@@ -1,4 +1,4 @@
-import express, { Express } from "express";
+import express, { Express, Request } from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -19,6 +19,14 @@ import {
 import fs from "fs";
 import { v4 as uuid } from "uuid";
 import { setupTestEmailAccount, sendPasswordResetEmail } from "./emailService";
+
+// Add custom type for Request with session
+interface RequestWithSession extends Request {
+  session: {
+    department?: Department;
+    [key: string]: any;
+  };
+}
 
 // Add type declaration for global adminResetTokens
 declare global {
@@ -369,29 +377,52 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Ensure uploads directory exists
+  // Ensure uploads directory exists with proper permissions
   const uploadDir = path.join(__dirname, '../uploads');
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+  console.log("Upload directory path:", uploadDir);
+  
+  try {
+    if (!fs.existsSync(uploadDir)) {
+      console.log("Creating uploads directory since it doesn't exist");
+      fs.mkdirSync(uploadDir, { recursive: true, mode: 0o755 });
+    } else {
+      console.log("Uploads directory already exists");
+      // Check if directory is writable
+      try {
+        // Try to write a test file to verify permissions
+        const testFile = path.join(uploadDir, '_test_write.txt');
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+        console.log("Upload directory is writable");
+      } catch (err) {
+        console.error("Upload directory exists but is not writable:", err);
+      }
+    }
+  } catch (err) {
+    console.error("Error checking/creating uploads directory:", err);
   }
 
   // Configure multer for file uploads
   const fileStorage = multer.diskStorage({
     destination: function (req, file, cb) {
+      console.log(`Storing file ${file.originalname} in ${uploadDir}`);
       cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+      const safeFileName = file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname);
+      console.log(`Generated filename for ${file.originalname}: ${safeFileName}`);
+      cb(null, safeFileName);
     }
   });
 
   const upload = multer({ 
     storage: fileStorage,
     fileFilter: (req, file, cb) => {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'image/webp'];
       
       console.log(`Validating file: ${file.originalname}, mimetype: ${file.mimetype}`);
+      console.log(`Request path: ${req.path}`);
       
       if (allowedTypes.includes(file.mimetype)) {
         console.log(`File accepted: ${file.originalname} (${file.mimetype})`);
@@ -400,11 +431,17 @@ export async function registerRoutes(app: Express) {
         console.error(`File rejected: ${file.originalname} (${file.mimetype}) - Invalid mimetype`);
         cb(null, false);
       }
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024 // 10MB limit
     }
   });
 
-  // Serve uploaded files statically
-  app.use('/uploads', express.static(uploadDir));
+  // Serve uploaded files statically with appropriate MIME types
+  app.use('/uploads', (req, res, next) => {
+    console.log(`Static file request: ${req.url}`);
+    next();
+  }, express.static(uploadDir));
 
   // Multi-file upload fields configuration
   const documentFields = [
@@ -517,6 +554,19 @@ export async function registerRoutes(app: Express) {
       const departmentId = Number(req.params.departmentId);
       console.log("Department - Received raw employee data:", req.body);
 
+      // Debug uploaded files in development mode
+      if (process.env.NODE_ENV !== 'production') {
+        console.log("Files received:", req.files ? Object.keys(req.files).length : 'No files');
+        if (req.files) {
+          Object.entries(req.files as { [fieldname: string]: Express.Multer.File[] }).forEach(([key, files]) => {
+            console.log(`- ${key}: ${files.length} file(s)`);
+            files.forEach(file => {
+              console.log(`  * ${file.fieldname}: ${file.originalname} (${file.mimetype}, ${file.size} bytes) saved as ${file.filename}`);
+            });
+          });
+        }
+      }
+
       // Handle uploaded files
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const employeeData = {
@@ -530,6 +580,17 @@ export async function registerRoutes(app: Express) {
         joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : req.body.joiningReportUrl || null,
         termExtensionUrl: files?.termExtensionDoc ? `/uploads/${files.termExtensionDoc[0].filename}` : req.body.termExtensionUrl || null
       };
+
+      // Log URLs in development mode
+      if (process.env.NODE_ENV !== 'production') {
+        console.log("Document URLs being saved:");
+        console.log("- panCardUrl:", employeeData.panCardUrl);
+        console.log("- bankProofUrl:", employeeData.bankProofUrl);
+        console.log("- aadharCardUrl:", employeeData.aadharCardUrl);
+        console.log("- officeMemoUrl:", employeeData.officeMemoUrl);
+        console.log("- joiningReportUrl:", employeeData.joiningReportUrl);
+        console.log("- termExtensionUrl:", employeeData.termExtensionUrl);
+      }
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
       console.log("Department - Parsed employee data:", parsedData);
@@ -643,26 +704,27 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Add this new endpoint for file uploads
-  app.post("/api/upload", upload.single('file'), async (req, res) => {
+  // Upload route (file upload handler)
+  app.post("/api/upload", upload.single("file"), async (req: any, res) => {
     try {
-      console.log("Upload API called");
-      
       if (!req.file) {
-        console.error('Upload API - No file received or invalid file type');
-        return res.status(400).json({ message: "No file uploaded or invalid file type" });
+        return res.status(400).json({ error: "No file uploaded" });
       }
-
+      
       console.log(`Upload API - File received: ${req.file.originalname}, size: ${req.file.size}, type: ${req.file.mimetype}`);
       
       // Return the URL that can be used to access the file
-      const fileUrl = `/uploads/${req.file.filename}`;
-      console.log(`Upload API - File saved as: ${fileUrl}`);
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://attendance.echowkidar.in' 
+        : `http://localhost:${process.env.PORT || 5001}`;
       
-      res.json({ fileUrl });
+      const imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+      console.log(`Upload API - File saved as: ${imageUrl}`);
+      
+      res.json({ imageUrl });
     } catch (error) {
       console.error('Error uploading file:', error);
-      res.status(500).json({ message: "Failed to upload file", error: String(error) });
+      res.status(500).json({ error: "Failed to upload file" });
     }
   });
 
@@ -671,18 +733,18 @@ export async function registerRoutes(app: Express) {
     try {
       console.log("Delete file API called with body:", req.body);
       
-      const { fileUrl } = req.body;
+      const { imageUrl } = req.body;
       
-      if (!fileUrl) {
+      if (!imageUrl) {
         console.log("No file URL provided in request body");
         return res.status(400).json({ message: "No file URL provided" });
       }
       
-      console.log(`Delete file API called for: ${fileUrl}`);
+      console.log(`Delete file API called for: ${imageUrl}`);
       
       // Extract the filename from the URL
       // Expected format: /uploads/filename.ext
-      const urlParts = fileUrl.split('/');
+      const urlParts = imageUrl.split('/');
       const filename = urlParts[urlParts.length - 1];
       
       if (!filename) {
@@ -905,7 +967,7 @@ export async function registerRoutes(app: Express) {
               email: email,
                 password: password // Consider hashing
             });
-            console.log(`Created new registered department: ${newDepartment.id} "${newDepartment.name}"`);
+            console.log(`Created new registered department: ID=${newDepartment.id}, Name=${newDepartment.name}`);
 
             // Recalculate UI ID (Fragile)
             const allDepts = await storage.getAllDepartments();
@@ -1494,6 +1556,212 @@ export async function registerRoutes(app: Express) {
       return res.status(500).json({ message: "Failed to update department profile" });
     }
   });
+
+  // Document API Routes
+  const uploadDestination = path.join(__dirname, "../uploads");
+  
+  // Ensure upload directory exists
+  if (!fs.existsSync(uploadDestination)) {
+    fs.mkdirSync(uploadDestination, { recursive: true });
+  }
+  
+  // Configure multer for document uploads - use memory storage instead of disk storage
+  // to avoid saving the original file to disk
+  const documentUpload = multer({ 
+    storage: multer.memoryStorage(), // Store file in memory instead of disk
+    fileFilter: (req, file, cb) => {
+      // Accept only specific image types
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+      
+      console.log(`Document upload validation: ${file.originalname}, mimetype: ${file.mimetype}`);
+      
+      if (allowedTypes.includes(file.mimetype)) {
+        console.log(`Document file accepted: ${file.originalname} (${file.mimetype})`);
+        cb(null, true);
+      } else {
+        console.error(`Document file rejected: ${file.originalname} (${file.mimetype}) - Invalid mimetype`);
+        cb(null, false);
+      }
+    },
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB limit
+    }
+  });
+  
+  // Get all documents
+  app.get("/api/documents", async (req, res) => {
+    try {
+      const documents = await storage.getAllDocuments();
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+  
+  // Get department-specific documents
+  app.get("/api/departments/:departmentId/documents", async (req, res) => {
+    try {
+      const departmentId = parseInt(req.params.departmentId);
+      const documents = await storage.getDocumentsByDepartment(departmentId);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching department documents:", error);
+      res.status(500).json({ message: "Failed to fetch department documents" });
+    }
+  });
+  
+  // Search documents
+  app.get("/api/documents/search", async (req, res) => {
+    try {
+      const searchTerm = req.query.term as string;
+      if (!searchTerm) {
+        return res.status(400).json({ message: "Search term is required" });
+      }
+      
+      const documents = await storage.searchDocuments(searchTerm);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error searching documents:", error);
+      res.status(500).json({ message: "Failed to search documents" });
+    }
+  });
+  
+  // Upload new document
+  app.post("/api/documents", documentUpload.single('documentImage'), async (req: any, res) => {
+    try {
+      const { documentType, issuingAuthority, subject, refNo, date, departmentId, departmentName } = req.body;
+      
+      if (!req.file || !documentType || !issuingAuthority || !subject || !refNo || !date) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      // Check for duplicates
+      const existingDoc = await storage.getDocumentByRefNoAndDate(refNo, date);
+      if (existingDoc) {
+        return res.status(409).json({ 
+          message: "A document with the same Ref. No. and Date already exists" 
+        });
+      }
+      
+      // Get department info from the request body first, then fall back to session if available
+      let deptId = departmentId ? parseInt(departmentId) : undefined;
+      let deptName = departmentName || undefined;
+      
+      // If not in request body, try to get from session
+      if ((!deptId || !deptName) && req.session?.department) {
+        deptId = deptId || req.session.department.id;
+        deptName = deptName || req.session.department.name;
+      }
+      
+      // If still missing department info, return error
+      if (!deptId || !deptName) {
+        return res.status(401).json({ message: "Unauthorized: Department information missing" });
+      }
+      
+      // Generate a unique filename
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const fileExt = req.file.originalname.split('.').pop();
+      const filename = `document-${uniqueSuffix}.${fileExt}`;
+      
+      // Set paths for the compressed file
+      const compressedFilename = `${filename.replace(`.${fileExt}`, '')}-compressed.${fileExt === 'png' ? 'jpeg' : fileExt}`;
+      const compressedFilePath = path.join(uploadDestination, compressedFilename);
+      
+      try {
+        // Import sharp for image processing
+        const sharp = await import('sharp');
+        
+        // Process the in-memory buffer directly and save compressed version to disk
+        await sharp.default(req.file.buffer)
+          .resize({
+            width: 800,
+            height: 800,
+            fit: 'inside',
+            withoutEnlargement: true
+          })
+          .jpeg({ quality: 70 })
+          .toFile(compressedFilePath);
+        
+        console.log(`Image compressed and saved: ${compressedFilePath}`);
+        
+        // Create file URL using the compressed file
+        const baseUrl = process.env.NODE_ENV === 'production' 
+          ? 'https://attendance.echowkidar.in' 
+          : `http://localhost:${process.env.PORT || 5001}`;
+        
+        const imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
+        
+        // Save document to database
+        const newDocument = await storage.createDocument({
+          documentType,
+          issuingAuthority,
+          subject,
+          refNo,
+          date,
+          imageUrl,
+          departmentId: deptId,
+          departmentName: deptName
+        });
+        
+        res.status(201).json(newDocument);
+      } catch (compressError) {
+        console.error("Error processing image:", compressError);
+        res.status(500).json({ message: "Failed to process document image" });
+      }
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ message: "Failed to upload document" });
+    }
+  });
+  
+  // Delete document
+  app.delete("/api/documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteDocument(id);
+      res.json({ message: "Document deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ message: "Failed to delete document" });
+    }
+  });
+
+  // Cleanup routine for old files
+  const cleanupOldFiles = () => {
+    try {
+      const files = fs.readdirSync(uploadDestination);
+      
+      // Find files older than 30 days that might be orphaned
+      const now = Date.now();
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+      
+      // Check all files for age
+      files.forEach(file => {
+        const filePath = path.join(uploadDestination, file);
+        try {
+          const stats = fs.statSync(filePath);
+          const fileCreationTime = stats.birthtime.getTime();
+          
+          // Delete very old files (orphaned files)
+          if (now - fileCreationTime > THIRTY_DAYS) {
+            fs.unlinkSync(filePath);
+            console.log(`Cleaned up old file (30+ days): ${file}`);
+          }
+        } catch (err) {
+          console.error(`Error checking file ${file}:`, err);
+        }
+      });
+    } catch (error) {
+      console.error("Error during cleanup:", error);
+    }
+  };
+  
+  // Run cleanup every 12 hours
+  setInterval(cleanupOldFiles, 12 * 60 * 60 * 1000);
+  
+  // Run cleanup on startup
+  setTimeout(cleanupOldFiles, 5 * 60 * 1000); // Wait 5 minutes after server start
 
   return httpServer;
 }

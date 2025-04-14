@@ -149,3 +149,37 @@ export type InsertAttendanceEntry = z.infer<typeof insertAttendanceEntrySchema>;
 
 export type DepartmentName = typeof departmentNames.$inferSelect;
 export type InsertDepartmentName = z.infer<typeof insertDepartmentNameSchema>;
+
+// Document schema
+export interface Document {
+  id: number;
+  documentType: string;
+  issuingAuthority: string;
+  subject: string;
+  refNo: string;
+  date: string;
+  imageUrl: string;
+  departmentId: number;
+  departmentName: string;
+  uploadedAt: Date;
+}
+
+export type InsertDocument = Omit<Document, "id" | "uploadedAt"> & { uploadedAt?: Date };
+
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  documentType: text("document_type").notNull(),
+  issuingAuthority: text("issuing_authority").notNull(),
+  subject: text("subject").notNull(),
+  refNo: text("ref_no").notNull(),
+  date: text("date").notNull(),
+  imageUrl: text("image_url").notNull(),
+  departmentId: integer("department_id").notNull(),
+  departmentName: text("department_name").notNull(),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+});
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({ 
+  id: true,
+  uploadedAt: true
+});

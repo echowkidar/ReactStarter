@@ -790,14 +790,14 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
               type="button" 
               variant="outline" 
               onClick={onClose}
-              className="px-4 py-2"
+              className="w-32 px-4 py-2"
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
               disabled={isSubmitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2"
+              className="w-32 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2"
             >
               {isSubmitting ? (
                 <>

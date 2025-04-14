@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { departments, employees, attendanceReports, attendanceEntries } from "@shared/schema";
+import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
 export async function runMigrations() {
@@ -37,7 +37,8 @@ export async function runMigrations() {
         bank_proof_url TEXT,
         aadhar_card_url TEXT,
         office_memo_url TEXT,
-        joining_report_url TEXT
+        joining_report_url TEXT,
+        term_extension_url TEXT
       );
     `);
 
@@ -70,6 +71,32 @@ export async function runMigrations() {
         to_date TEXT NOT NULL,
         periods TEXT NOT NULL,
         remarks TEXT
+      );
+    `);
+
+    // Create department_names table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS department_names (
+        id SERIAL PRIMARY KEY,
+        dept_code TEXT NOT NULL UNIQUE,
+        dept_name TEXT NOT NULL,
+        d_ast TEXT
+      );
+    `);
+
+    // Create documents table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS documents (
+        id SERIAL PRIMARY KEY,
+        document_type TEXT NOT NULL,
+        issuing_authority TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        ref_no TEXT NOT NULL,
+        date TEXT NOT NULL,
+        image_url TEXT NOT NULL,
+        department_id INTEGER NOT NULL REFERENCES departments(id),
+        department_name TEXT NOT NULL,
+        uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
     `);
 

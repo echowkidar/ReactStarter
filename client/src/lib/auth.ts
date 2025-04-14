@@ -32,8 +32,14 @@ export async function register(departmentData: Record<string, string>) {
   }
 }
 
-export function logout() {
+export function logout(redirectToLogin = true) {
+  // Clear all auth-related data
   localStorage.removeItem("department");
+  
+  // Force page reload to reset application state
+  if (redirectToLogin) {
+    window.location.href = "/";
+  }
 }
 
 export function getCurrentDepartment(): Department | null {

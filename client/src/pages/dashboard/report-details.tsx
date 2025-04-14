@@ -172,7 +172,7 @@ export default function ReportDetails() {
               <style media="all">
                 @page { 
                   size: portrait;
-                  margin: 5mm;
+                  margin: 5mm 5mm 15mm 5mm;
                 }
                 body {
                   margin: 0;
@@ -191,8 +191,32 @@ export default function ReportDetails() {
                 @page {
                   @bottom-right {
                     content: counter(page) "/" counter(pages);
-                    margin-bottom: 10mm;
+                    margin-bottom: 15mm;
                   }
+                }
+                
+                /* Barcode styling */
+                .page-footer-barcode {
+                  position: fixed;
+                  bottom: 5mm;
+                  left: 0;
+                  right: 0;
+                  text-align: center;
+                  font-family: 'Libre Barcode 39', cursive;
+                  font-size: 14pt;
+                  letter-spacing: 0;
+                  line-height: 1;
+                }
+                
+                /* Transaction ID text under barcode */
+                .transaction-id-text {
+                  position: fixed;
+                  bottom: 1mm;
+                  left: 0;
+                  right: 0;
+                  text-align: center;
+                  font-size: 6pt;
+                  font-family: monospace;
                 }
                 
                 /* Table styles for compact display */
@@ -339,6 +363,26 @@ export default function ReportDetails() {
             certificationSection.classList.add('certification');
           }
           
+          // Add barcode font
+          const linkElement = printWindow.document.createElement('link');
+          linkElement.rel = 'stylesheet';
+          linkElement.href = 'https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap';
+          printWindow.document.head.appendChild(linkElement);
+          
+          // Add transaction ID barcode to the print window
+          const contentElement = printWindow.document.querySelector('.print-content');
+          if (contentElement) {
+            const barcodeElement = printWindow.document.createElement('div');
+            barcodeElement.className = 'page-footer-barcode';
+            barcodeElement.innerHTML = `*${report.transactionId || "DRAFT"}*`;
+            printWindow.document.body.appendChild(barcodeElement);
+            
+            const transactionTextElement = printWindow.document.createElement('div');
+            transactionTextElement.className = 'transaction-id-text';
+            transactionTextElement.innerHTML = report.transactionId || "DRAFT";
+            printWindow.document.body.appendChild(transactionTextElement);
+          }
+          
           setTimeout(() => {
             printWindow.focus();
             printWindow.print();
@@ -424,7 +468,7 @@ export default function ReportDetails() {
       <style type="text/css" media="print">{`
         @page { 
           size: portrait;
-          margin: 5mm;
+          margin: 5mm 5mm 15mm 5mm;
         }
         @media print {
           body { 
@@ -449,8 +493,34 @@ export default function ReportDetails() {
           @page {
             @bottom-right {
               content: counter(page) "/" counter(pages);
-              margin-bottom: 10mm;
+              margin-bottom: 15mm;
             }
+          }
+          
+          /* Barcode in footer */
+          .page-footer-barcode {
+            position: fixed;
+            bottom: 5mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-family: 'Libre Barcode 39', cursive;
+            font-size: 14pt;
+            letter-spacing: 0;
+            line-height: 1;
+            visibility: visible;
+          }
+          
+          /* Transaction ID text under barcode */
+          .transaction-id-text {
+            position: fixed;
+            bottom: 1mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 6pt;
+            font-family: monospace;
+            visibility: visible;
           }
           
           /* Make table more compact */

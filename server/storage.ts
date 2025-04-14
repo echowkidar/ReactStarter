@@ -11,6 +11,9 @@ import {
   InsertEmployee,
   InsertAttendanceReport,
   InsertAttendanceEntry,
+  DepartmentName,
+  Document,
+  InsertDocument
 } from "@shared/schema";
 
 // Fix for __dirname in ES modules
@@ -61,6 +64,13 @@ export interface IStorage {
   createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry>;
   getAttendanceEntriesByReport(reportId: number): Promise<AttendanceEntry[]>;
   updateAttendanceEntry(id: number, updates: Partial<AttendanceEntry>): Promise<AttendanceEntry>;
+  // Document operations
+  createDocument(document: InsertDocument): Promise<Document>;
+  getAllDocuments(): Promise<Document[]>;
+  getDocumentsByDepartment(departmentId: number): Promise<Document[]>;
+  searchDocuments(searchTerm: string): Promise<Document[]>;
+  getDocumentByRefNoAndDate(refNo: string, date: string): Promise<Document | undefined>;
+  deleteDocument(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -68,6 +78,7 @@ export class MemStorage implements IStorage {
   private employees: Map<number, Employee>;
   private attendanceReports: Map<number, AttendanceReport>;
   private attendanceEntries: Map<number, AttendanceEntry>;
+  private documents: Map<number, Document>;
   private currentId: { [key: string]: number };
   private lastReceiptNo: number;
 
@@ -76,11 +87,13 @@ export class MemStorage implements IStorage {
     this.employees = new Map();
     this.attendanceReports = new Map();
     this.attendanceEntries = new Map();
+    this.documents = new Map();
     this.currentId = {
       department: 1,
       employee: 1,
       report: 1,
       entry: 1,
+      document: 1,
     };
     this.lastReceiptNo = 0;
   }
@@ -294,6 +307,52 @@ export class MemStorage implements IStorage {
 
   async getAllDepartments(): Promise<Department[]> {
     return Array.from(this.departments.values());
+  }
+
+  async createDocument(document: InsertDocument): Promise<Document> {
+    const id = this.currentId.document++;
+    const newDocument: Document = { 
+      id, 
+      ...document,
+      uploadedAt: new Date()
+    };
+    this.documents.set(id, newDocument);
+    return newDocument;
+  }
+
+  async getAllDocuments(): Promise<Document[]> {
+    return Array.from(this.documents.values())
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  }
+
+  async getDocumentsByDepartment(departmentId: number): Promise<Document[]> {
+    return Array.from(this.documents.values())
+      .filter(doc => doc.departmentId === departmentId)
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  }
+
+  async searchDocuments(searchTerm: string): Promise<Document[]> {
+    const searchTermLower = searchTerm.toLowerCase();
+    return Array.from(this.documents.values())
+      .filter(doc => 
+        doc.documentType.toLowerCase().includes(searchTermLower) ||
+        doc.issuingAuthority.toLowerCase().includes(searchTermLower) ||
+        doc.subject.toLowerCase().includes(searchTermLower) ||
+        doc.refNo.toLowerCase().includes(searchTermLower) ||
+        doc.date.includes(searchTerm) ||
+        doc.departmentName.toLowerCase().includes(searchTermLower)
+      )
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  }
+
+  async getDocumentByRefNoAndDate(refNo: string, date: string): Promise<Document | undefined> {
+    return Array.from(this.documents.values()).find(
+      doc => doc.refNo === refNo && doc.date === date
+    );
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    this.documents.delete(id);
   }
 }
 

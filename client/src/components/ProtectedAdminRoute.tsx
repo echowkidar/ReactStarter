@@ -1,26 +1,38 @@
-import React from "react";
-import { Route, Redirect, RouteProps } from "wouter";
+import React, { useEffect, useState } from "react";
+import { Route, Redirect } from "wouter";
 import { getCurrentAdmin } from "@/lib/auth"; // Adjust path if necessary
 
-interface ProtectedAdminRouteProps extends RouteProps {
+interface ProtectedAdminRouteProps {
+  path: string;
   component: React.ComponentType<any>;
 }
 
 const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
   component: Component,
-  ...rest
+  path,
 }) => {
-  const isAdminAuthenticated = !!getCurrentAdmin();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    // Check authentication status
+    const admin = getCurrentAdmin();
+    if (admin) {
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+  }, []);
+
+  // Show nothing during the authentication check
+  if (isAuthenticated === null) {
+    return null;
+  }
 
   return (
     <Route
-      {...rest}
+      path={path}
       component={(props: any) =>
-        isAdminAuthenticated ? (
-          <Component {...props} />
-        ) : (
-          <Redirect to="/admin/login" />
-        )
+        isAuthenticated ? <Component {...props} /> : <Redirect to="/admin/login" />
       }
     />
   );
