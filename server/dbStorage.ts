@@ -135,16 +135,22 @@ export class DbStorage implements IStorage {
 
   // Employee operations
   async getEmployee(id: number): Promise<Employee | undefined> {
-    return await db.query.employees.findFirst({
-      where: eq(employees.id, id),
-    });
+    try {
+      const result = await db.query.employees.findFirst({
+        where: eq(employees.id, id)
+      });
+      return result;
+    } catch (error) {
+      console.error('[DbStorage] Error fetching employee:', error);
+      return undefined;
+    }
   }
 
   async getEmployeesByDepartment(departmentId: number): Promise<Employee[]> {
     try {
       console.log(`[DbStorage] Fetching employees for department ${departmentId}`);
       const result = await db.query.employees.findMany({
-        where: eq(employees.departmentId, departmentId),
+        where: eq(employees.departmentId, departmentId)
       });
       console.log(`[DbStorage] Found ${result.length} employees`);
       if (result.length > 0) {
@@ -153,7 +159,7 @@ export class DbStorage implements IStorage {
       return result;
     } catch (error) {
       console.error('[DbStorage] Error fetching employees:', error);
-      throw error;
+      return [];
     }
   }
 

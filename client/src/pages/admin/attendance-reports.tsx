@@ -41,6 +41,7 @@ type AttendanceEntry = {
     epid?: string;       // Handle both field names
     designation: string;
     salaryRegisterNo: string;
+    salary_asstt?: string;
   };
 };
 
@@ -79,6 +80,9 @@ export default function AttendanceReports() {
     select: (data) => data.filter(report => report.status === "sent"),
   });
 
+  // Add this debug log to see the entire reports data
+  console.log("Reports data:", JSON.stringify(reports, null, 2));
+
   // Fetch all departments for the filter
   const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/departments"],
@@ -92,6 +96,7 @@ export default function AttendanceReports() {
       employeeId: string;
       employeeName: string;
       designation: string;
+      salaryAsstt: string;
       salaryRegisterNo: string;
       period: string;
       days: number;
@@ -111,6 +116,18 @@ export default function AttendanceReports() {
         
         report.entries.forEach(entry => {
           if (entry.employee) {
+            console.log("Employee data in attendance report:", entry.employee);
+            console.log("Employee data keys:", Object.keys(entry.employee));
+            
+            // First try direct access, then fall back to empty string
+            const salaryAssttValue = entry.employee.salary_asstt !== undefined ? 
+              String(entry.employee.salary_asstt) : 
+              (typeof entry.employee === 'object' && 'salary_asstt' in entry.employee) ? 
+                String(entry.employee.salary_asstt) : 
+                "";
+                
+            console.log("Employee salary_asstt value:", salaryAssttValue);
+            
             try {
               const periods = JSON.parse(entry.periods);
               periods.forEach((period: any) => {
@@ -120,6 +137,7 @@ export default function AttendanceReports() {
                   employeeId: entry.employee?.epid || entry.employee?.employeeId || "",
                   employeeName: entry.employee?.name || "",
                   designation: entry.employee?.designation || "",
+                  salaryAsstt: salaryAssttValue,
                   salaryRegisterNo: entry.employee?.salaryRegisterNo || "",
                   period: `${period.fromDate} to ${period.toDate}`,
                   days: period.days,
@@ -246,6 +264,7 @@ export default function AttendanceReports() {
       "Employee ID": entry.employeeId,
       "Employee Name": entry.employeeName,
       "Designation": entry.designation,
+      "Salary Assistant": entry.salaryAsstt,
       "Salary Register No": entry.salaryRegisterNo,
       "Period": entry.period,
       "Days": entry.days,
@@ -259,6 +278,7 @@ export default function AttendanceReports() {
       { wch: 15 }, // Employee ID
       { wch: 20 }, // Employee Name
       { wch: 20 }, // Designation
+      { wch: 20 }, // Salary Assistant
       { wch: 15 }, // Salary Register No
       { wch: 25 }, // Period
       { wch: 8 },  // Days
@@ -405,6 +425,7 @@ export default function AttendanceReports() {
                 <TableHead>Employee ID</TableHead>
                 <TableHead>Employee Name</TableHead>
                 <TableHead>Designation</TableHead>
+                <TableHead>Salary Assistant</TableHead>
                 <TableHead>Salary Register No</TableHead>
                 <TableHead>Period</TableHead>
                 <TableHead>Days</TableHead>
@@ -415,7 +436,7 @@ export default function AttendanceReports() {
             <TableBody>
               {processedEntries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={11} className="text-center py-8">
                     No attendance entries found
                   </TableCell>
                 </TableRow>
@@ -429,6 +450,7 @@ export default function AttendanceReports() {
                     <TableCell>{entry.employeeId}</TableCell>
                     <TableCell>{entry.employeeName}</TableCell>
                     <TableCell>{entry.designation}</TableCell>
+                    <TableCell>{entry.salaryAsstt}</TableCell>
                     <TableCell>{entry.salaryRegisterNo}</TableCell>
                     <TableCell>{entry.period}</TableCell>
                     <TableCell>{entry.days}</TableCell>

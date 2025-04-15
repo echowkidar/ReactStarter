@@ -26,6 +26,7 @@ export const employees = pgTable("employees", {
   salaryRegisterNo: text("salary_register_no").notNull(),
   officeMemoNo: text("office_memo_no").notNull(),
   joiningShift: text("joining_shift").notNull().default("morning"),
+  salary_asstt: text("salary_asstt"),
   // Add document URL fields
   panCardUrl: text("pan_card_url"),
   bankProofUrl: text("bank_proof_url"),
@@ -140,6 +141,7 @@ export type Employee = typeof employees.$inferSelect & {
   officeMemoUrl?: string | null;
   joiningReportUrl?: string | null;
   termExtensionUrl?: string | null;
+  salary_asstt?: string | null;
 };
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type AttendanceReport = typeof attendanceReports.$inferSelect;

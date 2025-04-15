@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,13 +8,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
 import { employmentStatuses } from "@/lib/departments";
 import AdminHeader from "@/components/layout/admin-header";
 import { format } from "date-fns";
+import * as XLSX from "xlsx";
 
 interface FileUpload {
   file: File | null;
@@ -38,6 +39,15 @@ export default function AdminEmployees() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 100;
+  
+  // Search and filter state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string>("all");
 
   // Function to find the correct department ID from the departments list
   const findMatchingDepartment = (employee: Employee, departments: Department[]) => {
@@ -73,7 +83,6 @@ export default function AdminEmployees() {
     queryKey: ['/api/departments'], 
     queryFn: async () => {
       try {
-        // Remove the registeredOnly parameter which might be limiting results
         const response = await apiRequest("GET", "/api/departments");
         if (!response.ok) {
           console.error("Failed to fetch departments:", response.status, response.statusText);
@@ -90,6 +99,53 @@ export default function AdminEmployees() {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
+
+  // Filter and paginate employees
+  const filteredEmployees = useMemo(() => {
+    let result = [...employees];
+    
+    // Apply search filter
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      result = result.filter(
+        emp => 
+          emp.epid?.toLowerCase().includes(lowerSearchTerm) ||
+          emp.name?.toLowerCase().includes(lowerSearchTerm) ||
+          emp.departmentName?.toLowerCase().includes(lowerSearchTerm) ||
+          emp.designation?.toLowerCase().includes(lowerSearchTerm)
+      );
+    }
+    
+    // Apply department filter
+    if (departmentFilter && departmentFilter !== "all") {
+      result = result.filter(emp => emp.departmentId.toString() === departmentFilter);
+    }
+    
+    // Apply dealing assistant filter
+    if (dealingAssistantFilter && dealingAssistantFilter !== "all") {
+      result = result.filter(emp => emp.salary_asstt === dealingAssistantFilter);
+    }
+    
+    return result;
+  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter]);
+  
+  // Paginate filtered results
+  const paginatedEmployees = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredEmployees.slice(startIndex, startIndex + pageSize);
+  }, [filteredEmployees, currentPage, pageSize]);
+  
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize);
+  
+  // Get unique dealing assistants for filter
+  const uniqueDealingAssistants = useMemo(() => {
+    const assistants = employees
+      .map(emp => emp.salary_asstt)
+      .filter((value): value is string => !!value); // Filter out null/undefined/empty values
+    
+    return Array.from(new Set(assistants)).sort();
+  }, [employees]);
 
   useEffect(() => {
     if (selectedEmployee && departments.length > 0) {
@@ -496,6 +552,74 @@ export default function AdminEmployees() {
     }
   });
 
+  // Function to handle page change
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleDownloadExcel = () => {
+    try {
+      // Create a workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Format employee data for Excel
+      const employeeData = filteredEmployees.map(emp => ({
+        'EPID': emp.epid || '',
+        'Name': emp.name || '',
+        'Department': emp.departmentName || '',
+        'Designation': emp.designation || '',
+        'Dealing Assistant': emp.salary_asstt || '',
+        'Status': emp.employmentStatus || '',
+        'Joining Date': emp.joiningDate || '',
+        'Office Memo No': emp.officeMemoNo || '',
+        'Salary Register No': emp.salaryRegisterNo || '',
+        'Bank Account': emp.bankAccount || '',
+        'PAN Number': emp.panNumber || '',
+        'Aadhar Number': emp.aadharCard || ''
+      }));
+      
+      // Convert to worksheet
+      const ws = XLSX.utils.json_to_sheet(employeeData);
+      
+      // Set column widths
+      const colWidths = [
+        { wch: 10 }, // EPID
+        { wch: 25 }, // Name
+        { wch: 30 }, // Department 
+        { wch: 25 }, // Designation
+        { wch: 25 }, // Dealing Assistant
+        { wch: 15 }, // Status
+        { wch: 15 }, // Joining Date
+        { wch: 20 }, // Office Memo No
+        { wch: 20 }, // Salary Register No
+        { wch: 20 }, // Bank Account
+        { wch: 15 }, // PAN Number
+        { wch: 15 }  // Aadhar Number
+      ];
+      ws['!cols'] = colWidths;
+      
+      // Add the worksheet to the workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Employees");
+      
+      // Generate Excel file and download
+      XLSX.writeFile(wb, "employees.xlsx");
+      
+      toast({
+        title: "Success",
+        description: `Downloaded ${filteredEmployees.length} employee records`
+      });
+    } catch (error) {
+      console.error("Error generating Excel:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to generate Excel file"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 min-h-screen flex flex-col">
       <AdminHeader />
@@ -680,6 +804,15 @@ export default function AdminEmployees() {
                             />
                           </div>
                           <div>
+                            <Label htmlFor="salary_asstt">Salary Assistant</Label>
+                            <Input
+                              id="salary_asstt"
+                              name="salary_asstt"
+                              defaultValue={selectedEmployee?.salary_asstt || ""}
+                              className="bg-white dark:bg-slate-800"
+                            />
+                          </div>
+                          <div>
                             <Label htmlFor="departmentId">Department</Label>
                             <Select
                               name="departmentId"
@@ -702,7 +835,7 @@ export default function AdminEmployees() {
                                 ) : departments && departments.length > 0 ? (
                                   departments.map((dept) => (
                                     <SelectItem key={dept.id} value={dept.id.toString()}>
-                                      {dept.name} ({dept.code})
+                                      {dept.name}
                                     </SelectItem>
                                   ))
                                 ) : (
@@ -760,16 +893,114 @@ export default function AdminEmployees() {
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
+              <Button
+                variant="outline"
+                onClick={handleDownloadExcel}
+                className="flex items-center gap-2"
+              >
+                <FileDown className="w-4 h-4" />
+                Download Excel
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
+            {/* Search and filter bar */}
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by EPID, name, department or designation..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1); // Reset to first page on search
+                  }}
+                  className="pl-8"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <Select
+                  value={departmentFilter}
+                  onValueChange={(value) => {
+                    setDepartmentFilter(value);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id.toString()}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full md:w-64">
+                <Select
+                  value={dealingAssistantFilter}
+                  onValueChange={(value) => {
+                    setDealingAssistantFilter(value);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by dealing assistant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Dealing Assistants</SelectItem>
+                    {uniqueDealingAssistants.map((assistant) => (
+                      <SelectItem key={assistant} value={assistant}>
+                        {assistant}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {/* Top pagination */}
+            {!isEmployeesLoading && filteredEmployees.length > 0 && (
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredEmployees.length)} of {filteredEmployees.length} employees
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-sm">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {isEmployeesLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
               </div>
-            ) : employees.length === 0 ? (
+            ) : filteredEmployees.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                No employees found. Add your first employee using the button above.
+                {searchTerm || departmentFilter !== "all" 
+                  ? "No employees found matching your search criteria." 
+                  : "No employees found. Add your first employee using the button above."}
               </div>
             ) : (
               <Table>
@@ -779,18 +1010,20 @@ export default function AdminEmployees() {
                     <TableHead>Name</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Designation</TableHead>
+                    <TableHead>Dealing Assistant</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Term Expiry Date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map((employee) => (
+                  {paginatedEmployees.map((employee) => (
                     <TableRow key={employee.id}>
                       <TableCell>{employee.epid}</TableCell>
                       <TableCell>{employee.name}</TableCell>
                       <TableCell>{employee.departmentName}</TableCell>
                       <TableCell>{employee.designation}</TableCell>
+                      <TableCell>{employee.salary_asstt || "-"}</TableCell>
                       <TableCell>{employee.employmentStatus}</TableCell>
                       <TableCell>
                         {(employee.employmentStatus === "Probation" ||
@@ -835,6 +1068,36 @@ export default function AdminEmployees() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+            
+            {/* Bottom pagination */}
+            {!isEmployeesLoading && filteredEmployees.length > 0 && (
+              <div className="flex justify-between items-center mt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredEmployees.length)} of {filteredEmployees.length} employees
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-sm">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
