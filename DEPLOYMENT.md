@@ -139,11 +139,16 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 ## git push origin complete_project
 
 
-## Cursor
+## Cursor if change branch
 ## git add .
 ## git commit -m "Your descriptive commit message"
 ## git checkout -b done # command does two things: -b done: Creates a new branch named "done" and checkout: Switches your current working branch to the newly created "done" branch.
 ## git push origin done # Push the new branch to GitHub:
+
+## Cursor if push into same branch
+## git add .
+## git commit -m "Your descriptive commit message"
+## git push origin done # Push into 'done' branch
 
 
 

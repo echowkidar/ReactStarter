@@ -65,6 +65,24 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
     },
   });
 
+  // Handle the form submission, catching specific errors
+  const handleFormSubmit = async (data: z.infer<typeof employeeSchema>) => {
+    try {
+      await onSubmit(data);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("EPID already exists")) {
+        form.setError("epid", { 
+          type: "manual", 
+          message: "An employee with this EPID already exists. Please use a unique EPID."
+        });
+      } else {
+        // Handle other errors or re-throw if needed
+        console.error("Error submitting employee form:", error);
+        // Optionally show a generic error toast or message
+      }
+    }
+  };
+
   // Handle file compression and validation
   const handleFileChange = async (file: File | null, fieldName: string) => {
     // Clear any previous errors for this field
@@ -99,7 +117,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto px-1">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto px-1">
         <div className="space-y-8">
           {/* Basic Information Section */}
           <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">

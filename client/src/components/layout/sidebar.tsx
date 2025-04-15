@@ -10,6 +10,7 @@ import {
   Menu,
   Settings,
   FileImage,
+  HelpCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
   { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Help", href: "/dashboard/help", icon: HelpCircle },
 ];
 
 interface SidebarProps {

@@ -12,6 +12,7 @@ import Attendance from "@/pages/dashboard/attendance";
 import ReportDetails from "@/pages/dashboard/report-details";
 import Settings from "@/pages/dashboard/settings";
 import Documents from "@/pages/dashboard/documents";
+import Help from "@/pages/help";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminEmployees from "@/pages/admin/employees";
@@ -35,6 +36,7 @@ function AppRouter() {
       <ProtectedRoute path="/dashboard/settings" component={Settings} />
       <ProtectedRoute path="/dashboard/documents" component={Documents} />
       <ProtectedRoute path="/dashboard/reports/:id" component={ReportDetails} />
+      <ProtectedRoute path="/dashboard/help" component={Help} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/forgot-password" component={AdminForgotPassword} />
       <Route path="/admin/reset-password" component={AdminResetPassword} />
