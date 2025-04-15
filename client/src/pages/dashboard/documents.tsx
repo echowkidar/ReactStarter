@@ -526,17 +526,23 @@ export default function Documents() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="refNo">Ref. No.</Label>
+                      <Label htmlFor="refNo">Ref. No. (Number only, plz exclude starting & ending characters)</Label>
                       <Input
                         id="refNo"
                         value={refNo}
-                        onChange={(e) => setRefNo(e.target.value)}
-                        required
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Allow only numbers
+                          if (/^\d*$/.test(value)) {
+                              setRefNo(value);
+                          }
+                      }}
+                      required
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="date">Date</Label>
+                      <Label htmlFor="date">Dispatch Date</Label>
                       <Input
                         id="date"
                         type="date"

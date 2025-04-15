@@ -1085,16 +1085,16 @@ export default function Attendance() {
                                 />
                               </DialogContent>
                             </Dialog>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
-                            >
-                              <Eye className="h-4 w-4" />
-                              View Details
-                            </Button>
                           </>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

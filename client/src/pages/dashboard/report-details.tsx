@@ -684,49 +684,67 @@ export default function ReportDetails() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {report.entries?.flatMap((entry, entryIndex) => {
-                try {
-                  const periods = typeof entry.periods === 'string' 
-                    ? JSON.parse(entry.periods) 
-                    : entry.periods;
+              {report.entries
+                ?.sort((a, b) => {
+                  // First sort by salary register number
+                  const regNoA = a.employee?.salaryRegisterNo || '';
+                  const regNoB = b.employee?.salaryRegisterNo || '';
+                  
+                  // Compare reg numbers first
+                  const regNoCompare = regNoA.localeCompare(regNoB);
+                  
+                  // If reg numbers are the same, then sort by employee ID
+                  if (regNoCompare === 0) {
+                    const idA = a.employee?.epid || '';
+                    const idB = b.employee?.epid || '';
+                    return idA.localeCompare(idB);
+                  }
+                  
+                  return regNoCompare;
+                })
+                .flatMap((entry, entryIndex) => {
+                  try {
+                    const periods = typeof entry.periods === 'string' 
+                      ? JSON.parse(entry.periods) 
+                      : entry.periods;
 
-                  return periods.map((period: any, periodIndex: number) => {
-                    // Calculate serial number based on flattened entries array
-                    const serialNumber = 
-                      (report.entries
-                        ? report.entries
-                            .slice(0, entryIndex)
-                            .reduce((count, prevEntry) => {
-                              const prevPeriods = typeof prevEntry.periods === 'string'
-                                ? JSON.parse(prevEntry.periods)
-                                : prevEntry.periods || [];
-                              return count + (prevPeriods?.length || 0);
-                            }, 0)
-                        : 0) + periodIndex + 1;
+                    return periods.map((period: any, periodIndex: number) => {
+                      // Calculate serial number based on flattened entries array
+                      const serialNumber = 
+                        (report.entries
+                          ? report.entries
+                              .slice(0, entryIndex)
+                              .reduce((count, prevEntry) => {
+                                const prevPeriods = typeof prevEntry.periods === 'string'
+                                  ? JSON.parse(prevEntry.periods)
+                                  : prevEntry.periods || [];
+                                return count + (prevPeriods?.length || 0);
+                              }, 0)
+                          : 0) + periodIndex + 1;
 
-                    return (
-                      <TableRow key={`${entry.id}-${periodIndex}`}>
-                        <TableCell className="whitespace-nowrap">{serialNumber}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.employee?.name}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.employee?.designation}</TableCell>
-                        <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {isWholeMonth(period.fromDate, period.toDate) 
-                            ? "- " 
-                            : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">{period.days}</TableCell>
-                        <TableCell>{period.remarks || "-"}</TableCell>
-                      </TableRow>
-                    );
-                  });
-                } catch (error) {
-                  console.error('Error parsing periods:', error);
-                  return null;
-                }
-              })}
+                      return (
+                        <TableRow key={`${entry.id}-${periodIndex}`}>
+                          <TableCell className="whitespace-nowrap">{serialNumber}</TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.name}</TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.designation}</TableCell>
+                          <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {isWholeMonth(period.fromDate, period.toDate) 
+                              ? "- " 
+                              : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{period.days}</TableCell>
+                          <TableCell>{period.remarks || "-"}</TableCell>
+                        </TableRow>
+                      );
+                    });
+                  } catch (error) {
+                    console.error('Error parsing periods:', error);
+                    return null;
+                  }
+                })}
             </TableBody>
           </Table>
         </div>
