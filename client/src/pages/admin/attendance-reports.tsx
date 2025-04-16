@@ -11,16 +11,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
+import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Search, ArrowLeft, FileDown } from "lucide-react";
+import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 
@@ -63,10 +58,15 @@ type AttendanceReport = {
 export default function AttendanceReports() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState("all");
-  const [salaryRegisterFilter, setSalaryRegisterFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
+  const [monthFilter, setMonthFilter] = useState<string[]>([]);
+  const [salaryRegisterFilter, setSalaryRegisterFilter] = useState<string[]>([]);
+  const [salaryAssistantFilter, setSalaryAssistantFilter] = useState<string[]>([]);
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
 
   useEffect(() => {
     // Check if user is salary admin
@@ -183,30 +183,153 @@ export default function AttendanceReports() {
     return Array.from(uniqueRegisters).sort();
   }, [allEntries]);
 
-  // Filter entries based on search and filters
-  const filteredEntries = useMemo(() => {
-    return allEntries.filter(entry => {
-      const matchesSearch = 
-        entry.month.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.departmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.designation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.salaryRegisterNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.remarks.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesDepartment = departmentFilter === "all" || 
-        entry.departmentId.toString() === departmentFilter;
-      
-      const matchesMonth = monthFilter === "all" || 
-        entry.month === monthFilter;
-      
-      const matchesSalaryRegister = salaryRegisterFilter === "all" || 
-        entry.salaryRegisterNo === salaryRegisterFilter;
-      
-      return matchesSearch && matchesDepartment && matchesMonth && matchesSalaryRegister;
+  // Get unique salary assistants for the filter
+  const availableSalaryAssistants = useMemo(() => {
+    const uniqueAssistants = new Set<string>();
+    allEntries.forEach(entry => {
+      if (entry.salaryAsstt && entry.salaryAsstt.trim() !== '') {
+        uniqueAssistants.add(entry.salaryAsstt);
+      }
     });
-  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter]);
+    return Array.from(uniqueAssistants).sort();
+  }, [allEntries]);
+
+  // Calculate filtered departments, months, and salary registers based on current filters
+  const {
+    filteredDepartments,
+    filteredMonths,
+    filteredSalaryRegisters,
+    filteredSalaryAssistants
+  } = useMemo(() => {
+    // Start with a filtered set of entries based on search term
+    let result = [...allEntries];
+    
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      result = result.filter(
+        entry => 
+          entry.employeeId.toLowerCase().includes(lowerSearchTerm) ||
+          entry.employeeName.toLowerCase().includes(lowerSearchTerm) ||
+          entry.departmentName.toLowerCase().includes(lowerSearchTerm) ||
+          entry.designation.toLowerCase().includes(lowerSearchTerm) ||
+          entry.remarks.toLowerCase().includes(lowerSearchTerm)
+      );
+    }
+    
+    // Apply department filter when calculating available months and salary registers
+    let departmentFilteredEntries = result;
+    if (departmentFilter.length > 0) {
+      departmentFilteredEntries = result.filter(
+        entry => departmentFilter.includes(entry.departmentId.toString())
+      );
+    }
+    
+    // Apply month filter when calculating available departments and salary registers
+    let monthFilteredEntries = result;
+    if (monthFilter.length > 0) {
+      monthFilteredEntries = result.filter(
+        entry => monthFilter.includes(entry.month)
+      );
+    }
+    
+    // Apply salary register filter when calculating available departments and months
+    let salaryRegisterFilteredEntries = result;
+    if (salaryRegisterFilter.length > 0) {
+      salaryRegisterFilteredEntries = result.filter(
+        entry => salaryRegisterFilter.includes(entry.salaryRegisterNo)
+      );
+    }
+    
+    // Apply salary assistant filter when calculating available departments, months, and registers
+    let salaryAssistantFilteredEntries = result;
+    if (salaryAssistantFilter.length > 0) {
+      salaryAssistantFilteredEntries = result.filter(
+        entry => salaryAssistantFilter.includes(entry.salaryAsstt)
+      );
+    }
+    
+    // Get available departments based on other filters
+    const filteredForDepartments = 
+      monthFilter.length > 0 ? monthFilteredEntries : 
+      salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
+      salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+    const deptIds = new Set(filteredForDepartments.map(entry => entry.departmentId.toString()));
+    
+    // Get available months based on other filters
+    const filteredForMonths = 
+      departmentFilter.length > 0 ? departmentFilteredEntries : 
+      salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
+      salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+    const months = new Set(filteredForMonths.map(entry => entry.month));
+    
+    // Get available salary registers based on other filters
+    const filteredForSalaryRegisters = 
+      departmentFilter.length > 0 ? departmentFilteredEntries : 
+      monthFilter.length > 0 ? monthFilteredEntries :
+      salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+    const salaryRegisters = new Set(filteredForSalaryRegisters.map(entry => entry.salaryRegisterNo));
+    
+    // Get available salary assistants based on other filters
+    const filteredForSalaryAssistants = 
+      departmentFilter.length > 0 ? departmentFilteredEntries : 
+      monthFilter.length > 0 ? monthFilteredEntries :
+      salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries : result;
+    const salaryAssistants = new Set(
+      filteredForSalaryAssistants
+        .map(entry => entry.salaryAsstt)
+        .filter(value => value && value.trim() !== '')
+    );
+    
+    return {
+      filteredDepartments: availableDepartments.filter(dept => 
+        (monthFilter.length === 0 && salaryRegisterFilter.length === 0 && salaryAssistantFilter.length === 0) || 
+        deptIds.has(dept.id.toString())
+      ),
+      filteredMonths: Array.from(months).sort(),
+      filteredSalaryRegisters: Array.from(salaryRegisters).sort(),
+      filteredSalaryAssistants: Array.from(salaryAssistants).sort()
+    };
+  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, availableDepartments]);
+
+  // Filter entries based on all criteria
+  const filteredEntries = useMemo(() => {
+    let result = [...allEntries];
+    
+    // Apply search filter
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      result = result.filter(
+        entry => 
+          entry.employeeId.toLowerCase().includes(lowerSearchTerm) ||
+          entry.employeeName.toLowerCase().includes(lowerSearchTerm) ||
+          entry.departmentName.toLowerCase().includes(lowerSearchTerm) ||
+          entry.designation.toLowerCase().includes(lowerSearchTerm) ||
+          entry.remarks.toLowerCase().includes(lowerSearchTerm)
+      );
+    }
+    
+    // Apply department filter
+    if (departmentFilter.length > 0) {
+      result = result.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
+    }
+    
+    // Apply month filter
+    if (monthFilter.length > 0) {
+      result = result.filter(entry => monthFilter.includes(entry.month));
+    }
+    
+    // Apply salary register filter
+    if (salaryRegisterFilter.length > 0) {
+      result = result.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
+    }
+    
+    // Apply salary assistant filter
+    if (salaryAssistantFilter.length > 0) {
+      result = result.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
+    }
+    
+    return result;
+  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter]);
 
   // Process entries to show department name only once
   const processedEntries = useMemo(() => {
@@ -249,10 +372,26 @@ export default function AttendanceReports() {
     });
   }, [filteredEntries]);
 
+  // Paginate processed entries
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return processedEntries.slice(startIndex, startIndex + pageSize);
+  }, [processedEntries, currentPage, pageSize]);
+
+  // Calculate total pages
+  const totalPages = Math.ceil(processedEntries.length / pageSize);
+
   const handleLogout = () => {
     // Clear admin data from localStorage
     localStorage.removeItem("adminType");
     setLocation("/admin/login");
+  };
+
+  // Function to handle page change
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
   };
 
   // Function to download filtered entries as Excel
@@ -292,12 +431,16 @@ export default function AttendanceReports() {
 
     // Generate file name with filters applied
     let fileName = "Attendance_Report";
-    if (departmentFilter !== "all") {
-      const dept = availableDepartments.find(d => d.id.toString() === departmentFilter);
-      if (dept) fileName += `_${dept.name.replace(/\s+/g, '_')}`;
+    if (departmentFilter.length > 0) {
+      // Try to find department names
+      const deptNames = departmentFilter.map(id => {
+        const dept = availableDepartments.find(d => d.id.toString() === id);
+        return dept ? dept.name.replace(/\s+/g, '_') : id;
+      });
+      fileName += `_${deptNames.join('_')}`;
     }
-    if (monthFilter !== "all") {
-      fileName += `_${monthFilter.replace(/\s+/g, '_')}`;
+    if (monthFilter.length > 0) {
+      fileName += `_${monthFilter.join('_').replace(/\s+/g, '_')}`;
     }
     fileName += ".xlsx";
 
@@ -311,167 +454,248 @@ export default function AttendanceReports() {
     <div className="min-h-screen flex flex-col">
       <AdminHeader />
       <div className="p-6 flex-1">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold">Attendance Reports</h1>
-            <Badge variant="outline" className="text-lg">
-              Received
-            </Badge>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              onClick={downloadExcel}
-              className="flex items-center gap-2"
-            >
-              <FileDown className="h-4 w-4" />
-              Download Excel
-            </Button>
-            {!isSalaryAdmin && (
-              <Button
-                variant="outline"
-                onClick={() => setLocation("/admin/employees")}
-                className="flex items-center gap-2"
-              >
-                <Users className="h-4 w-4" />
-                Manage Employees
-              </Button>
+        <Card className="w-full">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <h1 className="text-2xl font-bold">Attendance Reports</h1>
+                <Badge variant="outline" className="text-lg">
+                  Received
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  onClick={downloadExcel}
+                  className="flex items-center gap-2"
+                >
+                  <FileDown className="h-4 w-4" />
+                  Download Excel
+                </Button>
+                {!isSalaryAdmin && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setLocation("/admin/employees")}
+                    className="flex items-center gap-2"
+                  >
+                    <Users className="h-4 w-4" />
+                    Manage Employees
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation("/admin/dashboard")}
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Dashboard
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleLogout}
+                  className="flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by department, employee, designation, or remarks..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1); // Reset to first page on search
+                  }}
+                  className="pl-8"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <MultiSelect
+                  options={filteredMonths.map(month => ({
+                    label: month,
+                    value: month
+                  }))}
+                  selected={monthFilter}
+                  onChange={(values) => {
+                    setMonthFilter(values);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                  placeholder="Filter by month"
+                  className="min-w-[180px]"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <MultiSelect
+                  options={filteredDepartments.map(dept => ({
+                    label: dept.name,
+                    value: dept.id.toString()
+                  }))}
+                  selected={departmentFilter}
+                  onChange={(values) => {
+                    setDepartmentFilter(values);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                  placeholder="Filter by department"
+                  className="min-w-[180px]"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <MultiSelect
+                  options={filteredSalaryAssistants.map(assistant => ({
+                    label: assistant,
+                    value: assistant
+                  }))}
+                  selected={salaryAssistantFilter}
+                  onChange={(values) => {
+                    setSalaryAssistantFilter(values);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                  placeholder="Filter by salary assistant"
+                  className="min-w-[180px]"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <MultiSelect
+                  options={filteredSalaryRegisters.map(register => ({
+                    label: register,
+                    value: register
+                  }))}
+                  selected={salaryRegisterFilter}
+                  onChange={(values) => {
+                    setSalaryRegisterFilter(values);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                  placeholder="Filter by salary register"
+                  className="min-w-[180px]"
+                />
+              </div>
+            </div>
+
+            {/* Top pagination */}
+            {!isLoading && processedEntries.length > 0 && (
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, processedEntries.length)} of {processedEntries.length} entries
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-sm">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             )}
-            <Button
-              variant="outline"
-              onClick={() => setLocation("/admin/dashboard")}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              className="flex items-center gap-2"
-            >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Button>
-          </div>
-        </div>
 
-        <div className="flex gap-4 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by department, employee, designation, or remarks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Select
-            value={monthFilter}
-            onValueChange={setMonthFilter}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by month" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Months</SelectItem>
-              {availableMonths.map((month) => (
-                <SelectItem key={month} value={month}>
-                  {month}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={departmentFilter}
-            onValueChange={setDepartmentFilter}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Departments</SelectItem>
-              {availableDepartments.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id.toString()}>
-                  {dept.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={salaryRegisterFilter}
-            onValueChange={setSalaryRegisterFilter}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by salary register" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Salary Registers</SelectItem>
-              {availableSalaryRegisters.map((register) => (
-                <SelectItem key={register} value={register}>
-                  {register}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Month</TableHead>
-                <TableHead>Department Name</TableHead>
-                <TableHead>Employee ID</TableHead>
-                <TableHead>Employee Name</TableHead>
-                <TableHead>Designation</TableHead>
-                <TableHead>Salary Assistant</TableHead>
-                <TableHead>Salary Register No</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Days</TableHead>
-                <TableHead>Remarks</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {processedEntries.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8">
-                    No attendance entries found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                processedEntries.map((entry, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{entry.showMonth ? entry.month : ""}</TableCell>
-                    <TableCell className="font-medium">
-                      {entry.showDepartment ? entry.departmentName : ""}
-                    </TableCell>
-                    <TableCell>{entry.employeeId}</TableCell>
-                    <TableCell>{entry.employeeName}</TableCell>
-                    <TableCell>{entry.designation}</TableCell>
-                    <TableCell>{entry.salaryAsstt}</TableCell>
-                    <TableCell>{entry.salaryRegisterNo}</TableCell>
-                    <TableCell>{entry.period}</TableCell>
-                    <TableCell>{entry.days}</TableCell>
-                    <TableCell>{entry.remarks || "-"}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation(`/admin/reports/${entry.reportId}`)}
-                        className="flex items-center gap-2"
-                      >
-                        <Eye className="h-4 w-4" />
-                        View Report
-                      </Button>
-                    </TableCell>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Month</TableHead>
+                    <TableHead>Department Name</TableHead>
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Employee Name</TableHead>
+                    <TableHead>Designation</TableHead>
+                    <TableHead>Salary Assistant</TableHead>
+                    <TableHead>Salary Register No</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Days</TableHead>
+                    <TableHead>Remarks</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {paginatedEntries.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-center py-8">
+                        {searchTerm || departmentFilter.length > 0 || monthFilter.length > 0 || salaryRegisterFilter.length > 0
+                          ? "No attendance entries found matching your search criteria."
+                          : "No attendance entries found."}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedEntries.map((entry, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{entry.showMonth ? entry.month : ""}</TableCell>
+                        <TableCell className="font-medium">
+                          {entry.showDepartment ? entry.departmentName : ""}
+                        </TableCell>
+                        <TableCell>{entry.employeeId}</TableCell>
+                        <TableCell>{entry.employeeName}</TableCell>
+                        <TableCell>{entry.designation}</TableCell>
+                        <TableCell>{entry.salaryAsstt}</TableCell>
+                        <TableCell>{entry.salaryRegisterNo}</TableCell>
+                        <TableCell>{entry.period}</TableCell>
+                        <TableCell>{entry.days}</TableCell>
+                        <TableCell>{entry.remarks || "-"}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation(`/admin/reports/${entry.reportId}`)}
+                            className="flex items-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Report
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Bottom pagination */}
+            {!isLoading && processedEntries.length > 0 && (
+              <div className="flex justify-between items-center mt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, processedEntries.length)} of {processedEntries.length} entries
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-sm">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

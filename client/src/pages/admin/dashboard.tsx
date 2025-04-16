@@ -30,6 +30,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { MultiSelect, Option } from "@/components/ui/multi-select";
 
 type ReportWithDepartment = AttendanceReport & {
   department?: Department;
@@ -67,6 +68,7 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "receiptNo", direction: "desc" });
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
 
@@ -75,6 +77,16 @@ export default function AdminDashboard() {
     const adminType = localStorage.getItem("adminType");
     setIsSalaryAdmin(adminType === "salary");
   }, []);
+
+  // Format date helper function
+  const formatDate = (date: string | Date | null) => {
+    if (!date) return "-";
+    const d = new Date(date);
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
 
   // Get unique months from reports
   const availableMonths = useMemo(() => {
@@ -97,6 +109,22 @@ export default function AdminDashboard() {
     }).sort((a, b) => b.value.localeCompare(a.value)); // Sort in descending order
   }, [reports]);
 
+  // Get unique departments from reports
+  const availableDepartments = useMemo(() => {
+    if (!reports) return [];
+    
+    const uniqueDepartments = new Map<string, Department>();
+    
+    reports.forEach(report => {
+      if (report.department && report.department.id) {
+        uniqueDepartments.set(report.department.id.toString(), report.department);
+      }
+    });
+    
+    return Array.from(uniqueDepartments.values())
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [reports]);
+
   const handleSort = (key: keyof ReportWithDepartment) => {
     setSortConfig(current => ({
       key,
@@ -109,18 +137,37 @@ export default function AdminDashboard() {
 
     let filtered = reports.filter(report => {
       const searchLower = searchTerm.toLowerCase();
+      
+      // Format dates for searching
+      const receiptDateFormatted = report.receiptDate ? formatDate(report.receiptDate) : "";
+      const despatchDateFormatted = report.despatchDate ? formatDate(report.despatchDate) : "";
+      
+      // Format month for searching
+      const monthFormatted = new Date(report.year, report.month - 1).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+      }).toLowerCase();
+      
       const matchesSearch = 
         report.department?.name?.toLowerCase().includes(searchLower) ||
         report.receiptNo?.toString().includes(searchLower) ||
-        report.transactionId?.toLowerCase().includes(searchLower);
+        report.transactionId?.toLowerCase().includes(searchLower) ||
+        receiptDateFormatted.toLowerCase().includes(searchLower) ||
+        monthFormatted.includes(searchLower) ||
+        (report.despatchNo?.toLowerCase() || "").includes(searchLower) ||
+        despatchDateFormatted.toLowerCase().includes(searchLower);
 
       const matchesStatus = statusFilter === "all" || report.status === statusFilter;
 
       // Add month filtering
       const matchesMonth = monthFilter === "all" || 
         `${report.year}-${report.month - 1}` === monthFilter;
+        
+      // Add department filtering
+      const matchesDepartment = departmentFilter.length === 0 || 
+        (report.department && departmentFilter.includes(report.department.id.toString()));
 
-      return matchesSearch && matchesStatus && matchesMonth;
+      return matchesSearch && matchesStatus && matchesMonth && matchesDepartment;
     });
 
     if (sortConfig.key) {
@@ -146,7 +193,7 @@ export default function AdminDashboard() {
     }
 
     return filtered;
-  }, [reports, searchTerm, statusFilter, monthFilter, sortConfig]);
+  }, [reports, searchTerm, statusFilter, monthFilter, departmentFilter, sortConfig]);
 
   const handleLogout = () => {
     // Clear admin data from localStorage
@@ -155,15 +202,6 @@ export default function AdminDashboard() {
   };
 
   if (isLoading) return <Loading />;
-
-  const formatDate = (date: string | Date | null) => {
-    if (!date) return "-";
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -186,25 +224,25 @@ export default function AdminDashboard() {
               <FileCheck className="h-4 w-4" />
               Detailed View
             </Button>
+            {isSalaryAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => setLocation("/admin/employees")}
+                className="flex items-center gap-2"
+              >
+                <Users className="h-4 w-4" />
+                Manage Employees
+              </Button>
+            )}
             {!isSalaryAdmin && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => setLocation("/admin/employees")}
-                  className="flex items-center gap-2"
-                >
-                  <Users className="h-4 w-4" />
-                  Manage Employees
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setLocation("/admin/users")}
-                  className="flex items-center gap-2"
-                >
-                  <Users className="h-4 w-4" />
-                  User Management
-                </Button>
-              </>
+              <Button
+                variant="outline"
+                onClick={() => setLocation("/admin/users")}
+                className="flex items-center gap-2"
+              >
+                <Users className="h-4 w-4" />
+                User Management
+              </Button>
             )}
             <Button
               variant="outline"
@@ -254,8 +292,21 @@ export default function AdminDashboard() {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="submitted">Submitted</SelectItem>
             </SelectContent>
           </Select>
+          <MultiSelect
+            options={availableDepartments.map(dept => ({
+              label: dept.name,
+              value: dept.id.toString()
+            }))}
+            selected={departmentFilter}
+            onChange={(values) => {
+              setDepartmentFilter(values);
+            }}
+            placeholder="Filter by department"
+            className="w-[240px]"
+          />
         </div>
 
         <div className="rounded-md border">

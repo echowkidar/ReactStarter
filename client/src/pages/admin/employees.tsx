@@ -16,6 +16,7 @@ import { employmentStatuses } from "@/lib/departments";
 import AdminHeader from "@/components/layout/admin-header";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
+import { MultiSelect, Option } from "@/components/ui/multi-select";
 
 interface FileUpload {
   file: File | null;
@@ -46,8 +47,9 @@ export default function AdminEmployees() {
   
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string>("all");
+  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
+  const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string[]>([]);
+  const [regNoFilter, setRegNoFilter] = useState<string[]>([]);
 
   // Function to find the correct department ID from the departments list
   const findMatchingDepartment = (employee: Employee, departments: Department[]) => {
@@ -100,6 +102,91 @@ export default function AdminEmployees() {
     gcTime: 10 * 60 * 1000,
   });
 
+  // Get unique dealing assistants for filter
+  const uniqueDealingAssistants = useMemo(() => {
+    const assistants = employees
+      .map(emp => emp.salary_asstt)
+      .filter((value): value is string => !!value); // Filter out null/undefined/empty values
+    
+    return Array.from(new Set(assistants)).sort();
+  }, [employees]);
+
+  // Calculate filtered departments and dealing assistants based on current filters
+  const { filteredDepartments, filteredDealingAssistants, filteredRegNos } = useMemo(() => {
+    // Start with a filtered set of employees based on search term
+    let result = [...employees];
+    
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      result = result.filter(
+        emp => 
+          emp.epid?.toLowerCase().includes(lowerSearchTerm) ||
+          emp.name?.toLowerCase().includes(lowerSearchTerm) ||
+          emp.departmentName?.toLowerCase().includes(lowerSearchTerm) ||
+          emp.designation?.toLowerCase().includes(lowerSearchTerm)
+      );
+    }
+    
+    // Apply department filter when calculating available dealing assistants and reg nos
+    let departmentFilteredEmployees = result;
+    if (departmentFilter.length > 0) {
+      departmentFilteredEmployees = result.filter(
+        emp => departmentFilter.includes(emp.departmentId?.toString() || "")
+      );
+    }
+    
+    // Apply dealing assistant filter when calculating available departments and reg nos
+    let dealingAssistantFilteredEmployees = result;
+    if (dealingAssistantFilter.length > 0) {
+      dealingAssistantFilteredEmployees = result.filter(
+        emp => dealingAssistantFilter.includes(emp.salary_asstt || "")
+      );
+    }
+    
+    // Apply reg no filter when calculating available departments and dealing assistants
+    let regNoFilteredEmployees = result;
+    if (regNoFilter.length > 0) {
+      regNoFilteredEmployees = result.filter(
+        emp => regNoFilter.includes(emp.salaryRegisterNo || "")
+      );
+    }
+    
+    // Get unique departments from filtered employees
+    const availableDepartments = new Set<string>();
+    const combinedFiltered = dealingAssistantFilter.length > 0 ? dealingAssistantFilteredEmployees : 
+                             regNoFilter.length > 0 ? regNoFilteredEmployees : result;
+    combinedFiltered.forEach(emp => {
+      if (emp.departmentId) {
+        availableDepartments.add(emp.departmentId.toString());
+      }
+    });
+    
+    // Get unique dealing assistants from filtered employees
+    const filteredForAssistants = departmentFilter.length > 0 ? departmentFilteredEmployees : 
+                                 regNoFilter.length > 0 ? regNoFilteredEmployees : result;
+    const assistants = filteredForAssistants
+      .map(emp => emp.salary_asstt)
+      .filter((value): value is string => !!value);
+    const availableDealingAssistants = Array.from(new Set(assistants)).sort();
+    
+    // Get unique reg nos from filtered employees
+    const filteredForRegNos = departmentFilter.length > 0 ? departmentFilteredEmployees : 
+                             dealingAssistantFilter.length > 0 ? dealingAssistantFilteredEmployees : result;
+    const regNos = filteredForRegNos
+      .map(emp => emp.salaryRegisterNo)
+      .filter((value): value is string => !!value);
+    const availableRegNos = Array.from(new Set(regNos)).sort();
+    
+    return {
+      filteredDepartments: departments.filter(dept => 
+        (dealingAssistantFilter.length === 0 && regNoFilter.length === 0) || 
+        availableDepartments.has(dept.id.toString())
+      ),
+      filteredDealingAssistants: availableDealingAssistants,
+      filteredRegNos: availableRegNos
+    };
+  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter, regNoFilter, departments]);
+
   // Filter and paginate employees
   const filteredEmployees = useMemo(() => {
     let result = [...employees];
@@ -117,17 +204,22 @@ export default function AdminEmployees() {
     }
     
     // Apply department filter
-    if (departmentFilter && departmentFilter !== "all") {
-      result = result.filter(emp => emp.departmentId.toString() === departmentFilter);
+    if (departmentFilter.length > 0) {
+      result = result.filter(emp => departmentFilter.includes(emp.departmentId?.toString() || ""));
     }
     
     // Apply dealing assistant filter
-    if (dealingAssistantFilter && dealingAssistantFilter !== "all") {
-      result = result.filter(emp => emp.salary_asstt === dealingAssistantFilter);
+    if (dealingAssistantFilter.length > 0) {
+      result = result.filter(emp => dealingAssistantFilter.includes(emp.salary_asstt || ""));
+    }
+    
+    // Apply reg no filter
+    if (regNoFilter.length > 0) {
+      result = result.filter(emp => regNoFilter.includes(emp.salaryRegisterNo || ""));
     }
     
     return result;
-  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter]);
+  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter, regNoFilter]);
   
   // Paginate filtered results
   const paginatedEmployees = useMemo(() => {
@@ -137,15 +229,6 @@ export default function AdminEmployees() {
   
   // Calculate total pages
   const totalPages = Math.ceil(filteredEmployees.length / pageSize);
-  
-  // Get unique dealing assistants for filter
-  const uniqueDealingAssistants = useMemo(() => {
-    const assistants = employees
-      .map(emp => emp.salary_asstt)
-      .filter((value): value is string => !!value); // Filter out null/undefined/empty values
-    
-    return Array.from(new Set(assistants)).sort();
-  }, [employees]);
 
   useEffect(() => {
     if (selectedEmployee && departments.length > 0) {
@@ -571,10 +654,10 @@ export default function AdminEmployees() {
         'Department': emp.departmentName || '',
         'Designation': emp.designation || '',
         'Dealing Assistant': emp.salary_asstt || '',
+        'Reg.No.': emp.salaryRegisterNo || '',
         'Status': emp.employmentStatus || '',
         'Joining Date': emp.joiningDate || '',
         'Office Memo No': emp.officeMemoNo || '',
-        'Salary Register No': emp.salaryRegisterNo || '',
         'Bank Account': emp.bankAccount || '',
         'PAN Number': emp.panNumber || '',
         'Aadhar Number': emp.aadharCard || ''
@@ -590,10 +673,10 @@ export default function AdminEmployees() {
         { wch: 30 }, // Department 
         { wch: 25 }, // Designation
         { wch: 25 }, // Dealing Assistant
+        { wch: 15 }, // Reg.No.
         { wch: 15 }, // Status
         { wch: 15 }, // Joining Date
         { wch: 20 }, // Office Memo No
-        { wch: 20 }, // Salary Register No
         { wch: 20 }, // Bank Account
         { wch: 15 }, // PAN Number
         { wch: 15 }  // Aadhar Number
@@ -619,6 +702,42 @@ export default function AdminEmployees() {
       });
     }
   };
+
+  // Ensure filter values remain valid when options change
+  useEffect(() => {
+    // Check if selected department is still in filtered options
+    if (departmentFilter.length > 0) {
+      const validDepartmentIds = filteredDepartments.map(dept => dept.id.toString());
+      const invalidDepartments = departmentFilter.filter(id => !validDepartmentIds.includes(id));
+      if (invalidDepartments.length > 0) {
+        setDepartmentFilter(departmentFilter.filter(id => !invalidDepartments.includes(id)));
+      }
+    }
+    
+    // Check if selected dealing assistant is still in filtered options
+    if (dealingAssistantFilter.length > 0) {
+      const invalidAssistants = dealingAssistantFilter.filter(
+        assistant => !filteredDealingAssistants.includes(assistant)
+      );
+      if (invalidAssistants.length > 0) {
+        setDealingAssistantFilter(dealingAssistantFilter.filter(
+          assistant => !invalidAssistants.includes(assistant)
+        ));
+      }
+    }
+    
+    // Check if selected reg no is still in filtered options
+    if (regNoFilter.length > 0) {
+      const invalidRegNos = regNoFilter.filter(
+        regNo => !filteredRegNos.includes(regNo)
+      );
+      if (invalidRegNos.length > 0) {
+        setRegNoFilter(regNoFilter.filter(
+          regNo => !invalidRegNos.includes(regNo)
+        ));
+      }
+    }
+  }, [filteredDepartments, filteredDealingAssistants, filteredRegNos, departmentFilter, dealingAssistantFilter, regNoFilter]);
 
   return (
     <div className="container mx-auto py-8 min-h-screen flex flex-col">
@@ -919,46 +1038,49 @@ export default function AdminEmployees() {
                 />
               </div>
               <div className="w-full md:w-64">
-                <Select
-                  value={departmentFilter}
-                  onValueChange={(value) => {
-                    setDepartmentFilter(value);
+                <MultiSelect
+                  options={filteredDepartments.map(dept => ({
+                    label: dept.name,
+                    value: dept.id.toString()
+                  }))}
+                  selected={departmentFilter}
+                  onChange={(values) => {
+                    setDepartmentFilter(values);
                     setCurrentPage(1); // Reset to first page on filter change
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id.toString()}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Filter by department"
+                  className="min-w-[180px]"
+                />
               </div>
               <div className="w-full md:w-64">
-                <Select
-                  value={dealingAssistantFilter}
-                  onValueChange={(value) => {
-                    setDealingAssistantFilter(value);
+                <MultiSelect
+                  options={filteredDealingAssistants.map(assistant => ({
+                    label: assistant,
+                    value: assistant
+                  }))}
+                  selected={dealingAssistantFilter}
+                  onChange={(values) => {
+                    setDealingAssistantFilter(values);
                     setCurrentPage(1); // Reset to first page on filter change
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by dealing assistant" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Dealing Assistants</SelectItem>
-                    {uniqueDealingAssistants.map((assistant) => (
-                      <SelectItem key={assistant} value={assistant}>
-                        {assistant}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Filter by dealing assistant"
+                  className="min-w-[180px]"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <MultiSelect
+                  options={filteredRegNos.map(regNo => ({
+                    label: regNo,
+                    value: regNo
+                  }))}
+                  selected={regNoFilter}
+                  onChange={(values) => {
+                    setRegNoFilter(values);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                  placeholder="Filter by Reg.No."
+                  className="min-w-[180px]"
+                />
               </div>
             </div>
             
@@ -998,7 +1120,7 @@ export default function AdminEmployees() {
               </div>
             ) : filteredEmployees.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm || departmentFilter !== "all" 
+                {searchTerm || departmentFilter.length > 0 || dealingAssistantFilter.length > 0 || regNoFilter.length > 0
                   ? "No employees found matching your search criteria." 
                   : "No employees found. Add your first employee using the button above."}
               </div>
@@ -1011,6 +1133,7 @@ export default function AdminEmployees() {
                     <TableHead>Department</TableHead>
                     <TableHead>Designation</TableHead>
                     <TableHead>Dealing Assistant</TableHead>
+                    <TableHead>Reg.No.</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Term Expiry Date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -1024,6 +1147,7 @@ export default function AdminEmployees() {
                       <TableCell>{employee.departmentName}</TableCell>
                       <TableCell>{employee.designation}</TableCell>
                       <TableCell>{employee.salary_asstt || "-"}</TableCell>
+                      <TableCell>{employee.salaryRegisterNo || "-"}</TableCell>
                       <TableCell>{employee.employmentStatus}</TableCell>
                       <TableCell>
                         {(employee.employmentStatus === "Probation" ||
