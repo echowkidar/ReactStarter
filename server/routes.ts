@@ -14,7 +14,8 @@ import {
   insertAttendanceEntrySchema,
   insertDepartmentSchema,
   DepartmentName,
-  InsertDepartment
+  InsertDepartment,
+  InsertDepartmentName
 } from "../shared/schema";
 import fs from "fs";
 import { v4 as uuid } from "uuid";
@@ -926,66 +927,93 @@ export async function registerRoutes(app: Express) {
         console.log(`Found details: ${deptNameDetails.name} (Code: ${deptNameDetails.code})`);
 
         // Check if a department with this NAME is already registered in the 'departments' table
+        // TODO: Make this lookup case-insensitive and trim whitespace if possible in storage layer
         const existingRegisteredDept = await storage.getDepartmentByName(deptNameDetails.name);
 
         if (existingRegisteredDept) {
-            // If it exists and has a valid email, prevent creating another user for it.
+            // If it exists and has a valid email (not placeholder), prevent creating another user for it.
             if (existingRegisteredDept.email && !existingRegisteredDept.email.includes('unused_dept_') && !existingRegisteredDept.email.includes('@placeholder.com')) {
-                console.log(`Department "${deptNameDetails.name}" is already registered with user ${existingRegisteredDept.email}.`);
-                return res.status(400).json({ message: `Department "${deptNameDetails.name}" is already registered.` });
+                console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) is already registered with user ${existingRegisteredDept.email}.`);
+                return res.status(409).json({ // 409 Conflict
+                     message: `Cannot create user: Department "${deptNameDetails.name}" is already associated with an active user (${existingRegisteredDept.email}).`
+                });
             } else {
-                // If it exists but has a placeholder email, we can update it (effectively assigning the new user)
-                console.log(`Department "${deptNameDetails.name}" exists but has no active user. Updating it.`);
-                const updatedDepartment = await storage.updateDepartment(existingRegisteredDept.id, {
-            hodName: name,
-            email: email,
+                // If it exists but has a placeholder email, update it (assign the new user)
+                console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) exists but has no active user or a placeholder email. Updating it.`);
+                try {
+                    const updatedDepartment = await storage.updateDepartment(existingRegisteredDept.id, {
+                        hodName: name,
+                        email: email,
+                        password: password // Consider hashing
+                    });
+                    // Recalculate UI ID (Fragile) - Reuse existing calculation
+                    const allDepts = await storage.getAllDepartments();
+                    const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
+                    const userIndex = validDepts.findIndex(d => d.id === updatedDepartment.id);
+                    const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
+                    return res.status(200).json({ // 200 OK for update
+                        id: uiId,
+                        name: name,
+                        email: email,
+                        role: "department",
+                        departmentId: updatedDepartment.id, // The existing/updated department ID
+                        departmentName: updatedDepartment.name
+                    });
+                } catch (updateError: any) {
+                    console.error(`Error updating existing department ${existingRegisteredDept.id} ("${deptNameDetails.name}"):`, updateError);
+                    return res.status(500).json({ message: "Failed to update existing department entry for the new user." });
+                }
+            }
+        } else {
+            // Department name not found in 'departments' table by name. Proceed to create new entry.
+            console.log(`Department "${deptNameDetails.name}" not found by name in 'departments' table. Creating new entry.`);
+            try {
+                // Create the new department entry
+                const newDepartment = await storage.createDepartment({
+                    name: deptNameDetails.name, // Use name from department_names
+                    hodTitle: "Chairperson", // Default
+                    hodName: name,
+                    email: email,
                     password: password // Consider hashing
                 });
+                console.log(`Created new registered department: ID=${newDepartment.id}, Name=${newDepartment.name}`);
+
                 // Recalculate UI ID (Fragile)
-                const allDepts = await storage.getAllDepartments();
+                const allDepts = await storage.getAllDepartments(); // Refetch might be needed
                 const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
-                const userIndex = validDepts.findIndex(d => d.id === updatedDepartment.id);
-                const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); 
-                return res.status(200).json({ // 200 OK for update
+                const userIndex = validDepts.findIndex(d => d.id === newDepartment.id);
+                const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
+
+                return res.status(201).json({
                     id: uiId,
-            name: name,
-            email: email,
-            role: "department",
-                    departmentId: updatedDepartment.id,
-                    departmentName: updatedDepartment.name
+                    name: name,
+                    email: email,
+                    role: "department",
+                    departmentId: newDepartment.id, // The new ID from the 'departments' table
+                    departmentName: newDepartment.name
                 });
+            } catch (creationError: any) {
+                console.error('Error creating new department entry:', creationError);
+                // Handle potential duplicate key errors during creation (e.g., race condition or ID generation issue)
+                if (creationError.code === '23505') {
+                     console.warn(`Attempted to create a duplicate department for: ${deptNameDetails.name}. Constraint: ${creationError.constraint}. Detail: ${creationError.detail}`);
+                     // Try to find the conflicting department again, perhaps it was created between the check and the insert attempt
+                     const conflictingDept = await storage.getDepartmentByName(deptNameDetails.name); // Or by ID if detail provides it
+                     if (conflictingDept) {
+                         return res.status(409).json({
+                            message: `Failed to register user: A conflicting department entry for '${deptNameDetails.name}' (ID: ${conflictingDept.id}) was found after initial check. Please try again or contact support.`,
+                            detail: `Conflict likely due to race condition or concurrent creation. Found existing ID: ${conflictingDept.id}`
+                         });
+                     } else {
+                         return res.status(409).json({ // 409 Conflict
+                            message: `Failed to register user: A database conflict occurred while creating the department entry for '${deptNameDetails.name}'. Please check logs or contact support.`,
+                            detail: creationError.detail // Include DB detail for debugging
+                         });
+                     }
+                }
+                // Original fallback error
+                return res.status(500).json({ message: "Failed to register new department user due to database error during creation." });
             }
-        }
-
-        // If not found in 'departments', create a new department entry
-        console.log(`Creating new entry in 'departments' table for "${deptNameDetails.name}"`);
-        try {
-            const newDepartment = await storage.createDepartment({
-                name: deptNameDetails.name, // Use name from department_names
-                hodTitle: "Chairperson", // Default or fetch from somewhere?
-              hodName: name,
-              email: email,
-                password: password // Consider hashing
-            });
-            console.log(`Created new registered department: ID=${newDepartment.id}, Name=${newDepartment.name}`);
-
-            // Recalculate UI ID (Fragile)
-            const allDepts = await storage.getAllDepartments();
-            const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
-            const userIndex = validDepts.findIndex(d => d.id === newDepartment.id);
-            const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); 
-            
-            return res.status(201).json({
-                id: uiId, 
-              name: name,
-              email: email,
-              role: "department",
-                departmentId: newDepartment.id, // The new ID from the 'departments' table
-              departmentName: newDepartment.name
-            });
-        } catch (creationError) {
-            console.error('Error creating new department entry:', creationError);
-            return res.status(500).json({ message: "Failed to register new department user." });
         }
       }
       
@@ -1156,6 +1184,64 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to fetch employees" });
     }
   });
+
+  // === New Endpoint: Create Department Name ===
+  app.post("/api/admin/department-names", async (req, res) => {
+    try {
+      // Destructure the new optional field from the body
+      const { dept_name, dept_code, dealingAssistantCode } = req.body;
+      
+      console.log("POST /api/admin/department-names - Creating department name:", { 
+        dept_name, 
+        dept_code, 
+        dealingAssistantCode 
+      });
+
+      if (!dept_name || !dept_code) {
+        return res.status(400).json({ message: "Department name and code are required" });
+      }
+
+      // Optional: Add validation for code format if needed
+
+      // Check if department name or code already exists
+      const existingByName = await storage.getDepartmentNameByName(dept_name);
+      if (existingByName) {
+        return res.status(409).json({ message: `Department name "${dept_name}" already exists.` });
+      }
+      const existingByCode = await storage.getDepartmentNameByCode(dept_code);
+      if (existingByCode) {
+        return res.status(409).json({ message: `Department code "${dept_code}" already exists.` });
+      }
+
+      // Re-introduce manual ID generation
+      const maxIdResult = await storage.getMaxDepartmentNameId(); 
+      const newId = (maxIdResult?.maxId || 0) + 1;
+
+      // Create object with correct field names for Drizzle schema ('name', 'code')
+      // AND include the manually generated ID and the optional dealingAssistantCode
+      const newDepartmentData: InsertDepartmentName = {
+        id: newId, // Add the calculated ID
+        name: dept_name, // Map req.body.dept_name to schema field 'name'
+        code: dept_code, // Map req.body.dept_code to schema field 'code'
+        dealingAssistantCode: dealingAssistantCode || null // Map optional field, ensure it's null if undefined/empty
+      };
+
+      // Pass the correctly structured object
+      const newDepartmentName = await storage.createDepartmentName(newDepartmentData);
+
+      console.log("Department name created successfully:", newDepartmentName);
+      res.status(201).json(newDepartmentName);
+    } catch (error) {
+      console.error("Error creating department name:", error);
+      if (error instanceof Error && error.message.includes("duplicate key value violates unique constraint")) {
+         // Handle potential race conditions if ID generation isn't atomic
+         res.status(409).json({ message: "Conflict creating department name, possibly duplicate ID or constraint violation." });
+      } else {
+         res.status(500).json({ message: "Failed to create department name" });
+      }
+    }
+  });
+  // === End: New Endpoint ===
 
   app.delete("/api/employees/:id", async (req, res) => {
     await storage.deleteEmployee(Number(req.params.id));

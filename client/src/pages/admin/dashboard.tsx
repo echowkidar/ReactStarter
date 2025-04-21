@@ -71,11 +71,13 @@ export default function AdminDashboard() {
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "receiptNo", direction: "desc" });
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+  const [canManageEmployees, setCanManageEmployees] = useState(false);
 
   useEffect(() => {
-    // Check if user is salary admin
+    // Check user type
     const adminType = localStorage.getItem("adminType");
     setIsSalaryAdmin(adminType === "salary");
+    setCanManageEmployees(adminType === "salary" || adminType === "super");
   }, []);
 
   // Format date helper function
@@ -224,16 +226,6 @@ export default function AdminDashboard() {
               <FileCheck className="h-4 w-4" />
               Detailed View
             </Button>
-            {isSalaryAdmin && (
-              <Button
-                variant="outline"
-                onClick={() => setLocation("/admin/employees")}
-                className="flex items-center gap-2"
-              >
-                <Users className="h-4 w-4" />
-                Manage Employees
-              </Button>
-            )}
             {!isSalaryAdmin && (
               <Button
                 variant="outline"
@@ -242,6 +234,23 @@ export default function AdminDashboard() {
               >
                 <Users className="h-4 w-4" />
                 User Management
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => alert("Download Excel functionality to be implemented.")}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download Excel
+            </Button>
+            {canManageEmployees && (
+              <Button
+                variant="outline"
+                onClick={() => setLocation("/admin/employees")}
+                className="flex items-center gap-2"
+              >
+                <Users className="h-4 w-4" />
+                Manage Employees
               </Button>
             )}
             <Button

@@ -40,6 +40,7 @@ export default function AdminEmployees() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,6 +102,12 @@ export default function AdminEmployees() {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
+
+  // Check admin status on mount
+  useEffect(() => {
+    const adminType = localStorage.getItem("adminType");
+    setIsAdmin(adminType === "super");
+  }, []);
 
   // Get unique dealing assistants for filter
   const uniqueDealingAssistants = useMemo(() => {
@@ -1179,14 +1186,16 @@ export default function AdminEmployees() {
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => handleDelete(employee)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => handleDelete(employee)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search as SearchIcon, Plus, Pencil, Trash2, Users, LogOut } from "lucide-react";
+import { Search as SearchIcon, Plus, Pencil, Trash2, Users, LogOut, Building } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -70,7 +70,17 @@ const userFormSchema = z.object({
   departmentId: z.number({ coerce: true }).optional().nullable(),
 });
 
+// Form schema for creating department names
+const departmentNameFormSchema = z.object({
+  dept_name: z.string().min(3, { message: "Department name must be at least 3 characters" }),
+  dept_code: z.string().min(1, { message: "Department code is required" }),
+    // Optional: Add regex validation for code format if needed
+    // .regex(/^[A-Z0-9]+$/, { message: "Code must be uppercase letters and numbers" })
+  dealingAssistantCode: z.string().optional().nullable(), // Added optional field for d_ast
+});
+
 type UserFormValues = z.infer<typeof userFormSchema>;
+type DepartmentNameFormValues = z.infer<typeof departmentNameFormSchema>;
 
 export default function AdminUsers() {
   const [, setLocation] = useLocation();
@@ -79,6 +89,7 @@ export default function AdminUsers() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [isDepartmentDialogOpen, setIsDepartmentDialogOpen] = useState(false); // State for new department dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredDepartments, setFilteredDepartments] = useState<DepartmentRegistrationInfo[]>([]);
@@ -102,6 +113,7 @@ export default function AdminUsers() {
     queryKey: ["/api/admin/users"],
   });
 
+  // Restore the useEffect hook for admin check
   useEffect(() => {
     // Check if user is admin
     const adminType = localStorage.getItem("adminType");
@@ -116,8 +128,9 @@ export default function AdminUsers() {
         variant: "destructive",
       });
     }
-  }, []);
+  }, [setLocation, toast]); // Added dependencies
 
+  // Setup form for creating/editing users (assuming 'form' is defined elsewhere or needs setup)
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
@@ -126,6 +139,16 @@ export default function AdminUsers() {
       password: "",
       role: "department",
       departmentId: null,
+    },
+  });
+
+  // Setup form for creating department names
+  const departmentForm = useForm<DepartmentNameFormValues>({
+    resolver: zodResolver(departmentNameFormSchema),
+    defaultValues: {
+      dept_name: "",
+      dept_code: "",
+      dealingAssistantCode: "", // Initialize the new field
     },
   });
 
@@ -169,6 +192,12 @@ export default function AdminUsers() {
     setIsUserDialogOpen(true);
   };
 
+  // Open dialog for creating department name
+  const openDepartmentDialog = () => {
+    departmentForm.reset(); // Reset form fields
+    setIsDepartmentDialogOpen(true);
+  };
+
   // Open delete confirmation dialog
   const openDeleteDialog = (user: User) => {
     setSelectedUser(user);
@@ -176,7 +205,7 @@ export default function AdminUsers() {
   };
 
   // Handle user form submission
-  const onSubmit = async (data: UserFormValues) => {
+  const onSubmitUser = async (data: UserFormValues) => {
     try {
       console.log("Submitting user form with data:", data);
 
@@ -230,6 +259,48 @@ export default function AdminUsers() {
 
     } catch (error) {
       console.error("Error submitting user form:", error);
+      toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
+    }
+  };
+
+  // Handle department name form submission
+  const onSubmitDepartment = async (data: DepartmentNameFormValues) => {
+    try {
+      // Prepare data, ensuring dealingAssistantCode is null if empty string
+      const payload = {
+        ...data,
+        dealingAssistantCode: data.dealingAssistantCode?.trim() || null,
+      };
+      console.log("Submitting new department name form:", payload); // Log the payload
+      departmentForm.clearErrors(); // Clear previous errors
+
+      const response = await fetch("/api/admin/department-names", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload), // Send the processed payload
+      });
+
+      const responseData = await response.json();
+      console.log("API response:", response.status, responseData);
+
+      if (!response.ok) {
+        // Display specific error message from backend if available
+        const errorMessage = responseData?.message || "Failed to create department name";
+        toast({ variant: "destructive", title: "Error", description: errorMessage });
+        // Optionally set form errors based on response
+        if (responseData?.message?.includes("name")) {
+            departmentForm.setError("dept_name", { type: "manual", message: responseData.message });
+        } else if (responseData?.message?.includes("code")) {
+            departmentForm.setError("dept_code", { type: "manual", message: responseData.message });
+        }
+      } else {
+        toast({ title: "Success", description: "Department name created successfully" });
+        // Invalidate the departments query to refresh the dropdown list
+        queryClient.invalidateQueries({ queryKey: ["/api/departments?showAll=true"] });
+        setIsDepartmentDialogOpen(false); // Close the dialog
+      }
+    } catch (error) {
+      console.error("Error submitting department name form:", error);
       toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
     }
   };
@@ -355,7 +426,7 @@ export default function AdminUsers() {
               Logout
             </Button>
           </div>
-        </div>
+        </div> 
 
         <div className="mb-6">
           <Card>
@@ -363,8 +434,8 @@ export default function AdminUsers() {
               <CardTitle>User Management</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex justify-between mb-4">
-                <div className="relative w-full max-w-sm">
+              <div className="flex justify-between items-center mb-4 gap-4">
+                <div className="relative flex-grow max-w-sm">
                   <SearchIcon className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search by name, email or department..."
@@ -373,10 +444,16 @@ export default function AdminUsers() {
                     className="pl-8"
                   />
                 </div>
-                <Button onClick={() => openUserDialog()} className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  New User
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={openDepartmentDialog} variant="outline" className="flex items-center gap-2">
+                     <Building className="h-4 w-4" /> 
+                     New Department
+                  </Button>
+                  <Button onClick={() => openUserDialog()} className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    New User
+                  </Button>
+                </div>
               </div>
 
               <div className="rounded-md border">
@@ -447,7 +524,7 @@ export default function AdminUsers() {
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+              <form onSubmit={form.handleSubmit(onSubmitUser)} className="space-y-4 py-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -559,6 +636,68 @@ export default function AdminUsers() {
                   <Button type="submit" disabled={form.formState.isSubmitting}>
                     {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {selectedUser ? "Save Changes" : "Create User"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* New Department Name Dialog */}
+        <Dialog open={isDepartmentDialogOpen} onOpenChange={setIsDepartmentDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Create New Department Name</DialogTitle>
+              <DialogDescription>
+                Enter the details for the new department name entry. This will make it available for selection when creating/editing users.
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...departmentForm}>
+              <form onSubmit={departmentForm.handleSubmit(onSubmitDepartment)} className="space-y-4 py-4">
+                <FormField
+                  control={departmentForm.control}
+                  name="dept_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Department of Physics" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={departmentForm.control}
+                  name="dept_code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department Code</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., PHY" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={departmentForm.control}
+                  name="dealingAssistantCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Salary Assistant (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., SA01" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsDepartmentDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={departmentForm.formState.isSubmitting}>
+                    {departmentForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Create Department
                   </Button>
                 </DialogFooter>
               </form>

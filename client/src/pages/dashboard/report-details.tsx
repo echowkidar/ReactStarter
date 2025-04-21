@@ -246,13 +246,13 @@ export default function ReportDetails() {
                 /* Column widths for popup print window */
                 table th:nth-child(1), table td:nth-child(1) { width: 4%; } /* S.No. */
                 table th:nth-child(2), table td:nth-child(2) { width: 8%; } /* Employee ID */
-                table th:nth-child(3), table td:nth-child(3) { width: 22%; } /* Name */
-                table th:nth-child(4), table td:nth-child(4) { width: 22%; } /* Designation */
+                table th:nth-child(3), table td:nth-child(3) { width: 18%; white-space: normal; } /* Name */
+                table th:nth-child(4), table td:nth-child(4) { width: 18%; white-space: normal; } /* Designation */
                 table th:nth-child(5), table td:nth-child(5) { width: 7%; } /* Term_Expiry */
                 table th:nth-child(6), table td:nth-child(6) { width: 7%; } /* Salary Register */
                 table th:nth-child(7), table td:nth-child(7) { width: 17%; } /* Period */
                 table th:nth-child(8), table td:nth-child(8) { width: 5%; } /* Days */
-                table th:nth-child(9), table td:nth-child(9) { width: 8%; } /* Remarks */
+                table th:nth-child(9), table td:nth-child(9) { width: 16%; white-space: normal; } /* Remarks */
                 
                 /* Card styling */
                 .card {
@@ -449,13 +449,13 @@ export default function ReportDetails() {
     const colWidths = [
       { wch: 4 },  // S.No.
       { wch: 8 },  // Employee ID
-      { wch: 22 }, // Name
-      { wch: 22 }, // Designation
+      { wch: 18 }, // Name
+      { wch: 18 }, // Designation
       { wch: 7 },  // Term_Expiry
       { wch: 7 },  // Salary Register No
       { wch: 17 }, // Period
       { wch: 5 },  // Days
-      { wch: 8 }   // Remarks
+      { wch: 16 }   // Remarks
     ];
     ws['!cols'] = colWidths;
 
@@ -603,13 +603,13 @@ export default function ReportDetails() {
           /* Column widths for table */
           .print-content th:nth-child(1), .print-content td:nth-child(1) { width: 4% !important; } /* S.No. */
           .print-content th:nth-child(2), .print-content td:nth-child(2) { width: 6% !important; } /* Employee ID */
-          .print-content th:nth-child(3), .print-content td:nth-child(3) { width: 26% !important; } /* Name */
-          .print-content th:nth-child(4), .print-content td:nth-child(4) { width: 20% !important; } /* Designation */
+          .print-content th:nth-child(3), .print-content td:nth-child(3) { width: 18% !important; white-space: normal !important; } /* Name */
+          .print-content th:nth-child(4), .print-content td:nth-child(4) { width: 18% !important; white-space: normal !important; } /* Designation */
           .print-content th:nth-child(5), .print-content td:nth-child(5) { width: 7% !important; } /* Term_Expiry */
           .print-content th:nth-child(6), .print-content td:nth-child(6) { width: 7% !important; } /* Salary Register */
           .print-content th:nth-child(7), .print-content td:nth-child(7) { width: 17% !important; } /* Period */
           .print-content th:nth-child(8), .print-content td:nth-child(8) { width: 5% !important; } /* Days */
-          .print-content th:nth-child(9), .print-content td:nth-child(9) { width: 8% !important; } /* Remarks */
+          .print-content th:nth-child(9), .print-content td:nth-child(9) { width: 18% !important; white-space: normal !important; } /* Remarks */
         }
       `}</style>
 
@@ -674,13 +674,13 @@ export default function ReportDetails() {
               <TableRow>
                 <TableHead className="whitespace-nowrap">Srl</TableHead>
                 <TableHead className="whitespace-nowrap">ID</TableHead>
-                <TableHead className="whitespace-nowrap">Name</TableHead>
-                <TableHead className="whitespace-nowrap">Designation</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Designation</TableHead>
                 <TableHead className="whitespace-nowrap">Term</TableHead>
                 <TableHead className="whitespace-nowrap">Reg.No</TableHead>
                 <TableHead className="whitespace-nowrap">Period</TableHead>
                 <TableHead className="whitespace-nowrap">Days</TableHead>
-                <TableHead className="whitespace-nowrap">Remarks</TableHead>
+                <TableHead>Remarks</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -726,8 +726,8 @@ export default function ReportDetails() {
                         <TableRow key={`${entry.id}-${periodIndex}`}>
                           <TableCell className="whitespace-nowrap">{serialNumber}</TableCell>
                           <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.name}</TableCell>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.designation}</TableCell>
+                          <TableCell>{entry.employee?.name}</TableCell>
+                          <TableCell>{entry.employee?.designation}</TableCell>
                           <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
                           <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
                           <TableCell className="whitespace-nowrap">

@@ -37,7 +37,7 @@ export const employees = pgTable("employees", {
 });
 
 export const departmentNames = pgTable("department_names", {
-  id: serial("id").primaryKey(),
+  id: integer("id").primaryKey(),
   code: text("dept_code").notNull().unique(),
   name: text("dept_name").notNull(),
   dealingAssistantCode: text("d_ast"),
@@ -129,7 +129,7 @@ export const insertAttendanceEntrySchema = createInsertSchema(attendanceEntries)
     periods: z.string()
   });
 
-export const insertDepartmentNameSchema = createInsertSchema(departmentNames).omit({ id: true });
+export const insertDepartmentNameSchema = createInsertSchema(departmentNames);
 
 export type Department = typeof departments.$inferSelect;
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;

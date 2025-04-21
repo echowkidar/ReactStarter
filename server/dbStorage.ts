@@ -15,9 +15,10 @@ import type {
   InsertAttendanceEntry,
   DepartmentName,
   Document,
-  InsertDocument
+  InsertDocument,
+  InsertDepartmentName
 } from "@shared/schema";
-import { sql } from "drizzle-orm";
+import { sql, max } from "drizzle-orm";
 
 // Create a temporary in-memory storage for reset tokens
 // In a production app, these would be stored in the database
@@ -91,8 +92,24 @@ export class DbStorage implements IStorage {
   }
 
   async createDepartment(department: InsertDepartment): Promise<Department> {
-    const [newDepartment] = await db.insert(departments).values(department).returning();
-    return newDepartment;
+    // Use a transaction to reset the sequence before inserting
+    return await db.transaction(async (tx) => {
+      try {
+        // Reset sequence to max(id) + 1 to avoid conflicts
+        // Note: The sequence name 'departments_id_seq' is a common convention, verify if different
+        await tx.execute(sql`
+          SELECT setval('departments_id_seq', coalesce((SELECT MAX(id) FROM departments), 0) + 1, false);
+        `);
+
+        // Insert the new department
+        const [newDepartment] = await tx.insert(departments).values(department).returning();
+        return newDepartment;
+      } catch (error) {
+        console.error("Error in createDepartment transaction:", error);
+        // Rethrow the error so the route handler can catch it
+        throw error; 
+      }
+    });
   }
 
   async updateDepartment(id: number, updates: Partial<Department>): Promise<Department> {
@@ -131,6 +148,31 @@ export class DbStorage implements IStorage {
      return await db.query.departments.findFirst({
        where: eq(departments.name, name),
      });
+  }
+
+  // Add methods for department_names table
+  async getDepartmentNameByName(name: string): Promise<DepartmentName | undefined> {
+    return await db.query.departmentNames.findFirst({
+      where: eq(departmentNames.name, name),
+    });
+  }
+
+  async getDepartmentNameByCode(code: string): Promise<DepartmentName | undefined> {
+    return await db.query.departmentNames.findFirst({
+      where: eq(departmentNames.code, code),
+    });
+  }
+
+  async getMaxDepartmentNameId(): Promise<{ maxId: number | null } | undefined> {
+    const result = await db.select({ maxId: max(departmentNames.id) }).from(departmentNames);
+    return result[0]; // Drizzle returns an array, get the first element
+  }
+
+  async createDepartmentName(departmentName: InsertDepartmentName): Promise<DepartmentName> {
+    // Assuming InsertDepartmentName is defined in @shared/schema 
+    // and includes id, dept_name, dept_code, d_ast
+    const [newDepartmentName] = await db.insert(departmentNames).values(departmentName).returning();
+    return newDepartmentName;
   }
 
   // Employee operations
