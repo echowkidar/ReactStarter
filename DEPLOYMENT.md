@@ -123,3 +123,33 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 ### 5. npm run build # or yarn build
 ### 6. pm2 start ecosystem.config.cjs --force
 ### 7. pm2 logs reactstarter
+
+### Windsurf Commands To add repo in GitHub branch
+## git branch complete_ptoject
+## git config --global core.autocrlf true
+## git push origin complete_ptoject # Replace your-branch-name
+## git branch
+## git fetch origin
+## git checkout -b complete_project origin/complete_project
+## git add .
+## git config --global user.email "echowkidar@gmail.com"
+## git config --global user.name "echowkidar@gmail.com"
+## git commit -m "complete project"
+## git push origin complete_project
+
+
+## Cursor
+## git add .
+## git commit -m "Your descriptive commit message"
+## git checkout -b done # command does two things: -b done: Creates a new branch named "done" and checkout: Switches your current working branch to the newly created "done" branch.
+## git push origin done # Push the new branch to GitHub:
+
+### Console commands To fetch in vps in folder of attendance.echowkidar.in (if have any branch)
+## git fetch origin
+## git reset --hard origin/done
+## git config --global core.autocrlf input
+## git clean -fd
+## pm2 stop all
+## npm install # or yarn install
+## npm run build # or yarn build
+## pm2 start ecosystem.config.cjs --force
