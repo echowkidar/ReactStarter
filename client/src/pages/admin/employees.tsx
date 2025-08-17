@@ -480,6 +480,10 @@ export default function AdminEmployees() {
       }
     }
     
+    // Convert isActive checkbox to string value
+    const isActiveCheckbox = formData.get('isActive');
+    data.isActive = isActiveCheckbox ? 'active' : 'inactive';
+    
     // Explicitly get the aadharCard value and ensure it's included
     const aadharInputValue = (document.getElementById('aadharCard') as HTMLInputElement)?.value || '';
     data.aadharCard = aadharInputValue;
@@ -827,6 +831,18 @@ export default function AdminEmployees() {
                               </SelectContent>
                             </Select>
                           </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="isActive"
+                              name="isActive"
+                              defaultChecked={selectedEmployee?.isActive === "active" || !selectedEmployee}
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                            />
+                            <Label htmlFor="isActive" className="text-sm font-medium">
+                              Employee is Active
+                            </Label>
+                          </div>
                           {(employmentStatus === "Probation" || employmentStatus === "Temporary") && (
                             <div>
                               <Label htmlFor="termExpiry">Term Expiry Date</Label>
@@ -1141,6 +1157,7 @@ export default function AdminEmployees() {
                     <TableHead>Designation</TableHead>
                     <TableHead>Dealing Assistant</TableHead>
                     <TableHead>Reg.No.</TableHead>
+                    <TableHead>Employment Status</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Term Expiry Date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -1156,6 +1173,15 @@ export default function AdminEmployees() {
                       <TableCell>{employee.salary_asstt || "-"}</TableCell>
                       <TableCell>{employee.salaryRegisterNo || "-"}</TableCell>
                       <TableCell>{employee.employmentStatus}</TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          employee.isActive === "active" 
+                            ? "bg-green-100 text-green-800" 
+                            : "bg-red-100 text-red-800"
+                        }`}>
+                          {employee.isActive === "active" ? "Active" : "Disabled"}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         {(employee.employmentStatus === "Probation" ||
                           employee.employmentStatus === "Temporary") &&

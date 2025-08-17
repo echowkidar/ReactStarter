@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentDepartment } from "@/lib/auth";
+import { getPayLevelOrder } from "@/lib/pay-levels";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -132,13 +133,23 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   const { data: employees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
     select: (data: any) => {
-      // Sort employees by EPID in ascending order
-      return [...data].sort((a, b) => {
-        // Handle null or undefined EPID values
-        if (!a.epid) return 1;
-        if (!b.epid) return -1;
-        return a.epid.localeCompare(b.epid);
-      });
+      // Filter only active employees and sort by Pay Level (descending) then EPID (ascending)
+      return [...data]
+        .filter((employee: any) => employee.isActive === "active")
+        .sort((a, b) => {
+          // First sort by pay level (higher levels first)
+          const payLevelA = getPayLevelOrder(a.payLevel || "L-0");
+          const payLevelB = getPayLevelOrder(b.payLevel || "L-0");
+          
+          if (payLevelA !== payLevelB) {
+            return payLevelB - payLevelA; // Descending order (higher pay levels first)
+          }
+          
+          // If pay levels are the same, sort by EPID in ascending order
+          if (!a.epid) return 1;
+          if (!b.epid) return -1;
+          return a.epid.localeCompare(b.epid);
+        });
     },
   });
 

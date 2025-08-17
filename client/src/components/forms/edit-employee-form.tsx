@@ -4,12 +4,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { employmentStatuses } from "@/lib/departments";
+import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Employee, InsertEmployee, insertEmployeeSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
 import { FileUpload } from "@/components/ui/file-upload";
+
 
 interface EditEmployeeFormProps {
   employee: Employee;
@@ -267,6 +269,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       name: employee.name,
       designation: employee.designation,
       employmentStatus: employee.employmentStatus,
+      payLevel: employee.payLevel || "L-0",
       termExpiry: employee.termExpiry || "",
       panNumber: employee.panNumber || "",
       bankAccount: employee.bankAccount || "",
@@ -276,7 +279,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       joiningShift: employee.joiningShift || "FN",
       salaryRegisterNo: employee.salaryRegisterNo || "",
       departmentId: employee.departmentId,
-      // Add URL fields to defaultValues
+      isActive: employee.isActive || "active",
       panCardUrl: employee.panCardUrl || "",
       bankProofUrl: employee.bankProofUrl || "",
       aadharCardUrl: employee.aadharCardUrl || "",
@@ -465,6 +468,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           name: data.name,
           designation: data.designation,
           employmentStatus: data.employmentStatus,
+          payLevel: data.payLevel,
           termExpiry: data.termExpiry || null,
           panNumber: data.panNumber || "",
           bankAccount: data.bankAccount || "",
@@ -512,6 +516,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           name: data.name,
           designation: data.designation,
           employmentStatus: data.employmentStatus,
+          payLevel: data.payLevel,
           termExpiry: data.termExpiry || null,
           panNumber: data.panNumber || "",
           bankAccount: data.bankAccount || "",
@@ -521,6 +526,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           joiningShift: data.joiningShift || "FN",
           salaryRegisterNo: data.salaryRegisterNo || "",
           departmentId: Number(data.departmentId),
+          isActive: data.isActive || "active",
           panCardUrl: fileUrls.panCardUrl,
           bankProofUrl: fileUrls.bankProofUrl,
           aadharCardUrl: fileUrls.aadharCardUrl,
@@ -631,6 +637,65 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                   ))}
                 </select>
                 {errors.employmentStatus && <p className="text-red-500 text-xs mt-1">{errors.employmentStatus.message}</p>}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Pay Level</label>
+                <select
+                  {...register("payLevel")}
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                >
+                  {PAY_LEVELS.map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </select>
+                {errors.payLevel && <p className="text-red-500 text-xs mt-1">{errors.payLevel.message}</p>}
+              </div>
+
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <div className="flex items-center space-x-3 mt-2">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      {...register("isActive")}
+                      value="active"
+                      className="sr-only"
+                    />
+                    <div className={`w-4 h-4 rounded-full border-2 mr-2 ${
+                      watch("isActive") === "active" 
+                        ? "bg-green-500 border-green-500" 
+                        : "border-gray-300"
+                    }`}>
+                      {watch("isActive") === "active" && (
+                        <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
+                      )}
+                    </div>
+                    <span className="text-sm font-medium text-green-600">Active</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      {...register("isActive")}
+                      value="disabled"
+                      className="sr-only"
+                    />
+                    <div className={`w-4 h-4 rounded-full border-2 mr-2 ${
+                      watch("isActive") === "disabled" 
+                        ? "bg-red-500 border-red-500" 
+                        : "border-gray-300"
+                    }`}>
+                      {watch("isActive") === "disabled" && (
+                        <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
+                      )}
+                    </div>
+                    <span className="text-sm font-medium text-red-600">Disabled</span>
+                  </label>
+                </div>
+                {errors.isActive && <p className="text-red-500 text-xs mt-1">{errors.isActive.message}</p>}
               </div>
             </div>
           </div>

@@ -396,6 +396,7 @@ export default function Employees() {
                   <TableHead>EPID</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Designation</TableHead>
+                  <TableHead>Employment Status</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Term Expiry</TableHead>
                   <TableHead>Actions</TableHead>
@@ -408,6 +409,15 @@ export default function Employees() {
                     <TableCell>{employee.name}</TableCell>
                     <TableCell>{employee.designation}</TableCell>
                     <TableCell>{employee.employmentStatus}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        employee.isActive === "active" 
+                          ? "bg-green-100 text-green-800" 
+                          : "bg-red-100 text-red-800"
+                      }`}>
+                        {employee.isActive === "active" ? "Active" : "Disabled"}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       {(employee.employmentStatus === "Probation" ||
                         employee.employmentStatus === "Temporary") &&

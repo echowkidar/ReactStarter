@@ -33,6 +33,8 @@ export async function runMigrations() {
         salary_register_no TEXT NOT NULL,
         office_memo_no TEXT NOT NULL,
         joining_shift TEXT NOT NULL DEFAULT 'morning',
+        salary_asstt TEXT,
+        is_active TEXT NOT NULL DEFAULT 'active',
         pan_card_url TEXT,
         bank_proof_url TEXT,
         aadhar_card_url TEXT,
@@ -100,9 +102,19 @@ export async function runMigrations() {
       );
     `);
 
+    // Add isActive column to existing employees table if it doesn't exist
+    await db.execute(sql`
+      ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_active TEXT NOT NULL DEFAULT 'active';
+    `);
+
+    // Add salary_asstt column to existing employees table if it doesn't exist
+    await db.execute(sql`
+      ALTER TABLE employees ADD COLUMN IF NOT EXISTS salary_asstt TEXT;
+    `);
+
     console.log("Database migrations completed successfully");
   } catch (error) {
     console.error("Error running migrations:", error);
     throw error;
   }
-} 
+}

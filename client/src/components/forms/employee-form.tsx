@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
 import { employmentStatuses } from "@/lib/departments";
+import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Loader2 } from "lucide-react";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
 import { useState } from "react";
@@ -19,6 +20,7 @@ const employeeSchema = z.object({
   aadharCard: z.string().min(1, "Adhar Number is required"),
   designation: z.string().min(1, "Designation is required"),
   employmentStatus: z.enum(employmentStatuses),
+  payLevel: z.enum(PAY_LEVELS),
   termExpiry: z.string().optional(),
   officeMemoNo: z.string().min(1, "Office Memo No. is required"),
   joiningDate: z.string().min(1, "Joining Date is required"),
@@ -51,6 +53,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       aadharCard: "",
       designation: "",
       employmentStatus: "Permanent",
+      payLevel: "L-0",
       termExpiry: "",
       officeMemoNo: "",
       joiningDate: "",
@@ -182,6 +185,34 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                         {employmentStatuses.map((status) => (
                           <SelectItem key={status} value={status}>
                             {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="payLevel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Pay Level</FormLabel>
+                    <Select
+                      disabled={isLoading}
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="bg-white dark:bg-slate-800">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {PAY_LEVELS.map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {level}
                           </SelectItem>
                         ))}
                       </SelectContent>

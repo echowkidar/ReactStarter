@@ -1,0 +1,1 @@
+ALTER TABLE "employees" ADD COLUMN "pay_level" text DEFAULT 'L-0' NOT NULL;
