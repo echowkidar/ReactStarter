@@ -11,6 +11,7 @@ import { AttendanceReport, AttendanceEntry, Department, Employee } from "@shared
 import { Download, Printer, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useState } from "react";
+import { getPayLevelOrder } from "@/lib/pay-levels";
 
 interface ExtendedAttendanceEntry extends AttendanceEntry {
   employee?: Employee;
@@ -686,21 +687,18 @@ export default function ReportDetails() {
             <TableBody>
               {report.entries
                 ?.sort((a, b) => {
-                  // First sort by salary register number
-                  const regNoA = a.employee?.salaryRegisterNo || '';
-                  const regNoB = b.employee?.salaryRegisterNo || '';
+                  // Sort by pay level first (higher levels first)
+                  const payLevelA = a.employee?.payLevel || "L-0";
+                  const payLevelB = b.employee?.payLevel || "L-0";
                   
-                  // Compare reg numbers first
-                  const regNoCompare = regNoA.localeCompare(regNoB);
-                  
-                  // If reg numbers are the same, then sort by employee ID
-                  if (regNoCompare === 0) {
-                    const idA = a.employee?.epid || '';
-                    const idB = b.employee?.epid || '';
-                    return idA.localeCompare(idB);
+                  if (payLevelA !== payLevelB) {
+                    return getPayLevelOrder(payLevelB) - getPayLevelOrder(payLevelA);
                   }
                   
-                  return regNoCompare;
+                  // If pay levels are same, sort by EPID
+                  const epidA = a.employee?.epid || '';
+                  const epidB = b.employee?.epid || '';
+                  return epidA.localeCompare(epidB);
                 })
                 .flatMap((entry, entryIndex) => {
                   try {

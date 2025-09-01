@@ -428,14 +428,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {includedEmployees.has(employee.id) ? 
-                      Array.from(includedEmployees)
-                        .filter(id => includedEmployees.has(id))
-                        .sort((a, b) => {
-                          const empA = employees.find((e: any) => e.id === a);
-                          const empB = employees.find((e: any) => e.id === b);
-                          return empA?.epid?.localeCompare(empB?.epid || '') || 0;
-                        })
-                        .indexOf(employee.id) + 1 
+                      employees
+                        .filter((e: any) => includedEmployees.has(e.id))
+                        .findIndex((e: any) => e.id === employee.id) + 1
                       : '-'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">{employee.epid}</TableCell>
