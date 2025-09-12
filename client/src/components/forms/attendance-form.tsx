@@ -82,7 +82,7 @@ const attendanceSchema = z.object({
     periods: z.array(z.object({
       fromDate: z.string(),
       toDate: z.string(),
-      days: z.number().min(0).max(31),
+      days: z.number().min(0).max(365),
       remarks: z.string().optional(),
     })).min(1),
   })).min(1, "At least one employee entry is required"),
