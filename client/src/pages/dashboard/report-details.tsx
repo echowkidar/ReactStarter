@@ -108,13 +108,12 @@ export default function ReportDetails() {
     }
   };
 
-  // Updated function to check if it's a complete month AND matches the current report month
-  const isWholeCurrentMonth = (fromDate: string, toDate: string, reportMonth: number, reportYear: number): boolean => {
+  const isWholeMonth = (fromDate: string, toDate: string): boolean => {
     // Check if period starts from day 1
     const fromParts = fromDate.split('-');
     if (fromParts.length !== 3 || fromParts[0] !== '01') return false;
     
-    // Extract month and year from the period
+    // Extract month and year
     const fromMonth = parseInt(fromParts[1]);
     const fromYear = parseInt(fromParts[2].length === 2 ? `20${fromParts[2]}` : fromParts[2]);
     
@@ -132,12 +131,7 @@ export default function ReportDetails() {
     const lastDay = new Date(fromYear, fromMonth, 0).getDate();
     
     // Check if end date is the last day of month
-    const isCompleteMonth = parseInt(toParts[0]) === lastDay;
-    
-    // NEW CONDITION: Also check if this period month matches the report month/year
-    const matchesReportMonth = fromMonth === reportMonth && fromYear === reportYear;
-    
-    return isCompleteMonth && matchesReportMonth;
+    return parseInt(toParts[0]) === lastDay;
   };
 
   const handlePrint = () => {
@@ -432,7 +426,7 @@ export default function ReportDetails() {
           entry.employee?.designation,
           formatTermExpiry(entry.employee?.termExpiry),
           entry.employee?.salaryRegisterNo || '-',
-          isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year) 
+          isWholeMonth(period.fromDate, period.toDate) 
             ? "- " 
             : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
           period.days,
@@ -735,7 +729,7 @@ export default function ReportDetails() {
                           <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
                           <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year) 
+                            {isWholeMonth(period.fromDate, period.toDate) 
                               ? "- " 
                               : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
                           </TableCell>
