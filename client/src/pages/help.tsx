@@ -201,15 +201,16 @@ export default function Help() {
 
           <div className="mt-8">
             <h2 className="text-2xl font-bold mb-4">Tutorial Video</h2>
-            <iframe
-              width="100%"
-              height="315"
-              src="https://www.youtube.com/embed/ej_yvXC8ekg"
-              title="YouTube video player"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            ></iframe>
+            <div className="relative w-full h-0" style={{ paddingBottom: "56.25%" }}>
+              <iframe
+                className="absolute top-0 left-0 w-full h-full"
+                src="https://www.youtube.com/embed/ej_yvXC8ekg"
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              ></iframe>
+            </div>
           </div>
         </main>
       </div>
