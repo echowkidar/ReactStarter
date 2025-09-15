@@ -104,7 +104,7 @@ export async function registerRoutes(app: Express) {
       
       // Create reset URL
       const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://attendance.echowkidar.in' 
+        ? 'https://amu.echowkidar.in' 
         : 'http://localhost:5001';
       
       const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
