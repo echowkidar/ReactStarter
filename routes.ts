@@ -94,6 +94,7 @@ export async function registerRoutes(app: Express) {
 
       // Handle uploaded files
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const baseUrl = process.env.BASE_URL || '';
       const employeeData = {
         ...req.body,
         departmentId,
