@@ -198,8 +198,21 @@ export default function Help() {
                {outroContent}
              </ReactMarkdown>
           </div>
+
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold mb-4">Tutorial Video</h2>
+            <iframe
+              width="100%"
+              height="315"
+              src="https://www.youtube.com/embed/ej_yvXC8ekg"
+              title="YouTube video player"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
         </main>
       </div>
     </div>
   );
-} 
+}
