@@ -196,7 +196,7 @@ export async function registerRoutes(app: Express) {
       
       // Create reset URL
       const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://attendance.echowkidar.in' 
+        ? 'https://amu.echowkidar.in' 
         : 'http://localhost:5001';
       
       const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
@@ -716,7 +716,7 @@ export async function registerRoutes(app: Express) {
       
       // Return the URL that can be used to access the file
       const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://attendance.echowkidar.in' 
+        ? 'https://amu.echowkidar.in' 
         : `http://localhost:${process.env.PORT || 5001}`;
       
       const imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
@@ -1773,7 +1773,7 @@ export async function registerRoutes(app: Express) {
         
         // Create file URL using the compressed file
         const baseUrl = process.env.NODE_ENV === 'production' 
-          ? 'https://attendance.echowkidar.in' 
+          ? 'https://amu.echowkidar.in' 
           : `http://localhost:${process.env.PORT || 5001}`;
         
         const imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
