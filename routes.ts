@@ -230,8 +230,10 @@ export async function registerRoutes(app: Express) {
       // Return the URL that can be used to access the file
       const fileUrl = `/uploads/${req.file.filename}`;
       console.log(`Upload API - File saved as: ${fileUrl}`);
+      // Use BASE_URL if available, otherwise return relative URL
+      const fullUrl = process.env.BASE_URL ? `${process.env.BASE_URL}${fileUrl}` : fileUrl;
       
-      res.json({ fileUrl });
+      res.json({ fileUrl: fullUrl });
     } catch (error) {
       console.error('Error uploading file:', error);
       res.status(500).json({ message: "Failed to upload file", error: String(error) });
