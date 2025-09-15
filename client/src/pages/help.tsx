@@ -203,10 +203,12 @@ export default function Help() {
             <h2 className="text-2xl font-bold mb-4">Tutorial Video</h2>
             <div className="relative w-full h-0" style={{ paddingBottom: "56.25%" }}>
               <iframe
-                className="absolute top-0 left-0 w-full h-full"
+                className="absolute top-0 left-0 w-[50%] h-[50%]"
+
+
                 src="https://www.youtube.com/embed/ej_yvXC8ekg"
                 title="YouTube video player"
-                frameBorder="0"
+                frameBorder="1"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               ></iframe>
