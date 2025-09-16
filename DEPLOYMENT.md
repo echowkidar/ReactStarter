@@ -161,3 +161,10 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 ## npm install # or yarn install
 ## npm run build # or yarn build
 ## pm2 start ecosystem.config.cjs --force
+
+### command to clone "digital_ocean" branch (fres OK)
+## git clone --branch digital_ocean --single-branch https://github.com/echowkidar/ReactStarter.git
+## after modification
+## git add .
+## git commit -m "Add your descriptive message here"
+## git push
