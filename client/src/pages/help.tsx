@@ -206,7 +206,7 @@ export default function Help() {
                 className="absolute top-0 left-0 w-[50%] h-[50%]"
 
 
-                src="https://www.youtube.com/embed/ej_yvXC8ekg"
+                src="https://www.youtube.com/embed/s3uPEzevL5w"
                 title="YouTube video player"
                 frameBorder="1"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
