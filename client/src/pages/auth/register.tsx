@@ -17,7 +17,20 @@ const N8nChatScript = () => {
     script.innerHTML = `
       import { createChat } from "https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js";
       createChat({ 
-        webhookUrl: "https://agent.echowkidar.in/webhook/336cd62e-fd49-462a-bc21-83dae5195819/chat"
+        webhookUrl: "https://agent.echowkidar.in/webhook/336cd62e-fd49-462a-bc21-83dae5195819/chat",
+        initialMessages: [
+          'Hi there! 👋',
+          '<strong style="font-size: 1.2em;">I am AMU AI.</strong> How can I assist you today?'
+        ],
+        i18n: {
+          en: {
+            title: 'AMU AI',
+            subtitle: "Start a chat. We're here to help you 24/7.",
+            footer: '',
+            getStarted: 'New Conversation',
+            inputPlaceholder: 'Type your question..',
+          }
+        }
       });
     `;
     document.body.appendChild(script);
