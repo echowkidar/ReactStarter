@@ -32,8 +32,8 @@ const N8nChatScript = () => {
       createChat({ 
         webhookUrl: "https://agent.echowkidar.in/webhook/336cd62e-fd49-462a-bc21-83dae5195819/chat",
         initialMessages: [
-          'Hi there! 👋',
-          '<strong style="font-size: 1.2em;">I am AMU AI.</strong> How can I assist you today?'
+          'Hi there! ',
+          'I am AMU AI. How can I assist you today?'
         ],
         i18n: {
           en: {
