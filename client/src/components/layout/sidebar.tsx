@@ -16,6 +16,33 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useState, useEffect } from "react";
 
+// n8n chat integration
+// Add n8n chat styles
+const N8nChatStyles = () => (
+  <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+);
+
+// Add n8n chat script
+const N8nChatScript = () => {
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.type = "module";
+    script.innerHTML = `
+      import { createChat } from "https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js";
+      createChat({ 
+        webhookUrl: "https://agent.echowkidar.in/webhook/336cd62e-fd49-462a-bc21-83dae5195819/chat"
+      });
+    `;
+    document.body.appendChild(script);
+    
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+  
+  return null;
+};
+
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Employees", href: "/dashboard/employees", icon: Users },
@@ -53,6 +80,8 @@ export default function Sidebar({ className }: SidebarProps) {
 
   const content = (
     <div className={cn("flex h-full flex-col gap-4", className)}>
+      <N8nChatStyles />
+      <N8nChatScript />
       <div className="px-3 py-2">
         <h2 className="mb-2 px-4 text-lg font-semibold">
           {department?.name}

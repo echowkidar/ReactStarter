@@ -1,12 +1,42 @@
 import { useLocation } from "wouter";
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useEffect } from "react";
+
+// n8n chat integration
+// Add n8n chat styles
+const N8nChatStyles = () => (
+  <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+);
+
+// Add n8n chat script
+const N8nChatScript = () => {
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.type = "module";
+    script.innerHTML = `
+      import { createChat } from "https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js";
+      createChat({ 
+        webhookUrl: "https://agent.echowkidar.in/webhook/336cd62e-fd49-462a-bc21-83dae5195819/chat"
+      });
+    `;
+    document.body.appendChild(script);
+    
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+  
+  return null;
+};
 
 export default function Register() {
   const [, setLocation] = useLocation();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <N8nChatStyles />
+      <N8nChatScript />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <h1 className="text-2xl font-bold">Department Registration</h1>

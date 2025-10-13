@@ -11,6 +11,35 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
+// n8n chat integration
+import { useEffect as useEffectOnce } from "react";
+
+// Add n8n chat styles
+const N8nChatStyles = () => (
+  <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+);
+
+// Add n8n chat script
+const N8nChatScript = () => {
+  useEffectOnce(() => {
+    const script = document.createElement("script");
+    script.type = "module";
+    script.innerHTML = `
+      import { createChat } from "https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js";
+      createChat({ 
+        webhookUrl: "https://agent.echowkidar.in/webhook/336cd62e-fd49-462a-bc21-83dae5195819/chat"
+      });
+    `;
+    document.body.appendChild(script);
+    
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+  
+  return null;
+};
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -55,6 +84,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <N8nChatStyles />
+      <N8nChatScript />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <h1 className="text-2xl font-bold">Department Login</h1>
