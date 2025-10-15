@@ -97,7 +97,7 @@ export default function Sidebar({ className }: SidebarProps) {
       <N8nChatScript />
       <div className="px-3 py-2">
         <div className="mb-4 px-4 flex items-center gap-2">
-          <img src="/src/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto" />
+          <img src="/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto" />
           <h2 className="text-lg font-semibold">
             {department?.name}
           </h2>

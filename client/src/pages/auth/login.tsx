@@ -102,7 +102,7 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <img src="/src/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-20 w-auto" />
+            <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-20 w-auto" />
           </div>
           <h1 className="text-2xl font-bold">Department Login</h1>
           <p className="text-sm text-muted-foreground">

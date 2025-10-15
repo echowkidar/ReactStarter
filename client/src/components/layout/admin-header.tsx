@@ -53,7 +53,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
   return (
     <header className={`flex items-center justify-between p-4 border-b ${className}`}>
       <div className="flex items-center space-x-4">
-        <img src="/src/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto mr-2" />
+        <img src="/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto mr-2" />
         <div className={`p-2 rounded-full ${styles.bgColor}`}>
           <AdminIcon className={`h-5 w-5 ${styles.textColor}`} />
         </div>
