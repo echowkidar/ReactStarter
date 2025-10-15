@@ -51,18 +51,16 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
   const AdminIcon = styles.icon;
   
   return (
-    <header className={`flex items-center justify-end border-b bg-background p-4 ${className}`}>
-      <div className="flex items-center gap-3">
-        <div className={`${styles.bgColor} p-1.5 rounded-full`}>
+    <header className={`flex items-center justify-between p-4 border-b ${className}`}>
+      <div className="flex items-center space-x-4">
+        <img src="/src/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto mr-2" />
+        <div className={`p-2 rounded-full ${styles.bgColor}`}>
           <AdminIcon className={`h-5 w-5 ${styles.textColor}`} />
         </div>
-        <div className="text-sm">
-          <p className={`font-medium ${styles.textColor}`}>
-            {getDisplayName(adminInfo.email)}
-          </p>
-          <p className="text-muted-foreground text-xs">{adminInfo.email}</p>
+        <div>
+          <h2 className="font-medium">{getDisplayName(adminInfo.email)}</h2>
+          <p className={`text-xs ${styles.textColor}`}>{styles.roleText}</p>
         </div>
       </div>
-    </header>
   );
-} 
+}

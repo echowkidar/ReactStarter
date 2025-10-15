@@ -73,6 +73,9 @@ export default function AdminLogin() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Card className="w-full max-w-md mx-4">
         <CardHeader>
+          <div className="flex justify-center mb-4">
+            <img src="/src/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-20 w-auto" />
+          </div>
           <CardTitle className="text-2xl text-center">Admin Login</CardTitle>
         </CardHeader>
         <CardContent>
