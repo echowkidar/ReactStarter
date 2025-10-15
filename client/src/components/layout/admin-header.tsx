@@ -62,5 +62,6 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
           <p className={`text-xs ${styles.textColor}`}>{styles.roleText}</p>
         </div>
       </div>
+    </header>
   );
 }
