@@ -41,16 +41,20 @@ export default function AdminEmployees() {
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
   const [isAdmin, setIsAdmin] = useState(false);
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 100;
-  
+
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
   const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string[]>([]);
   const [regNoFilter, setRegNoFilter] = useState<string[]>([]);
+
+  // Sorting state
+  type SortKey = "epid" | "name" | "departmentName" | "designation" | "salary_asstt" | "salaryRegisterNo" | "employmentStatus" | "isActive" | "termExpiry" | "";
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: "asc" | "desc" }>({ key: "", direction: "asc" });
 
   // Function to find the correct department ID from the departments list
   const findMatchingDepartment = (employee: Employee, departments: Department[]) => {
@@ -59,17 +63,17 @@ export default function AdminEmployees() {
     if (directMatch) {
       return directMatch.id.toString();
     }
-    
+
     // If no direct match, try matching by name (if departmentName is available)
     if (employee.departmentName) {
-      const nameMatch = departments.find(d => 
+      const nameMatch = departments.find(d =>
         d.name.toLowerCase() === employee.departmentName?.toLowerCase()
       );
       if (nameMatch) {
         return nameMatch.id.toString();
       }
     }
-    
+
     // Return the original ID as string if no match found
     return employee.departmentId?.toString() || "";
   };
@@ -82,8 +86,8 @@ export default function AdminEmployees() {
     }
   });
 
-  const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({ 
-    queryKey: ['/api/departments'], 
+  const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({
+    queryKey: ['/api/departments'],
     queryFn: async () => {
       try {
         const response = await apiRequest("GET", "/api/departments");
@@ -114,7 +118,7 @@ export default function AdminEmployees() {
     const assistants = employees
       .map(emp => emp.salary_asstt)
       .filter((value): value is string => !!value); // Filter out null/undefined/empty values
-    
+
     return Array.from(new Set(assistants)).sort();
   }, [employees]);
 
@@ -122,18 +126,18 @@ export default function AdminEmployees() {
   const { filteredDepartments, filteredDealingAssistants, filteredRegNos } = useMemo(() => {
     // Start with a filtered set of employees based on search term
     let result = [...employees];
-    
+
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       result = result.filter(
-        emp => 
+        emp =>
           emp.epid?.toLowerCase().includes(lowerSearchTerm) ||
           emp.name?.toLowerCase().includes(lowerSearchTerm) ||
           emp.departmentName?.toLowerCase().includes(lowerSearchTerm) ||
           emp.designation?.toLowerCase().includes(lowerSearchTerm)
       );
     }
-    
+
     // Apply department filter when calculating available dealing assistants and reg nos
     let departmentFilteredEmployees = result;
     if (departmentFilter.length > 0) {
@@ -141,7 +145,7 @@ export default function AdminEmployees() {
         emp => departmentFilter.includes(emp.departmentId?.toString() || "")
       );
     }
-    
+
     // Apply dealing assistant filter when calculating available departments and reg nos
     let dealingAssistantFilteredEmployees = result;
     if (dealingAssistantFilter.length > 0) {
@@ -149,7 +153,7 @@ export default function AdminEmployees() {
         emp => dealingAssistantFilter.includes(emp.salary_asstt || "")
       );
     }
-    
+
     // Apply reg no filter when calculating available departments and dealing assistants
     let regNoFilteredEmployees = result;
     if (regNoFilter.length > 0) {
@@ -157,36 +161,36 @@ export default function AdminEmployees() {
         emp => regNoFilter.includes(emp.salaryRegisterNo || "")
       );
     }
-    
+
     // Get unique departments from filtered employees
     const availableDepartments = new Set<string>();
-    const combinedFiltered = dealingAssistantFilter.length > 0 ? dealingAssistantFilteredEmployees : 
-                             regNoFilter.length > 0 ? regNoFilteredEmployees : result;
+    const combinedFiltered = dealingAssistantFilter.length > 0 ? dealingAssistantFilteredEmployees :
+      regNoFilter.length > 0 ? regNoFilteredEmployees : result;
     combinedFiltered.forEach(emp => {
       if (emp.departmentId) {
         availableDepartments.add(emp.departmentId.toString());
       }
     });
-    
+
     // Get unique dealing assistants from filtered employees
-    const filteredForAssistants = departmentFilter.length > 0 ? departmentFilteredEmployees : 
-                                 regNoFilter.length > 0 ? regNoFilteredEmployees : result;
+    const filteredForAssistants = departmentFilter.length > 0 ? departmentFilteredEmployees :
+      regNoFilter.length > 0 ? regNoFilteredEmployees : result;
     const assistants = filteredForAssistants
       .map(emp => emp.salary_asstt)
       .filter((value): value is string => !!value);
     const availableDealingAssistants = Array.from(new Set(assistants)).sort();
-    
+
     // Get unique reg nos from filtered employees
-    const filteredForRegNos = departmentFilter.length > 0 ? departmentFilteredEmployees : 
-                             dealingAssistantFilter.length > 0 ? dealingAssistantFilteredEmployees : result;
+    const filteredForRegNos = departmentFilter.length > 0 ? departmentFilteredEmployees :
+      dealingAssistantFilter.length > 0 ? dealingAssistantFilteredEmployees : result;
     const regNos = filteredForRegNos
       .map(emp => emp.salaryRegisterNo)
       .filter((value): value is string => !!value);
     const availableRegNos = Array.from(new Set(regNos)).sort();
-    
+
     return {
-      filteredDepartments: departments.filter(dept => 
-        (dealingAssistantFilter.length === 0 && regNoFilter.length === 0) || 
+      filteredDepartments: departments.filter(dept =>
+        (dealingAssistantFilter.length === 0 && regNoFilter.length === 0) ||
         availableDepartments.has(dept.id.toString())
       ),
       filteredDealingAssistants: availableDealingAssistants,
@@ -194,46 +198,73 @@ export default function AdminEmployees() {
     };
   }, [employees, searchTerm, departmentFilter, dealingAssistantFilter, regNoFilter, departments]);
 
+  // Handle sorting
+  const handleSort = (key: SortKey) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc"
+    }));
+  };
+
   // Filter and paginate employees
   const filteredEmployees = useMemo(() => {
     let result = [...employees];
-    
+
     // Apply search filter
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       result = result.filter(
-        emp => 
+        emp =>
           emp.epid?.toLowerCase().includes(lowerSearchTerm) ||
           emp.name?.toLowerCase().includes(lowerSearchTerm) ||
           emp.departmentName?.toLowerCase().includes(lowerSearchTerm) ||
           emp.designation?.toLowerCase().includes(lowerSearchTerm)
       );
     }
-    
+
     // Apply department filter
     if (departmentFilter.length > 0) {
       result = result.filter(emp => departmentFilter.includes(emp.departmentId?.toString() || ""));
     }
-    
+
     // Apply dealing assistant filter
     if (dealingAssistantFilter.length > 0) {
       result = result.filter(emp => dealingAssistantFilter.includes(emp.salary_asstt || ""));
     }
-    
+
     // Apply reg no filter
     if (regNoFilter.length > 0) {
       result = result.filter(emp => regNoFilter.includes(emp.salaryRegisterNo || ""));
     }
-    
+
+    // Apply sorting
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key as keyof Employee];
+        let bValue: any = b[sortConfig.key as keyof Employee];
+
+        // Handle null/undefined values
+        if (aValue === null || aValue === undefined) return 1;
+        if (bValue === null || bValue === undefined) return -1;
+
+        // Convert to strings for comparison
+        const aString = String(aValue).toLowerCase();
+        const bString = String(bValue).toLowerCase();
+
+        const comparison = aString < bString ? -1 : aString > bString ? 1 : 0;
+        return sortConfig.direction === "asc" ? comparison : -comparison;
+      });
+    }
+
     return result;
-  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter, regNoFilter]);
-  
+  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter, regNoFilter, sortConfig]);
+
   // Paginate filtered results
   const paginatedEmployees = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
     return filteredEmployees.slice(startIndex, startIndex + pageSize);
   }, [filteredEmployees, currentPage, pageSize]);
-  
+
   // Calculate total pages
   const totalPages = Math.ceil(filteredEmployees.length / pageSize);
 
@@ -276,7 +307,7 @@ export default function AdminEmployees() {
       }
 
       setUploads(existingUploads);
-      
+
       // Debug the department ID
       console.log("Selected employee department ID:", selectedEmployee.departmentId);
       console.log("Department IDs in dropdown:", departments.map(d => d.id));
@@ -318,15 +349,15 @@ export default function AdminEmployees() {
 
   const handleRemoveFile = async (type: keyof UploadState) => {
     const upload = uploads[type];
-    
+
     // If URL exists (meaning the file was uploaded previously), remove it from server
     if (upload?.preview && !upload.preview.startsWith('data:')) {
       try {
         console.log(`Attempting to remove file from server: ${upload.preview}`);
-        
+
         const apiUrl = `/api/upload`;
         console.log(`API endpoint: ${apiUrl}`);
-        
+
         const response = await fetch(apiUrl, {
           method: 'DELETE',
           headers: {
@@ -335,17 +366,17 @@ export default function AdminEmployees() {
           },
           body: JSON.stringify({ fileUrl: upload.preview }),
         });
-        
+
         // Log server response
         console.log(`Server response status: ${response.status}`);
         console.log(`Server response status text: ${response.statusText}`);
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Server error response:', errorText);
           throw new Error(`Server response: ${response.status} ${response.statusText}. ${errorText}`);
         }
-        
+
         // Check response type
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
@@ -371,7 +402,7 @@ export default function AdminEmployees() {
         });
       }
     }
-    
+
     // UI से फाइल रिमूव करें
     setUploads(prev => {
       const newUploads = { ...prev };
@@ -384,39 +415,39 @@ export default function AdminEmployees() {
     mutationFn: async (data: Partial<InsertEmployee>) => {
       // Ensure department ID is present
       const departmentId = selectedDepartmentId ? parseInt(selectedDepartmentId, 10) : NaN;
-      
+
       if (isNaN(departmentId)) {
         throw new Error("Please select a department");
       }
-      
+
       // Create a FormData instance for file uploads
       const formData = new FormData();
-      
+
       // Explicitly add department ID from state
       formData.append('departmentId', departmentId.toString());
-      
+
       // Add files from uploads to FormData
       for (const [key, upload] of Object.entries(uploads)) {
         if (upload?.file) {
           // Use the appropriate field name for the server endpoint
           const fieldName = key === 'panCard' ? 'panCardDoc' :
-                           key === 'bankProof' ? 'bankAccountDoc' :
-                           key === 'aadharCard' ? 'aadharCardDoc' :
-                           key === 'officeMemo' ? 'officeMemoDoc' :
-                           key === 'joiningReport' ? 'joiningReportDoc' :
-                           key === 'termExtension' ? 'termExtensionDoc' : key;
-          
+            key === 'bankProof' ? 'bankAccountDoc' :
+              key === 'aadharCard' ? 'aadharCardDoc' :
+                key === 'officeMemo' ? 'officeMemoDoc' :
+                  key === 'joiningReport' ? 'joiningReportDoc' :
+                    key === 'termExtension' ? 'termExtensionDoc' : key;
+
           formData.append(fieldName, upload.file);
         }
       }
-      
+
       // Add other employee data to FormData
       Object.entries(data).forEach(([key, value]) => {
         if (value !== null && value !== undefined && key !== 'departmentId') { // Skip departmentId as we already added it
           formData.append(key, String(value));
         }
       });
-      
+
       // Use existing URLs if files weren't changed
       for (const [key, upload] of Object.entries(uploads)) {
         if (!upload?.file && upload?.preview && !upload.preview.startsWith('data:')) {
@@ -470,7 +501,7 @@ export default function AdminEmployees() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     // Create data object from form entries, excluding file inputs
     const data: Record<string, any> = {};
     const formDataEntries: [string, FormDataEntryValue][] = Array.from(formData.entries());
@@ -479,23 +510,23 @@ export default function AdminEmployees() {
         data[key] = value;
       }
     }
-    
+
     // Convert isActive checkbox to string value
     const isActiveCheckbox = formData.get('isActive');
     data.isActive = isActiveCheckbox ? 'active' : 'inactive';
-    
+
     // Explicitly get the aadharCard value and ensure it's included
     const aadharInputValue = (document.getElementById('aadharCard') as HTMLInputElement)?.value || '';
     data.aadharCard = aadharInputValue;
-    
+
     // Log the form data for debugging
     console.log("Form data being submitted:", data);
     console.log("Department ID being submitted:", selectedDepartmentId);
-    
+
     // Use the selectedDepartmentId from state instead of form data
     const departmentId = selectedDepartmentId ? parseInt(selectedDepartmentId, 10) : NaN;
     data.departmentId = departmentId;
-    
+
     if (isNaN(departmentId)) {
       toast({
         variant: "destructive",
@@ -504,28 +535,28 @@ export default function AdminEmployees() {
       });
       return;
     }
-    
+
     // Create a new FormData for the API request
     const apiFormData = new FormData();
-    
+
     // Add all form fields to the API FormData
     Object.entries(data).forEach(([key, value]) => {
       if (value !== null && value !== undefined) {
         apiFormData.append(key, String(value));
       }
     });
-    
+
     // Add files from uploads to FormData with proper field names
     for (const [key, upload] of Object.entries(uploads)) {
       if (upload?.file) {
         // Map UI field names to API field names
         const fieldName = key === 'panCard' ? 'panCardDoc' :
-                         key === 'bankProof' ? 'bankAccountDoc' :
-                         key === 'aadharCard' ? 'aadharCardDoc' :
-                         key === 'officeMemo' ? 'officeMemoDoc' :
-                         key === 'joiningReport' ? 'joiningReportDoc' :
-                         key === 'termExtension' ? 'termExtensionDoc' : key;
-        
+          key === 'bankProof' ? 'bankAccountDoc' :
+            key === 'aadharCard' ? 'aadharCardDoc' :
+              key === 'officeMemo' ? 'officeMemoDoc' :
+                key === 'joiningReport' ? 'joiningReportDoc' :
+                  key === 'termExtension' ? 'termExtensionDoc' : key;
+
         apiFormData.append(fieldName, upload.file);
       } else if (upload?.preview && !upload.preview.startsWith('data:')) {
         // Preserve existing URLs for files that weren't changed
@@ -533,19 +564,19 @@ export default function AdminEmployees() {
         apiFormData.append(urlKey, upload.preview);
       }
     }
-    
+
     console.log("Form data being submitted with files", {
       departmentId: data.departmentId,
       selectedDepartmentId
     });
-    
+
     try {
       if (selectedEmployee) {
         await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, apiFormData, false);
       } else {
         await apiRequest('POST', '/api/admin/employees', apiFormData, false);
       }
-      
+
       queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
       setIsDialogOpen(false);
       setSelectedEmployee(null);
@@ -577,17 +608,17 @@ export default function AdminEmployees() {
               <>
                 {isPDF ? (
                   <div className="w-full h-full flex items-center justify-center bg-slate-100">
-                    <a 
-                      href={upload.preview} 
-                      target="_blank" 
+                    <a
+                      href={upload.preview}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="flex flex-col items-center justify-center text-primary hover:text-primary/80"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="12" y1="18" x2="12" y2="12"/>
-                        <line x1="9" y1="15" x2="15" y2="15"/>
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="12" y1="18" x2="12" y2="12" />
+                        <line x1="9" y1="15" x2="15" y2="15" />
                       </svg>
                       <span className="text-xs">View PDF</span>
                     </a>
@@ -657,7 +688,7 @@ export default function AdminEmployees() {
     try {
       // Create a workbook
       const wb = XLSX.utils.book_new();
-      
+
       // Format employee data for Excel
       const employeeData = filteredEmployees.map(emp => ({
         'EPID': emp.epid || '',
@@ -673,10 +704,10 @@ export default function AdminEmployees() {
         'PAN Number': emp.panNumber || '',
         'Aadhar Number': emp.aadharCard || ''
       }));
-      
+
       // Convert to worksheet
       const ws = XLSX.utils.json_to_sheet(employeeData);
-      
+
       // Set column widths
       const colWidths = [
         { wch: 10 }, // EPID
@@ -693,13 +724,13 @@ export default function AdminEmployees() {
         { wch: 15 }  // Aadhar Number
       ];
       ws['!cols'] = colWidths;
-      
+
       // Add the worksheet to the workbook
       XLSX.utils.book_append_sheet(wb, ws, "Employees");
-      
+
       // Generate Excel file and download
       XLSX.writeFile(wb, "employees.xlsx");
-      
+
       toast({
         title: "Success",
         description: `Downloaded ${filteredEmployees.length} employee records`
@@ -724,7 +755,7 @@ export default function AdminEmployees() {
         setDepartmentFilter(departmentFilter.filter(id => !invalidDepartments.includes(id)));
       }
     }
-    
+
     // Check if selected dealing assistant is still in filtered options
     if (dealingAssistantFilter.length > 0) {
       const invalidAssistants = dealingAssistantFilter.filter(
@@ -736,7 +767,7 @@ export default function AdminEmployees() {
         ));
       }
     }
-    
+
     // Check if selected reg no is still in filtered options
     if (regNoFilter.length > 0) {
       const invalidRegNos = regNoFilter.filter(
@@ -1006,7 +1037,7 @@ export default function AdminEmployees() {
                           {renderUploadPreview('aadharCard', 'Adhar Number')}
                           {renderUploadPreview('officeMemo', 'Office Memo')}
                           {renderUploadPreview('joiningReport', 'Joining Report')}
-                          {(employmentStatus === "Probation" || employmentStatus === "Temporary") && 
+                          {(employmentStatus === "Probation" || employmentStatus === "Temporary") &&
                             renderUploadPreview('termExtension', 'Term Extension Office Memo')
                           }
                         </div>
@@ -1106,7 +1137,7 @@ export default function AdminEmployees() {
                 />
               </div>
             </div>
-            
+
             {/* Top pagination */}
             {!isEmployeesLoading && filteredEmployees.length > 0 && (
               <div className="flex justify-between items-center mb-4">
@@ -1114,9 +1145,9 @@ export default function AdminEmployees() {
                   Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredEmployees.length)} of {filteredEmployees.length} employees
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
@@ -1125,9 +1156,9 @@ export default function AdminEmployees() {
                   <div className="text-sm">
                     Page {currentPage} of {totalPages}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
                   >
@@ -1144,22 +1175,112 @@ export default function AdminEmployees() {
             ) : filteredEmployees.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {searchTerm || departmentFilter.length > 0 || dealingAssistantFilter.length > 0 || regNoFilter.length > 0
-                  ? "No employees found matching your search criteria." 
+                  ? "No employees found matching your search criteria."
                   : "No employees found. Add your first employee using the button above."}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>EPID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Designation</TableHead>
-                    <TableHead>Dealing Assistant</TableHead>
-                    <TableHead>Reg.No.</TableHead>
-                    <TableHead>Employment Status</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Term Expiry Date</TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("epid")}
+                    >
+                      EPID
+                      {sortConfig.key === "epid" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("name")}
+                    >
+                      Name
+                      {sortConfig.key === "name" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("departmentName")}
+                    >
+                      Department
+                      {sortConfig.key === "departmentName" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("designation")}
+                    >
+                      Designation
+                      {sortConfig.key === "designation" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("salary_asstt")}
+                    >
+                      Dealing Assistant
+                      {sortConfig.key === "salary_asstt" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("salaryRegisterNo")}
+                    >
+                      Reg.No.
+                      {sortConfig.key === "salaryRegisterNo" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("employmentStatus")}
+                    >
+                      Employment Status
+                      {sortConfig.key === "employmentStatus" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("isActive")}
+                    >
+                      Status
+                      {sortConfig.key === "isActive" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("termExpiry")}
+                    >
+                      Term Expiry Date
+                      {sortConfig.key === "termExpiry" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1174,11 +1295,10 @@ export default function AdminEmployees() {
                       <TableCell>{employee.salaryRegisterNo || "-"}</TableCell>
                       <TableCell>{employee.employmentStatus}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          employee.isActive === "active" 
-                            ? "bg-green-100 text-green-800" 
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee.isActive === "active"
+                            ? "bg-green-100 text-green-800"
                             : "bg-red-100 text-red-800"
-                        }`}>
+                          }`}>
                           {employee.isActive === "active" ? "Active" : "Disabled"}
                         </span>
                       </TableCell>
@@ -1186,10 +1306,10 @@ export default function AdminEmployees() {
                         {(employee.employmentStatus === "Probation" ||
                           employee.employmentStatus === "Temporary") &&
                           employee.termExpiry ? (
-                            format(new Date(employee.termExpiry), "dd MMM yyyy")
-                          ) : (
-                            "-"
-                          )}
+                          format(new Date(employee.termExpiry), "dd MMM yyyy")
+                        ) : (
+                          "-"
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -1202,10 +1322,10 @@ export default function AdminEmployees() {
                             console.log("Employee aadharCard:", employee.aadharCard);
                             console.log("Employee departmentId:", employee.departmentId);
                             console.log("Employee departmentName:", employee.departmentName);
-                            
+
                             setSelectedEmployee(employee);
                             setEmploymentStatus(employee.employmentStatus);
-                            
+
                             // The department ID will be set by the useEffect when departments are available
                             setIsDialogOpen(true);
                           }}
@@ -1228,7 +1348,7 @@ export default function AdminEmployees() {
                 </TableBody>
               </Table>
             )}
-            
+
             {/* Bottom pagination */}
             {!isEmployeesLoading && filteredEmployees.length > 0 && (
               <div className="flex justify-between items-center mt-4">
@@ -1236,9 +1356,9 @@ export default function AdminEmployees() {
                   Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredEmployees.length)} of {filteredEmployees.length} employees
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
@@ -1247,9 +1367,9 @@ export default function AdminEmployees() {
                   <div className="text-sm">
                     Page {currentPage} of {totalPages}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
                   >
