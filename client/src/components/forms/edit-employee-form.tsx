@@ -11,7 +11,15 @@ import { Loader2 } from "lucide-react";
 import { z } from "zod";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
 import { FileUpload } from "@/components/ui/file-upload";
+import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
 
+// Import master data for designations and salary assistants
+import designationsData from "@/lib/designations.json";
+import salaryAssistantsData from "@/lib/salary-assistants.json";
+
+// Prepare options for searchable selects
+const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
+const salaryAssistantOptions: ComboboxOption[] = salaryAssistantsData as ComboboxOption[];
 
 interface EditEmployeeFormProps {
   employee: Employee;
@@ -24,7 +32,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
-  
+  const [selectedDesignation, setSelectedDesignation] = useState(employee.designation || "");
+  const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState(employee.salary_asstt || "");
+
   // File input references
   const panCardFileRef = useRef<HTMLInputElement>(null);
   const bankAccountFileRef = useRef<HTMLInputElement>(null);
@@ -32,7 +42,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const officeMemoFileRef = useRef<HTMLInputElement>(null);
   const joiningReportFileRef = useRef<HTMLInputElement>(null);
   const termExtensionFileRef = useRef<HTMLInputElement>(null);
-  
+
   // File state tracking
   const [selectedFiles, setSelectedFiles] = useState<{
     panCardDoc: File | null,
@@ -49,7 +59,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     joiningReportDoc: null,
     termExtensionDoc: null
   });
-  
+
   // File URL State - to handle file removal or replacement
   const [fileUrls, setFileUrls] = useState({
     panCardUrl: employee.panCardUrl || "",
@@ -59,22 +69,22 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     joiningReportUrl: employee.joiningReportUrl || "",
     termExtensionUrl: employee.termExtensionUrl || ""
   });
-  
+
   // File change handler
   const handleFileChange = async (file: File | null, fieldName: string) => {
     // Clear any previous errors for this field
     setFileErrors(prev => ({ ...prev, [fieldName]: "" }));
-    
+
     // Update selected files state
     setSelectedFiles(prev => ({
       ...prev,
       [fieldName]: file
     }));
-    
+
     if (!file) {
       // Clear the URL for this field
       let urlField: keyof typeof fileUrls;
-      
+
       // Special case for bank account proof which has a different URL field name
       if (fieldName === 'bankAccountDoc') {
         urlField = 'bankProofUrl';
@@ -82,31 +92,31 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         // Normal case: convert 'typeDoc' to 'typeUrl'
         urlField = `${fieldName.replace('Doc', '')}Url` as keyof typeof fileUrls;
       }
-      
+
       setFileUrls(prev => ({
         ...prev,
         [urlField]: ""
       }));
       return;
     }
-    
+
     // Validate that it's an image
     if (!isImageFile(file)) {
       setFileErrors(prev => ({ ...prev, [fieldName]: "Only image files are allowed" }));
       return;
     }
-    
+
     try {
       // Compress the image to WebP format
       const result = await compressImageToWebP(file);
-      
+
       // Log the conversion to verify WebP format
       console.log(`Converted ${file.name} to WebP: ${result.fileName}`);
       console.log(`Blob type: ${result.blob.type}`);
-      
+
       // Set the URL in fileUrls state
       let urlField: keyof typeof fileUrls;
-      
+
       // Special case for bank account proof which has a different URL field name
       if (fieldName === 'bankAccountDoc') {
         urlField = 'bankProofUrl';
@@ -114,25 +124,25 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         // Normal case: convert 'typeDoc' to 'typeUrl'
         urlField = `${fieldName.replace('Doc', '')}Url` as keyof typeof fileUrls;
       }
-      
+
       setFileUrls(prev => ({
         ...prev,
         [urlField]: result.url
       }));
-      
+
     } catch (error) {
       console.error(`Error processing ${fieldName}:`, error);
       setFileErrors(prev => ({ ...prev, [fieldName]: "Failed to process image" }));
     }
   };
-  
+
   // File removal handler
   const handleRemoveFile = async (fileType: string) => {
     console.log(`File being removed: ${fileType}`);
-    
+
     // Get the file URL field name based on the file type
     let urlField: keyof typeof fileUrls;
-    
+
     // Special case for bank account proof which has a different URL field name
     if (fileType === 'bankAccountDoc') {
       urlField = 'bankProofUrl';
@@ -140,22 +150,22 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       // Normal case: convert 'typeDoc' to 'typeUrl'
       urlField = `${fileType.replace('Doc', '')}Url` as keyof typeof fileUrls;
     }
-    
+
     const currentFileUrl = fileUrls[urlField];
-    
+
     // Directly check if in admin or department mode
     const isAdmin = window.location.pathname.includes('/admin');
     console.log("File deletion:", isAdmin ? "Admin mode" : "Department mode");
-    
+
     // If file URL exists, also remove from server
     if (currentFileUrl) {
       try {
         console.log(`Attempting to remove file from server: ${currentFileUrl}`);
-        
+
         // Add the complete endpoint URL here
         const apiUrl = `/api/upload`;
         console.log(`API endpoint: ${apiUrl}`);
-        
+
         const response = await fetch(apiUrl, {
           method: 'DELETE',
           headers: {
@@ -163,18 +173,18 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           },
           body: JSON.stringify({ fileUrl: currentFileUrl })
         });
-        
+
         // Log server response
         console.log(`Status code: ${response.status}`);
         console.log(`Status text: ${response.statusText}`);
-        
+
         // If response is not OK, log the error response text
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Server error response:', errorText);
           throw new Error(`Server response: ${response.status} ${response.statusText}. ${errorText}`);
         }
-        
+
         // When response is OK, parse JSON
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
@@ -198,20 +208,20 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           title: "Error",
           description: `Error removing file: ${error instanceof Error ? error.message : String(error)}`,
         });
-        
+
         // Clear file URL in form despite the error
         console.log('File URL being cleared in form');
       }
     }
-    
+
     // Clear file URL in form
     setFileUrls(prev => ({
       ...prev,
       [urlField]: ""
     }));
-    
+
     // Reset file input
-    switch(fileType) {
+    switch (fileType) {
       case 'panCardDoc':
         if (panCardFileRef.current) panCardFileRef.current.value = '';
         break;
@@ -231,19 +241,19 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         if (termExtensionFileRef.current) termExtensionFileRef.current.value = '';
         break;
     }
-    
+
     // Remove selected file
     setSelectedFiles(prev => ({
       ...prev,
       [fileType]: null
     }));
   };
-  
+
   // Create a modified schema that makes URL fields optional
   const editEmployeeSchema = insertEmployeeSchema.extend({
     panCardUrl: z.string().optional(),
     bankProofUrl: z.string().optional(),
-    aadharCardUrl: z.string().optional(), 
+    aadharCardUrl: z.string().optional(),
     officeMemoUrl: z.string().optional(),
     joiningReportUrl: z.string().optional(),
     termExtensionUrl: z.string().optional(),
@@ -278,7 +288,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       joiningDate: employee.joiningDate || "",
       joiningShift: employee.joiningShift || "FN",
       salaryRegisterNo: employee.salaryRegisterNo || "",
+      salary_asstt: employee.salary_asstt || "",
       departmentId: employee.departmentId,
+
       isActive: employee.isActive || "active",
       panCardUrl: employee.panCardUrl || "",
       bankProofUrl: employee.bankProofUrl || "",
@@ -290,7 +302,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   });
 
   const { register, handleSubmit, watch, formState: { errors } } = form;
-  
+
   // Watch employment status to conditionally show term expiry field
   const employmentStatus = watch("employmentStatus");
   const showTermExpiry = employmentStatus === "Probation" || employmentStatus === "Temporary";
@@ -306,46 +318,46 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     try {
       console.log("Form submission started with data:", data);
       setIsSubmitting(true);
-      
+
       // Get department info for department-specific API
       const departmentInfo = JSON.parse(localStorage.getItem("department") || "{}");
       const departmentId = departmentInfo.id || employee.departmentId;
-      
+
       // Determine if we're in admin or department context
       const isAdmin = window.location.pathname.includes('/admin');
       console.log("Context:", isAdmin ? "Admin" : "Department", "Department ID:", departmentId);
-      
+
       // अब रेफरेंस और स्टेट से फाइल्स का उपयोग करें
       const files = selectedFiles;
-      
+
       // Log file details for debugging
       console.log("Selected files:", Object.fromEntries(
         Object.entries(files).map(([key, file]) => [
-          key, 
-          file ? {name: file.name, type: file.type, size: file.size} : null
+          key,
+          file ? { name: file.name, type: file.type, size: file.size } : null
         ])
       ));
-      
+
       console.log("File URLs to preserve or clear:", fileUrls);
-      
+
       const hasFiles = !!(
-        files.panCardDoc || 
-        files.bankAccountDoc || 
-        files.aadharCardDoc || 
-        files.officeMemoDoc || 
+        files.panCardDoc ||
+        files.bankAccountDoc ||
+        files.aadharCardDoc ||
+        files.officeMemoDoc ||
         files.joiningReportDoc ||
         files.termExtensionDoc
       );
-      
+
       console.log("Has files:", hasFiles);
-      
+
       // If we have files, we need to handle them specially
       if (hasFiles) {
         console.log("Processing files for upload...");
-        
+
         // This is how Admin side does it - first upload each file, then update employee
         // We'll do the same for Department side
-        
+
         // First, upload each file and get the URLs
         let panCardUrlPromise = null;
         let bankProofUrlPromise = null;
@@ -353,7 +365,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         let officeMemoUrlPromise = null;
         let joiningReportUrlPromise = null;
         let termExtensionUrlPromise = null;
-        
+
         if (files.panCardDoc) {
           console.log("Uploading PAN Card:", files.panCardDoc.name);
           const panCardFormData = new FormData();
@@ -369,7 +381,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return result.fileUrl;
           });
         }
-        
+
         if (files.bankAccountDoc) {
           console.log("Uploading Bank Account proof:", files.bankAccountDoc.name);
           const bankFormData = new FormData();
@@ -385,7 +397,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return result.fileUrl;
           });
         }
-        
+
         if (files.aadharCardDoc) {
           console.log("Uploading Aadhar Card:", files.aadharCardDoc.name);
           const aadharFormData = new FormData();
@@ -401,7 +413,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return result.fileUrl;
           });
         }
-        
+
         if (files.officeMemoDoc) {
           console.log("Uploading Office Memo:", files.officeMemoDoc.name);
           const memoFormData = new FormData();
@@ -417,7 +429,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return result.fileUrl;
           });
         }
-        
+
         if (files.joiningReportDoc) {
           console.log("Uploading Joining Report:", files.joiningReportDoc.name);
           const reportFormData = new FormData();
@@ -433,7 +445,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return result.fileUrl;
           });
         }
-        
+
         if (files.termExtensionDoc) {
           console.log("Uploading Term Extension Office Memo:", files.termExtensionDoc.name);
           const termExtensionFormData = new FormData();
@@ -449,7 +461,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return result.fileUrl;
           });
         }
-        
+
         // Wait for all uploads to complete
         const results = await Promise.all([
           panCardUrlPromise || Promise.resolve(employee.panCardUrl || ""),
@@ -459,9 +471,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           joiningReportUrlPromise || Promise.resolve(employee.joiningReportUrl || ""),
           termExtensionUrlPromise || Promise.resolve(employee.termExtensionUrl || "")
         ]);
-        
+
         console.log("File uploads complete. Results:", results);
-        
+
         // Now prepare the update data with the file URLs
         const updateData = {
           epid: data.epid,
@@ -477,7 +489,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
           salaryRegisterNo: data.salaryRegisterNo || "",
+          salary_asstt: selectedSalaryAsstt || "",
           departmentId: Number(data.departmentId),
+
           panCardUrl: results[0] || fileUrls.panCardUrl,
           bankProofUrl: results[1] || fileUrls.bankProofUrl,
           aadharCardUrl: results[2] || fileUrls.aadharCardUrl,
@@ -485,14 +499,14 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           joiningReportUrl: results[4] || fileUrls.joiningReportUrl,
           termExtensionUrl: results[5] || fileUrls.termExtensionUrl
         };
-        
+
         // Select the appropriate endpoint
-        const apiEndpoint = isAdmin 
+        const apiEndpoint = isAdmin
           ? `/api/employees/${employee.id}`
           : `/api/departments/${departmentId}/employees/${employee.id}`;
-        
+
         console.log(`Making JSON PATCH request to ${apiEndpoint} with data:`, updateData);
-        
+
         // Update the employee with the file URLs
         const response = await fetch(apiEndpoint, {
           method: 'PATCH',
@@ -501,12 +515,12 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           },
           body: JSON.stringify(updateData),
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`API Error: ${response.status} - ${errorText}`);
         }
-        
+
         const updatedEmployee = await response.json();
         console.log("Employee updated successfully with files:", updatedEmployee);
       } else {
@@ -525,8 +539,10 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
           salaryRegisterNo: data.salaryRegisterNo || "",
+          salary_asstt: selectedSalaryAsstt || "",
           departmentId: Number(data.departmentId),
           isActive: data.isActive || "active",
+
           panCardUrl: fileUrls.panCardUrl,
           bankProofUrl: fileUrls.bankProofUrl,
           aadharCardUrl: fileUrls.aadharCardUrl,
@@ -534,14 +550,14 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           joiningReportUrl: fileUrls.joiningReportUrl,
           termExtensionUrl: fileUrls.termExtensionUrl
         };
-        
+
         // Select the appropriate endpoint
-        const apiEndpoint = isAdmin 
+        const apiEndpoint = isAdmin
           ? `/api/employees/${employee.id}`
           : `/api/departments/${departmentId}/employees/${employee.id}`;
-        
+
         console.log(`Making JSON PATCH request to ${apiEndpoint} with data:`, updateData);
-        
+
         const response = await fetch(apiEndpoint, {
           method: 'PATCH',
           headers: {
@@ -549,16 +565,16 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           },
           body: JSON.stringify(updateData),
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`API Error: ${response.status} - ${errorText}`);
         }
-        
+
         const updatedEmployee = await response.json();
         console.log("Employee updated successfully:", updatedEmployee);
       }
-      
+
       toast({
         title: "Success",
         description: "Employee updated successfully",
@@ -568,7 +584,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         console.log("Calling onSuccess callback");
         onSuccess();
       }
-      
+
       console.log("Closing dialog");
       onClose();
     } catch (error) {
@@ -617,9 +633,18 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Designation</label>
-                <input
-                  {...register("designation")}
-                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                <SearchableSelect
+                  options={designationOptions}
+                  value={selectedDesignation}
+                  onValueChange={(value) => {
+                    setSelectedDesignation(value);
+                    form.setValue("designation", value);
+                  }}
+                  placeholder="Select designation..."
+                  searchPlaceholder="Search designation..."
+                  emptyMessage="No designation found."
+                  className="bg-white"
+                  disabled={isSubmitting}
                 />
                 {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation.message}</p>}
               </div>
@@ -638,7 +663,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 </select>
                 {errors.employmentStatus && <p className="text-red-500 text-xs mt-1">{errors.employmentStatus.message}</p>}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Pay Level</label>
                 <select
@@ -665,11 +690,10 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                       value="active"
                       className="sr-only"
                     />
-                    <div className={`w-4 h-4 rounded-full border-2 mr-2 ${
-                      watch("isActive") === "active" 
-                        ? "bg-green-500 border-green-500" 
-                        : "border-gray-300"
-                    }`}>
+                    <div className={`w-4 h-4 rounded-full border-2 mr-2 ${watch("isActive") === "active"
+                      ? "bg-green-500 border-green-500"
+                      : "border-gray-300"
+                      }`}>
                       {watch("isActive") === "active" && (
                         <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
                       )}
@@ -683,11 +707,10 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                       value="disabled"
                       className="sr-only"
                     />
-                    <div className={`w-4 h-4 rounded-full border-2 mr-2 ${
-                      watch("isActive") === "disabled" 
-                        ? "bg-red-500 border-red-500" 
-                        : "border-gray-300"
-                    }`}>
+                    <div className={`w-4 h-4 rounded-full border-2 mr-2 ${watch("isActive") === "disabled"
+                      ? "bg-red-500 border-red-500"
+                      : "border-gray-300"
+                      }`}>
                       {watch("isActive") === "disabled" && (
                         <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
                       )}
@@ -697,13 +720,31 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 </div>
                 {errors.isActive && <p className="text-red-500 text-xs mt-1">{errors.isActive.message}</p>}
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Salary Assistant</label>
+                <SearchableSelect
+                  options={salaryAssistantOptions}
+                  value={selectedSalaryAsstt}
+                  onValueChange={(value) => {
+                    setSelectedSalaryAsstt(value);
+                    form.setValue("salary_asstt" as any, value);
+                  }}
+                  placeholder="Select salary assistant..."
+                  searchPlaceholder="Search salary assistant..."
+                  emptyMessage="No salary assistant found."
+                  className="bg-white"
+                  disabled={isSubmitting}
+                />
+              </div>
             </div>
           </div>
+
 
           {/* Document upload fields */}
           <div className="bg-slate-50 p-4 rounded-lg">
             <h3 className="text-md font-medium mb-4 text-slate-700 border-b pb-2">Documents</h3>
-            
+
             {/* Term Expiry Date and Term Extension Letter - Only for non-Permanent employees */}
             {watch("employmentStatus") !== "Permanent" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 pb-6 border-b">
@@ -733,7 +774,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 )}
               </div>
             )}
-            
+
             {/* Other document fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
@@ -744,7 +785,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 />
                 {errors.panNumber && <p className="text-red-500 text-xs mt-1">{errors.panNumber.message}</p>}
               </div>
-              
+
               <div className="border-l pl-4">
                 <FileUpload
                   label="PAN Card"
@@ -766,7 +807,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 />
                 {errors.bankAccount && <p className="text-red-500 text-xs mt-1">{errors.bankAccount.message}</p>}
               </div>
-              
+
               <div className="border-l pl-4">
                 <FileUpload
                   label="Bank Account Proof"
@@ -788,7 +829,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 />
                 {errors.aadharCard && <p className="text-red-500 text-xs mt-1">{errors.aadharCard.message}</p>}
               </div>
-              
+
               <div className="border-l pl-4">
                 <FileUpload
                   label="Aadhar Card"
@@ -801,7 +842,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                   errorMessage={fileErrors.aadharCardDoc}
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Office Memo No</label>
                 <input
@@ -851,16 +892,16 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
           {/* Submit Button */}
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={onClose}
               className="w-32 px-4 py-2"
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isSubmitting}
               className="w-32 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2"
             >

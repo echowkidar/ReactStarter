@@ -1,0 +1,8082 @@
+[
+  {
+    "value": "ADM106",
+    "label": "ADM106 - DEAN F/o AGRICULTURAL SCIENCE"
+  },
+  {
+    "value": "ADM106DW",
+    "label": "ADM106DW - DEAN F/o AGRICULTURAL SCIENCE"
+  },
+  {
+    "value": "ADM106NT",
+    "label": "ADM106NT - DEAN F/o AGRICULTURAL SCIENCE"
+  },
+  {
+    "value": "ADM106T",
+    "label": "ADM106T - DEAN F/o AGRICULTURAL SCIENCE"
+  },
+  {
+    "value": "ADM106Z",
+    "label": "ADM106Z - DEAN F/o AGRICULTURAL SCIENCE"
+  },
+  {
+    "value": "ADM13A",
+    "label": "ADM13A - DEAN F/o LAW"
+  },
+  {
+    "value": "ADM13AZ",
+    "label": "ADM13AZ - DEAN F/o LAW"
+  },
+  {
+    "value": "ADM13DW",
+    "label": "ADM13DW - DEAN F/o LAW"
+  },
+  {
+    "value": "ADM200",
+    "label": "ADM200 - PAYMENT OF CONSULTANT"
+  },
+  {
+    "value": "ADM22L",
+    "label": "ADM22L - PUBLIC RELATIONS OFFICE"
+  },
+  {
+    "value": "ADM22R",
+    "label": "ADM22R - PUBLIC RELATIONS OFFICE"
+  },
+  {
+    "value": "ADM22RDW",
+    "label": "ADM22RDW - PUBLIC RELATIONS OFFICE"
+  },
+  {
+    "value": "ADM22RNT",
+    "label": "ADM22RNT - PUBLIC RELATIONS OFFICE"
+  },
+  {
+    "value": "ADM22RZ",
+    "label": "ADM22RZ - PUBLIC RELATIONS OFFICE"
+  },
+  {
+    "value": "ADM23",
+    "label": "ADM23 - VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23A",
+    "label": "ADM23A - PRO-VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23ADW",
+    "label": "ADM23ADW - PRO-VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23ANT",
+    "label": "ADM23ANT - PRO-VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23AZ",
+    "label": "ADM23AZ - PRO-VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23AZY",
+    "label": "ADM23AZY - PRO-VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23B",
+    "label": "ADM23B - DIRECTOR ACADEMIC PROGRAMME"
+  },
+  {
+    "value": "ADM23C",
+    "label": "ADM23C - PLATINUM JUBLEE CELEBRATION"
+  },
+  {
+    "value": "ADM23PVC",
+    "label": "ADM23PVC - PRO-VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23VC",
+    "label": "ADM23VC - VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23VCDW",
+    "label": "ADM23VCDW - VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23VCNT",
+    "label": "ADM23VCNT - VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23Z",
+    "label": "ADM23Z - VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM23ZY",
+    "label": "ADM23ZY - VICE CHANCELLOR'S OFFICE"
+  },
+  {
+    "value": "ADM24",
+    "label": "ADM24 - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24A",
+    "label": "ADM24A - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24B",
+    "label": "ADM24B - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24C",
+    "label": "ADM24C - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24DW",
+    "label": "ADM24DW - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24E",
+    "label": "ADM24E - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24HDW",
+    "label": "ADM24HDW - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24HY",
+    "label": "ADM24HY - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24HZ",
+    "label": "ADM24HZ - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24I",
+    "label": "ADM24I - INNOVATION COUNCIL"
+  },
+  {
+    "value": "ADM24IDW",
+    "label": "ADM24IDW - INNOVATION COUNCIL"
+  },
+  {
+    "value": "ADM24IZ",
+    "label": "ADM24IZ - INNOVATION COUNCIL"
+  },
+  {
+    "value": "ADM24L",
+    "label": "ADM24L - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24N",
+    "label": "ADM24N - N A A C"
+  },
+  {
+    "value": "ADM24NDW",
+    "label": "ADM24NDW - N A A C"
+  },
+  {
+    "value": "ADM24NT",
+    "label": "ADM24NT - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24NY",
+    "label": "ADM24NY - N A A C"
+  },
+  {
+    "value": "ADM24NZ",
+    "label": "ADM24NZ - N A A C"
+  },
+  {
+    "value": "ADM24Q",
+    "label": "ADM24Q - INTERNAL QUALITY ASSU.CELL"
+  },
+  {
+    "value": "ADM24QNT",
+    "label": "ADM24QNT - INTERNAL QUALITY ASSU.CELL"
+  },
+  {
+    "value": "ADM24R",
+    "label": "ADM24R - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24X",
+    "label": "ADM24X - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24Y",
+    "label": "ADM24Y - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM24Z",
+    "label": "ADM24Z - REGISTRAR'S OFFICE"
+  },
+  {
+    "value": "ADM25",
+    "label": "ADM25 - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25A",
+    "label": "ADM25A - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25AI",
+    "label": "ADM25AI - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25AII",
+    "label": "ADM25AII - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25B",
+    "label": "ADM25B - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25BI",
+    "label": "ADM25BI - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25BII",
+    "label": "ADM25BII - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25BIII",
+    "label": "ADM25BIII - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25C",
+    "label": "ADM25C - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25CI",
+    "label": "ADM25CI - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25CII",
+    "label": "ADM25CII - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25CIII",
+    "label": "ADM25CIII - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25D",
+    "label": "ADM25D - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25DI",
+    "label": "ADM25DI - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25DII",
+    "label": "ADM25DII - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25DIII",
+    "label": "ADM25DIII - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25IDW",
+    "label": "ADM25IDW - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25IIDW",
+    "label": "ADM25IIDW - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25LAP",
+    "label": "ADM25LAP - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25R",
+    "label": "ADM25R - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25X",
+    "label": "ADM25X - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25XNT",
+    "label": "ADM25XNT - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25Y",
+    "label": "ADM25Y - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM25Z",
+    "label": "ADM25Z - FINANCE & ACCOUNTS DEPARTMENT"
+  },
+  {
+    "value": "ADM26",
+    "label": "ADM26 - INTERNAL AUDIT OFFICE"
+  },
+  {
+    "value": "ADM26DW",
+    "label": "ADM26DW - INTERNAL AUDIT OFFICE"
+  },
+  {
+    "value": "ADM26NT",
+    "label": "ADM26NT - INTERNAL AUDIT OFFICE"
+  },
+  {
+    "value": "ADM28",
+    "label": "ADM28 - DEAN F/o THEOLOGY"
+  },
+  {
+    "value": "ADM28NT",
+    "label": "ADM28NT - DEAN F/o THEOLOGY"
+  },
+  {
+    "value": "ADM29",
+    "label": "ADM29 - DEAN F/o ARTS"
+  },
+  {
+    "value": "ADM29A",
+    "label": "ADM29A - DEAN F/o SOCIAL SCIENCE"
+  },
+  {
+    "value": "ADM29ADW",
+    "label": "ADM29ADW - DEAN F/o SOCIAL SCIENCE"
+  },
+  {
+    "value": "ADM29ANT",
+    "label": "ADM29ANT - DEAN F/o SOCIAL SCIENCE"
+  },
+  {
+    "value": "ADM29AY",
+    "label": "ADM29AY - DEAN F/o SOCIAL SCIENCE"
+  },
+  {
+    "value": "ADM29AZ",
+    "label": "ADM29AZ - DEAN F/o SOCIAL SCIENCE"
+  },
+  {
+    "value": "ADM29DW",
+    "label": "ADM29DW - DEAN F/o ARTS"
+  },
+  {
+    "value": "ADM29NT",
+    "label": "ADM29NT - DEAN F/o ARTS"
+  },
+  {
+    "value": "ADM30",
+    "label": "ADM30 - DEAN F/o SCIENCE"
+  },
+  {
+    "value": "ADM30DW",
+    "label": "ADM30DW - DEAN F/o SCIENCE"
+  },
+  {
+    "value": "ADM30NT",
+    "label": "ADM30NT - DEAN F/o SCIENCE"
+  },
+  {
+    "value": "ADM30Y",
+    "label": "ADM30Y - DEAN F/o SCIENCE"
+  },
+  {
+    "value": "ADM30Z",
+    "label": "ADM30Z - DEAN F/o SCIENCE"
+  },
+  {
+    "value": "ADM30ZI",
+    "label": "ADM30ZI - DEAN F/o SCIENCE"
+  },
+  {
+    "value": "ADM31",
+    "label": "ADM31 - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31A",
+    "label": "ADM31A - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31ANT",
+    "label": "ADM31ANT - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31APT",
+    "label": "ADM31APT - REVOLVING FUND"
+  },
+  {
+    "value": "ADM31B",
+    "label": "ADM31B - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31BNT",
+    "label": "ADM31BNT - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31BPT",
+    "label": "ADM31BPT - REVOLVING FUND"
+  },
+  {
+    "value": "ADM31C",
+    "label": "ADM31C - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31CNT",
+    "label": "ADM31CNT - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31CPT",
+    "label": "ADM31CPT - REVOLVING FUND"
+  },
+  {
+    "value": "ADM31D",
+    "label": "ADM31D - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31DNT",
+    "label": "ADM31DNT - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31DW",
+    "label": "ADM31DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E",
+    "label": "ADM31E - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E10Y",
+    "label": "ADM31E10Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E10Z",
+    "label": "ADM31E10Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E11Z",
+    "label": "ADM31E11Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E12Z",
+    "label": "ADM31E12Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E13Y",
+    "label": "ADM31E13Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E13Z",
+    "label": "ADM31E13Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E14Z",
+    "label": "ADM31E14Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E1Y",
+    "label": "ADM31E1Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E1Z",
+    "label": "ADM31E1Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E2Y",
+    "label": "ADM31E2Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E2Z",
+    "label": "ADM31E2Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E3Y",
+    "label": "ADM31E3Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E3Z",
+    "label": "ADM31E3Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E4Y",
+    "label": "ADM31E4Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E4Z",
+    "label": "ADM31E4Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E5Y",
+    "label": "ADM31E5Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E5Z",
+    "label": "ADM31E5Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E6Y",
+    "label": "ADM31E6Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E6Z",
+    "label": "ADM31E6Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E7Y",
+    "label": "ADM31E7Y - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E7Z",
+    "label": "ADM31E7Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E8Z",
+    "label": "ADM31E8Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31E9Z",
+    "label": "ADM31E9Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31EIZ",
+    "label": "ADM31EIZ - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31EIZDW",
+    "label": "ADM31EIZDW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31ENT",
+    "label": "ADM31ENT - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31ER1Z",
+    "label": "ADM31ER1Z - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31ERZ",
+    "label": "ADM31ERZ - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31F",
+    "label": "ADM31F - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31FF",
+    "label": "ADM31FF - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31FFDW",
+    "label": "ADM31FFDW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31FFY",
+    "label": "ADM31FFY - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31FNT",
+    "label": "ADM31FNT - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31GI",
+    "label": "ADM31GI - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31GII",
+    "label": "ADM31GII - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31GIII",
+    "label": "ADM31GIII - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31L",
+    "label": "ADM31L - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31NT",
+    "label": "ADM31NT - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31T",
+    "label": "ADM31T - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z10DW",
+    "label": "ADM31Z10DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z11DW",
+    "label": "ADM31Z11DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z12DW",
+    "label": "ADM31Z12DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z13DW",
+    "label": "ADM31Z13DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z14DW",
+    "label": "ADM31Z14DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z1DW",
+    "label": "ADM31Z1DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z2DW",
+    "label": "ADM31Z2DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z3DW",
+    "label": "ADM31Z3DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z4DW",
+    "label": "ADM31Z4DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z5DW",
+    "label": "ADM31Z5DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z6DW",
+    "label": "ADM31Z6DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z7DW",
+    "label": "ADM31Z7DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z8DW",
+    "label": "ADM31Z8DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM31Z9DW",
+    "label": "ADM31Z9DW - PROCTOR'S OFFICE"
+  },
+  {
+    "value": "ADM38CARET",
+    "label": "ADM38CARET - C.A.R.E.T. (ZHCET)"
+  },
+  {
+    "value": "ADM38PI",
+    "label": "ADM38PI - PRINCIPAL OFFICE ENGINEERING"
+  },
+  {
+    "value": "ADM38PII",
+    "label": "ADM38PII - PRINCIPAL OFFICE ENGINEERING"
+  },
+  {
+    "value": "ADM38PIII",
+    "label": "ADM38PIII - DEAN F/o ENGINEERING & TECH."
+  },
+  {
+    "value": "ADM38PIIIY",
+    "label": "ADM38PIIIY - DEAN F/o ENGINEERING & TECH."
+  },
+  {
+    "value": "ADM38PIIZ",
+    "label": "ADM38PIIZ - PRINCIPAL OFFICE ENGINEERING"
+  },
+  {
+    "value": "ADM38PIU",
+    "label": "ADM38PIU - Z H COLLEGE OF E&T"
+  },
+  {
+    "value": "ADM38PIUG",
+    "label": "ADM38PIUG - PRINCIPAL OFFICE ENGINEERING"
+  },
+  {
+    "value": "ADM38PIUY",
+    "label": "ADM38PIUY - Z H COLLEGE OF E&T"
+  },
+  {
+    "value": "ADM38PIZ",
+    "label": "ADM38PIZ - DEAN F/o ENGINEERING & TECH."
+  },
+  {
+    "value": "ADM38TPIZ",
+    "label": "ADM38TPIZ - TRAINING & PLACEMENT OFFICE"
+  },
+  {
+    "value": "ADM38ZH",
+    "label": "ADM38ZH - Z H COLLEGE OF E&T"
+  },
+  {
+    "value": "ADM40",
+    "label": "ADM40 - DEAN F/o UNANI MEDICINE"
+  },
+  {
+    "value": "ADM40NT",
+    "label": "ADM40NT - DEAN F/o UNANI MEDICINE"
+  },
+  {
+    "value": "ADM53",
+    "label": "ADM53 - LEGAL REMEMBRENCER'S OFFICE"
+  },
+  {
+    "value": "ADM53DW",
+    "label": "ADM53DW - LEGAL REMEMBRENCER'S OFFICE"
+  },
+  {
+    "value": "ADM53NT",
+    "label": "ADM53NT - LEGAL REMEMBRENCER'S OFFICE"
+  },
+  {
+    "value": "ADM53Y",
+    "label": "ADM53Y - LEGAL REMEMBRENCER'S OFFICE"
+  },
+  {
+    "value": "ADM53Z",
+    "label": "ADM53Z - LEGAL REMEMBRENCER'S OFFICE"
+  },
+  {
+    "value": "ADM69",
+    "label": "ADM69 - J N M C PRINCIPAL'S OFFICE"
+  },
+  {
+    "value": "ADM69A",
+    "label": "ADM69A - DEAN F/o MEDICINE"
+  },
+  {
+    "value": "ADM69ADW",
+    "label": "ADM69ADW - DEAN F/o MEDICINE"
+  },
+  {
+    "value": "ADM69ANT",
+    "label": "ADM69ANT - DEAN F/o MEDICINE"
+  },
+  {
+    "value": "ADM69AZ",
+    "label": "ADM69AZ - DEAN F/o MEDICINE"
+  },
+  {
+    "value": "ADM69DW",
+    "label": "ADM69DW - J N M C PRINCIPAL'S OFFICE"
+  },
+  {
+    "value": "ADM69I",
+    "label": "ADM69I - UNY.SOPH.INST.FACILITY (USIF)"
+  },
+  {
+    "value": "ADM69IDW",
+    "label": "ADM69IDW - UNY.SOPH.INST.FACILITY (USIF)"
+  },
+  {
+    "value": "ADM69IL",
+    "label": "ADM69IL - UNY.SOPH.INST.FACILITY (USIF)"
+  },
+  {
+    "value": "ADM69INT",
+    "label": "ADM69INT - UNY.SOPH.INST.FACILITY (USIF)"
+  },
+  {
+    "value": "ADM69L",
+    "label": "ADM69L - J N M C PRINCIPAL'S OFFICE"
+  },
+  {
+    "value": "ADM69NT",
+    "label": "ADM69NT - J N M C PRINCIPAL'S OFFICE"
+  },
+  {
+    "value": "ADM69U",
+    "label": "ADM69U - J N M C PRINCIPAL'S OFFICE"
+  },
+  {
+    "value": "ADM69Y",
+    "label": "ADM69Y - J N M C PRINCIPAL'S OFFICE"
+  },
+  {
+    "value": "ADM69Z",
+    "label": "ADM69Z - J N M C PRINCIPAL'S OFFICE"
+  },
+  {
+    "value": "ADM8AII",
+    "label": "ADM8AII - DEAN F/o COMMERCE"
+  },
+  {
+    "value": "ADM8AIIDW",
+    "label": "ADM8AIIDW - DEAN F/o COMMERCE"
+  },
+  {
+    "value": "ADM8AIINT",
+    "label": "ADM8AIINT - DEAN F/o COMMERCE"
+  },
+  {
+    "value": "ADM8AIIY",
+    "label": "ADM8AIIY - DEAN F/o COMMERCE"
+  },
+  {
+    "value": "ADM8AIIZ",
+    "label": "ADM8AIIZ - DEAN F/o COMMERCE"
+  },
+  {
+    "value": "ADM96",
+    "label": "ADM96 - DEAN F/o LIFE SCIENCE"
+  },
+  {
+    "value": "ADM96NT",
+    "label": "ADM96NT - DEAN F/o LIFE SCIENCE"
+  },
+  {
+    "value": "AEX24EI",
+    "label": "AEX24EI - CONTROLLER'S OFFICE [ADM.]"
+  },
+  {
+    "value": "AEX24EIDW",
+    "label": "AEX24EIDW - CONTROLLER'S OFFICE [ADM.]"
+  },
+  {
+    "value": "AEX24EINT",
+    "label": "AEX24EINT - CONTROLLER'S OFFICE [ADM.]"
+  },
+  {
+    "value": "AEX24EIY",
+    "label": "AEX24EIY - CONTROLLER'S OFFICE [ADM.]"
+  },
+  {
+    "value": "AEX24EIZ",
+    "label": "AEX24EIZ - CONTROLLER'S OFFICE [ADM.]"
+  },
+  {
+    "value": "AEX24EL",
+    "label": "AEX24EL - CONTROLLER'S OFFICE [ADM.]"
+  },
+  {
+    "value": "AEX24F",
+    "label": "AEX24F - CONTROLLER'S OFFICE [EXAM]"
+  },
+  {
+    "value": "AEX24FDW",
+    "label": "AEX24FDW - CONTROLLER'S OFFICE [EXAM]"
+  },
+  {
+    "value": "AEX24FI",
+    "label": "AEX24FI - CONTROLLER'S OFFICE [EXAM]"
+  },
+  {
+    "value": "AEX24FL",
+    "label": "AEX24FL - CONTROLLER'S OFFICE [EXAM]"
+  },
+  {
+    "value": "AEX24FNT",
+    "label": "AEX24FNT - CONTROLLER'S OFFICE [EXAM]"
+  },
+  {
+    "value": "AEX24FY",
+    "label": "AEX24FY - CONTROLLER'S OFFICE [EXAM]"
+  },
+  {
+    "value": "AEX24FZ",
+    "label": "AEX24FZ - CONTROLLER'S OFFICE [EXAM]"
+  },
+  {
+    "value": "AEX44A",
+    "label": "AEX44A - RESULT PROCESSING UNIT"
+  },
+  {
+    "value": "AEX44ANT",
+    "label": "AEX44ANT - RESULT PROCESSING UNIT"
+  },
+  {
+    "value": "AEX44DW",
+    "label": "AEX44DW - RESULT PROCESSING UNIT"
+  },
+  {
+    "value": "AEX49",
+    "label": "AEX49 - STUDENT'S UNION"
+  },
+  {
+    "value": "AGR1063DW",
+    "label": "AGR1063DW - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106I",
+    "label": "AGR106I - AGRIC.ECONOMICS & BUS.MANAG."
+  },
+  {
+    "value": "AGR106II",
+    "label": "AGR106II - POST HARVEST ENGG.& TECHNOLOGY"
+  },
+  {
+    "value": "AGR106III",
+    "label": "AGR106III - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106IIIDW",
+    "label": "AGR106IIIDW - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106IIIG",
+    "label": "AGR106IIIG - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106IIIL",
+    "label": "AGR106IIIL - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106IIIU",
+    "label": "AGR106IIIU - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106IIIY",
+    "label": "AGR106IIIY - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106IIIZ",
+    "label": "AGR106IIIZ - AGRICULTURAL MICRO BIOLOGY"
+  },
+  {
+    "value": "AGR106IIL",
+    "label": "AGR106IIL - POST HARVEST ENGG.& TECHNOLOGY"
+  },
+  {
+    "value": "AGR106IIT",
+    "label": "AGR106IIT - POST HARVEST ENGG.& TECHNOLOGY"
+  },
+  {
+    "value": "AGR106IIU",
+    "label": "AGR106IIU - POST HARVEST ENGG.& TECHNOLOGY"
+  },
+  {
+    "value": "AGR106IIUG",
+    "label": "AGR106IIUG - POST HARVEST ENGG.& TECHNOLOGY"
+  },
+  {
+    "value": "AGR106IIUX",
+    "label": "AGR106IIUX - POST HARVEST ENGG.& TECHNOLOGY"
+  },
+  {
+    "value": "AGR106IIY",
+    "label": "AGR106IIY - POST HARVEST ENGG.& TECHNOLOGY"
+  },
+  {
+    "value": "AGR106IT",
+    "label": "AGR106IT - AGRIC.ECONOMICS & BUS.MANAG."
+  },
+  {
+    "value": "AGR106IU",
+    "label": "AGR106IU - AGRIC.ECONOMICS & BUS.MANAG."
+  },
+  {
+    "value": "AGR106IV",
+    "label": "AGR106IV - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IVDP",
+    "label": "AGR106IVDP - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IVDW",
+    "label": "AGR106IVDW - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IVL",
+    "label": "AGR106IVL - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IVT",
+    "label": "AGR106IVT - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IVU",
+    "label": "AGR106IVU - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IVZ",
+    "label": "AGR106IVZ - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IVZI",
+    "label": "AGR106IVZI - PLANT PROTECTION"
+  },
+  {
+    "value": "AGR106IZ",
+    "label": "AGR106IZ - AGRIC.ECONOMICS & BUS.MANAG."
+  },
+  {
+    "value": "AGR106VL",
+    "label": "AGR106VL - HOME SCIENCE"
+  },
+  {
+    "value": "AGR106VT",
+    "label": "AGR106VT - HOME SCIENCE"
+  },
+  {
+    "value": "AGR106VU",
+    "label": "AGR106VU - HOME SCIENCE"
+  },
+  {
+    "value": "AGR106VYI",
+    "label": "AGR106VYI - HOME SCIENCE"
+  },
+  {
+    "value": "ART10I",
+    "label": "ART10I - PERSIAN"
+  },
+  {
+    "value": "ART10IDW",
+    "label": "ART10IDW - PERSIAN"
+  },
+  {
+    "value": "ART10II",
+    "label": "ART10II - PERSIAN"
+  },
+  {
+    "value": "ART10IIDW",
+    "label": "ART10IIDW - INSTITUTE OF PERSIAN RESEARCH"
+  },
+  {
+    "value": "ART10IPU",
+    "label": "ART10IPU - INSTITUTE OF PERSIAN RESEARCH"
+  },
+  {
+    "value": "ART10IT",
+    "label": "ART10IT - PERSIAN"
+  },
+  {
+    "value": "ART10IU",
+    "label": "ART10IU - PERSIAN"
+  },
+  {
+    "value": "ART10IUG",
+    "label": "ART10IUG - INSTITUTE OF PERSIAN RESEARCH"
+  },
+  {
+    "value": "ART10IY",
+    "label": "ART10IY - PERSIAN"
+  },
+  {
+    "value": "ART10IZ",
+    "label": "ART10IZ - INSTITUTE OF PERSIAN RESEARCH"
+  },
+  {
+    "value": "ART10IZY",
+    "label": "ART10IZY - INSTITUTE OF PERSIAN RESEARCH"
+  },
+  {
+    "value": "ART10Z",
+    "label": "ART10Z - PERSIAN"
+  },
+  {
+    "value": "ART11A",
+    "label": "ART11A - URDU ACADEMY"
+  },
+  {
+    "value": "ART11ADW",
+    "label": "ART11ADW - URDU ACADEMY"
+  },
+  {
+    "value": "ART11ANT",
+    "label": "ART11ANT - URDU ACADEMY"
+  },
+  {
+    "value": "ART11AY",
+    "label": "ART11AY - URDU ACADEMY"
+  },
+  {
+    "value": "ART11I",
+    "label": "ART11I - URDU"
+  },
+  {
+    "value": "ART11IA",
+    "label": "ART11IA - URDU ACADEMY"
+  },
+  {
+    "value": "ART11IAU",
+    "label": "ART11IAU - URDU ACADEMY"
+  },
+  {
+    "value": "ART11IDW",
+    "label": "ART11IDW - URDU"
+  },
+  {
+    "value": "ART11II",
+    "label": "ART11II - URDU"
+  },
+  {
+    "value": "ART11IIZ",
+    "label": "ART11IIZ - URDU"
+  },
+  {
+    "value": "ART11INT",
+    "label": "ART11INT - URDU"
+  },
+  {
+    "value": "ART11IU",
+    "label": "ART11IU - URDU"
+  },
+  {
+    "value": "ART11IUG",
+    "label": "ART11IUG - URDU"
+  },
+  {
+    "value": "ART11IUT",
+    "label": "ART11IUT - URDU"
+  },
+  {
+    "value": "ART11IY",
+    "label": "ART11IY - URDU"
+  },
+  {
+    "value": "ART11SA",
+    "label": "ART11SA - URDU ACADEMY"
+  },
+  {
+    "value": "ART12A",
+    "label": "ART12A - SANSKRIT"
+  },
+  {
+    "value": "ART12ADW",
+    "label": "ART12ADW - SANSKRIT"
+  },
+  {
+    "value": "ART12ANT",
+    "label": "ART12ANT - SANSKRIT"
+  },
+  {
+    "value": "ART12AT",
+    "label": "ART12AT - SANSKRIT"
+  },
+  {
+    "value": "ART12AU",
+    "label": "ART12AU - SANSKRIT"
+  },
+  {
+    "value": "ART12AY",
+    "label": "ART12AY - SANSKRIT"
+  },
+  {
+    "value": "ART12AZ",
+    "label": "ART12AZ - SANSKRIT"
+  },
+  {
+    "value": "ART12C",
+    "label": "ART12C - MODERN INDIAN LANGUAGES"
+  },
+  {
+    "value": "ART12CDW",
+    "label": "ART12CDW - MODERN INDIAN LANGUAGES"
+  },
+  {
+    "value": "ART12CT",
+    "label": "ART12CT - MODERN INDIAN LANGUAGES"
+  },
+  {
+    "value": "ART12CU",
+    "label": "ART12CU - MODERN INDIAN LANGUAGES"
+  },
+  {
+    "value": "ART12CY",
+    "label": "ART12CY - MODERN INDIAN LANGUAGES"
+  },
+  {
+    "value": "ART12CZ",
+    "label": "ART12CZ - MODERN INDIAN LANGUAGES"
+  },
+  {
+    "value": "ART12DU",
+    "label": "ART12DU - C.COMP.STUDIES OF IND.LAN.CUL."
+  },
+  {
+    "value": "ART12DZ",
+    "label": "ART12DZ - C.COMP.STUDIES OF IND.LAN.CUL."
+  },
+  {
+    "value": "ART12II",
+    "label": "ART12II - HINDI"
+  },
+  {
+    "value": "ART12IIDW",
+    "label": "ART12IIDW - HINDI"
+  },
+  {
+    "value": "ART12IINT",
+    "label": "ART12IINT - HINDI"
+  },
+  {
+    "value": "ART12IIY",
+    "label": "ART12IIY - HINDI"
+  },
+  {
+    "value": "ART12IU",
+    "label": "ART12IU - HINDI"
+  },
+  {
+    "value": "ART12IUT",
+    "label": "ART12IUT - HINDI"
+  },
+  {
+    "value": "ART12OL",
+    "label": "ART12OL - OFF.LANG.(HINDI) IMP.COMMITTEE"
+  },
+  {
+    "value": "ART12OLDW",
+    "label": "ART12OLDW - OFF.LANG.(HINDI) IMP.COMMITTEE"
+  },
+  {
+    "value": "ART12UG",
+    "label": "ART12UG - HINDI"
+  },
+  {
+    "value": "ART12Z",
+    "label": "ART12Z - HINDI"
+  },
+  {
+    "value": "ART14D",
+    "label": "ART14D - FINE ARTS"
+  },
+  {
+    "value": "ART14DDW",
+    "label": "ART14DDW - FINE ARTS"
+  },
+  {
+    "value": "ART14DG",
+    "label": "ART14DG - FINE ARTS"
+  },
+  {
+    "value": "ART14DNT",
+    "label": "ART14DNT - FINE ARTS"
+  },
+  {
+    "value": "ART14DT",
+    "label": "ART14DT - FINE ARTS"
+  },
+  {
+    "value": "ART14DU",
+    "label": "ART14DU - FINE ARTS"
+  },
+  {
+    "value": "ART14DY",
+    "label": "ART14DY - FINE ARTS"
+  },
+  {
+    "value": "ART14DZ",
+    "label": "ART14DZ - FINE ARTS"
+  },
+  {
+    "value": "ART37B",
+    "label": "ART37B - LINGUISTICS"
+  },
+  {
+    "value": "ART37BDW",
+    "label": "ART37BDW - LINGUISTICS"
+  },
+  {
+    "value": "ART37BNT",
+    "label": "ART37BNT - LINGUISTICS"
+  },
+  {
+    "value": "ART37BT",
+    "label": "ART37BT - LINGUISTICS"
+  },
+  {
+    "value": "ART37BU",
+    "label": "ART37BU - LINGUISTICS"
+  },
+  {
+    "value": "ART37BUG",
+    "label": "ART37BUG - LINGUISTICS"
+  },
+  {
+    "value": "ART37BY",
+    "label": "ART37BY - LINGUISTICS"
+  },
+  {
+    "value": "ART37BZ",
+    "label": "ART37BZ - LINGUISTICS"
+  },
+  {
+    "value": "ART3II",
+    "label": "ART3II - ENGLISH"
+  },
+  {
+    "value": "ART3IIDW",
+    "label": "ART3IIDW - ENGLISH"
+  },
+  {
+    "value": "ART3IINT",
+    "label": "ART3IINT - ENGLISH"
+  },
+  {
+    "value": "ART3IU",
+    "label": "ART3IU - ENGLISH"
+  },
+  {
+    "value": "ART3IUG",
+    "label": "ART3IUG - ENGLISH"
+  },
+  {
+    "value": "ART3IUT",
+    "label": "ART3IUT - ENGLISH"
+  },
+  {
+    "value": "ART3IY",
+    "label": "ART3IY - ENGLISH"
+  },
+  {
+    "value": "ART3Z",
+    "label": "ART3Z - ENGLISH"
+  },
+  {
+    "value": "ART6",
+    "label": "ART6 - PHILOSOPHY"
+  },
+  {
+    "value": "ART6DW",
+    "label": "ART6DW - PHILOSOPHY"
+  },
+  {
+    "value": "ART6NT",
+    "label": "ART6NT - PHILOSOPHY"
+  },
+  {
+    "value": "ART6T",
+    "label": "ART6T - PHILOSOPHY"
+  },
+  {
+    "value": "ART6U",
+    "label": "ART6U - PHILOSOPHY"
+  },
+  {
+    "value": "ART6Y",
+    "label": "ART6Y - PHILOSOPHY"
+  },
+  {
+    "value": "ART6Z",
+    "label": "ART6Z - PHILOSOPHY"
+  },
+  {
+    "value": "ART9",
+    "label": "ART9 - ARABIC"
+  },
+  {
+    "value": "ART9DW",
+    "label": "ART9DW - ARABIC"
+  },
+  {
+    "value": "ART9T",
+    "label": "ART9T - ARABIC"
+  },
+  {
+    "value": "ART9U",
+    "label": "ART9U - ARABIC"
+  },
+  {
+    "value": "ART9UG",
+    "label": "ART9UG - ARABIC"
+  },
+  {
+    "value": "ART9Y",
+    "label": "ART9Y - ARABIC"
+  },
+  {
+    "value": "ART9Z",
+    "label": "ART9Z - ARABIC"
+  },
+  {
+    "value": "AUX50A",
+    "label": "AUX50A - ELECTRICITY DEPTT [SUPPLY]"
+  },
+  {
+    "value": "AUX50AY",
+    "label": "AUX50AY - ELECTRICITY DEPTT [SUPPLY]"
+  },
+  {
+    "value": "AUX50B",
+    "label": "AUX50B - ELECTRICITY DEPTT [SUPPLY]"
+  },
+  {
+    "value": "AUX50BDW",
+    "label": "AUX50BDW - ELECTRICITY DEPTT [SUPPLY]"
+  },
+  {
+    "value": "AUX50BNT",
+    "label": "AUX50BNT - ELECTRICITY DEPTT [SUPPLY]"
+  },
+  {
+    "value": "AUX50BZ",
+    "label": "AUX50BZ - ELECTRICITY DEPTT [SUPPLY]"
+  },
+  {
+    "value": "AUX50C",
+    "label": "AUX50C - ELECTRICITY DEPTT [W & M]"
+  },
+  {
+    "value": "AUX50CY",
+    "label": "AUX50CY - ELECTRICITY DEPTT [W & M]"
+  },
+  {
+    "value": "AUX50D",
+    "label": "AUX50D - ELECTRICITY DEPTT [W & M]"
+  },
+  {
+    "value": "AUX50DDW",
+    "label": "AUX50DDW - ELECTRICITY DEPTT [W & M]"
+  },
+  {
+    "value": "AUX50DNT",
+    "label": "AUX50DNT - ELECTRICITY DEPTT [W & M]"
+  },
+  {
+    "value": "AUX50DZ",
+    "label": "AUX50DZ - ELECTRICITY DEPTT [W & M]"
+  },
+  {
+    "value": "COL14A",
+    "label": "COL14A - CULTURAL EDUCATION CENTRE"
+  },
+  {
+    "value": "COL14ADW",
+    "label": "COL14ADW - CULTURAL EDUCATION CENTRE"
+  },
+  {
+    "value": "COL14ANT",
+    "label": "COL14ANT - CULTURAL EDUCATION CENTRE"
+  },
+  {
+    "value": "COL14AY",
+    "label": "COL14AY - CULTURAL EDUCATION CENTRE"
+  },
+  {
+    "value": "COL14AZ",
+    "label": "COL14AZ - CULTURAL EDUCATION CENTRE"
+  },
+  {
+    "value": "COL14B",
+    "label": "COL14B - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14BDW",
+    "label": "COL14BDW - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14BNT",
+    "label": "COL14BNT - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14BT",
+    "label": "COL14BT - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14BU",
+    "label": "COL14BU - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14BY",
+    "label": "COL14BY - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14BYY",
+    "label": "COL14BYY - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14BZ",
+    "label": "COL14BZ - PROFESSIONAL COURSES"
+  },
+  {
+    "value": "COL14E",
+    "label": "COL14E - JOURNALISIM & MASS COMM."
+  },
+  {
+    "value": "COL14EDW",
+    "label": "COL14EDW - JOURNALISIM & MASS COMM."
+  },
+  {
+    "value": "COL14ENT",
+    "label": "COL14ENT - JOURNALISIM & MASS COMM."
+  },
+  {
+    "value": "COL14ET",
+    "label": "COL14ET - JOURNALISIM & MASS COMM."
+  },
+  {
+    "value": "COL14EU",
+    "label": "COL14EU - JOURNALISIM & MASS COMM."
+  },
+  {
+    "value": "COL14EZ",
+    "label": "COL14EZ - JOURNALISIM & MASS COMM."
+  },
+  {
+    "value": "COL55AT",
+    "label": "COL55AT - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55EZ",
+    "label": "COL55EZ - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55P3NT",
+    "label": "COL55P3NT - SKILL DEV.&CAREER PLAN CENTRE"
+  },
+  {
+    "value": "COL55PDW",
+    "label": "COL55PDW - SKILL DEV.&CAREER PLAN CENTRE"
+  },
+  {
+    "value": "COL55PI",
+    "label": "COL55PI - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55PII",
+    "label": "COL55PII - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55PIIDW",
+    "label": "COL55PIIDW - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55PIII",
+    "label": "COL55PIII - SKILL DEV.&CAREER PLAN CENTRE"
+  },
+  {
+    "value": "COL55PIIIU",
+    "label": "COL55PIIIU - SKILL DEV.&CAREER PLAN CENTRE"
+  },
+  {
+    "value": "COL55PIIIZ",
+    "label": "COL55PIIIZ - SKILL DEV.&CAREER PLAN CENTRE"
+  },
+  {
+    "value": "COL55PIINT",
+    "label": "COL55PIINT - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55PL",
+    "label": "COL55PL - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TA2",
+    "label": "COL55TA2 - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TA2U",
+    "label": "COL55TA2U - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TAI",
+    "label": "COL55TAI - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TAU",
+    "label": "COL55TAU - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TAY",
+    "label": "COL55TAY - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TB",
+    "label": "COL55TB - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TBU",
+    "label": "COL55TBU - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TC",
+    "label": "COL55TC - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TCG",
+    "label": "COL55TCG - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TCU",
+    "label": "COL55TCU - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL55TD",
+    "label": "COL55TD - WOMEN'S COLLEGE"
+  },
+  {
+    "value": "COL99",
+    "label": "COL99 - UGC MM TT CENTRE (MMTTC)"
+  },
+  {
+    "value": "COL99DW",
+    "label": "COL99DW - UGC MM TT CENTRE (MMTTC)"
+  },
+  {
+    "value": "COL99NT",
+    "label": "COL99NT - UGC MM TT CENTRE (MMTTC)"
+  },
+  {
+    "value": "COL99S",
+    "label": "COL99S - UGC MM TT CENTRE (MMTTC)"
+  },
+  {
+    "value": "COL99SU",
+    "label": "COL99SU - UGC MM TT CENTRE (MMTTC)"
+  },
+  {
+    "value": "COL99T",
+    "label": "COL99T - UGC MM TT CENTRE (MMTTC)"
+  },
+  {
+    "value": "COL99Z",
+    "label": "COL99Z - UGC MM TT CENTRE (MMTTC)"
+  },
+  {
+    "value": "COM8AI",
+    "label": "COM8AI - COMMERCE"
+  },
+  {
+    "value": "COM8AIDW",
+    "label": "COM8AIDW - COMMERCE"
+  },
+  {
+    "value": "COM8AII",
+    "label": "COM8AII - COMMERCE"
+  },
+  {
+    "value": "COM8AINT",
+    "label": "COM8AINT - COMMERCE"
+  },
+  {
+    "value": "COM8AIZ",
+    "label": "COM8AIZ - COMMERCE"
+  },
+  {
+    "value": "COM8B",
+    "label": "COM8B - COMMERCE"
+  },
+  {
+    "value": "COM8TAU",
+    "label": "COM8TAU - COMMERCE"
+  },
+  {
+    "value": "COM8TAUT",
+    "label": "COM8TAUT - COMMERCE"
+  },
+  {
+    "value": "COM8TAY",
+    "label": "COM8TAY - COMMERCE"
+  },
+  {
+    "value": "COM8TAYG",
+    "label": "COM8TAYG - COMMERCE"
+  },
+  {
+    "value": "COM8TBU",
+    "label": "COM8TBU - COMMERCE"
+  },
+  {
+    "value": "COM8TGI",
+    "label": "COM8TGI - COMMERCE"
+  },
+  {
+    "value": "DEN76E",
+    "label": "DEN76E - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "DEN76E3DW",
+    "label": "DEN76E3DW - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "DEN76E3NT",
+    "label": "DEN76E3NT - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "DEN76EDW",
+    "label": "DEN76EDW - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "DEN76EI",
+    "label": "DEN76EI - PROSTHODONTICS"
+  },
+  {
+    "value": "DEN76EIDW",
+    "label": "DEN76EIDW - PROSTHODONTICS"
+  },
+  {
+    "value": "DEN76EII",
+    "label": "DEN76EII - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "DEN76EIIDW",
+    "label": "DEN76EIIDW - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "DEN76EIII",
+    "label": "DEN76EIII - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "DEN76EIIIT",
+    "label": "DEN76EIIIT - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "DEN76EIINT",
+    "label": "DEN76EIINT - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "DEN76EINT",
+    "label": "DEN76EINT - PROSTHODONTICS"
+  },
+  {
+    "value": "DEN76EIT",
+    "label": "DEN76EIT - PROSTHODONTICS"
+  },
+  {
+    "value": "DEN76EIV",
+    "label": "DEN76EIV - CONSERVATIVE DENTISTRY"
+  },
+  {
+    "value": "DEN76EIVDW",
+    "label": "DEN76EIVDW - CONSERVATIVE DENTISTRY"
+  },
+  {
+    "value": "DEN76EIVT",
+    "label": "DEN76EIVT - CONSERVATIVE DENTISTRY"
+  },
+  {
+    "value": "DEN76ENT",
+    "label": "DEN76ENT - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "DEN76EV",
+    "label": "DEN76EV - ORAL & MAXILLOFACIAL"
+  },
+  {
+    "value": "DEN76EVI",
+    "label": "DEN76EVI - ORAL & DENTAL PATHOLOGY"
+  },
+  {
+    "value": "DEN76EVII",
+    "label": "DEN76EVII - PAEDIATRICS AND PREVENTIVE DENTISTRY"
+  },
+  {
+    "value": "DEN76EVIIT",
+    "label": "DEN76EVIIT - PAEDIATRICS AND PREVENTIVE DENTISTRY"
+  },
+  {
+    "value": "DEN76EVIT",
+    "label": "DEN76EVIT - ORAL & DENTAL PATHOLOGY"
+  },
+  {
+    "value": "DEN76EVT",
+    "label": "DEN76EVT - ORAL & MAXILLOFACIAL"
+  },
+  {
+    "value": "DEN76IIT",
+    "label": "DEN76IIT - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "DTCXX",
+    "label": "DTCXX - DAWAKHANA TIBBIYA COLLEGE"
+  },
+  {
+    "value": "ENG38A7",
+    "label": "ENG38A7 - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38A7U",
+    "label": "ENG38A7U - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38A7UG",
+    "label": "ENG38A7UG - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38A7Y",
+    "label": "ENG38A7Y - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38A7Z",
+    "label": "ENG38A7Z - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38A7ZY",
+    "label": "ENG38A7ZY - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38A8",
+    "label": "ENG38A8 - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38A8GU",
+    "label": "ENG38A8GU - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38A8HZ",
+    "label": "ENG38A8HZ - HERITAGE CELL"
+  },
+  {
+    "value": "ENG38A8U",
+    "label": "ENG38A8U - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38A8Y",
+    "label": "ENG38A8Y - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38A8Z",
+    "label": "ENG38A8Z - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38A8ZY",
+    "label": "ENG38A8ZY - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38AC",
+    "label": "ENG38AC - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AC6",
+    "label": "ENG38AC6 - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AC6NT",
+    "label": "ENG38AC6NT - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38ACDW",
+    "label": "ENG38ACDW - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38ACNT",
+    "label": "ENG38ACNT - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38ACT",
+    "label": "ENG38ACT - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AI",
+    "label": "ENG38AI - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38AII",
+    "label": "ENG38AII - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AIII",
+    "label": "ENG38AIII - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AIIIG",
+    "label": "ENG38AIIIG - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AIIIU",
+    "label": "ENG38AIIIU - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AIIIY",
+    "label": "ENG38AIIIY - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AIIU",
+    "label": "ENG38AIIU - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AIIUG",
+    "label": "ENG38AIIUG - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AIIUY",
+    "label": "ENG38AIIUY - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AIIY",
+    "label": "ENG38AIIY - APPLIED CHEMISTRY ENGINEERING"
+  },
+  {
+    "value": "ENG38AIT",
+    "label": "ENG38AIT - INTER.CENTRE FOR ART.INTELLIGENCE"
+  },
+  {
+    "value": "ENG38AIU",
+    "label": "ENG38AIU - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38AIY",
+    "label": "ENG38AIY - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38AIZ",
+    "label": "ENG38AIZ - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38AM",
+    "label": "ENG38AM - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AMDW",
+    "label": "ENG38AMDW - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AMNT",
+    "label": "ENG38AMNT - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AMT",
+    "label": "ENG38AMT - APPLIED MATHEMATICS ENGG.COLL."
+  },
+  {
+    "value": "ENG38AP",
+    "label": "ENG38AP - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38APDW",
+    "label": "ENG38APDW - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38APNT",
+    "label": "ENG38APNT - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38APT",
+    "label": "ENG38APT - APPLIED PHYSICS ENGG.COLLEGE"
+  },
+  {
+    "value": "ENG38AR",
+    "label": "ENG38AR - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38ARDW",
+    "label": "ENG38ARDW - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38ARNT",
+    "label": "ENG38ARNT - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38ART",
+    "label": "ENG38ART - ARCHITECTURE"
+  },
+  {
+    "value": "ENG38AV",
+    "label": "ENG38AV - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38AVA",
+    "label": "ENG38AVA - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38AVAU",
+    "label": "ENG38AVAU - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38AVAUG",
+    "label": "ENG38AVAUG - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38AVAY",
+    "label": "ENG38AVAY - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38AVAZ",
+    "label": "ENG38AVAZ - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38AVAZY",
+    "label": "ENG38AVAZY - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38AVI",
+    "label": "ENG38AVI - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38AVIU",
+    "label": "ENG38AVIU - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38AVIY",
+    "label": "ENG38AVIY - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38AVIZ",
+    "label": "ENG38AVIZ - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38AVIZY",
+    "label": "ENG38AVIZY - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38AVU",
+    "label": "ENG38AVU - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38AVY",
+    "label": "ENG38AVY - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38AVZY",
+    "label": "ENG38AVZY - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38BE",
+    "label": "ENG38BE - B.E.(EVENING)"
+  },
+  {
+    "value": "ENG38BEDW",
+    "label": "ENG38BEDW - B.E.(EVENING)"
+  },
+  {
+    "value": "ENG38BENT",
+    "label": "ENG38BENT - B.E.(EVENING)"
+  },
+  {
+    "value": "ENG38BET",
+    "label": "ENG38BET - B.E.(EVENING)"
+  },
+  {
+    "value": "ENG38CD",
+    "label": "ENG38CD - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CDDW",
+    "label": "ENG38CDDW - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CDNT",
+    "label": "ENG38CDNT - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CDNT6",
+    "label": "ENG38CDNT6 - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CDT",
+    "label": "ENG38CDT - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CF",
+    "label": "ENG38CF - CENTRE OF FOOD TECHNOLOGY"
+  },
+  {
+    "value": "ENG38CFT",
+    "label": "ENG38CFT - CENTRE OF FOOD TECHNOLOGY"
+  },
+  {
+    "value": "ENG38CGRT",
+    "label": "ENG38CGRT - C G R E"
+  },
+  {
+    "value": "ENG38CH",
+    "label": "ENG38CH - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38CHDW",
+    "label": "ENG38CHDW - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38CHNT",
+    "label": "ENG38CHNT - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38CHT",
+    "label": "ENG38CHT - CHEMICAL ENGINEERING"
+  },
+  {
+    "value": "ENG38CI",
+    "label": "ENG38CI - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CII",
+    "label": "ENG38CII - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CIIZ",
+    "label": "ENG38CIIZ - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CIU",
+    "label": "ENG38CIU - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CIY",
+    "label": "ENG38CIY - CIVIL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CM",
+    "label": "ENG38CM - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CMDW",
+    "label": "ENG38CMDW - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CMNT",
+    "label": "ENG38CMNT - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CMT",
+    "label": "ENG38CMT - COMPUTER ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38CR",
+    "label": "ENG38CR - C.A.R.E.T. (ZHCET)"
+  },
+  {
+    "value": "ENG38CRDW",
+    "label": "ENG38CRDW - C.A.R.E.T. (ZHCET)"
+  },
+  {
+    "value": "ENG38D",
+    "label": "ENG38D - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38DE",
+    "label": "ENG38DE - DEAN F/o ENGINEERING & TECH."
+  },
+  {
+    "value": "ENG38DEDW",
+    "label": "ENG38DEDW - DEAN F/o ENGINEERING & TECH."
+  },
+  {
+    "value": "ENG38DENT",
+    "label": "ENG38DENT - DEAN F/o ENGINEERING & TECH."
+  },
+  {
+    "value": "ENG38DW",
+    "label": "ENG38DW - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38ED",
+    "label": "ENG38ED - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EDDW",
+    "label": "ENG38EDDW - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EDNT",
+    "label": "ENG38EDNT - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EDT",
+    "label": "ENG38EDT - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EII",
+    "label": "ENG38EII - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EIU",
+    "label": "ENG38EIU - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EIUG",
+    "label": "ENG38EIUG - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EIY",
+    "label": "ENG38EIY - ELECTRICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38EN",
+    "label": "ENG38EN - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38ENDW",
+    "label": "ENG38ENDW - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38ENNT",
+    "label": "ENG38ENNT - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38ENT",
+    "label": "ENG38ENT - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38ETT",
+    "label": "ENG38ETT - ELECTRONICS ENGINEERING"
+  },
+  {
+    "value": "ENG38HC",
+    "label": "ENG38HC - HERITAGE CELL"
+  },
+  {
+    "value": "ENG38HCDW",
+    "label": "ENG38HCDW - HERITAGE CELL"
+  },
+  {
+    "value": "ENG38IAIY",
+    "label": "ENG38IAIY - INTER.CENTRE FOR ART.INTELLIGENCE"
+  },
+  {
+    "value": "ENG38MD",
+    "label": "ENG38MD - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MDDW",
+    "label": "ENG38MDDW - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MDNT",
+    "label": "ENG38MDNT - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MDT",
+    "label": "ENG38MDT - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MII",
+    "label": "ENG38MII - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MIIY",
+    "label": "ENG38MIIY - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MIIZ",
+    "label": "ENG38MIIZ - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MIU",
+    "label": "ENG38MIU - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38MIY",
+    "label": "ENG38MIY - MECHANICAL ENGINEERING DEPT."
+  },
+  {
+    "value": "ENG38NA",
+    "label": "ENG38NA - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38NADW",
+    "label": "ENG38NADW - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38NANT",
+    "label": "ENG38NANT - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38NAT",
+    "label": "ENG38NAT - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38NTU",
+    "label": "ENG38NTU - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38NTY",
+    "label": "ENG38NTY - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38NTZ",
+    "label": "ENG38NTZ - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38NTZY",
+    "label": "ENG38NTZY - INTER.NANOTECHNOLOGY CENTRE"
+  },
+  {
+    "value": "ENG38PO",
+    "label": "ENG38PO - PRINCIPAL OFFICE ENGINEERING"
+  },
+  {
+    "value": "ENG38PODW",
+    "label": "ENG38PODW - PRINCIPAL OFFICE ENGINEERING"
+  },
+  {
+    "value": "ENG38PONT",
+    "label": "ENG38PONT - PRINCIPAL OFFICE ENGINEERING"
+  },
+  {
+    "value": "ENG38PS",
+    "label": "ENG38PS - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38PS6NT",
+    "label": "ENG38PS6NT - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38PSDW",
+    "label": "ENG38PSDW - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38PSNT",
+    "label": "ENG38PSNT - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38PST",
+    "label": "ENG38PST - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG38TP",
+    "label": "ENG38TP - TRAINING & PLACEMENT OFFICE"
+  },
+  {
+    "value": "ENG38TPDW",
+    "label": "ENG38TPDW - TRAINING & PLACEMENT OFFICE"
+  },
+  {
+    "value": "ENG38TPGZ",
+    "label": "ENG38TPGZ - TPO (GENERAL)"
+  },
+  {
+    "value": "ENG38TPI",
+    "label": "ENG38TPI - TRAINING & PLACEMENT OFFICE"
+  },
+  {
+    "value": "ENG38TPNT",
+    "label": "ENG38TPNT - TRAINING & PLACEMENT OFFICE"
+  },
+  {
+    "value": "ENG38W",
+    "label": "ENG38W - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38WA",
+    "label": "ENG38WA - WORKSHOP ENGINEERING COLLEGE"
+  },
+  {
+    "value": "ENG38WAU",
+    "label": "ENG38WAU - WORKSHOP ENGINEERING COLLEGE"
+  },
+  {
+    "value": "ENG38WB",
+    "label": "ENG38WB - WORKSHOP ENGINEERING COLLEGE"
+  },
+  {
+    "value": "ENG38WBY",
+    "label": "ENG38WBY - WORKSHOP ENGINEERING COLLEGE"
+  },
+  {
+    "value": "ENG38WC",
+    "label": "ENG38WC - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38WCDW",
+    "label": "ENG38WCDW - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38WCNT",
+    "label": "ENG38WCNT - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38WCY",
+    "label": "ENG38WCY - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38WCZ",
+    "label": "ENG38WCZ - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38WD",
+    "label": "ENG38WD - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "ENG38WE",
+    "label": "ENG38WE - WORKSHOP ENGINEERING COLLEGE"
+  },
+  {
+    "value": "ENG38WEDW",
+    "label": "ENG38WEDW - WORKSHOP ENGINEERING COLLEGE"
+  },
+  {
+    "value": "ENG38WENT",
+    "label": "ENG38WENT - WORKSHOP ENGINEERING COLLEGE"
+  },
+  {
+    "value": "ENG38ZHT",
+    "label": "ENG38ZHT - Z H COLLEGE OF E&T"
+  },
+  {
+    "value": "ENG398AVAU",
+    "label": "ENG398AVAU - PETROLEUM STUDIES"
+  },
+  {
+    "value": "ENG39D",
+    "label": "ENG39D - MECHANICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39DA",
+    "label": "ENG39DA - ARCHITECHTURE SEC. (UP)"
+  },
+  {
+    "value": "ENG39DANT",
+    "label": "ENG39DANT - ARCHITECHTURE SEC. (UP)"
+  },
+  {
+    "value": "ENG39DAU",
+    "label": "ENG39DAU - ARCHITECHTURE SEC. (UP)"
+  },
+  {
+    "value": "ENG39DAY",
+    "label": "ENG39DAY - ARCHITECHTURE SEC. (UP)"
+  },
+  {
+    "value": "ENG39DAYT",
+    "label": "ENG39DAYT - ARCHITECHTURE SEC. (UP)"
+  },
+  {
+    "value": "ENG39DB",
+    "label": "ENG39DB - FOOTWEAR/LEATHER TECH.(UP)"
+  },
+  {
+    "value": "ENG39DBNT",
+    "label": "ENG39DBNT - FOOTWEAR/LEATHER TECH.(UP)"
+  },
+  {
+    "value": "ENG39DBT",
+    "label": "ENG39DBT - FOOTWEAR/LEATHER TECH.(UP)"
+  },
+  {
+    "value": "ENG39DBU",
+    "label": "ENG39DBU - FOOTWEAR/LEATHER TECH.(UP)"
+  },
+  {
+    "value": "ENG39DNT",
+    "label": "ENG39DNT - MECHANICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39DU",
+    "label": "ENG39DU - MECHANICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39DY",
+    "label": "ENG39DY - MECHANICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39DYT",
+    "label": "ENG39DYT - MECHANICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39PA",
+    "label": "ENG39PA - PRINCIPAL OFFICE (UP)"
+  },
+  {
+    "value": "ENG39PB",
+    "label": "ENG39PB - PRINCIPAL OFFICE (UP)"
+  },
+  {
+    "value": "ENG39PDW",
+    "label": "ENG39PDW - PRINCIPAL OFFICE (UP)"
+  },
+  {
+    "value": "ENG39PII",
+    "label": "ENG39PII - GENERAL SEC. (WOMEN'S POLY.)"
+  },
+  {
+    "value": "ENG39PNT",
+    "label": "ENG39PNT - PRINCIPAL OFFICE (UP)"
+  },
+  {
+    "value": "ENG39PY",
+    "label": "ENG39PY - PRINCIPAL OFFICE (UP)"
+  },
+  {
+    "value": "ENG39PZ",
+    "label": "ENG39PZ - PRINCIPAL OFFICE (UP)"
+  },
+  {
+    "value": "ENG39TA",
+    "label": "ENG39TA - CIVIL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TAT",
+    "label": "ENG39TAT - CIVIL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TAY",
+    "label": "ENG39TAY - CIVIL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TB",
+    "label": "ENG39TB - ELECTRICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TBNT",
+    "label": "ENG39TBNT - ELECTRICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TBT",
+    "label": "ENG39TBT - ELECTRICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TBU",
+    "label": "ENG39TBU - ELECTRICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TBUG",
+    "label": "ENG39TBUG - ELECTRICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TBY",
+    "label": "ENG39TBY - ELECTRICAL SECTION (UP)"
+  },
+  {
+    "value": "ENG39TC",
+    "label": "ENG39TC - APPLIED SC.& HUM. SEC. (UP)"
+  },
+  {
+    "value": "ENG39TCT",
+    "label": "ENG39TCT - APPLIED SC.& HUM. SEC. (UP)"
+  },
+  {
+    "value": "ENG39TCY",
+    "label": "ENG39TCY - APPLIED SC.& HUM. SEC. (UP)"
+  },
+  {
+    "value": "ENG39WA",
+    "label": "ENG39WA - WORKSHOP (UP)"
+  },
+  {
+    "value": "ENG39WADW",
+    "label": "ENG39WADW - WORKSHOP (UP)"
+  },
+  {
+    "value": "ENG39WANT",
+    "label": "ENG39WANT - WORKSHOP (UP)"
+  },
+  {
+    "value": "ENG39WAY",
+    "label": "ENG39WAY - WORKSHOP (UP)"
+  },
+  {
+    "value": "ENG39WB",
+    "label": "ENG39WB - WORKSHOP (UP)"
+  },
+  {
+    "value": "ENG39WB6",
+    "label": "ENG39WB6 - WORKSHOP (UP)"
+  },
+  {
+    "value": "ENG68A",
+    "label": "ENG68A - COMPUTER  SECTION (W.P.)"
+  },
+  {
+    "value": "ENG68ADW",
+    "label": "ENG68ADW - COMPUTER  SECTION (W.P.)"
+  },
+  {
+    "value": "ENG68ANT",
+    "label": "ENG68ANT - COMPUTER  SECTION (W.P.)"
+  },
+  {
+    "value": "ENG68AT",
+    "label": "ENG68AT - COMPUTER  SECTION (W.P.)"
+  },
+  {
+    "value": "ENG68AU",
+    "label": "ENG68AU - COMPUTER  SECTION (W.P.)"
+  },
+  {
+    "value": "ENG68AY",
+    "label": "ENG68AY - COMPUTER  SECTION (W.P.)"
+  },
+  {
+    "value": "ENG68B",
+    "label": "ENG68B - ELECTRONIC SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68BNT",
+    "label": "ENG68BNT - ELECTRONIC SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68BU",
+    "label": "ENG68BU - ELECTRONIC SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68BUG",
+    "label": "ENG68BUG - ELECTRONIC SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68BY",
+    "label": "ENG68BY - ELECTRONIC SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68BYT",
+    "label": "ENG68BYT - ELECTRONIC SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68C",
+    "label": "ENG68C - APP.SC. & HUM.SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68CT",
+    "label": "ENG68CT - APP.SC. & HUM.SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68CU",
+    "label": "ENG68CU - APP.SC. & HUM.SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68D",
+    "label": "ENG68D - O.A.& S.P. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68DU",
+    "label": "ENG68DU - O.A.& S.P. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68DY",
+    "label": "ENG68DY - O.A.& S.P. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68DYT",
+    "label": "ENG68DYT - O.A.& S.P. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68E",
+    "label": "ENG68E - C.D.& D.M. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68EU",
+    "label": "ENG68EU - C.D.& D.M. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68EY",
+    "label": "ENG68EY - C.D.& D.M. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68EYT",
+    "label": "ENG68EYT - C.D.& D.M. SEC. (W.P.)"
+  },
+  {
+    "value": "ENG68I",
+    "label": "ENG68I - PRINCIPAL OFFICE (W.P.)"
+  },
+  {
+    "value": "ENG68IDW",
+    "label": "ENG68IDW - PRINCIPAL OFFICE (W.P.)"
+  },
+  {
+    "value": "ENG68II",
+    "label": "ENG68II - PRINCIPAL OFFICE (W.P.)"
+  },
+  {
+    "value": "ENG68INT",
+    "label": "ENG68INT - PRINCIPAL OFFICE (W.P.)"
+  },
+  {
+    "value": "ENG68IY",
+    "label": "ENG68IY - PRINCIPAL OFFICE (W.P.)"
+  },
+  {
+    "value": "ENG68Y",
+    "label": "ENG68Y - PRINCIPAL OFFICE (W.P.)"
+  },
+  {
+    "value": "ENG68Z",
+    "label": "ENG68Z - PRINCIPAL OFFICE (W.P.)"
+  },
+  {
+    "value": "FIS90",
+    "label": "FIS90 - Dean F/o INTERNATIONAL STUDIES"
+  },
+  {
+    "value": "FIS90A",
+    "label": "FIS90A - STRATEGIC & SECURITY STUDIES"
+  },
+  {
+    "value": "FIS90ADW",
+    "label": "FIS90ADW - STRATEGIC & SECURITY STUDIES"
+  },
+  {
+    "value": "FIS90AGU",
+    "label": "FIS90AGU - STRATEGIC & SECURITY STUDIES"
+  },
+  {
+    "value": "FIS90AU",
+    "label": "FIS90AU - STRATEGIC & SECURITY STUDIES"
+  },
+  {
+    "value": "FIS90AY",
+    "label": "FIS90AY - STRATEGIC & SECURITY STUDIES"
+  },
+  {
+    "value": "FIS90AZ",
+    "label": "FIS90AZ - STRATEGIC & SECURITY STUDIES"
+  },
+  {
+    "value": "FIS90B",
+    "label": "FIS90B - FOREIGN LANGUAGE"
+  },
+  {
+    "value": "FIS90BDW",
+    "label": "FIS90BDW - FOREIGN LANGUAGE"
+  },
+  {
+    "value": "FIS90BT",
+    "label": "FIS90BT - FOREIGN LANGUAGE"
+  },
+  {
+    "value": "FIS90BU",
+    "label": "FIS90BU - FOREIGN LANGUAGE"
+  },
+  {
+    "value": "FIS90BUG",
+    "label": "FIS90BUG - FOREIGN LANGUAGE"
+  },
+  {
+    "value": "FIS90BZ",
+    "label": "FIS90BZ - FOREIGN LANGUAGE"
+  },
+  {
+    "value": "FIS90C",
+    "label": "FIS90C - SOUTH AFRICAN & BRAZILIAN STD."
+  },
+  {
+    "value": "FIS90CU",
+    "label": "FIS90CU - SOUTH AFRICAN & BRAZILIAN STD."
+  },
+  {
+    "value": "FIS90CUG",
+    "label": "FIS90CUG - SOUTH AFRICAN & BRAZILIAN STD."
+  },
+  {
+    "value": "FIS90CZ",
+    "label": "FIS90CZ - SOUTH AFRICAN & BRAZILIAN STD."
+  },
+  {
+    "value": "FIS90Y",
+    "label": "FIS90Y - FOREIGN LANGUAGE"
+  },
+  {
+    "value": "HAL107",
+    "label": "HAL107 - INDIRA GANDHI HALL"
+  },
+  {
+    "value": "HAL107DW",
+    "label": "HAL107DW - INDIRA GANDHI HALL"
+  },
+  {
+    "value": "HAL107NT",
+    "label": "HAL107NT - INDIRA GANDHI HALL"
+  },
+  {
+    "value": "HAL107T",
+    "label": "HAL107T - INDIRA GANDHI HALL"
+  },
+  {
+    "value": "HAL107Y",
+    "label": "HAL107Y - INDIRA GANDHI HALL"
+  },
+  {
+    "value": "HAL107Z",
+    "label": "HAL107Z - INDIRA GANDHI HALL"
+  },
+  {
+    "value": "HAL108",
+    "label": "HAL108 - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL108AT",
+    "label": "HAL108AT - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL108DW",
+    "label": "HAL108DW - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL108L",
+    "label": "HAL108L - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL108NT",
+    "label": "HAL108NT - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL108T",
+    "label": "HAL108T - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL108Y",
+    "label": "HAL108Y - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL108Z",
+    "label": "HAL108Z - NADEEM TARIN HALL"
+  },
+  {
+    "value": "HAL109",
+    "label": "HAL109 - AMBEDKAR HALL"
+  },
+  {
+    "value": "HAL109DW",
+    "label": "HAL109DW - AMBEDKAR HALL"
+  },
+  {
+    "value": "HAL109NT",
+    "label": "HAL109NT - AMBEDKAR HALL"
+  },
+  {
+    "value": "HAL109Z",
+    "label": "HAL109Z - AMBEDKAR HALL"
+  },
+  {
+    "value": "HAL110",
+    "label": "HAL110 - BEGUM SULTAN JAHAN HALL"
+  },
+  {
+    "value": "HAL110BS",
+    "label": "HAL110BS - BEGUM SULTAN JAHAN HALL"
+  },
+  {
+    "value": "HAL110BSDW",
+    "label": "HAL110BSDW - BEGUM SULTAN JAHAN HALL"
+  },
+  {
+    "value": "HAL110BSNT",
+    "label": "HAL110BSNT - BEGUM SULTAN JAHAN HALL"
+  },
+  {
+    "value": "HAL110Z",
+    "label": "HAL110Z - BEGUM SULTAN JAHAN HALL"
+  },
+  {
+    "value": "HAL110ZY",
+    "label": "HAL110ZY - BEGUM SULTAN JAHAN HALL"
+  },
+  {
+    "value": "HAL111",
+    "label": "HAL111 - BIBI FATIMA HALL"
+  },
+  {
+    "value": "HAL111DW",
+    "label": "HAL111DW - BIBI FATIMA HALL"
+  },
+  {
+    "value": "HAL111NT",
+    "label": "HAL111NT - BIBI FATIMA HALL"
+  },
+  {
+    "value": "HAL111Y",
+    "label": "HAL111Y - BIBI FATIMA HALL"
+  },
+  {
+    "value": "HAL111Z",
+    "label": "HAL111Z - BIBI FATIMA HALL"
+  },
+  {
+    "value": "HAL112",
+    "label": "HAL112 - BEGUM AZEEZUNNISA HALL"
+  },
+  {
+    "value": "HAL112T",
+    "label": "HAL112T - BEGUM AZEEZUNNISA HALL"
+  },
+  {
+    "value": "HAL58A",
+    "label": "HAL58A - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58ADW",
+    "label": "HAL58ADW - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58ANT",
+    "label": "HAL58ANT - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58B",
+    "label": "HAL58B - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58BNT",
+    "label": "HAL58BNT - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58C",
+    "label": "HAL58C - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58CNT",
+    "label": "HAL58CNT - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58D",
+    "label": "HAL58D - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58DI",
+    "label": "HAL58DI - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58T",
+    "label": "HAL58T - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58Z",
+    "label": "HAL58Z - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL58ZDW",
+    "label": "HAL58ZDW - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "HAL60AI",
+    "label": "HAL60AI - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AIDW",
+    "label": "HAL60AIDW - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AII",
+    "label": "HAL60AII - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AIII",
+    "label": "HAL60AIII - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AIIIZ",
+    "label": "HAL60AIIIZ - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AIINT",
+    "label": "HAL60AIINT - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AIL",
+    "label": "HAL60AIL - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AILDW",
+    "label": "HAL60AILDW - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AINT",
+    "label": "HAL60AINT - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60AT",
+    "label": "HAL60AT - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL60B",
+    "label": "HAL60B - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BI",
+    "label": "HAL60BI - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BIDW",
+    "label": "HAL60BIDW - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BII",
+    "label": "HAL60BII - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BIII",
+    "label": "HAL60BIII - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BIIIZ",
+    "label": "HAL60BIIIZ - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BIINT",
+    "label": "HAL60BIINT - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BIL",
+    "label": "HAL60BIL - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BINT",
+    "label": "HAL60BINT - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BT",
+    "label": "HAL60BT - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60BY",
+    "label": "HAL60BY - MOHD HABIB HALL"
+  },
+  {
+    "value": "HAL60I",
+    "label": "HAL60I - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60IDW",
+    "label": "HAL60IDW - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60II",
+    "label": "HAL60II - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60III",
+    "label": "HAL60III - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60INT",
+    "label": "HAL60INT - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60IV",
+    "label": "HAL60IV - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60IVY",
+    "label": "HAL60IVY - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60IVZ",
+    "label": "HAL60IVZ - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60SN",
+    "label": "HAL60SN - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60SNDW",
+    "label": "HAL60SNDW - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60SNNT",
+    "label": "HAL60SNNT - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60T",
+    "label": "HAL60T - ROSS MASOOD HALL"
+  },
+  {
+    "value": "HAL60WI",
+    "label": "HAL60WI - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60WII",
+    "label": "HAL60WII - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60WIII",
+    "label": "HAL60WIII - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60WIIIZ",
+    "label": "HAL60WIIIZ - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60WIIZY",
+    "label": "HAL60WIIZY - SAROJINI NAIDU HALL"
+  },
+  {
+    "value": "HAL60ZDW",
+    "label": "HAL60ZDW - HADI HASAN HALL"
+  },
+  {
+    "value": "HAL62A",
+    "label": "HAL62A - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62ADW",
+    "label": "HAL62ADW - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62ANT",
+    "label": "HAL62ANT - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62AT",
+    "label": "HAL62AT - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62B",
+    "label": "HAL62B - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62C",
+    "label": "HAL62C - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62D",
+    "label": "HAL62D - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62DY",
+    "label": "HAL62DY - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL62DZ",
+    "label": "HAL62DZ - MOHSINUL MULK HALL"
+  },
+  {
+    "value": "HAL63A",
+    "label": "HAL63A - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63AT",
+    "label": "HAL63AT - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63B",
+    "label": "HAL63B - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63C",
+    "label": "HAL63C - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63D",
+    "label": "HAL63D - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63DW",
+    "label": "HAL63DW - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63L",
+    "label": "HAL63L - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63NT",
+    "label": "HAL63NT - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63Y",
+    "label": "HAL63Y - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL63Z",
+    "label": "HAL63Z - SIR SYED HALL [NORTH]"
+  },
+  {
+    "value": "HAL64I",
+    "label": "HAL64I - AFTAB HALL"
+  },
+  {
+    "value": "HAL64IDW",
+    "label": "HAL64IDW - AFTAB HALL"
+  },
+  {
+    "value": "HAL64II",
+    "label": "HAL64II - AFTAB HALL"
+  },
+  {
+    "value": "HAL64III",
+    "label": "HAL64III - AFTAB HALL"
+  },
+  {
+    "value": "HAL64INT",
+    "label": "HAL64INT - AFTAB HALL"
+  },
+  {
+    "value": "HAL64IV",
+    "label": "HAL64IV - AFTAB HALL"
+  },
+  {
+    "value": "HAL64IVY",
+    "label": "HAL64IVY - AFTAB HALL"
+  },
+  {
+    "value": "HAL64IVZ",
+    "label": "HAL64IVZ - AFTAB HALL"
+  },
+  {
+    "value": "HAL64T",
+    "label": "HAL64T - AFTAB HALL"
+  },
+  {
+    "value": "HAL65I",
+    "label": "HAL65I - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65IDW",
+    "label": "HAL65IDW - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65II",
+    "label": "HAL65II - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65III",
+    "label": "HAL65III - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65INT",
+    "label": "HAL65INT - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65IT",
+    "label": "HAL65IT - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65IV",
+    "label": "HAL65IV - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65IVY",
+    "label": "HAL65IVY - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL65IVZ",
+    "label": "HAL65IVZ - VIQARUL MULK HALL"
+  },
+  {
+    "value": "HAL66A",
+    "label": "HAL66A - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66ADW",
+    "label": "HAL66ADW - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66ANT",
+    "label": "HAL66ANT - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66AT",
+    "label": "HAL66AT - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66B",
+    "label": "HAL66B - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66BL",
+    "label": "HAL66BL - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66BNT",
+    "label": "HAL66BNT - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66C",
+    "label": "HAL66C - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66CNT",
+    "label": "HAL66CNT - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66D",
+    "label": "HAL66D - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66DZ",
+    "label": "HAL66DZ - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL66T",
+    "label": "HAL66T - SULAIMAN HALL"
+  },
+  {
+    "value": "HAL67A",
+    "label": "HAL67A - N R S C"
+  },
+  {
+    "value": "HAL67ADW",
+    "label": "HAL67ADW - N R S C"
+  },
+  {
+    "value": "HAL67ANT",
+    "label": "HAL67ANT - N R S C"
+  },
+  {
+    "value": "HAL67B",
+    "label": "HAL67B - N R S C"
+  },
+  {
+    "value": "HAL67BY",
+    "label": "HAL67BY - N R S C"
+  },
+  {
+    "value": "HAL67BZ",
+    "label": "HAL67BZ - N R S C"
+  },
+  {
+    "value": "HAL67I",
+    "label": "HAL67I - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67IDW",
+    "label": "HAL67IDW - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67II",
+    "label": "HAL67II - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67IIDW",
+    "label": "HAL67IIDW - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67III",
+    "label": "HAL67III - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67IL",
+    "label": "HAL67IL - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67INT",
+    "label": "HAL67INT - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67IT",
+    "label": "HAL67IT - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67IV",
+    "label": "HAL67IV - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67IVZ",
+    "label": "HAL67IVZ - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL67T",
+    "label": "HAL67T - N R S C"
+  },
+  {
+    "value": "HAL67Y",
+    "label": "HAL67Y - ABDULLAH HALL"
+  },
+  {
+    "value": "HAL87DW",
+    "label": "HAL87DW - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87I",
+    "label": "HAL87I - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87II",
+    "label": "HAL87II - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87III",
+    "label": "HAL87III - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87IV",
+    "label": "HAL87IV - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87L",
+    "label": "HAL87L - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87NT",
+    "label": "HAL87NT - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87T",
+    "label": "HAL87T - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87Y",
+    "label": "HAL87Y - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL87Z",
+    "label": "HAL87Z - SIR SYED HALL [SOUTH]"
+  },
+  {
+    "value": "HAL89A",
+    "label": "HAL89A - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "HAL89ADW",
+    "label": "HAL89ADW - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "HAL89ANT",
+    "label": "HAL89ANT - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "HAL89B",
+    "label": "HAL89B - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "HAL89C",
+    "label": "HAL89C - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "HAL89CZ",
+    "label": "HAL89CZ - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "HAL89T",
+    "label": "HAL89T - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "HAL89Y",
+    "label": "HAL89Y - ALLAMA IQBAL B/H"
+  },
+  {
+    "value": "KGN170",
+    "label": "KGN170 - KISHAN GANJ CENTRE"
+  },
+  {
+    "value": "KGN170DW",
+    "label": "KGN170DW - KISHAN GANJ CENTRE"
+  },
+  {
+    "value": "KGN170U",
+    "label": "KGN170U - EDUCATION DEPTT. (KISHANGANJ)"
+  },
+  {
+    "value": "KGN172U",
+    "label": "KGN172U - BUSINESS ADMIN.(KISHANGANJ)"
+  },
+  {
+    "value": "KGN172UT",
+    "label": "KGN172UT - BUSINESS ADMIN.(KISHANGANJ)"
+  },
+  {
+    "value": "KGN173U",
+    "label": "KGN173U - LAW DEPT. (KISHANGANJ)"
+  },
+  {
+    "value": "LA13IINT",
+    "label": "LA13IINT - LAW"
+  },
+  {
+    "value": "LAW13DW",
+    "label": "LAW13DW - LAW"
+  },
+  {
+    "value": "LAW13GU",
+    "label": "LAW13GU - LAW"
+  },
+  {
+    "value": "LAW13I",
+    "label": "LAW13I - LAW"
+  },
+  {
+    "value": "LAW13II",
+    "label": "LAW13II - LAW"
+  },
+  {
+    "value": "LAW13IT",
+    "label": "LAW13IT - LAW"
+  },
+  {
+    "value": "LAW13IU",
+    "label": "LAW13IU - LAW"
+  },
+  {
+    "value": "LAW13IY",
+    "label": "LAW13IY - LAW"
+  },
+  {
+    "value": "LAW13S",
+    "label": "LAW13S - LAW (AMBEDKAR CHAIR)"
+  },
+  {
+    "value": "LAW13Y",
+    "label": "LAW13Y - LAW"
+  },
+  {
+    "value": "LAW13Z",
+    "label": "LAW13Z - LAW"
+  },
+  {
+    "value": "LAW13ZI",
+    "label": "LAW13ZI - LAW"
+  },
+  {
+    "value": "LHR100",
+    "label": "LHR100 - LEGAL HEIR'S"
+  },
+  {
+    "value": "LIB33A",
+    "label": "LIB33A - M A LIBRARY"
+  },
+  {
+    "value": "LIB33ADW",
+    "label": "LIB33ADW - M A LIBRARY"
+  },
+  {
+    "value": "LIB33ANT",
+    "label": "LIB33ANT - M A LIBRARY"
+  },
+  {
+    "value": "LIB33B",
+    "label": "LIB33B - M A LIBRARY"
+  },
+  {
+    "value": "LIB33C",
+    "label": "LIB33C - M A LIBRARY"
+  },
+  {
+    "value": "LIB33D",
+    "label": "LIB33D - M A LIBRARY"
+  },
+  {
+    "value": "LIB33DY",
+    "label": "LIB33DY - M A LIBRARY"
+  },
+  {
+    "value": "LIB33DZ",
+    "label": "LIB33DZ - M A LIBRARY"
+  },
+  {
+    "value": "LIB33E",
+    "label": "LIB33E - M A LIBRARY"
+  },
+  {
+    "value": "LIB33EY",
+    "label": "LIB33EY - M A LIBRARY"
+  },
+  {
+    "value": "LIB33F",
+    "label": "LIB33F - M A LIBRARY"
+  },
+  {
+    "value": "LIF14C",
+    "label": "LIF14C - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14CDW",
+    "label": "LIF14CDW - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14CG",
+    "label": "LIF14CG - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14CNT",
+    "label": "LIF14CNT - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14CT",
+    "label": "LIF14CT - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14CU",
+    "label": "LIF14CU - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14CY",
+    "label": "LIF14CY - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14CZ",
+    "label": "LIF14CZ - MUSEOLOGY"
+  },
+  {
+    "value": "LIF14L",
+    "label": "LIF14L - MUSEOLOGY"
+  },
+  {
+    "value": "LIF18A",
+    "label": "LIF18A - ZOOLOGY"
+  },
+  {
+    "value": "LIF18AU",
+    "label": "LIF18AU - ZOOLOGY"
+  },
+  {
+    "value": "LIF18AUT",
+    "label": "LIF18AUT - ZOOLOGY"
+  },
+  {
+    "value": "LIF18AUY",
+    "label": "LIF18AUY - ZOOLOGY"
+  },
+  {
+    "value": "LIF18B",
+    "label": "LIF18B - ZOOLOGY"
+  },
+  {
+    "value": "LIF18BNT",
+    "label": "LIF18BNT - ZOOLOGY"
+  },
+  {
+    "value": "LIF18DW",
+    "label": "LIF18DW - ZOOLOGY"
+  },
+  {
+    "value": "LIF18L",
+    "label": "LIF18L - ZOOLOGY"
+  },
+  {
+    "value": "LIF18Y",
+    "label": "LIF18Y - ZOOLOGY"
+  },
+  {
+    "value": "LIF19A",
+    "label": "LIF19A - BOTANY"
+  },
+  {
+    "value": "LIF19AT",
+    "label": "LIF19AT - BOTANY"
+  },
+  {
+    "value": "LIF19AY",
+    "label": "LIF19AY - BOTANY"
+  },
+  {
+    "value": "LIF19B",
+    "label": "LIF19B - BOTANY"
+  },
+  {
+    "value": "LIF19BNT",
+    "label": "LIF19BNT - BOTANY"
+  },
+  {
+    "value": "LIF19DW",
+    "label": "LIF19DW - BOTANY"
+  },
+  {
+    "value": "LIF19L",
+    "label": "LIF19L - BOTANY"
+  },
+  {
+    "value": "LIF19Z",
+    "label": "LIF19Z - BOTANY"
+  },
+  {
+    "value": "LIF19ZI",
+    "label": "LIF19ZI - BOTANY"
+  },
+  {
+    "value": "LIF93",
+    "label": "LIF93 - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93DW",
+    "label": "LIF93DW - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93L",
+    "label": "LIF93L - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93NT",
+    "label": "LIF93NT - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93T",
+    "label": "LIF93T - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93U",
+    "label": "LIF93U - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93Y",
+    "label": "LIF93Y - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93YI",
+    "label": "LIF93YI - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF93Z",
+    "label": "LIF93Z - BIO - CHEMISTRY"
+  },
+  {
+    "value": "LIF94",
+    "label": "LIF94 - CENTRE OF WILD LIFE"
+  },
+  {
+    "value": "LIF94DW",
+    "label": "LIF94DW - CENTRE OF WILD LIFE"
+  },
+  {
+    "value": "LIF94NT",
+    "label": "LIF94NT - CENTRE OF WILD LIFE"
+  },
+  {
+    "value": "LIF94U",
+    "label": "LIF94U - CENTRE OF WILD LIFE"
+  },
+  {
+    "value": "LIF94UG",
+    "label": "LIF94UG - CENTRE OF WILD LIFE"
+  },
+  {
+    "value": "LIF94Y",
+    "label": "LIF94Y - CENTRE OF WILD LIFE"
+  },
+  {
+    "value": "LIF94Z",
+    "label": "LIF94Z - CENTRE OF WILD LIFE"
+  },
+  {
+    "value": "MDD76IG",
+    "label": "MDD76IG - NEURO SURGERY"
+  },
+  {
+    "value": "MED100",
+    "label": "MED100 - COLLEGE OF NURSING"
+  },
+  {
+    "value": "MED100NT",
+    "label": "MED100NT - COLLEGE OF NURSING"
+  },
+  {
+    "value": "MED100T",
+    "label": "MED100T - COLLEGE OF NURSING"
+  },
+  {
+    "value": "MED101",
+    "label": "MED101 - COLLEGE OF PARA-MEDICAL SC."
+  },
+  {
+    "value": "MED101NT",
+    "label": "MED101NT - COLLEGE OF PARA-MEDICAL SC."
+  },
+  {
+    "value": "MED101T",
+    "label": "MED101T - COLLEGE OF PARA-MEDICAL SC."
+  },
+  {
+    "value": "MED101Y",
+    "label": "MED101Y - COLLEGE OF PARA-MEDICAL SC."
+  },
+  {
+    "value": "MED70",
+    "label": "MED70 - ANATOMY"
+  },
+  {
+    "value": "MED70DW",
+    "label": "MED70DW - ANATOMY"
+  },
+  {
+    "value": "MED70L",
+    "label": "MED70L - ANATOMY"
+  },
+  {
+    "value": "MED70NT",
+    "label": "MED70NT - ANATOMY"
+  },
+  {
+    "value": "MED70T",
+    "label": "MED70T - ANATOMY"
+  },
+  {
+    "value": "MED70U",
+    "label": "MED70U - ANATOMY"
+  },
+  {
+    "value": "MED70UG",
+    "label": "MED70UG - ANATOMY"
+  },
+  {
+    "value": "MED70Z",
+    "label": "MED70Z - ANATOMY"
+  },
+  {
+    "value": "MED71I",
+    "label": "MED71I - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71II",
+    "label": "MED71II - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71IIDW",
+    "label": "MED71IIDW - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71IINT",
+    "label": "MED71IINT - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71INT",
+    "label": "MED71INT - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71IT",
+    "label": "MED71IT - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71IU",
+    "label": "MED71IU - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71IUG",
+    "label": "MED71IUG - PHYSIOLOGY"
+  },
+  {
+    "value": "MED71IUT",
+    "label": "MED71IUT - PHYSIOLOGY"
+  },
+  {
+    "value": "MED72",
+    "label": "MED72 - BIO - CHEMISTRY (MEDICAL)"
+  },
+  {
+    "value": "MED72B",
+    "label": "MED72B - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72BDW",
+    "label": "MED72BDW - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72BL",
+    "label": "MED72BL - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72BNT",
+    "label": "MED72BNT - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72BT",
+    "label": "MED72BT - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72BU",
+    "label": "MED72BU - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72BY",
+    "label": "MED72BY - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72BZ",
+    "label": "MED72BZ - INTERDISCIPLINARY BIOTECHNOLO"
+  },
+  {
+    "value": "MED72C",
+    "label": "MED72C - INT.BRAIN RESEARCH CENTRE"
+  },
+  {
+    "value": "MED72CDW",
+    "label": "MED72CDW - INT.BRAIN RESEARCH CENTRE"
+  },
+  {
+    "value": "MED72CU",
+    "label": "MED72CU - INT.BRAIN RESEARCH CENTRE"
+  },
+  {
+    "value": "MED72CUG",
+    "label": "MED72CUG - INT.BRAIN RESEARCH CENTRE"
+  },
+  {
+    "value": "MED72CZ",
+    "label": "MED72CZ - INT.BRAIN RESEARCH CENTRE"
+  },
+  {
+    "value": "MED72DW",
+    "label": "MED72DW - BIO - CHEMISTRY (MEDICAL)"
+  },
+  {
+    "value": "MED72L",
+    "label": "MED72L - BIO - CHEMISTRY (MEDICAL)"
+  },
+  {
+    "value": "MED72NT",
+    "label": "MED72NT - BIO - CHEMISTRY (MEDICAL)"
+  },
+  {
+    "value": "MED72T",
+    "label": "MED72T - BIO - CHEMISTRY (MEDICAL)"
+  },
+  {
+    "value": "MED72U",
+    "label": "MED72U - BIO - CHEMISTRY (MEDICAL)"
+  },
+  {
+    "value": "MED72Z",
+    "label": "MED72Z - BIO - CHEMISTRY (MEDICAL)"
+  },
+  {
+    "value": "MED73II",
+    "label": "MED73II - PHARMACOLOGY"
+  },
+  {
+    "value": "MED73IIDW",
+    "label": "MED73IIDW - PHARMACOLOGY"
+  },
+  {
+    "value": "MED73IINT",
+    "label": "MED73IINT - PHARMACOLOGY"
+  },
+  {
+    "value": "MED73IIT",
+    "label": "MED73IIT - PHARMACOLOGY"
+  },
+  {
+    "value": "MED73IU",
+    "label": "MED73IU - PHARMACOLOGY"
+  },
+  {
+    "value": "MED73IUT",
+    "label": "MED73IUT - PHARMACOLOGY"
+  },
+  {
+    "value": "MED746NT",
+    "label": "MED746NT - PATHALOGY"
+  },
+  {
+    "value": "MED74G",
+    "label": "MED74G - PATHALOGY"
+  },
+  {
+    "value": "MED74II",
+    "label": "MED74II - PATHALOGY"
+  },
+  {
+    "value": "MED74IIDW",
+    "label": "MED74IIDW - PATHALOGY"
+  },
+  {
+    "value": "MED74III",
+    "label": "MED74III - PATHALOGY"
+  },
+  {
+    "value": "MED74IINT",
+    "label": "MED74IINT - PATHALOGY"
+  },
+  {
+    "value": "MED74IIT",
+    "label": "MED74IIT - PATHALOGY"
+  },
+  {
+    "value": "MED74IU",
+    "label": "MED74IU - PATHALOGY"
+  },
+  {
+    "value": "MED74IUT",
+    "label": "MED74IUT - PATHALOGY"
+  },
+  {
+    "value": "MED75A",
+    "label": "MED75A - MICROBIOLOGY"
+  },
+  {
+    "value": "MED75AG",
+    "label": "MED75AG - MICROBIOLOGY"
+  },
+  {
+    "value": "MED75ANT",
+    "label": "MED75ANT - MICROBIOLOGY"
+  },
+  {
+    "value": "MED75AT",
+    "label": "MED75AT - MICROBIOLOGY"
+  },
+  {
+    "value": "MED75AU",
+    "label": "MED75AU - MICROBIOLOGY"
+  },
+  {
+    "value": "MED75AUG",
+    "label": "MED75AUG - MICROBIOLOGY"
+  },
+  {
+    "value": "MED76",
+    "label": "MED76 - SURGERY"
+  },
+  {
+    "value": "MED76B",
+    "label": "MED76B - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BDW",
+    "label": "MED76BDW - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BG",
+    "label": "MED76BG - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BL",
+    "label": "MED76BL - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BNT",
+    "label": "MED76BNT - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BT",
+    "label": "MED76BT - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BU",
+    "label": "MED76BU - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BUG",
+    "label": "MED76BUG - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76BZ",
+    "label": "MED76BZ - ORTHOPAEDIC SURGERY"
+  },
+  {
+    "value": "MED76C",
+    "label": "MED76C - ANAESTHESIOLOGY"
+  },
+  {
+    "value": "MED76CG",
+    "label": "MED76CG - ANAESTHESIOLOGY"
+  },
+  {
+    "value": "MED76CNT",
+    "label": "MED76CNT - ANAESTHESIOLOGY"
+  },
+  {
+    "value": "MED76CT",
+    "label": "MED76CT - ANAESTHESIOLOGY"
+  },
+  {
+    "value": "MED76CU",
+    "label": "MED76CU - ANAESTHESIOLOGY"
+  },
+  {
+    "value": "MED76CUG",
+    "label": "MED76CUG - ANAESTHESIOLOGY"
+  },
+  {
+    "value": "MED76D",
+    "label": "MED76D - OTORHINO LARYNGOLOGY [E N T]"
+  },
+  {
+    "value": "MED76DL",
+    "label": "MED76DL - OTORHINO LARYNGOLOGY [E N T]"
+  },
+  {
+    "value": "MED76DNT",
+    "label": "MED76DNT - OTORHINO LARYNGOLOGY [E N T]"
+  },
+  {
+    "value": "MED76DT",
+    "label": "MED76DT - OTORHINO LARYNGOLOGY [E N T]"
+  },
+  {
+    "value": "MED76DU",
+    "label": "MED76DU - OTORHINO LARYNGOLOGY [E N T]"
+  },
+  {
+    "value": "MED76E",
+    "label": "MED76E - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "MED76E3UG",
+    "label": "MED76E3UG - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "MED76E7UG",
+    "label": "MED76E7UG - PAEDIATRICS AND PREVENTIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EI",
+    "label": "MED76EI - PROSTHODONTICS"
+  },
+  {
+    "value": "MED76EII",
+    "label": "MED76EII - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "MED76EIII",
+    "label": "MED76EIII - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "MED76EIIIG",
+    "label": "MED76EIIIG - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "MED76EIIIU",
+    "label": "MED76EIIIU - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "MED76EIIIZ",
+    "label": "MED76EIIIZ - ORTHODONTICS & DENTAL ANATOMY"
+  },
+  {
+    "value": "MED76EIIU",
+    "label": "MED76EIIU - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "MED76EIIUG",
+    "label": "MED76EIIUG - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "MED76EIIZ",
+    "label": "MED76EIIZ - PERIODONTIA & COMM. DENTISTRY"
+  },
+  {
+    "value": "MED76EIU",
+    "label": "MED76EIU - PROSTHODONTICS"
+  },
+  {
+    "value": "MED76EIUG",
+    "label": "MED76EIUG - PROSTHODONTICS"
+  },
+  {
+    "value": "MED76EIV",
+    "label": "MED76EIV - CONSERVATIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EIVU",
+    "label": "MED76EIVU - CONSERVATIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EIVUG",
+    "label": "MED76EIVUG - CONSERVATIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EIVZ",
+    "label": "MED76EIVZ - CONSERVATIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EIZ",
+    "label": "MED76EIZ - PROSTHODONTICS"
+  },
+  {
+    "value": "MED76EL",
+    "label": "MED76EL - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "MED76EU",
+    "label": "MED76EU - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "MED76EV",
+    "label": "MED76EV - ORAL & MAXILLOFACIAL"
+  },
+  {
+    "value": "MED76EVI",
+    "label": "MED76EVI - ORAL & DENTAL PATHOLOGY"
+  },
+  {
+    "value": "MED76EVII",
+    "label": "MED76EVII - PAEDIATRICS AND PREVENTIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EVIIU",
+    "label": "MED76EVIIU - PAEDIATRICS AND PREVENTIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EVIIZ",
+    "label": "MED76EVIIZ - PAEDIATRICS AND PREVENTIVE DENTISTRY"
+  },
+  {
+    "value": "MED76EVIU",
+    "label": "MED76EVIU - ORAL & DENTAL PATHOLOGY"
+  },
+  {
+    "value": "MED76EVUG",
+    "label": "MED76EVUG - ORAL & MAXILLOFACIAL"
+  },
+  {
+    "value": "MED76EY",
+    "label": "MED76EY - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "MED76EZ",
+    "label": "MED76EZ - PRINCIPAL OFFICE DENTAL COLLEG"
+  },
+  {
+    "value": "MED76I",
+    "label": "MED76I - NEURO SURGERY"
+  },
+  {
+    "value": "MED76IDW",
+    "label": "MED76IDW - NEURO SURGERY"
+  },
+  {
+    "value": "MED76II",
+    "label": "MED76II - PAEDIATRICS SURGERY"
+  },
+  {
+    "value": "MED76IIDW",
+    "label": "MED76IIDW - PAEDIATRICS SURGERY"
+  },
+  {
+    "value": "MED76IIG",
+    "label": "MED76IIG - PAEDIATRICS SURGERY"
+  },
+  {
+    "value": "MED76III",
+    "label": "MED76III - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IIIDW",
+    "label": "MED76IIIDW - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IIIG",
+    "label": "MED76IIIG - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IIINT",
+    "label": "MED76IIINT - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IIIT",
+    "label": "MED76IIIT - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IIIU",
+    "label": "MED76IIIU - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IIIUG",
+    "label": "MED76IIIUG - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IIIZ",
+    "label": "MED76IIIZ - CARDIOTHORACIC SURGERY"
+  },
+  {
+    "value": "MED76IINT",
+    "label": "MED76IINT - PAEDIATRICS SURGERY"
+  },
+  {
+    "value": "MED76IIT",
+    "label": "MED76IIT - PAEDIATRICS SURGERY"
+  },
+  {
+    "value": "MED76IIU",
+    "label": "MED76IIU - PAEDIATRICS SURGERY"
+  },
+  {
+    "value": "MED76IIUG",
+    "label": "MED76IIUG - PAEDIATRICS SURGERY"
+  },
+  {
+    "value": "MED76IL",
+    "label": "MED76IL - NEURO SURGERY"
+  },
+  {
+    "value": "MED76INT",
+    "label": "MED76INT - NEURO SURGERY"
+  },
+  {
+    "value": "MED76IT",
+    "label": "MED76IT - NEURO SURGERY"
+  },
+  {
+    "value": "MED76IU",
+    "label": "MED76IU - NEURO SURGERY"
+  },
+  {
+    "value": "MED76IUG",
+    "label": "MED76IUG - NEURO SURGERY"
+  },
+  {
+    "value": "MED76NT",
+    "label": "MED76NT - SURGERY"
+  },
+  {
+    "value": "MED76P",
+    "label": "MED76P - PLASTIC SURGERY"
+  },
+  {
+    "value": "MED76PDW",
+    "label": "MED76PDW - PLASTIC SURGERY"
+  },
+  {
+    "value": "MED76PNT",
+    "label": "MED76PNT - PLASTIC SURGERY"
+  },
+  {
+    "value": "MED76PT",
+    "label": "MED76PT - PLASTIC SURGERY"
+  },
+  {
+    "value": "MED76PU",
+    "label": "MED76PU - PLASTIC SURGERY"
+  },
+  {
+    "value": "MED76PZ",
+    "label": "MED76PZ - PLASTIC SURGERY"
+  },
+  {
+    "value": "MED76T",
+    "label": "MED76T - SURGERY"
+  },
+  {
+    "value": "MED76U",
+    "label": "MED76U - SURGERY"
+  },
+  {
+    "value": "MED76UG",
+    "label": "MED76UG - SURGERY"
+  },
+  {
+    "value": "MED77",
+    "label": "MED77 - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77B",
+    "label": "MED77B - RADIOTHERAPY"
+  },
+  {
+    "value": "MED77BNT",
+    "label": "MED77BNT - RADIOTHERAPY"
+  },
+  {
+    "value": "MED77BT",
+    "label": "MED77BT - RADIOTHERAPY"
+  },
+  {
+    "value": "MED77BU",
+    "label": "MED77BU - RADIOTHERAPY"
+  },
+  {
+    "value": "MED77BUG",
+    "label": "MED77BUG - RADIOTHERAPY"
+  },
+  {
+    "value": "MED77BZ",
+    "label": "MED77BZ - RADIOTHERAPY"
+  },
+  {
+    "value": "MED77DW",
+    "label": "MED77DW - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77L",
+    "label": "MED77L - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77NT",
+    "label": "MED77NT - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77T",
+    "label": "MED77T - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77U",
+    "label": "MED77U - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77UG",
+    "label": "MED77UG - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77Y",
+    "label": "MED77Y - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED77Z",
+    "label": "MED77Z - RADIO DIAGNOSIS"
+  },
+  {
+    "value": "MED78A",
+    "label": "MED78A - MEDICINE"
+  },
+  {
+    "value": "MED78AG",
+    "label": "MED78AG - MEDICINE"
+  },
+  {
+    "value": "MED78AI",
+    "label": "MED78AI - C.FOR DIABETES & ENDOCRINOLOGY"
+  },
+  {
+    "value": "MED78AII",
+    "label": "MED78AII - CARDIOLOGY"
+  },
+  {
+    "value": "MED78AIIT",
+    "label": "MED78AIIT - CARDIOLOGY"
+  },
+  {
+    "value": "MED78AIIU",
+    "label": "MED78AIIU - CARDIOLOGY"
+  },
+  {
+    "value": "MED78AIIUG",
+    "label": "MED78AIIUG - CARDIOLOGY"
+  },
+  {
+    "value": "MED78AIIZ",
+    "label": "MED78AIIZ - CARDIOLOGY"
+  },
+  {
+    "value": "MED78AINT",
+    "label": "MED78AINT - C.FOR DIABETES & ENDOCRINOLOGY"
+  },
+  {
+    "value": "MED78AIT",
+    "label": "MED78AIT - C.FOR DIABETES & ENDOCRINOLOGY"
+  },
+  {
+    "value": "MED78ANT",
+    "label": "MED78ANT - MEDICINE"
+  },
+  {
+    "value": "MED78AT",
+    "label": "MED78AT - MEDICINE"
+  },
+  {
+    "value": "MED78AU31",
+    "label": "MED78AU31 - MEDICINE"
+  },
+  {
+    "value": "MED78AUG",
+    "label": "MED78AUG - MEDICINE"
+  },
+  {
+    "value": "MED78B",
+    "label": "MED78B - MEDICINE"
+  },
+  {
+    "value": "MED78BDW",
+    "label": "MED78BDW - MEDICINE"
+  },
+  {
+    "value": "MED78BNT",
+    "label": "MED78BNT - MEDICINE"
+  },
+  {
+    "value": "MED78C",
+    "label": "MED78C - T B & CHEST"
+  },
+  {
+    "value": "MED78CDW",
+    "label": "MED78CDW - T B & CHEST"
+  },
+  {
+    "value": "MED78CG",
+    "label": "MED78CG - T B & CHEST"
+  },
+  {
+    "value": "MED78CNT",
+    "label": "MED78CNT - T B & CHEST"
+  },
+  {
+    "value": "MED78CT",
+    "label": "MED78CT - T B & CHEST"
+  },
+  {
+    "value": "MED78CU",
+    "label": "MED78CU - T B & CHEST"
+  },
+  {
+    "value": "MED78CUG",
+    "label": "MED78CUG - T B & CHEST"
+  },
+  {
+    "value": "MED78CZ",
+    "label": "MED78CZ - T B & CHEST"
+  },
+  {
+    "value": "MED78D",
+    "label": "MED78D - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DDW",
+    "label": "MED78DDW - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DG",
+    "label": "MED78DG - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DL",
+    "label": "MED78DL - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DNT",
+    "label": "MED78DNT - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DT",
+    "label": "MED78DT - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DU",
+    "label": "MED78DU - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DY",
+    "label": "MED78DY - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78DZ",
+    "label": "MED78DZ - DERMATOLOGY [SKIN & VD]"
+  },
+  {
+    "value": "MED78E",
+    "label": "MED78E - PSYCHIATRY"
+  },
+  {
+    "value": "MED78EDW",
+    "label": "MED78EDW - PSYCHIATRY"
+  },
+  {
+    "value": "MED78EL",
+    "label": "MED78EL - PSYCHIATRY"
+  },
+  {
+    "value": "MED78ENT",
+    "label": "MED78ENT - PSYCHIATRY"
+  },
+  {
+    "value": "MED78ET",
+    "label": "MED78ET - PSYCHIATRY"
+  },
+  {
+    "value": "MED78EU",
+    "label": "MED78EU - PSYCHIATRY"
+  },
+  {
+    "value": "MED78EUG",
+    "label": "MED78EUG - PSYCHIATRY"
+  },
+  {
+    "value": "MED78EY",
+    "label": "MED78EY - PSYCHIATRY"
+  },
+  {
+    "value": "MED78EZ",
+    "label": "MED78EZ - PSYCHIATRY"
+  },
+  {
+    "value": "MED79",
+    "label": "MED79 - FORENSIC MEDICINE"
+  },
+  {
+    "value": "MED79DW",
+    "label": "MED79DW - FORENSIC MEDICINE"
+  },
+  {
+    "value": "MED79NT",
+    "label": "MED79NT - FORENSIC MEDICINE"
+  },
+  {
+    "value": "MED79T",
+    "label": "MED79T - FORENSIC MEDICINE"
+  },
+  {
+    "value": "MED79U",
+    "label": "MED79U - FORENSIC MEDICINE"
+  },
+  {
+    "value": "MED79UG",
+    "label": "MED79UG - FORENSIC MEDICINE"
+  },
+  {
+    "value": "MED80",
+    "label": "MED80 - PAEDIATRICS"
+  },
+  {
+    "value": "MED80G",
+    "label": "MED80G - PAEDIATRICS"
+  },
+  {
+    "value": "MED80L",
+    "label": "MED80L - PAEDIATRICS"
+  },
+  {
+    "value": "MED80NT",
+    "label": "MED80NT - PAEDIATRICS"
+  },
+  {
+    "value": "MED80T",
+    "label": "MED80T - PAEDIATRICS"
+  },
+  {
+    "value": "MED80U",
+    "label": "MED80U - PAEDIATRICS"
+  },
+  {
+    "value": "MED80UG",
+    "label": "MED80UG - PAEDIATRICS"
+  },
+  {
+    "value": "MED80Z",
+    "label": "MED80Z - PAEDIATRICS"
+  },
+  {
+    "value": "MED81I",
+    "label": "MED81I - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED81IDW",
+    "label": "MED81IDW - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED81II",
+    "label": "MED81II - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED81III",
+    "label": "MED81III - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED81INT",
+    "label": "MED81INT - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED81IT",
+    "label": "MED81IT - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED81IU",
+    "label": "MED81IU - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED81IUT",
+    "label": "MED81IUT - COMMUNITY MEDICINE"
+  },
+  {
+    "value": "MED82",
+    "label": "MED82 - GYNAECOLOGY & OBST"
+  },
+  {
+    "value": "MED82DW",
+    "label": "MED82DW - GYNAECOLOGY & OBST"
+  },
+  {
+    "value": "MED82L",
+    "label": "MED82L - GYNAECOLOGY & OBST"
+  },
+  {
+    "value": "MED82NT",
+    "label": "MED82NT - GYNAECOLOGY & OBST"
+  },
+  {
+    "value": "MED82T",
+    "label": "MED82T - GYNAECOLOGY & OBST"
+  },
+  {
+    "value": "MED82U",
+    "label": "MED82U - GYNAECOLOGY & OBST"
+  },
+  {
+    "value": "MED82UG",
+    "label": "MED82UG - GYNAECOLOGY & OBST"
+  },
+  {
+    "value": "MED83A",
+    "label": "MED83A - CENTRAL ANIMAL HOUSE"
+  },
+  {
+    "value": "MED83ADW",
+    "label": "MED83ADW - CENTRAL ANIMAL HOUSE"
+  },
+  {
+    "value": "MED83AL",
+    "label": "MED83AL - CENTRAL ANIMAL HOUSE"
+  },
+  {
+    "value": "MED83ANT",
+    "label": "MED83ANT - CENTRAL ANIMAL HOUSE"
+  },
+  {
+    "value": "MED84C",
+    "label": "MED84C - INTERN'S (J.N.M.C.)"
+  },
+  {
+    "value": "MED84CA",
+    "label": "MED84CA - INTERN'S (J.N.M.C.)"
+  },
+  {
+    "value": "MED84CAI",
+    "label": "MED84CAI - INTERN'S (J.N.M.C.)"
+  },
+  {
+    "value": "MED84CI",
+    "label": "MED84CI - INTERN'S (J.N.M.C.)"
+  },
+  {
+    "value": "MED84CII",
+    "label": "MED84CII - INTERN'S (J.N.M.C.)"
+  },
+  {
+    "value": "MED84D",
+    "label": "MED84D - INTERNS (DENTAL COLLEGE)"
+  },
+  {
+    "value": "MED84F",
+    "label": "MED84F - INTERN'S (J.N.M.C.)"
+  },
+  {
+    "value": "MED85A",
+    "label": "MED85A - OPHTHALMOLOGY"
+  },
+  {
+    "value": "MED85AT",
+    "label": "MED85AT - OPHTHALMOLOGY"
+  },
+  {
+    "value": "MED85B",
+    "label": "MED85B - OPHTHALMOLOGY"
+  },
+  {
+    "value": "MED85C",
+    "label": "MED85C - OPHTHALMOLOGY"
+  },
+  {
+    "value": "MED85DW",
+    "label": "MED85DW - OPHTHALMOLOGY"
+  },
+  {
+    "value": "MED85L",
+    "label": "MED85L - OPHTHALMOLOGY"
+  },
+  {
+    "value": "MED85NT",
+    "label": "MED85NT - OPHTHALMOLOGY"
+  },
+  {
+    "value": "MED92",
+    "label": "MED92 - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92A",
+    "label": "MED92A - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92AI",
+    "label": "MED92AI - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92B",
+    "label": "MED92B - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92BI",
+    "label": "MED92BI - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92BII",
+    "label": "MED92BII - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92BIII",
+    "label": "MED92BIII - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92BIV",
+    "label": "MED92BIV - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92C",
+    "label": "MED92C - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92D",
+    "label": "MED92D - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92DI",
+    "label": "MED92DI - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92DII",
+    "label": "MED92DII - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92DIII",
+    "label": "MED92DIII - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92DIV",
+    "label": "MED92DIV - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92E",
+    "label": "MED92E - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92F",
+    "label": "MED92F - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92FI",
+    "label": "MED92FI - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92H",
+    "label": "MED92H - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92HI",
+    "label": "MED92HI - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92K",
+    "label": "MED92K - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92KI",
+    "label": "MED92KI - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92KII",
+    "label": "MED92KII - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92KIII",
+    "label": "MED92KIII - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92KIV",
+    "label": "MED92KIV - POST GRADUATE STUDENTS-MEDICAL"
+  },
+  {
+    "value": "MED92L",
+    "label": "MED92L - POST GRADUATE STUDENT (DENTAL)"
+  },
+  {
+    "value": "MED92M",
+    "label": "MED92M - POST GRADUATE STUDENT (DENTAL)"
+  },
+  {
+    "value": "MED92N",
+    "label": "MED92N - POST GRADUATE STUDENT (DENTAL)"
+  },
+  {
+    "value": "MED92O",
+    "label": "MED92O - POST GRADUATE STUDENT (DENTAL)"
+  },
+  {
+    "value": "MED92P",
+    "label": "MED92P - POST GRADUATE STUDENT (DENTAL)"
+  },
+  {
+    "value": "MED92Q",
+    "label": "MED92Q - POST GRADUATE STUDENT (DENTAL)"
+  },
+  {
+    "value": "MED92R",
+    "label": "MED92R - POST GRADUATE STUDENT (DENTAL)"
+  },
+  {
+    "value": "MLP120U",
+    "label": "MLP120U - BUSINESS ADMIN (MALLAPURAM)"
+  },
+  {
+    "value": "MLP120UT",
+    "label": "MLP120UT - BUSINESS ADMIN (MALLAPURAM)"
+  },
+  {
+    "value": "MLP120Y",
+    "label": "MLP120Y - BUSINESS ADMIN (MALLAPURAM)"
+  },
+  {
+    "value": "MLP121U",
+    "label": "MLP121U - LAW DEPARTMENT (MALLAPURAM)"
+  },
+  {
+    "value": "MLP121UT",
+    "label": "MLP121UT - LAW DEPARTMENT (MALLAPURAM)"
+  },
+  {
+    "value": "MLP121Y",
+    "label": "MLP121Y - LAW DEPARTMENT (MALLAPURAM)"
+  },
+  {
+    "value": "MLP122",
+    "label": "MLP122 - MALLAPURAM CENTRE"
+  },
+  {
+    "value": "MLP122DW",
+    "label": "MLP122DW - MALLAPURAM CENTRE"
+  },
+  {
+    "value": "MLP122LS",
+    "label": "MLP122LS - MALLAPURAM CENTRE"
+  },
+  {
+    "value": "MLP122NT",
+    "label": "MLP122NT - MALLAPURAM CENTRE"
+  },
+  {
+    "value": "MLP122Y",
+    "label": "MLP122Y - MALLAPURAM CENTRE"
+  },
+  {
+    "value": "MLP123",
+    "label": "MLP123 - MALLAPURAM CENTRE"
+  },
+  {
+    "value": "MLP123U",
+    "label": "MLP123U - EDUCATION DEPTT. (MALLAPURAM)"
+  },
+  {
+    "value": "MLP123UT",
+    "label": "MLP123UT - EDUCATION DEPTT. (MALLAPURAM)"
+  },
+  {
+    "value": "MLP123Y",
+    "label": "MLP123Y - EDUCATION DEPTT. (MALLAPURAM)"
+  },
+  {
+    "value": "MNG883BDW",
+    "label": "MNG883BDW - DEAN F/o MNGT.STUDIES & RES."
+  },
+  {
+    "value": "MNG88ANT",
+    "label": "MNG88ANT - BUSINESS ADMINISTRATION"
+  },
+  {
+    "value": "MNG88IIIA",
+    "label": "MNG88IIIA - BUSINESS ADMINISTRATION"
+  },
+  {
+    "value": "MNG88IIIB",
+    "label": "MNG88IIIB - DEAN F/o MNGT.STUDIES & RES."
+  },
+  {
+    "value": "MNG88IIIBZ",
+    "label": "MNG88IIIBZ - DEAN F/o MNGT.STUDIES & RES."
+  },
+  {
+    "value": "MNG88IIINT",
+    "label": "MNG88IIINT - DEAN F/o MNGT.STUDIES & RES."
+  },
+  {
+    "value": "MNG88IIITY",
+    "label": "MNG88IIITY - BUSINESS ADMINISTRATION"
+  },
+  {
+    "value": "MNG88IIIU",
+    "label": "MNG88IIIU - BUSINESS ADMINISTRATION"
+  },
+  {
+    "value": "MNG88IIIY",
+    "label": "MNG88IIIY - BUSINESS ADMINISTRATION"
+  },
+  {
+    "value": "MNG88UT",
+    "label": "MNG88UT - BUSINESS ADMINISTRATION"
+  },
+  {
+    "value": "MUR150",
+    "label": "MUR150 - MURSHIDABAD CENTRE"
+  },
+  {
+    "value": "MUR150DW",
+    "label": "MUR150DW - MURSHIDABAD CENTRE"
+  },
+  {
+    "value": "MUR150LV",
+    "label": "MUR150LV - MURSHIDABAD CENTRE"
+  },
+  {
+    "value": "MUR150Y",
+    "label": "MUR150Y - MURSHIDABAD CENTRE"
+  },
+  {
+    "value": "MUR151U",
+    "label": "MUR151U - BUSINESS ADMIN. (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR151UT",
+    "label": "MUR151UT - BUSINESS ADMIN. (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR151Y",
+    "label": "MUR151Y - BUSINESS ADMIN. (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR152U",
+    "label": "MUR152U - LAW (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR152UT",
+    "label": "MUR152UT - LAW (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR152Y",
+    "label": "MUR152Y - LAW (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR153U",
+    "label": "MUR153U - EDU. DEPTT.  (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR153UT",
+    "label": "MUR153UT - EDU. DEPTT.  (MURSHIDABAD)"
+  },
+  {
+    "value": "MUR153Y",
+    "label": "MUR153Y - EDU. DEPTT.  (MURSHIDABAD)"
+  },
+  {
+    "value": "OTH130US",
+    "label": "OTH130US - COMMUNITY COLLEGE"
+  },
+  {
+    "value": "OTH202ADW",
+    "label": "OTH202ADW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202BDW",
+    "label": "OTH202BDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202CDW",
+    "label": "OTH202CDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202DDW",
+    "label": "OTH202DDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202EDW",
+    "label": "OTH202EDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202FDW",
+    "label": "OTH202FDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202GDW",
+    "label": "OTH202GDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202HDW",
+    "label": "OTH202HDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202IDW",
+    "label": "OTH202IDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202JDW",
+    "label": "OTH202JDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202KDW",
+    "label": "OTH202KDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202LDW",
+    "label": "OTH202LDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202MDW",
+    "label": "OTH202MDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202NDW",
+    "label": "OTH202NDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202PDW",
+    "label": "OTH202PDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202PTR",
+    "label": "OTH202PTR - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202QDW",
+    "label": "OTH202QDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202RDW",
+    "label": "OTH202RDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202SDW",
+    "label": "OTH202SDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202TDW",
+    "label": "OTH202TDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202UDW",
+    "label": "OTH202UDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202VDW",
+    "label": "OTH202VDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202WDW",
+    "label": "OTH202WDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202XDW",
+    "label": "OTH202XDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202YDW",
+    "label": "OTH202YDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202ZADW",
+    "label": "OTH202ZADW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202ZBDW",
+    "label": "OTH202ZBDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202ZCDW",
+    "label": "OTH202ZCDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH202ZDW",
+    "label": "OTH202ZDW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH203DW",
+    "label": "OTH203DW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH204DW",
+    "label": "OTH204DW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH205DW",
+    "label": "OTH205DW - RECURRING HEAD (OH - 31)"
+  },
+  {
+    "value": "OTH22A",
+    "label": "OTH22A - GAMES COMMITTEE"
+  },
+  {
+    "value": "OTH22AI",
+    "label": "OTH22AI - GAMES COMMITTEE"
+  },
+  {
+    "value": "OTH22F",
+    "label": "OTH22F - LIAISON OFFICE AMU AT JMI"
+  },
+  {
+    "value": "OTH22H",
+    "label": "OTH22H - SOCIAL EDUCATION SERVICE"
+  },
+  {
+    "value": "OTH22JU",
+    "label": "OTH22JU - BRIDGE COURSE"
+  },
+  {
+    "value": "OTH22JUY",
+    "label": "OTH22JUY - BRIDGE COURSE"
+  },
+  {
+    "value": "OTH22JUYNT",
+    "label": "OTH22JUYNT - BRIDGE COURSE"
+  },
+  {
+    "value": "OTH22JUYT",
+    "label": "OTH22JUYT - BRIDGE COURSE"
+  },
+  {
+    "value": "OTH22JZ",
+    "label": "OTH22JZ - BRIDGE COURSE"
+  },
+  {
+    "value": "OTH22L",
+    "label": "OTH22L - UNIVERSITY EXTENSION LECTURES"
+  },
+  {
+    "value": "OTH22P",
+    "label": "OTH22P - UNIVERSITY GUEST HOUSE"
+  },
+  {
+    "value": "OTH22PDW",
+    "label": "OTH22PDW - UNIVERSITY GUEST HOUSE"
+  },
+  {
+    "value": "OTH22PL",
+    "label": "OTH22PL - UNIVERSITY GUEST HOUSE"
+  },
+  {
+    "value": "OTH22PNT",
+    "label": "OTH22PNT - UNIVERSITY GUEST HOUSE"
+  },
+  {
+    "value": "OTH22PY",
+    "label": "OTH22PY - UNIVERSITY GUEST HOUSE"
+  },
+  {
+    "value": "OTH22PZ",
+    "label": "OTH22PZ - UNIVERSITY GUEST HOUSE"
+  },
+  {
+    "value": "OTH22W",
+    "label": "OTH22W - AMU GAS AGENCY"
+  },
+  {
+    "value": "OTH22WDW",
+    "label": "OTH22WDW - AMU GAS AGENCY"
+  },
+  {
+    "value": "OTH32",
+    "label": "OTH32 - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32A",
+    "label": "OTH32A - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32ADW",
+    "label": "OTH32ADW - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32ANT",
+    "label": "OTH32ANT - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32B",
+    "label": "OTH32B - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32BNT",
+    "label": "OTH32BNT - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32C",
+    "label": "OTH32C - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32CI",
+    "label": "OTH32CI - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32CINT",
+    "label": "OTH32CINT - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32CL",
+    "label": "OTH32CL - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32CNT",
+    "label": "OTH32CNT - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32D",
+    "label": "OTH32D - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32DL",
+    "label": "OTH32DL - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32DNT",
+    "label": "OTH32DNT - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32E",
+    "label": "OTH32E - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32EDW",
+    "label": "OTH32EDW - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32FDW",
+    "label": "OTH32FDW - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32FG",
+    "label": "OTH32FG - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32FI",
+    "label": "OTH32FI - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32FY",
+    "label": "OTH32FY - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH32FZ",
+    "label": "OTH32FZ - BUILDING DEPARTMENT"
+  },
+  {
+    "value": "OTH34",
+    "label": "OTH34 - SIR SYED HOUSE"
+  },
+  {
+    "value": "OTH34DW",
+    "label": "OTH34DW - SIR SYED HOUSE"
+  },
+  {
+    "value": "OTH34NT",
+    "label": "OTH34NT - SIR SYED HOUSE"
+  },
+  {
+    "value": "OTH38",
+    "label": "OTH38 - TELEPHONE DEPTT"
+  },
+  {
+    "value": "OTH38DW",
+    "label": "OTH38DW - TELEPHONE DEPTT"
+  },
+  {
+    "value": "OTH38NT",
+    "label": "OTH38NT - TELEPHONE DEPTT"
+  },
+  {
+    "value": "OTH38T",
+    "label": "OTH38T - TELEPHONE DEPTT"
+  },
+  {
+    "value": "OTH38TL",
+    "label": "OTH38TL - TELEPHONE DEPTT"
+  },
+  {
+    "value": "OTH38TY",
+    "label": "OTH38TY - TELEPHONE DEPTT"
+  },
+  {
+    "value": "OTH38TZ",
+    "label": "OTH38TZ - TELEPHONE DEPTT"
+  },
+  {
+    "value": "OTH45A",
+    "label": "OTH45A - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH45AL",
+    "label": "OTH45AL - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH45B",
+    "label": "OTH45B - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH45C",
+    "label": "OTH45C - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH45CY",
+    "label": "OTH45CY - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH45CZ",
+    "label": "OTH45CZ - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH45DW",
+    "label": "OTH45DW - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH45NT",
+    "label": "OTH45NT - UNIVERSITY HEALTH SERVICE"
+  },
+  {
+    "value": "OTH46A",
+    "label": "OTH46A - PURCHASE OFFICE"
+  },
+  {
+    "value": "OTH46ADW",
+    "label": "OTH46ADW - PURCHASE OFFICE"
+  },
+  {
+    "value": "OTH46ANT",
+    "label": "OTH46ANT - PURCHASE OFFICE"
+  },
+  {
+    "value": "OTH46AZ",
+    "label": "OTH46AZ - PURCHASE OFFICE"
+  },
+  {
+    "value": "OTH46B",
+    "label": "OTH46B - PROPERTY OFFICE"
+  },
+  {
+    "value": "OTH46BDW",
+    "label": "OTH46BDW - PROPERTY OFFICE"
+  },
+  {
+    "value": "OTH46BNT",
+    "label": "OTH46BNT - PROPERTY OFFICE"
+  },
+  {
+    "value": "OTH46BZ",
+    "label": "OTH46BZ - PROPERTY OFFICE"
+  },
+  {
+    "value": "OTH46C",
+    "label": "OTH46C - ESTATE OFFICE [GAZETTED]"
+  },
+  {
+    "value": "OTH46CNT",
+    "label": "OTH46CNT - ESTATE OFFICE [GAZETTED]"
+  },
+  {
+    "value": "OTH47A",
+    "label": "OTH47A - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47ADW",
+    "label": "OTH47ADW - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47AI",
+    "label": "OTH47AI - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47AIDW",
+    "label": "OTH47AIDW - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47AIIDW",
+    "label": "OTH47AIIDW - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47AIY",
+    "label": "OTH47AIY - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47AIZ",
+    "label": "OTH47AIZ - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47ANT",
+    "label": "OTH47ANT - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47AY",
+    "label": "OTH47AY - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47AZ",
+    "label": "OTH47AZ - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47C",
+    "label": "OTH47C - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47C6",
+    "label": "OTH47C6 - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH47CY",
+    "label": "OTH47CY - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH48A",
+    "label": "OTH48A - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48ANT",
+    "label": "OTH48ANT - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48B",
+    "label": "OTH48B - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48BNT",
+    "label": "OTH48BNT - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48C",
+    "label": "OTH48C - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48CNT",
+    "label": "OTH48CNT - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48D",
+    "label": "OTH48D - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48DDW",
+    "label": "OTH48DDW - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48DY",
+    "label": "OTH48DY - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH48DZ",
+    "label": "OTH48DZ - GARDEN AND LANDS"
+  },
+  {
+    "value": "OTH51",
+    "label": "OTH51 - HOBBIES WORKSHOP"
+  },
+  {
+    "value": "OTH53",
+    "label": "OTH53 - LEGAL REMEMBRENCER'S OFFICE"
+  },
+  {
+    "value": "OTH57A",
+    "label": "OTH57A - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH57AI",
+    "label": "OTH57AI - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH57AIY",
+    "label": "OTH57AIY - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH57B",
+    "label": "OTH57B - UNIVERSITY HEALTH OFFICE [CON]"
+  },
+  {
+    "value": "OTH86MAS",
+    "label": "OTH86MAS - MEDICAL ATTENDANCE SCHEME"
+  },
+  {
+    "value": "OTH86MASDW",
+    "label": "OTH86MASDW - MEDICAL ATTENDANCE SCHEME"
+  },
+  {
+    "value": "OTH86MASNT",
+    "label": "OTH86MASNT - MEDICAL ATTENDANCE SCHEME"
+  },
+  {
+    "value": "OTH86MASZ",
+    "label": "OTH86MASZ - MEDICAL ATTENDANCE SCHEME"
+  },
+  {
+    "value": "PUB22B",
+    "label": "PUB22B - UNIVERSITY GAZETTE"
+  },
+  {
+    "value": "PUB22BDW",
+    "label": "PUB22BDW - UNIVERSITY GAZETTE"
+  },
+  {
+    "value": "PUB22BNT",
+    "label": "PUB22BNT - UNIVERSITY GAZETTE"
+  },
+  {
+    "value": "PUB22C",
+    "label": "PUB22C - UNIVERSITY PUB.(DIRECTOR)"
+  },
+  {
+    "value": "PUB22CDW",
+    "label": "PUB22CDW - UNIVERSITY PUB.(DIRECTOR)"
+  },
+  {
+    "value": "PUB22CNT",
+    "label": "PUB22CNT - UNIVERSITY PUB.(DIRECTOR)"
+  },
+  {
+    "value": "PUB22M",
+    "label": "PUB22M - IDARA -E- FIKRO NAZAR"
+  },
+  {
+    "value": "PUB22MDW",
+    "label": "PUB22MDW - IDARA -E- FIKRO NAZAR"
+  },
+  {
+    "value": "PUB22MNT",
+    "label": "PUB22MNT - IDARA -E- FIKRO NAZAR"
+  },
+  {
+    "value": "SBFCC",
+    "label": "SBFCC - CENTRAL AUTOMOBILE WORKSHOP"
+  },
+  {
+    "value": "SCI15AU",
+    "label": "SCI15AU - PHYSICS"
+  },
+  {
+    "value": "SCI15AUG",
+    "label": "SCI15AUG - PHYSICS"
+  },
+  {
+    "value": "SCI15AUT",
+    "label": "SCI15AUT - PHYSICS"
+  },
+  {
+    "value": "SCI15AUY",
+    "label": "SCI15AUY - PHYSICS"
+  },
+  {
+    "value": "SCI15B",
+    "label": "SCI15B - PHYSICS"
+  },
+  {
+    "value": "SCI15BDW",
+    "label": "SCI15BDW - PHYSICS"
+  },
+  {
+    "value": "SCI15BII",
+    "label": "SCI15BII - PHYSICS"
+  },
+  {
+    "value": "SCI15BIIL",
+    "label": "SCI15BIIL - PHYSICS"
+  },
+  {
+    "value": "SCI15BIINT",
+    "label": "SCI15BIINT - PHYSICS"
+  },
+  {
+    "value": "SCI15BNT",
+    "label": "SCI15BNT - PHYSICS"
+  },
+  {
+    "value": "SCI15C",
+    "label": "SCI15C - M N FAROOQI COMPUTER CENTRE"
+  },
+  {
+    "value": "SCI15C1",
+    "label": "SCI15C1 - M N FAROOQI COMPUTER CENTRE"
+  },
+  {
+    "value": "SCI15CDW",
+    "label": "SCI15CDW - M N FAROOQI COMPUTER CENTRE"
+  },
+  {
+    "value": "SCI15CI",
+    "label": "SCI15CI - M N FAROOQI COMPUTER CENTRE"
+  },
+  {
+    "value": "SCI15CIZ",
+    "label": "SCI15CIZ - M N FAROOQI COMPUTER CENTRE"
+  },
+  {
+    "value": "SCI15CNT",
+    "label": "SCI15CNT - M N FAROOQI COMPUTER CENTRE"
+  },
+  {
+    "value": "SCI15CS",
+    "label": "SCI15CS - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSDW",
+    "label": "SCI15CSDW - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSI",
+    "label": "SCI15CSI - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSIL",
+    "label": "SCI15CSIL - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSINT",
+    "label": "SCI15CSINT - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CST",
+    "label": "SCI15CST - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSU",
+    "label": "SCI15CSU - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSUG",
+    "label": "SCI15CSUG - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSY",
+    "label": "SCI15CSY - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15CSZ",
+    "label": "SCI15CSZ - COMPUTER SCIENCE"
+  },
+  {
+    "value": "SCI15PSU",
+    "label": "SCI15PSU - PHYSICS"
+  },
+  {
+    "value": "SCI15PSUY",
+    "label": "SCI15PSUY - PHYSICS"
+  },
+  {
+    "value": "SCI15Y",
+    "label": "SCI15Y - M N FAROOQI COMPUTER CENTRE"
+  },
+  {
+    "value": "SCI15YI",
+    "label": "SCI15YI - PHYSICS"
+  },
+  {
+    "value": "SCI16A",
+    "label": "SCI16A - CHEMISTRY"
+  },
+  {
+    "value": "SCI16AT",
+    "label": "SCI16AT - CHEMISTRY"
+  },
+  {
+    "value": "SCI16AU",
+    "label": "SCI16AU - CHEMISTRY"
+  },
+  {
+    "value": "SCI16AUG",
+    "label": "SCI16AUG - CHEMISTRY"
+  },
+  {
+    "value": "SCI16AY",
+    "label": "SCI16AY - CHEMISTRY"
+  },
+  {
+    "value": "SCI16B",
+    "label": "SCI16B - CHEMISTRY"
+  },
+  {
+    "value": "SCI16BII",
+    "label": "SCI16BII - CHEMISTRY"
+  },
+  {
+    "value": "SCI16BIIL",
+    "label": "SCI16BIIL - CHEMISTRY"
+  },
+  {
+    "value": "SCI16BIINT",
+    "label": "SCI16BIINT - CHEMISTRY"
+  },
+  {
+    "value": "SCI16BNT",
+    "label": "SCI16BNT - CHEMISTRY"
+  },
+  {
+    "value": "SCI16DW",
+    "label": "SCI16DW - CHEMISTRY"
+  },
+  {
+    "value": "SCI16IN",
+    "label": "SCI16IN - INDUSTRIAL CHEMISTRY"
+  },
+  {
+    "value": "SCI16INDW",
+    "label": "SCI16INDW - INDUSTRIAL CHEMISTRY"
+  },
+  {
+    "value": "SCI16INNT",
+    "label": "SCI16INNT - INDUSTRIAL CHEMISTRY"
+  },
+  {
+    "value": "SCI16INT",
+    "label": "SCI16INT - INDUSTRIAL CHEMISTRY"
+  },
+  {
+    "value": "SCI16PSU",
+    "label": "SCI16PSU - CHEMISTRY"
+  },
+  {
+    "value": "SCI16Y",
+    "label": "SCI16Y - CHEMISTRY"
+  },
+  {
+    "value": "SCI16YI",
+    "label": "SCI16YI - CHEMISTRY"
+  },
+  {
+    "value": "SCI16Z",
+    "label": "SCI16Z - CHEMISTRY"
+  },
+  {
+    "value": "SCI16ZI",
+    "label": "SCI16ZI - CHEMISTRY"
+  },
+  {
+    "value": "SCI17A",
+    "label": "SCI17A - MATHEMATICS"
+  },
+  {
+    "value": "SCI17AT",
+    "label": "SCI17AT - MATHEMATICS"
+  },
+  {
+    "value": "SCI17AU",
+    "label": "SCI17AU - MATHEMATICS"
+  },
+  {
+    "value": "SCI17AY",
+    "label": "SCI17AY - MATHEMATICS"
+  },
+  {
+    "value": "SCI17AYI",
+    "label": "SCI17AYI - MATHEMATICS"
+  },
+  {
+    "value": "SCI17B",
+    "label": "SCI17B - MATHEMATICS"
+  },
+  {
+    "value": "SCI17BL",
+    "label": "SCI17BL - MATHEMATICS"
+  },
+  {
+    "value": "SCI17BNT",
+    "label": "SCI17BNT - MATHEMATICS"
+  },
+  {
+    "value": "SCI17C",
+    "label": "SCI17C - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CDW",
+    "label": "SCI17CDW - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CI",
+    "label": "SCI17CI - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CNT",
+    "label": "SCI17CNT - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CT",
+    "label": "SCI17CT - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CU",
+    "label": "SCI17CU - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CUG",
+    "label": "SCI17CUG - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CY",
+    "label": "SCI17CY - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CYI",
+    "label": "SCI17CYI - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17CZ",
+    "label": "SCI17CZ - STATISTICS & OR"
+  },
+  {
+    "value": "SCI17DW",
+    "label": "SCI17DW - MATHEMATICS"
+  },
+  {
+    "value": "SCI17Z",
+    "label": "SCI17Z - MATHEMATICS"
+  },
+  {
+    "value": "SCI18B",
+    "label": "SCI18B - ZOOLOGY"
+  },
+  {
+    "value": "SCI20AU",
+    "label": "SCI20AU - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20AUG",
+    "label": "SCI20AUG - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20AUT",
+    "label": "SCI20AUT - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20AUY",
+    "label": "SCI20AUY - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20B",
+    "label": "SCI20B - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20BNT",
+    "label": "SCI20BNT - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20DW",
+    "label": "SCI20DW - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20Y",
+    "label": "SCI20Y - GEOGRAPHY"
+  },
+  {
+    "value": "SCI20Z",
+    "label": "SCI20Z - GEOGRAPHY"
+  },
+  {
+    "value": "SCI21AU",
+    "label": "SCI21AU - GEOLOGY"
+  },
+  {
+    "value": "SCI21AUT",
+    "label": "SCI21AUT - GEOLOGY"
+  },
+  {
+    "value": "SCI21AUY",
+    "label": "SCI21AUY - GEOLOGY"
+  },
+  {
+    "value": "SCI21B",
+    "label": "SCI21B - GEOLOGY"
+  },
+  {
+    "value": "SCI21BDW",
+    "label": "SCI21BDW - GEOLOGY"
+  },
+  {
+    "value": "SCI21BL",
+    "label": "SCI21BL - GEOLOGY"
+  },
+  {
+    "value": "SCI21BNT",
+    "label": "SCI21BNT - GEOLOGY"
+  },
+  {
+    "value": "SCI21C",
+    "label": "SCI21C - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21CDW",
+    "label": "SCI21CDW - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21CNT",
+    "label": "SCI21CNT - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21CT",
+    "label": "SCI21CT - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21CU",
+    "label": "SCI21CU - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21CY",
+    "label": "SCI21CY - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21CZ",
+    "label": "SCI21CZ - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21GU",
+    "label": "SCI21GU - REMOTE SENSING & GIS APPL."
+  },
+  {
+    "value": "SCI21Z",
+    "label": "SCI21Z - GEOLOGY"
+  },
+  {
+    "value": "SCI30",
+    "label": "SCI30 - DEAN F/o SCIENCE"
+  },
+  {
+    "value": "SCI91",
+    "label": "SCI91 - CENTRE FOR PROM. OF SCIENCE"
+  },
+  {
+    "value": "SCI91DW",
+    "label": "SCI91DW - CENTRE FOR PROM. OF SCIENCE"
+  },
+  {
+    "value": "SCI91NT",
+    "label": "SCI91NT - CENTRE FOR PROM. OF SCIENCE"
+  },
+  {
+    "value": "SCI91Z",
+    "label": "SCI91Z - CENTRE FOR PROM. OF SCIENCE"
+  },
+  {
+    "value": "SOC7IUG",
+    "label": "SOC7IUG - ECONOMICS"
+  },
+  {
+    "value": "SOS14D",
+    "label": "SOS14D - FINE ARTS"
+  },
+  {
+    "value": "SOS14I",
+    "label": "SOS14I - EDUCATION"
+  },
+  {
+    "value": "SOS14II",
+    "label": "SOS14II - EDUCATION"
+  },
+  {
+    "value": "SOS14IIDW",
+    "label": "SOS14IIDW - EDUCATION"
+  },
+  {
+    "value": "SOS14III",
+    "label": "SOS14III - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IIID",
+    "label": "SOS14IIID - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IIIDW",
+    "label": "SOS14IIIDW - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IIINT",
+    "label": "SOS14IIINT - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IIIU",
+    "label": "SOS14IIIU - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IIIUG",
+    "label": "SOS14IIIUG - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IIIY",
+    "label": "SOS14IIIY - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IIIZ",
+    "label": "SOS14IIIZ - CENTRE FOR DISTANCE EDUCATION"
+  },
+  {
+    "value": "SOS14IINT",
+    "label": "SOS14IINT - EDUCATION"
+  },
+  {
+    "value": "SOS14IIZ",
+    "label": "SOS14IIZ - EDUCATION"
+  },
+  {
+    "value": "SOS14IT",
+    "label": "SOS14IT - EDUCATION"
+  },
+  {
+    "value": "SOS14IV",
+    "label": "SOS14IV - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IVDW",
+    "label": "SOS14IVDW - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IVNT",
+    "label": "SOS14IVNT - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IVT",
+    "label": "SOS14IVT - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IVU",
+    "label": "SOS14IVU - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IVUG",
+    "label": "SOS14IVUG - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IVY",
+    "label": "SOS14IVY - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IVZ",
+    "label": "SOS14IVZ - PHYSICAL EDUCATION"
+  },
+  {
+    "value": "SOS14IY",
+    "label": "SOS14IY - EDUCATION"
+  },
+  {
+    "value": "SOS27",
+    "label": "SOS27 - WEST AS.& NORTH AFRICAN STD."
+  },
+  {
+    "value": "SOS27DW",
+    "label": "SOS27DW - WEST AS.& NORTH AFRICAN STD."
+  },
+  {
+    "value": "SOS27NT",
+    "label": "SOS27NT - WEST AS.& NORTH AFRICAN STD."
+  },
+  {
+    "value": "SOS27T",
+    "label": "SOS27T - WEST AS.& NORTH AFRICAN STD."
+  },
+  {
+    "value": "SOS27U",
+    "label": "SOS27U - WEST AS.& NORTH AFRICAN STD."
+  },
+  {
+    "value": "SOS27Y",
+    "label": "SOS27Y - WEST AS.& NORTH AFRICAN STD."
+  },
+  {
+    "value": "SOS33L",
+    "label": "SOS33L - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LDW",
+    "label": "SOS33LDW - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LNT",
+    "label": "SOS33LNT - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LT",
+    "label": "SOS33LT - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LU",
+    "label": "SOS33LU - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LUG",
+    "label": "SOS33LUG - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LUY",
+    "label": "SOS33LUY - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LY",
+    "label": "SOS33LY - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS33LZ",
+    "label": "SOS33LZ - LIBRARY SCIENCE"
+  },
+  {
+    "value": "SOS4A",
+    "label": "SOS4A - HISTORY"
+  },
+  {
+    "value": "SOS4AT",
+    "label": "SOS4AT - HISTORY"
+  },
+  {
+    "value": "SOS4AY",
+    "label": "SOS4AY - HISTORY"
+  },
+  {
+    "value": "SOS4B",
+    "label": "SOS4B - HISTORY"
+  },
+  {
+    "value": "SOS4BDW",
+    "label": "SOS4BDW - HISTORY"
+  },
+  {
+    "value": "SOS4BNT",
+    "label": "SOS4BNT - HISTORY"
+  },
+  {
+    "value": "SOS4BZ",
+    "label": "SOS4BZ - HISTORY"
+  },
+  {
+    "value": "SOS4C",
+    "label": "SOS4C - HISTORY"
+  },
+  {
+    "value": "SOS4CU",
+    "label": "SOS4CU - HISTORY"
+  },
+  {
+    "value": "SOS4D",
+    "label": "SOS4D - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS4DDW",
+    "label": "SOS4DDW - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS4DNT",
+    "label": "SOS4DNT - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS4DS",
+    "label": "SOS4DS - CENTRE FOR WOMEN'S STUDIES"
+  },
+  {
+    "value": "SOS4DST",
+    "label": "SOS4DST - CENTRE FOR WOMEN'S STUDIES"
+  },
+  {
+    "value": "SOS4DT",
+    "label": "SOS4DT - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS4DU",
+    "label": "SOS4DU - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS4DUG",
+    "label": "SOS4DUG - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS4DUI",
+    "label": "SOS4DUI - CENTRE FOR WOMEN'S STUDIES"
+  },
+  {
+    "value": "SOS4DUIS",
+    "label": "SOS4DUIS - CENTRE FOR WOMEN'S STUDIES"
+  },
+  {
+    "value": "SOS4DUIT",
+    "label": "SOS4DUIT - CENTRE FOR WOMEN'S STUDIES"
+  },
+  {
+    "value": "SOS4DUY",
+    "label": "SOS4DUY - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS4DZ",
+    "label": "SOS4DZ - CENTRE FOR QURANIC STUDIES"
+  },
+  {
+    "value": "SOS5A",
+    "label": "SOS5A - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5ADW",
+    "label": "SOS5ADW - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5AI",
+    "label": "SOS5AI - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5AIDW",
+    "label": "SOS5AIDW - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5AINT",
+    "label": "SOS5AINT - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5AIT",
+    "label": "SOS5AIT - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5AIU",
+    "label": "SOS5AIU - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5AIUG",
+    "label": "SOS5AIUG - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5AIY",
+    "label": "SOS5AIY - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5AIZ",
+    "label": "SOS5AIZ - SOCIAL WORK"
+  },
+  {
+    "value": "SOS5ANT",
+    "label": "SOS5ANT - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5AT",
+    "label": "SOS5AT - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5AU",
+    "label": "SOS5AU - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5AUG",
+    "label": "SOS5AUG - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5AY",
+    "label": "SOS5AY - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5AZ",
+    "label": "SOS5AZ - SOCIOLOGY"
+  },
+  {
+    "value": "SOS5I",
+    "label": "SOS5I - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5II",
+    "label": "SOS5II - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5IIDW",
+    "label": "SOS5IIDW - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5IINT",
+    "label": "SOS5IINT - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5IIZ",
+    "label": "SOS5IIZ - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5IT",
+    "label": "SOS5IT - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5IU",
+    "label": "SOS5IU - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5IUG",
+    "label": "SOS5IUG - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS5IY",
+    "label": "SOS5IY - POLITICAL SCIENCE"
+  },
+  {
+    "value": "SOS6A1UG",
+    "label": "SOS6A1UG - PSYCHOLOGY"
+  },
+  {
+    "value": "SOS6AI",
+    "label": "SOS6AI - PSYCHOLOGY"
+  },
+  {
+    "value": "SOS6AII",
+    "label": "SOS6AII - PSYCHOLOGY"
+  },
+  {
+    "value": "SOS6AIINT",
+    "label": "SOS6AIINT - PSYCHOLOGY"
+  },
+  {
+    "value": "SOS6AIT",
+    "label": "SOS6AIT - PSYCHOLOGY"
+  },
+  {
+    "value": "SOS6AIU",
+    "label": "SOS6AIU - PSYCHOLOGY"
+  },
+  {
+    "value": "SOS6AIY",
+    "label": "SOS6AIY - PSYCHOLOGY"
+  },
+  {
+    "value": "SOS7B",
+    "label": "SOS7B - INTER DISCIPLINARY UNIT"
+  },
+  {
+    "value": "SOS7BZ",
+    "label": "SOS7BZ - INTER DISCIPLINARY UNIT"
+  },
+  {
+    "value": "SOS7I",
+    "label": "SOS7I - ECONOMICS"
+  },
+  {
+    "value": "SOS7II",
+    "label": "SOS7II - ECONOMICS"
+  },
+  {
+    "value": "SOS7IIDW",
+    "label": "SOS7IIDW - ECONOMICS"
+  },
+  {
+    "value": "SOS7IINT",
+    "label": "SOS7IINT - ECONOMICS"
+  },
+  {
+    "value": "SOS7IIZ",
+    "label": "SOS7IIZ - ECONOMICS"
+  },
+  {
+    "value": "SOS7IT",
+    "label": "SOS7IT - ECONOMICS"
+  },
+  {
+    "value": "SOS7IY",
+    "label": "SOS7IY - ECONOMICS"
+  },
+  {
+    "value": "SOS9A",
+    "label": "SOS9A - ISLAMIC STUDIES"
+  },
+  {
+    "value": "SOS9ADW",
+    "label": "SOS9ADW - ISLAMIC STUDIES"
+  },
+  {
+    "value": "SOS9ANT",
+    "label": "SOS9ANT - ISLAMIC STUDIES"
+  },
+  {
+    "value": "SOS9AU",
+    "label": "SOS9AU - ISLAMIC STUDIES"
+  },
+  {
+    "value": "SOS9AUT",
+    "label": "SOS9AUT - ISLAMIC STUDIES"
+  },
+  {
+    "value": "SOS9AY",
+    "label": "SOS9AY - ISLAMIC STUDIES"
+  },
+  {
+    "value": "SOS9AZ",
+    "label": "SOS9AZ - ISLAMIC STUDIES"
+  },
+  {
+    "value": "STU22A",
+    "label": "STU22A - GAMES COMMITTEE"
+  },
+  {
+    "value": "STU22ADW",
+    "label": "STU22ADW - GAMES COMMITTEE"
+  },
+  {
+    "value": "STU22AI",
+    "label": "STU22AI - GAMES COMMITTEE"
+  },
+  {
+    "value": "STU22ANT",
+    "label": "STU22ANT - GAMES COMMITTEE"
+  },
+  {
+    "value": "STU22AY",
+    "label": "STU22AY - GAMES COMMITTEE"
+  },
+  {
+    "value": "STU22AZ",
+    "label": "STU22AZ - GAMES COMMITTEE"
+  },
+  {
+    "value": "STU22D",
+    "label": "STU22D - COACHING & GUIDANCE CENTRE"
+  },
+  {
+    "value": "STU22DGI",
+    "label": "STU22DGI - RESIDENTIAL COACHING ACADEMY"
+  },
+  {
+    "value": "STU22DI",
+    "label": "STU22DI - RESIDENTIAL COACHING ACADEMY"
+  },
+  {
+    "value": "STU22DIDW",
+    "label": "STU22DIDW - RESIDENTIAL COACHING ACADEMY"
+  },
+  {
+    "value": "STU22DINT",
+    "label": "STU22DINT - RESIDENTIAL COACHING ACADEMY"
+  },
+  {
+    "value": "STU22DIS",
+    "label": "STU22DIS - RESIDENTIAL COACHING ACADEMY"
+  },
+  {
+    "value": "STU22DIY",
+    "label": "STU22DIY - RESIDENTIAL COACHING ACADEMY"
+  },
+  {
+    "value": "STU22DIZ",
+    "label": "STU22DIZ - RESIDENTIAL COACHING ACADEMY"
+  },
+  {
+    "value": "STU22DS",
+    "label": "STU22DS - COACHING & GUIDANCE CENTRE"
+  },
+  {
+    "value": "STU22DZ",
+    "label": "STU22DZ - COACHING & GUIDANCE CENTRE"
+  },
+  {
+    "value": "STU22E",
+    "label": "STU22E - D S W OFFICE"
+  },
+  {
+    "value": "STU22EDW",
+    "label": "STU22EDW - D S W OFFICE"
+  },
+  {
+    "value": "STU22ENT",
+    "label": "STU22ENT - D S W OFFICE"
+  },
+  {
+    "value": "STU22EY",
+    "label": "STU22EY - D S W OFFICE"
+  },
+  {
+    "value": "STU22EZ",
+    "label": "STU22EZ - D S W OFFICE"
+  },
+  {
+    "value": "STU22H",
+    "label": "STU22H - SOCIAL EDUCATION SERVICE"
+  },
+  {
+    "value": "STU22HDW",
+    "label": "STU22HDW - SOCIAL EDUCATION SERVICE"
+  },
+  {
+    "value": "STU22HNT",
+    "label": "STU22HNT - SOCIAL EDUCATION SERVICE"
+  },
+  {
+    "value": "STU22HZ",
+    "label": "STU22HZ - SOCIAL EDUCATION SERVICE"
+  },
+  {
+    "value": "STU22K",
+    "label": "STU22K - ENCOURAGEMENT OF CULTURAL ACT."
+  },
+  {
+    "value": "STU22KNT",
+    "label": "STU22KNT - ENCOURAGEMENT OF CULTURAL ACT."
+  },
+  {
+    "value": "STU22MN",
+    "label": "STU22MN - TAHZIBUL AKHLAQ/NISHANT"
+  },
+  {
+    "value": "STU22MNDW",
+    "label": "STU22MNDW - TAHZIBUL AKHLAQ/NISHANT"
+  },
+  {
+    "value": "STU22MNNT",
+    "label": "STU22MNNT - TAHZIBUL AKHLAQ/NISHANT"
+  },
+  {
+    "value": "STU22MNY",
+    "label": "STU22MNY - TAHZIBUL AKHLAQ/NISHANT"
+  },
+  {
+    "value": "STU22MNZ",
+    "label": "STU22MNZ - TAHZIBUL AKHLAQ/NISHANT"
+  },
+  {
+    "value": "STU22N",
+    "label": "STU22N - NCC 8 UP BATALLION"
+  },
+  {
+    "value": "STU22NNT",
+    "label": "STU22NNT - NCC 8 UP BATALLION"
+  },
+  {
+    "value": "STU22O",
+    "label": "STU22O - NCC 1 UP ENGG. COPS"
+  },
+  {
+    "value": "STU22OL",
+    "label": "STU22OL - NCC 1 UP ENGG. COPS"
+  },
+  {
+    "value": "STU22ONT",
+    "label": "STU22ONT - NCC 1 UP ENGG. COPS"
+  },
+  {
+    "value": "STU22S",
+    "label": "STU22S - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU22SDW",
+    "label": "STU22SDW - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU22SL",
+    "label": "STU22SL - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU22SNT",
+    "label": "STU22SNT - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU22ST",
+    "label": "STU22ST - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU22SU",
+    "label": "STU22SU - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU22SUG",
+    "label": "STU22SUG - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU22SZ",
+    "label": "STU22SZ - CENTRE OF ADV.OF MUSLIMS (IND)"
+  },
+  {
+    "value": "STU49",
+    "label": "STU49 - STUDENT'S UNION"
+  },
+  {
+    "value": "STU49DW",
+    "label": "STU49DW - STUDENT'S UNION"
+  },
+  {
+    "value": "STU49NT",
+    "label": "STU49NT - STUDENT'S UNION"
+  },
+  {
+    "value": "STU49Y",
+    "label": "STU49Y - STUDENT'S UNION"
+  },
+  {
+    "value": "STU49Z",
+    "label": "STU49Z - STUDENT'S UNION"
+  },
+  {
+    "value": "STU59",
+    "label": "STU59 - CENTRE OF ADULT & CONTINUING"
+  },
+  {
+    "value": "STU59DW",
+    "label": "STU59DW - CENTRE OF ADULT & CONTINUING"
+  },
+  {
+    "value": "STU59U",
+    "label": "STU59U - CENTRE OF ADULT & CONTINUING"
+  },
+  {
+    "value": "STU59Y",
+    "label": "STU59Y - CENTRE OF ADULT & CONTINUING"
+  },
+  {
+    "value": "STU59Z",
+    "label": "STU59Z - CENTRE OF ADULT & CONTINUING"
+  },
+  {
+    "value": "STU64D",
+    "label": "STU64D - INTERNATIONAL STUDENTS ADVISOR"
+  },
+  {
+    "value": "STU64DDW",
+    "label": "STU64DDW - INTERNATIONAL STUDENTS ADVISOR"
+  },
+  {
+    "value": "STU64DNT",
+    "label": "STU64DNT - INTERNATIONAL STUDENTS ADVISOR"
+  },
+  {
+    "value": "SYU49Z",
+    "label": "SYU49Z - STUDENT'S UNION"
+  },
+  {
+    "value": "THE1",
+    "label": "THE1 - SUNNI THEOLOGY"
+  },
+  {
+    "value": "THE1A",
+    "label": "THE1A - NAZIM SUNNI DINIYAT"
+  },
+  {
+    "value": "THE1ADW",
+    "label": "THE1ADW - NAZIM SUNNI DINIYAT"
+  },
+  {
+    "value": "THE1ANT",
+    "label": "THE1ANT - NAZIM SUNNI DINIYAT"
+  },
+  {
+    "value": "THE1B",
+    "label": "THE1B - NAZIM SUNNI DINIYAT"
+  },
+  {
+    "value": "THE1BY",
+    "label": "THE1BY - NAZIM SUNNI DINIYAT"
+  },
+  {
+    "value": "THE1BZ",
+    "label": "THE1BZ - NAZIM SUNNI DINIYAT"
+  },
+  {
+    "value": "THE1DW",
+    "label": "THE1DW - SUNNI THEOLOGY"
+  },
+  {
+    "value": "THE1NT",
+    "label": "THE1NT - SUNNI THEOLOGY"
+  },
+  {
+    "value": "THE1T",
+    "label": "THE1T - SUNNI THEOLOGY"
+  },
+  {
+    "value": "THE1U",
+    "label": "THE1U - SUNNI THEOLOGY"
+  },
+  {
+    "value": "THE1Y",
+    "label": "THE1Y - SUNNI THEOLOGY"
+  },
+  {
+    "value": "THE1Z",
+    "label": "THE1Z - SUNNI THEOLOGY"
+  },
+  {
+    "value": "THE2",
+    "label": "THE2 - SHIA THEOLOGY"
+  },
+  {
+    "value": "THE2A",
+    "label": "THE2A - NAZIM SHIA DINIYAT"
+  },
+  {
+    "value": "THE2ADW",
+    "label": "THE2ADW - NAZIM SHIA DINIYAT"
+  },
+  {
+    "value": "THE2DW",
+    "label": "THE2DW - SHIA THEOLOGY"
+  },
+  {
+    "value": "THE2NT",
+    "label": "THE2NT - SHIA THEOLOGY"
+  },
+  {
+    "value": "THE2T",
+    "label": "THE2T - SHIA THEOLOGY"
+  },
+  {
+    "value": "THE2U",
+    "label": "THE2U - SHIA THEOLOGY"
+  },
+  {
+    "value": "THE2Y",
+    "label": "THE2Y - SHIA THEOLOGY"
+  },
+  {
+    "value": "THE2Z",
+    "label": "THE2Z - SHIA THEOLOGY"
+  },
+  {
+    "value": "UMI35A",
+    "label": "UMI35A - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35B",
+    "label": "UMI35B - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35C",
+    "label": "UMI35C - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35D",
+    "label": "UMI35D - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35DW",
+    "label": "UMI35DW - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35NT",
+    "label": "UMI35NT - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35PT",
+    "label": "UMI35PT - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35SF",
+    "label": "UMI35SF - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35T",
+    "label": "UMI35T - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI35Z",
+    "label": "UMI35Z - ABK HIGH SCHOOL"
+  },
+  {
+    "value": "UMI41A",
+    "label": "UMI41A - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41AI",
+    "label": "UMI41AI - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41AII",
+    "label": "UMI41AII - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41B",
+    "label": "UMI41B - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41C",
+    "label": "UMI41C - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41CY",
+    "label": "UMI41CY - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41D",
+    "label": "UMI41D - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41DW",
+    "label": "UMI41DW - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41DY",
+    "label": "UMI41DY - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41E",
+    "label": "UMI41E - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41EZ",
+    "label": "UMI41EZ - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41EZY",
+    "label": "UMI41EZY - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41NT",
+    "label": "UMI41NT - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41PT",
+    "label": "UMI41PT - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41SF",
+    "label": "UMI41SF - S T S SCHOOL"
+  },
+  {
+    "value": "UMI41T",
+    "label": "UMI41T - S T S SCHOOL"
+  },
+  {
+    "value": "UMI42I",
+    "label": "UMI42I - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42IDW",
+    "label": "UMI42IDW - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42II",
+    "label": "UMI42II - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42III",
+    "label": "UMI42III - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42IIIY",
+    "label": "UMI42IIIY - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42IIIZ",
+    "label": "UMI42IIIZ - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42INT",
+    "label": "UMI42INT - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42IT",
+    "label": "UMI42IT - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42PT",
+    "label": "UMI42PT - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI42SF",
+    "label": "UMI42SF - RAJA M P SINGH AMU CITY SCHOOL"
+  },
+  {
+    "value": "UMI43",
+    "label": "UMI43 - CITY GIRLS HIGH SCHOOL"
+  },
+  {
+    "value": "UMI43DW",
+    "label": "UMI43DW - CITY GIRLS HIGH SCHOOL"
+  },
+  {
+    "value": "UMI43NT",
+    "label": "UMI43NT - CITY GIRLS HIGH SCHOOL"
+  },
+  {
+    "value": "UMI43PT",
+    "label": "UMI43PT - CITY GIRLS HIGH SCHOOL"
+  },
+  {
+    "value": "UMI43SF",
+    "label": "UMI43SF - CITY GIRLS HIGH SCHOOL"
+  },
+  {
+    "value": "UMI43T",
+    "label": "UMI43T - CITY GIRLS HIGH SCHOOL"
+  },
+  {
+    "value": "UMI43Z",
+    "label": "UMI43Z - CITY GIRLS HIGH SCHOOL"
+  },
+  {
+    "value": "UMI51DW",
+    "label": "UMI51DW - HOBBIES WORKSHOP"
+  },
+  {
+    "value": "UMI51Z",
+    "label": "UMI51Z - HOBBIES WORKSHOP"
+  },
+  {
+    "value": "UMI52",
+    "label": "UMI52 - DIRECTORATE OF SCHOOL EDU."
+  },
+  {
+    "value": "UMI52DW",
+    "label": "UMI52DW - DIRECTORATE OF SCHOOL EDU."
+  },
+  {
+    "value": "UMI52Z",
+    "label": "UMI52Z - DIRECTORATE OF SCHOOL EDU."
+  },
+  {
+    "value": "UMI54",
+    "label": "UMI54 - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI54DW",
+    "label": "UMI54DW - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI54I",
+    "label": "UMI54I - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI54II",
+    "label": "UMI54II - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI54IIZ",
+    "label": "UMI54IIZ - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI54NT",
+    "label": "UMI54NT - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI54PT",
+    "label": "UMI54PT - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI54T",
+    "label": "UMI54T - AHMADI SCH.FOR VIS. CHALLENGED"
+  },
+  {
+    "value": "UMI56A",
+    "label": "UMI56A - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56AI",
+    "label": "UMI56AI - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56AII",
+    "label": "UMI56AII - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56B",
+    "label": "UMI56B - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56C",
+    "label": "UMI56C - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56D",
+    "label": "UMI56D - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56DW",
+    "label": "UMI56DW - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56NT",
+    "label": "UMI56NT - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56PT",
+    "label": "UMI56PT - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56SF",
+    "label": "UMI56SF - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56T",
+    "label": "UMI56T - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI56Z",
+    "label": "UMI56Z - AMU GIRLS SCHOOL"
+  },
+  {
+    "value": "UMI58D",
+    "label": "UMI58D - SIR ZIAUDDIN HALL"
+  },
+  {
+    "value": "UMI61",
+    "label": "UMI61 - ABDULLAH SCHOOL"
+  },
+  {
+    "value": "UMI61DW",
+    "label": "UMI61DW - ABDULLAH SCHOOL"
+  },
+  {
+    "value": "UMI61NT",
+    "label": "UMI61NT - ABDULLAH SCHOOL"
+  },
+  {
+    "value": "UMI61PT",
+    "label": "UMI61PT - ABDULLAH SCHOOL"
+  },
+  {
+    "value": "UMI61SF",
+    "label": "UMI61SF - ABDULLAH SCHOOL"
+  },
+  {
+    "value": "UMI61T",
+    "label": "UMI61T - ABDULLAH SCHOOL"
+  },
+  {
+    "value": "UMI84AI",
+    "label": "UMI84AI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI84AII",
+    "label": "UMI84AII - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI84AIINT",
+    "label": "UMI84AIINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI84AINT",
+    "label": "UMI84AINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86A",
+    "label": "UMI86A - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86ANT",
+    "label": "UMI86ANT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86B",
+    "label": "UMI86B - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86BI",
+    "label": "UMI86BI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86BIA",
+    "label": "UMI86BIA - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86BIANT",
+    "label": "UMI86BIANT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86BII",
+    "label": "UMI86BII - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86BIINT",
+    "label": "UMI86BIINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86BINT",
+    "label": "UMI86BINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86BNT",
+    "label": "UMI86BNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86C",
+    "label": "UMI86C - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86CI",
+    "label": "UMI86CI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86CIA",
+    "label": "UMI86CIA - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86CIANT",
+    "label": "UMI86CIANT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86CINT",
+    "label": "UMI86CINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86CNT",
+    "label": "UMI86CNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86D",
+    "label": "UMI86D - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86DI",
+    "label": "UMI86DI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86DINT",
+    "label": "UMI86DINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86DNT",
+    "label": "UMI86DNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86E",
+    "label": "UMI86E - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86ENT",
+    "label": "UMI86ENT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86F",
+    "label": "UMI86F - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86FI",
+    "label": "UMI86FI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86FINT",
+    "label": "UMI86FINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86FNT",
+    "label": "UMI86FNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86H",
+    "label": "UMI86H - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86HNT",
+    "label": "UMI86HNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86I",
+    "label": "UMI86I - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86J",
+    "label": "UMI86J - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86JI",
+    "label": "UMI86JI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86JINT",
+    "label": "UMI86JINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86JNT",
+    "label": "UMI86JNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86K",
+    "label": "UMI86K - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86KI",
+    "label": "UMI86KI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86KNT",
+    "label": "UMI86KNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86L",
+    "label": "UMI86L - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86LVI",
+    "label": "UMI86LVI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86LVINT",
+    "label": "UMI86LVINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86M",
+    "label": "UMI86M - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86MI",
+    "label": "UMI86MI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86MINT",
+    "label": "UMI86MINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86MNT",
+    "label": "UMI86MNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NA",
+    "label": "UMI86NA - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NAI",
+    "label": "UMI86NAI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NAINT",
+    "label": "UMI86NAINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NANT",
+    "label": "UMI86NANT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NB",
+    "label": "UMI86NB - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NBI",
+    "label": "UMI86NBI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NBINT",
+    "label": "UMI86NBINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86NBNT",
+    "label": "UMI86NBNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86P",
+    "label": "UMI86P - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86P2ANT",
+    "label": "UMI86P2ANT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86P3NT",
+    "label": "UMI86P3NT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PI",
+    "label": "UMI86PI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PIA",
+    "label": "UMI86PIA - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PIANT",
+    "label": "UMI86PIANT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PII",
+    "label": "UMI86PII - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PIIA",
+    "label": "UMI86PIIA - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PIIDW",
+    "label": "UMI86PIIDW - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PIII",
+    "label": "UMI86PIII - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PIIL",
+    "label": "UMI86PIIL - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PINT",
+    "label": "UMI86PINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PNT",
+    "label": "UMI86PNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86PP",
+    "label": "UMI86PP - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86Q",
+    "label": "UMI86Q - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86QI",
+    "label": "UMI86QI - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86QINT",
+    "label": "UMI86QINT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86QNT",
+    "label": "UMI86QNT - J N M C HOSPITAL"
+  },
+  {
+    "value": "UMI86R",
+    "label": "UMI86R - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RA",
+    "label": "UMI86RA - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RB",
+    "label": "UMI86RB - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RC",
+    "label": "UMI86RC - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RD",
+    "label": "UMI86RD - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RDW",
+    "label": "UMI86RDW - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RE",
+    "label": "UMI86RE - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RFNT",
+    "label": "UMI86RFNT - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RG",
+    "label": "UMI86RG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RI",
+    "label": "UMI86RI - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RIG",
+    "label": "UMI86RIG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RIIG",
+    "label": "UMI86RIIG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RIII",
+    "label": "UMI86RIII - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RIIIG",
+    "label": "UMI86RIIIG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86RNT",
+    "label": "UMI86RNT - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86S",
+    "label": "UMI86S - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86SA",
+    "label": "UMI86SA - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86SAG",
+    "label": "UMI86SAG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86SG",
+    "label": "UMI86SG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86SI",
+    "label": "UMI86SI - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86SIG",
+    "label": "UMI86SIG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86SII",
+    "label": "UMI86SII - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI86SIIG",
+    "label": "UMI86SIIG - TRAUMA CENTRE (JNMCH)"
+  },
+  {
+    "value": "UMI97A",
+    "label": "UMI97A - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97B",
+    "label": "UMI97B - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97DW",
+    "label": "UMI97DW - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97GI",
+    "label": "UMI97GI - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97I",
+    "label": "UMI97I - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97II",
+    "label": "UMI97II - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97III",
+    "label": "UMI97III - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI97IIIPT",
+    "label": "UMI97IIIPT - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI97IIISF",
+    "label": "UMI97IIISF - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI97IIIZ",
+    "label": "UMI97IIIZ - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI97IIPT",
+    "label": "UMI97IIPT - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97IISF",
+    "label": "UMI97IISF - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97IIZ",
+    "label": "UMI97IIZ - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97IIZY",
+    "label": "UMI97IIZY - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI97ISF",
+    "label": "UMI97ISF - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97NT",
+    "label": "UMI97NT - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97PT",
+    "label": "UMI97PT - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI97T",
+    "label": "UMI97T - S HAMID SR.SEC.SCH. (BOYS)"
+  },
+  {
+    "value": "UMI98",
+    "label": "UMI98 - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI98DW",
+    "label": "UMI98DW - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI98NT",
+    "label": "UMI98NT - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UMI98T",
+    "label": "UMI98T - SR.SECONDARY SCHOOL (GIRLS)"
+  },
+  {
+    "value": "UNA40-95",
+    "label": "UNA40-95 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40ADW",
+    "label": "UNA40ADW - DEAN F/o UNANI MEDICINE"
+  },
+  {
+    "value": "UNA40ANT",
+    "label": "UNA40ANT - DEAN F/o UNANI MEDICINE"
+  },
+  {
+    "value": "UNA40DTC",
+    "label": "UNA40DTC - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40DW",
+    "label": "UNA40DW - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40I",
+    "label": "UNA40I - UNANI RESEARCH UNIT"
+  },
+  {
+    "value": "UNA40IA",
+    "label": "UNA40IA - ILMUL ATFAL"
+  },
+  {
+    "value": "UNA40IAT",
+    "label": "UNA40IAT - ILMUL ATFAL"
+  },
+  {
+    "value": "UNA40II",
+    "label": "UNA40II - ILMUL ADVIA"
+  },
+  {
+    "value": "UNA40IIDW",
+    "label": "UNA40IIDW - ILMUL ADVIA"
+  },
+  {
+    "value": "UNA40III",
+    "label": "UNA40III - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III01",
+    "label": "UNA40III01 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III02",
+    "label": "UNA40III02 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III03",
+    "label": "UNA40III03 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III04",
+    "label": "UNA40III04 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III05",
+    "label": "UNA40III05 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III06",
+    "label": "UNA40III06 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III07",
+    "label": "UNA40III07 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III08",
+    "label": "UNA40III08 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III09",
+    "label": "UNA40III09 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III10",
+    "label": "UNA40III10 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III11",
+    "label": "UNA40III11 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III12",
+    "label": "UNA40III12 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III2K",
+    "label": "UNA40III2K - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III95",
+    "label": "UNA40III95 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III96",
+    "label": "UNA40III96 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III97",
+    "label": "UNA40III97 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III98",
+    "label": "UNA40III98 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40III99",
+    "label": "UNA40III99 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40IIIA",
+    "label": "UNA40IIIA - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40IIIAM",
+    "label": "UNA40IIIAM - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIAZ",
+    "label": "UNA40IIIAZ - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIID",
+    "label": "UNA40IIID - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40IIIG",
+    "label": "UNA40IIIG - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIHG",
+    "label": "UNA40IIIHG - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIII",
+    "label": "UNA40IIII - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIIT",
+    "label": "UNA40IIIIT - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIJ",
+    "label": "UNA40IIIJ - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIK",
+    "label": "UNA40IIIK - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIM",
+    "label": "UNA40IIIM - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIMA",
+    "label": "UNA40IIIMA - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIS",
+    "label": "UNA40IIIS - POST GRADUATE STUDENTS (UNANI)"
+  },
+  {
+    "value": "UNA40IIIU",
+    "label": "UNA40IIIU - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA40IINT",
+    "label": "UNA40IINT - ILMUL ADVIA"
+  },
+  {
+    "value": "UNA40IIT",
+    "label": "UNA40IIT - ILMUL ADVIA"
+  },
+  {
+    "value": "UNA40IIU",
+    "label": "UNA40IIU - ILMUL ADVIA"
+  },
+  {
+    "value": "UNA40IIY",
+    "label": "UNA40IIY - ILMUL ADVIA"
+  },
+  {
+    "value": "UNA40IU",
+    "label": "UNA40IU - UNANI RESEARCH UNIT"
+  },
+  {
+    "value": "UNA40J",
+    "label": "UNA40J - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40JDW",
+    "label": "UNA40JDW - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40JNT",
+    "label": "UNA40JNT - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40JT",
+    "label": "UNA40JT - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40JU",
+    "label": "UNA40JU - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40JUG",
+    "label": "UNA40JUG - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40JY",
+    "label": "UNA40JY - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40JZ",
+    "label": "UNA40JZ - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40L",
+    "label": "UNA40L - ILMUL AMRAZ"
+  },
+  {
+    "value": "UNA40LDW",
+    "label": "UNA40LDW - ILMUL AMRAZ"
+  },
+  {
+    "value": "UNA40LNT",
+    "label": "UNA40LNT - ILMUL AMRAZ"
+  },
+  {
+    "value": "UNA40LT",
+    "label": "UNA40LT - ILMUL AMRAZ"
+  },
+  {
+    "value": "UNA40LU",
+    "label": "UNA40LU - ILMUL AMRAZ"
+  },
+  {
+    "value": "UNA40LUG",
+    "label": "UNA40LUG - ILMUL AMRAZ"
+  },
+  {
+    "value": "UNA40LZ",
+    "label": "UNA40LZ - ILMUL AMRAZ"
+  },
+  {
+    "value": "UNA40NT",
+    "label": "UNA40NT - AMRAZ E JILD WA ZOHRAWIYA"
+  },
+  {
+    "value": "UNA40NTT",
+    "label": "UNA40NTT - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40PA11",
+    "label": "UNA40PA11 - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PADW",
+    "label": "UNA40PADW - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PAI",
+    "label": "UNA40PAI - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PAII",
+    "label": "UNA40PAII - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PAII6",
+    "label": "UNA40PAII6 - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PAIIB",
+    "label": "UNA40PAIIB - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PAIIY",
+    "label": "UNA40PAIIY - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PAIIZ",
+    "label": "UNA40PAIIZ - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PANT",
+    "label": "UNA40PANT - A K TIBBIYA COLLEGE HOSPITAL"
+  },
+  {
+    "value": "UNA40PB",
+    "label": "UNA40PB - A K T COLLEGE PRINCIPAL OFFICE"
+  },
+  {
+    "value": "UNA40PBDW",
+    "label": "UNA40PBDW - A K T COLLEGE PRINCIPAL OFFICE"
+  },
+  {
+    "value": "UNA40PBNT",
+    "label": "UNA40PBNT - A K T COLLEGE PRINCIPAL OFFICE"
+  },
+  {
+    "value": "UNA40PI",
+    "label": "UNA40PI - A K T COLLEGE PRINCIPAL OFFICE"
+  },
+  {
+    "value": "UNA40S",
+    "label": "UNA40S - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40SDW",
+    "label": "UNA40SDW - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40SNT",
+    "label": "UNA40SNT - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40ST",
+    "label": "UNA40ST - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40SU",
+    "label": "UNA40SU - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40SUG",
+    "label": "UNA40SUG - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40SUGY",
+    "label": "UNA40SUGY - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40SY",
+    "label": "UNA40SY - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40SZ",
+    "label": "UNA40SZ - SAIDLA DEPARTMENT"
+  },
+  {
+    "value": "UNA40T",
+    "label": "UNA40T - TASHREEHUL BADAN"
+  },
+  {
+    "value": "UNA40TA",
+    "label": "UNA40TA - KULLIYAT"
+  },
+  {
+    "value": "UNA40TADW",
+    "label": "UNA40TADW - KULLIYAT"
+  },
+  {
+    "value": "UNA40TANT",
+    "label": "UNA40TANT - KULLIYAT"
+  },
+  {
+    "value": "UNA40TAT",
+    "label": "UNA40TAT - KULLIYAT"
+  },
+  {
+    "value": "UNA40TAU",
+    "label": "UNA40TAU - KULLIYAT"
+  },
+  {
+    "value": "UNA40TAY",
+    "label": "UNA40TAY - KULLIYAT"
+  },
+  {
+    "value": "UNA40TAZ",
+    "label": "UNA40TAZ - KULLIYAT"
+  },
+  {
+    "value": "UNA40TB",
+    "label": "UNA40TB - TASHEEH WA MUNAFEUL-AZA"
+  },
+  {
+    "value": "UNA40TBDW",
+    "label": "UNA40TBDW - TASHEEH WA MUNAFEUL-AZA"
+  },
+  {
+    "value": "UNA40TBNT",
+    "label": "UNA40TBNT - TASHEEH WA MUNAFEUL-AZA"
+  },
+  {
+    "value": "UNA40TBT",
+    "label": "UNA40TBT - TASHEEH WA MUNAFEUL-AZA"
+  },
+  {
+    "value": "UNA40TBU",
+    "label": "UNA40TBU - TASHEEH WA MUNAFEUL-AZA"
+  },
+  {
+    "value": "UNA40TBY",
+    "label": "UNA40TBY - TASHEEH WA MUNAFEUL-AZA"
+  },
+  {
+    "value": "UNA40TBZ",
+    "label": "UNA40TBZ - TASHEEH WA MUNAFEUL-AZA"
+  },
+  {
+    "value": "UNA40TC",
+    "label": "UNA40TC - MOALIJAT"
+  },
+  {
+    "value": "UNA40TCDW",
+    "label": "UNA40TCDW - MOALIJAT"
+  },
+  {
+    "value": "UNA40TCNT",
+    "label": "UNA40TCNT - MOALIJAT"
+  },
+  {
+    "value": "UNA40TCT",
+    "label": "UNA40TCT - MOALIJAT"
+  },
+  {
+    "value": "UNA40TCU",
+    "label": "UNA40TCU - MOALIJAT"
+  },
+  {
+    "value": "UNA40TCY",
+    "label": "UNA40TCY - MOALIJAT"
+  },
+  {
+    "value": "UNA40TCZ",
+    "label": "UNA40TCZ - MOALIJAT"
+  },
+  {
+    "value": "UNA40TD",
+    "label": "UNA40TD - JARAHAT"
+  },
+  {
+    "value": "UNA40TDDW",
+    "label": "UNA40TDDW - JARAHAT"
+  },
+  {
+    "value": "UNA40TDNT",
+    "label": "UNA40TDNT - JARAHAT"
+  },
+  {
+    "value": "UNA40TDT",
+    "label": "UNA40TDT - JARAHAT"
+  },
+  {
+    "value": "UNA40TDU",
+    "label": "UNA40TDU - JARAHAT"
+  },
+  {
+    "value": "UNA40TDUG",
+    "label": "UNA40TDUG - JARAHAT"
+  },
+  {
+    "value": "UNA40TDW",
+    "label": "UNA40TDW - TASHREEHUL BADAN"
+  },
+  {
+    "value": "UNA40TDY",
+    "label": "UNA40TDY - JARAHAT"
+  },
+  {
+    "value": "UNA40TDZ",
+    "label": "UNA40TDZ - JARAHAT"
+  },
+  {
+    "value": "UNA40TE",
+    "label": "UNA40TE - HIFZAN E SEHAT"
+  },
+  {
+    "value": "UNA40TEDW",
+    "label": "UNA40TEDW - HIFZAN E SEHAT"
+  },
+  {
+    "value": "UNA40TEGU",
+    "label": "UNA40TEGU - HIFZAN E SEHAT"
+  },
+  {
+    "value": "UNA40TENT",
+    "label": "UNA40TENT - HIFZAN E SEHAT"
+  },
+  {
+    "value": "UNA40TET",
+    "label": "UNA40TET - HIFZAN E SEHAT"
+  },
+  {
+    "value": "UNA40TEU",
+    "label": "UNA40TEU - HIFZAN E SEHAT"
+  },
+  {
+    "value": "UNA40TEY",
+    "label": "UNA40TEY - HIFZAN E SEHAT"
+  },
+  {
+    "value": "UNA40TN",
+    "label": "UNA40TN - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40TNDW",
+    "label": "UNA40TNDW - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40TNNT",
+    "label": "UNA40TNNT - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40TNT",
+    "label": "UNA40TNT - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40TNU",
+    "label": "UNA40TNU - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40TNY",
+    "label": "UNA40TNY - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40TNZ",
+    "label": "UNA40TNZ - NISWAN WA QABALAT"
+  },
+  {
+    "value": "UNA40TT",
+    "label": "UNA40TT - TASHREEHUL BADAN"
+  },
+  {
+    "value": "UNA40TTNT",
+    "label": "UNA40TTNT - TASHREEHUL BADAN"
+  },
+  {
+    "value": "UNA40TU",
+    "label": "UNA40TU - TASHREEHUL BADAN"
+  },
+  {
+    "value": "UNA40TUG",
+    "label": "UNA40TUG - TASHREEHUL BADAN"
+  },
+  {
+    "value": "UNA40TZ",
+    "label": "UNA40TZ - TASHREEHUL BADAN"
+  },
+  {
+    "value": "UNA40U",
+    "label": "UNA40U - ILAJ-BIT-TADBIR"
+  },
+  {
+    "value": "UNA40UDW",
+    "label": "UNA40UDW - ILAJ-BIT-TADBIR"
+  },
+  {
+    "value": "UNA40UG",
+    "label": "UNA40UG - ILAJ-BIT-TADBIR"
+  },
+  {
+    "value": "UNA40UNT",
+    "label": "UNA40UNT - ILAJ-BIT-TADBIR"
+  },
+  {
+    "value": "UNA40UT",
+    "label": "UNA40UT - ILAJ-BIT-TADBIR"
+  },
+  {
+    "value": "UNA40UY",
+    "label": "UNA40UY - ILAJ-BIT-TADBIR"
+  },
+  {
+    "value": "UNA40UZ",
+    "label": "UNA40UZ - ILAJ-BIT-TADBIR"
+  },
+  {
+    "value": "UNA40Z",
+    "label": "UNA40Z - DEAN F/o UNANI MEDICINE"
+  },
+  {
+    "value": "UNA4OIII06",
+    "label": "UNA4OIII06 - INTERN'S (A K T COLLEGE)"
+  },
+  {
+    "value": "UNA4OIIU",
+    "label": "UNA4OIIU - ILMUL ADVIA"
+  },
+  {
+    "value": "UNA4OTNUG",
+    "label": "UNA4OTNUG - NISWAN WA QABALAT"
+  }
+]

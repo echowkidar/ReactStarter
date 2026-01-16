@@ -17,6 +17,17 @@ import AdminHeader from "@/components/layout/admin-header";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
+import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
+
+// Import master data for designations and register numbers
+import designationsData from "@/lib/designations.json";
+import registerNosData from "@/lib/register-nos.json";
+import salaryAssistantsData from "@/lib/salary-assistants.json";
+
+// Prepare options for searchable selects
+const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
+const registerNoOptions: ComboboxOption[] = registerNosData as ComboboxOption[];
+const salaryAssistantOptions: ComboboxOption[] = salaryAssistantsData as ComboboxOption[];
 
 interface FileUpload {
   file: File | null;
@@ -38,6 +49,9 @@ export default function AdminEmployees() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus || "Permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [selectedDesignation, setSelectedDesignation] = useState<string>("");
+  const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState<string>("");
+  const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState<string>("");
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -278,10 +292,19 @@ export default function AdminEmployees() {
         console.warn(`Employee's department ID (${initialDeptId}) not found in registered departments list. Resetting selection.`);
         setSelectedDepartmentId("");
       }
+      // Set designation, salary register number, and salary assistant
+      setSelectedDesignation(selectedEmployee.designation || "");
+      setSelectedSalaryRegisterNo(selectedEmployee.salaryRegisterNo || "");
+      setSelectedSalaryAsstt(selectedEmployee.salary_asstt || "");
     } else if (!selectedEmployee) {
       setSelectedDepartmentId("");
+      setSelectedDesignation("");
+      setSelectedSalaryRegisterNo("");
+      setSelectedSalaryAsstt("");
     }
   }, [selectedEmployee, departments]);
+
+
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -797,8 +820,13 @@ export default function AdminEmployees() {
                       setSelectedEmployee(null);
                       setEmploymentStatus("Permanent");
                       setSelectedDepartmentId("");
+                      setSelectedDesignation("");
+                      setSelectedSalaryRegisterNo("");
+                      setSelectedSalaryAsstt("");
                       setUploads({});
                     }}
+
+
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Employee
@@ -837,14 +865,18 @@ export default function AdminEmployees() {
                           </div>
                           <div>
                             <Label htmlFor="designation">Designation</Label>
-                            <Input
-                              id="designation"
-                              name="designation"
-                              defaultValue={selectedEmployee?.designation}
+                            <SearchableSelect
+                              options={designationOptions}
+                              value={selectedDesignation}
+                              onValueChange={setSelectedDesignation}
+                              placeholder="Select designation..."
+                              searchPlaceholder="Search designation..."
+                              emptyMessage="No designation found."
                               className="bg-white dark:bg-slate-800"
-                              required
                             />
+                            <input type="hidden" name="designation" value={selectedDesignation} />
                           </div>
+
                           <div>
                             <Label htmlFor="employmentStatus">Employment Status</Label>
                             <Select
@@ -968,56 +1000,50 @@ export default function AdminEmployees() {
                           </div>
                           <div>
                             <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
-                            <Input
-                              id="salaryRegisterNo"
-                              name="salaryRegisterNo"
-                              defaultValue={selectedEmployee?.salaryRegisterNo}
+                            <SearchableSelect
+                              options={registerNoOptions}
+                              value={selectedSalaryRegisterNo}
+                              onValueChange={setSelectedSalaryRegisterNo}
+                              placeholder="Select register no..."
+                              searchPlaceholder="Search register no..."
+                              emptyMessage="No register number found."
                               className="bg-white dark:bg-slate-800"
-                              required
                             />
+                            <input type="hidden" name="salaryRegisterNo" value={selectedSalaryRegisterNo} />
                           </div>
+
                           <div>
                             <Label htmlFor="salary_asstt">Salary Assistant</Label>
-                            <Input
-                              id="salary_asstt"
-                              name="salary_asstt"
-                              defaultValue={selectedEmployee?.salary_asstt || ""}
+                            <SearchableSelect
+                              options={salaryAssistantOptions}
+                              value={selectedSalaryAsstt}
+                              onValueChange={setSelectedSalaryAsstt}
+                              placeholder="Select salary assistant..."
+                              searchPlaceholder="Search salary assistant..."
+                              emptyMessage="No salary assistant found."
                               className="bg-white dark:bg-slate-800"
                             />
+                            <input type="hidden" name="salary_asstt" value={selectedSalaryAsstt} />
                           </div>
                           <div>
                             <Label htmlFor="departmentId">Department</Label>
-                            <Select
-                              name="departmentId"
+                            <SearchableSelect
+                              options={departments.map(dept => ({
+                                value: dept.id.toString(),
+                                label: dept.name
+                              }))}
                               value={selectedDepartmentId}
                               onValueChange={(value) => {
                                 console.log("Department selected:", value);
                                 setSelectedDepartmentId(value);
                               }}
-                              required
-                            >
-                              <SelectTrigger className="bg-white dark:bg-slate-800">
-                                <SelectValue placeholder={isDepartmentsLoading ? "Loading departments..." : "Select department"} />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-[200px]">
-                                {isDepartmentsLoading ? (
-                                  <div className="flex items-center justify-center p-2">
-                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900" />
-                                    <span className="ml-2">Loading departments...</span>
-                                  </div>
-                                ) : departments && departments.length > 0 ? (
-                                  departments.map((dept) => (
-                                    <SelectItem key={dept.id} value={dept.id.toString()}>
-                                      {dept.name}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <SelectItem value="" disabled>
-                                    No departments available
-                                  </SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
+                              placeholder={isDepartmentsLoading ? "Loading departments..." : "Select department..."}
+                              searchPlaceholder="Search department..."
+                              emptyMessage="No department found."
+                              className="bg-white dark:bg-slate-800"
+                              disabled={isDepartmentsLoading}
+                            />
+                            <input type="hidden" name="departmentId" value={selectedDepartmentId} />
                             {isDepartmentsLoading ? (
                               <p className="text-blue-500 text-xs mt-1">Loading departments...</p>
                             ) : departments.length === 0 ? (
@@ -1026,6 +1052,7 @@ export default function AdminEmployees() {
                               <p className="text-red-500 text-xs mt-1">Department is required</p>
                             ) : null}
                           </div>
+
                         </div>
                       </div>
 
@@ -1296,8 +1323,8 @@ export default function AdminEmployees() {
                       <TableCell>{employee.employmentStatus}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee.isActive === "active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
                           }`}>
                           {employee.isActive === "active" ? "Active" : "Disabled"}
                         </span>

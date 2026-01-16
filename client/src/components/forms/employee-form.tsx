@@ -6,19 +6,31 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
+import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
 import { employmentStatuses } from "@/lib/departments";
 import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Loader2 } from "lucide-react";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
 import { useState } from "react";
 
+// Import master data for designations and register numbers
+import designationsData from "@/lib/designations.json";
+import registerNosData from "@/lib/register-nos.json";
+import salaryAssistantsData from "@/lib/salary-assistants.json";
+
+// Prepare options for searchable selects
+const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
+const registerNoOptions: ComboboxOption[] = registerNosData as ComboboxOption[];
+const salaryAssistantOptions: ComboboxOption[] = salaryAssistantsData as ComboboxOption[];
+
 const employeeSchema = z.object({
   epid: z.string().min(1, "EPID is required"),
   name: z.string().min(1, "Name is required"),
-  panNumber: z.string().min(1, "PAN Number is required"),
+  panNumber: z.string().optional(),
   bankAccount: z.string().min(1, "Bank Account is required"),
-  aadharCard: z.string().min(1, "Adhar Number is required"),
+  aadharCard: z.string().optional(),
   designation: z.string().min(1, "Designation is required"),
+
   employmentStatus: z.enum(employmentStatuses),
   payLevel: z.enum(PAY_LEVELS),
   termExpiry: z.string().optional(),
@@ -26,6 +38,7 @@ const employeeSchema = z.object({
   joiningDate: z.string().min(1, "Joining Date is required"),
   joiningShift: z.enum(["FN", "AN"]),
   salaryRegisterNo: z.string().min(1, "Salary Register No. is required"),
+  salary_asstt: z.string().optional(),
   // Document fields
   panCardDoc: z.string().optional(),
   bankAccountDoc: z.string().optional(),
@@ -42,7 +55,7 @@ interface EmployeeFormProps {
 
 export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps) {
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
-  
+
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
@@ -59,6 +72,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       joiningDate: "",
       joiningShift: "FN",
       salaryRegisterNo: "",
+      salary_asstt: "",
       panCardDoc: "",
       bankAccountDoc: "",
       aadharCardDoc: "",
@@ -74,8 +88,8 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       await onSubmit(data);
     } catch (error) {
       if (error instanceof Error && error.message.includes("EPID already exists")) {
-        form.setError("epid", { 
-          type: "manual", 
+        form.setError("epid", {
+          type: "manual",
           message: "An employee with this EPID already exists. Please use a unique EPID."
         });
       } else {
@@ -90,26 +104,26 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
   const handleFileChange = async (file: File | null, fieldName: string) => {
     // Clear any previous errors for this field
     setFileErrors(prev => ({ ...prev, [fieldName]: "" }));
-    
+
     if (!file) {
       form.setValue(fieldName as any, "");
       return;
     }
-    
+
     // Validate that it's an image
     if (!isImageFile(file)) {
       setFileErrors(prev => ({ ...prev, [fieldName]: "Only image files are allowed" }));
       return;
     }
-    
+
     try {
       // Compress the image to WebP format
       const result = await compressImageToWebP(file);
-      
+
       // Log the conversion to verify WebP format
       console.log(`Converted ${file.name} to WebP: ${result.fileName}`);
       console.log(`Blob type: ${result.blob.type}`);
-      
+
       // Set the field value with the WebP image URL
       form.setValue(fieldName as any, result.url);
     } catch (error) {
@@ -159,7 +173,16 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>Designation</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                      <SearchableSelect
+                        options={designationOptions}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder="Select designation..."
+                        searchPlaceholder="Search designation..."
+                        emptyMessage="No designation found."
+                        className="bg-white dark:bg-slate-800"
+                        disabled={isLoading}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -347,7 +370,38 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   <FormItem>
                     <FormLabel>Salary Register No.</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                      <SearchableSelect
+                        options={registerNoOptions}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder="Select register no..."
+                        searchPlaceholder="Search register no..."
+                        emptyMessage="No register number found."
+                        className="bg-white dark:bg-slate-800"
+                        disabled={isLoading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="salary_asstt"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Salary Assistant</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={salaryAssistantOptions}
+                        value={field.value || ""}
+                        onValueChange={field.onChange}
+                        placeholder="Select salary assistant..."
+                        searchPlaceholder="Search salary assistant..."
+                        emptyMessage="No salary assistant found."
+                        className="bg-white dark:bg-slate-800"
+                        disabled={isLoading}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -355,6 +409,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
               />
             </div>
           </div>
+
 
           {/* Document Upload Section */}
           <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
@@ -452,32 +507,32 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
               />
               {(form.watch("employmentStatus") === "Probation" ||
                 form.watch("employmentStatus") === "Temporary") && (
-                <FormField
-                  control={form.control}
-                  name="termExtensionDoc"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FileUpload
-                        label="Term Extension Office Memo"
-                        name="termExtensionDoc"
-                        value={field.value}
-                        onChange={(file) => handleFileChange(file, "termExtensionDoc")}
-                        disabled={isLoading}
-                        onlyImages={true}
-                        errorMessage={fileErrors.termExtensionDoc}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+                  <FormField
+                    control={form.control}
+                    name="termExtensionDoc"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FileUpload
+                          label="Term Extension Office Memo"
+                          name="termExtensionDoc"
+                          value={field.value}
+                          onChange={(file) => handleFileChange(file, "termExtensionDoc")}
+                          disabled={isLoading}
+                          onlyImages={true}
+                          errorMessage={fileErrors.termExtensionDoc}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
             </div>
           </div>
         </div>
 
-        <Button 
-          type="submit" 
-          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary" 
+        <Button
+          type="submit"
+          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
           disabled={isLoading}
         >
           {isLoading ? (
