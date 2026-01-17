@@ -65,6 +65,15 @@ const PdfPreview = ({ pdfUrl }: { pdfUrl: string }) => {
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [adminType, setAdminType] = useState<string>("super");
+
+  useEffect(() => {
+    const storedType = localStorage.getItem("adminType");
+    if (storedType) {
+      setAdminType(storedType);
+    }
+  }, []);
+
   const { data: reports, isLoading } = useQuery<ReportWithDepartment[]>({
     queryKey: ["/api/admin/attendance"],
   });
@@ -903,19 +912,21 @@ export default function AdminDashboard() {
                       )}
 
                     </div>
-                    {/* Delete Action - always available for admin */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-1"
-                      onClick={() => {
-                        setReportToDelete(report);
-                        setDeleteStage(1);
-                      }}
-                      title="Delete Report"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {/* Delete Action - restricted to super admin */}
+                    {adminType === "super" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-1"
+                        onClick={() => {
+                          setReportToDelete(report);
+                          setDeleteStage(1);
+                        }}
+                        title="Delete Report"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
 
 
                   </TableCell>

@@ -33,20 +33,11 @@ EOF
 ```
 
 ### 4. Build the Application
+```bash
 npm run build
 ```
 
-### 5. Database Migration (If Schema Changed)
-If you added new tables (like `admins`), you need to update the production database:
-```bash
-npm run db:push
-```
-> [!IMPORTANT]
-> - If `db:push` asks to **truncate** `department_names` or other existing tables, select **No** (using arrow keys or input).
-> - Only allow it to create new tables (e.g., `admins`).
-> - If you are using the **SAME** database as your development setup (remote DB), you might not need to run this if you already did it.
-
-### 6. Set Up PM2 for Process Management
+### 5. Set Up PM2 for Process Management
 ```bash
 # Install PM2 globally if not installed
 npm install -g pm2
@@ -59,7 +50,7 @@ pm2 save
 pm2 startup
 ```
 
-### 7. Configure CyberPanel (OpenLiteSpeed)
+### 6. Configure CyberPanel (OpenLiteSpeed)
 
 1. Create a website in CyberPanel for your domain
 2. Edit the vhost.conf file:
@@ -102,10 +93,10 @@ pm2 startup
    /usr/local/lsws/bin/lswsctrl restart
    ```
 
-### 8. Issue SSL Certificate
+### 7. Issue SSL Certificate
 Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 
-### 9. Monitoring and Maintenance
+### 8. Monitoring and Maintenance
 
 - View logs: `pm2 logs reactstarter`
 - Restart application: `pm2 restart reactstarter`
