@@ -43,13 +43,15 @@ export default function AdminLogin() {
       }
 
       const responseData = await response.json();
-      
+
       // Store admin information in localStorage
       localStorage.setItem("adminType", responseData.adminType || "super");
-      
+      localStorage.setItem("adminSessionToken", responseData.sessionToken); // For session verification
+
       // Store admin info as object
       localStorage.setItem("admin", JSON.stringify({
         email: data.email,
+        name: responseData.adminName || "Admin",
         role: responseData.adminType === "salary" ? "salary" : "superadmin"
       }));
 

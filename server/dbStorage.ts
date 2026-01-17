@@ -49,20 +49,7 @@ export class DbStorage implements IStorage {
     }
   }
 
-  // Authentication methods
-  async adminLogin(email: string, password: string): Promise<any> {
-    try {
-      // This is a simplified version - in a real app you'd verify password with bcrypt
-      // For demo purposes, check if this is the admin account (update with your actual admin email)
-      if (email === "admin@amu.ac.in" && password === "123") {
-        return { id: 1, email, role: "admin" };
-      }
-      return null;
-    } catch (error) {
-      console.error("Admin login error:", error);
-      return null;
-    }
-  }
+  // Note: Admin authentication is handled in routes.ts using getAdminByEmail() and database passwords
 
   async departmentLogin(email: string, password: string): Promise<Department | null> {
     try {

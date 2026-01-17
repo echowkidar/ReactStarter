@@ -54,28 +54,9 @@ export async function registerRoutes(app: Express) {
     console.error("Failed to setup test email account:", error);
   }
 
-  // Seed default admins if they don't exist
-  try {
-    const existingSuperAdmin = await storage.getAdminByEmail("admin@amu.ac.in");
-    if (!existingSuperAdmin) {
-      console.log("Seeding default admins...");
-      await storage.createAdmin({
-        email: "admin@amu.ac.in",
-        password: "admin123", // In production, hash this!
-        role: "super_admin",
-        name: "Super Admin"
-      });
-      await storage.createAdmin({
-        email: "salary@amu.ac.in",
-        password: "admin123", // In production, hash this!
-        role: "salary_admin",
-        name: "Salary Section Admin"
-      });
-      console.log("Default admins seeded successfully.");
-    }
-  } catch (error) {
-    console.error("Error seeding admins:", error);
-  }
+  // NOTE: Admin seeding removed for security - passwords should not be in source code
+  // Admins must be manually created in the database 'admins' table
+  // Required fields: email, password, role ('super_admin' or 'salary_admin'), name
 
   // Initialize notices tables
   try {
@@ -124,14 +105,47 @@ export async function registerRoutes(app: Express) {
       // Frontend expects: 'super', 'salary'
       const adminType = admin.role === 'salary_admin' ? 'salary' : 'super';
 
+      // Create session token based on password (for session invalidation on password change)
+      const sessionToken = Buffer.from(`${admin.email}:${admin.password}`).toString('base64');
+
       return res.json({
         role: "admin",
         adminType: adminType,
+        adminName: admin.name || "Admin",
+        sessionToken: sessionToken, // For session verification
         message: "Admin logged in successfully"
       });
     } catch (error) {
       console.error("Admin login error:", error);
       return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Verify admin session (called on page load)
+  app.post("/api/auth/admin/verify-session", async (req, res) => {
+    const { email, sessionToken } = req.body;
+
+    try {
+      if (!email || !sessionToken) {
+        return res.status(401).json({ valid: false, message: "Missing credentials" });
+      }
+
+      const admin = await storage.getAdminByEmail(email);
+      if (!admin) {
+        return res.status(401).json({ valid: false, message: "Admin not found" });
+      }
+
+      // Verify session token matches current password
+      const expectedToken = Buffer.from(`${admin.email}:${admin.password}`).toString('base64');
+
+      if (sessionToken !== expectedToken) {
+        return res.status(401).json({ valid: false, message: "Session expired - password changed" });
+      }
+
+      return res.json({ valid: true });
+    } catch (error) {
+      console.error("Session verification error:", error);
+      return res.status(500).json({ valid: false, message: "Verification failed" });
     }
   });
 
