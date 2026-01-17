@@ -1970,7 +1970,23 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/documents/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+
+      // Get document first to get the imageUrl
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Delete the physical file from uploads folder
+      if (document.imageUrl) {
+        console.log(`[DELETE Document] Deleting file for document ${id}: ${document.imageUrl}`);
+        await storage.deleteFile(document.imageUrl);
+      }
+
+      // Delete from database
       await storage.deleteDocument(id);
+
+      console.log(`[DELETE Document] Successfully deleted document ${id}`);
       res.json({ message: "Document deleted successfully" });
     } catch (error) {
       console.error("Error deleting document:", error);

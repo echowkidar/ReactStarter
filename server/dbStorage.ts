@@ -471,6 +471,12 @@ export class DbStorage implements IStorage {
     });
   }
 
+  async getDocument(id: number): Promise<Document | undefined> {
+    return await db.query.documents.findFirst({
+      where: eq(documents.id, id)
+    });
+  }
+
   async deleteDocument(id: number): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
   }
