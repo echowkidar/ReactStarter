@@ -730,7 +730,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Upload route (file upload handler)
+  // Upload route (file upload handler) - with PDF compression using Ghostscript
   app.post("/api/upload", upload.single("file"), async (req: any, res) => {
     try {
       if (!req.file) {
@@ -739,15 +739,102 @@ export async function registerRoutes(app: Express) {
 
       console.log(`Upload API - File received: ${req.file.originalname}, size: ${req.file.size}, type: ${req.file.mimetype}`);
 
-      // Return the URL that can be used to access the file
       const baseUrl = process.env.NODE_ENV === 'production'
         ? 'https://amu.echowkidar.in'
         : `http://localhost:${process.env.PORT || 5001}`;
 
-      const imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
-      console.log(`Upload API - File saved as: ${imageUrl}`);
+      let finalFilename = req.file.filename;
+      let finalFileUrl = `${baseUrl}/uploads/${finalFilename}`;
 
-      res.json({ imageUrl });
+      // Compress PDF files using Ghostscript for aggressive compression
+      if (req.file.mimetype === 'application/pdf') {
+        const filePath = path.join(uploadDir, req.file.filename);
+        const originalSize = fs.statSync(filePath).size;
+        console.log(`PDF compression - Original size: ${Math.round(originalSize / 1024)} KB`);
+
+        const compressedFilename = req.file.filename.replace(/\.pdf$/i, '-compressed.pdf');
+        const compressedFilePath = path.join(uploadDir, compressedFilename);
+
+        try {
+          const { execSync } = await import('child_process');
+
+          // Try Ghostscript compression
+          // -dPDFSETTINGS=/ebook gives good compression for scanned documents
+          // /screen = lowest quality, smallest size (72 dpi)
+          // /ebook = medium quality (150 dpi) - good balance
+          // /printer = high quality (300 dpi)
+          const gsCommand = process.platform === 'win32'
+            ? `gswin64c -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${compressedFilePath}" "${filePath}"`
+            : `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${compressedFilePath}" "${filePath}"`;
+
+          console.log('Running Ghostscript compression...');
+          execSync(gsCommand, { timeout: 60000 }); // 60 second timeout
+
+          // Check if compressed file was created and is smaller
+          if (fs.existsSync(compressedFilePath)) {
+            const compressedSize = fs.statSync(compressedFilePath).size;
+            const reductionPercent = Math.round((1 - compressedSize / originalSize) * 100);
+
+            console.log(`PDF compression - Compressed size: ${Math.round(compressedSize / 1024)} KB`);
+            console.log(`PDF compression - Size reduction: ${reductionPercent}%`);
+
+            if (compressedSize < originalSize * 0.95) { // Only use if at least 5% smaller
+              // Delete original and use compressed
+              fs.unlinkSync(filePath);
+              finalFilename = compressedFilename;
+              finalFileUrl = `${baseUrl}/uploads/${compressedFilename}`;
+              console.log(`PDF compressed successfully using Ghostscript: ${compressedFilename}`);
+            } else {
+              // Compressed file is not significantly smaller, delete it
+              fs.unlinkSync(compressedFilePath);
+              console.log('Ghostscript compression did not significantly reduce size, keeping original');
+            }
+          }
+        } catch (gsError: any) {
+          console.log('Ghostscript not available or failed, trying pdf-lib fallback...');
+
+          // Fallback to pdf-lib basic compression
+          try {
+            const { PDFDocument } = await import('pdf-lib');
+            const existingPdfBytes = fs.readFileSync(filePath);
+
+            const pdfDoc = await PDFDocument.load(existingPdfBytes, {
+              ignoreEncryption: true,
+            });
+
+            // Remove metadata
+            pdfDoc.setTitle('');
+            pdfDoc.setAuthor('');
+            pdfDoc.setSubject('');
+            pdfDoc.setKeywords([]);
+            pdfDoc.setProducer('');
+            pdfDoc.setCreator('');
+
+            const compressedPdfBytes = await pdfDoc.save({
+              useObjectStreams: true,
+              addDefaultPage: false,
+            });
+
+            const compressedSize = compressedPdfBytes.length;
+            const reductionPercent = Math.round((1 - compressedSize / originalSize) * 100);
+            console.log(`PDF compression (pdf-lib) - Compressed size: ${Math.round(compressedSize / 1024)} KB`);
+            console.log(`PDF compression (pdf-lib) - Size reduction: ${reductionPercent}%`);
+
+            if (compressedSize < originalSize) {
+              fs.writeFileSync(compressedFilePath, compressedPdfBytes);
+              fs.unlinkSync(filePath);
+              finalFilename = compressedFilename;
+              finalFileUrl = `${baseUrl}/uploads/${compressedFilename}`;
+              console.log(`PDF compressed using pdf-lib: ${compressedFilename}`);
+            }
+          } catch (pdfLibError) {
+            console.error('pdf-lib compression also failed, keeping original:', pdfLibError);
+          }
+        }
+      }
+
+      console.log(`Upload API - Final file URL: ${finalFileUrl}`);
+      res.json({ imageUrl: finalFileUrl, fileUrl: finalFileUrl });
     } catch (error) {
       console.error('Error uploading file:', error);
       res.status(500).json({ error: "Failed to upload file" });
@@ -2116,6 +2203,187 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error getting attendance status:", error);
       res.status(500).json({ message: "Failed to get attendance status" });
+    }
+  });
+
+  // ========== TICKET ROUTES ==========
+
+  // Configure multer for ticket screenshots
+  const ticketUpload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(null, false);
+      }
+    },
+    limits: { fileSize: 5 * 1024 * 1024 }
+  });
+
+  // Get ticket stats (for admin dashboard)
+  app.get("/api/tickets/stats", async (req, res) => {
+    try {
+      const stats = await storage.getTicketStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting ticket stats:", error);
+      res.status(500).json({ message: "Failed to get ticket stats" });
+    }
+  });
+
+  // Get all tickets (admin)
+  app.get("/api/admin/tickets", async (req, res) => {
+    try {
+      const tickets = await storage.getAllTickets();
+      res.json(tickets);
+    } catch (error) {
+      console.error("Error fetching all tickets:", error);
+      res.status(500).json({ message: "Failed to fetch tickets" });
+    }
+  });
+
+  // Get tickets by department
+  app.get("/api/departments/:departmentId/tickets", async (req, res) => {
+    try {
+      const departmentId = parseInt(req.params.departmentId);
+      const tickets = await storage.getTicketsByDepartment(departmentId);
+      res.json(tickets);
+    } catch (error) {
+      console.error("Error fetching department tickets:", error);
+      res.status(500).json({ message: "Failed to fetch tickets" });
+    }
+  });
+
+  // Get single ticket with replies
+  app.get("/api/tickets/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const ticket = await storage.getTicket(id);
+      if (!ticket) {
+        return res.status(404).json({ message: "Ticket not found" });
+      }
+      // We now use adminResponse column instead of separate replies table
+      res.json({ ...ticket, replies: [] });
+    } catch (error) {
+      console.error("Error fetching ticket:", error);
+      res.status(500).json({ message: "Failed to fetch ticket" });
+    }
+  });
+
+  // Create ticket (department side)
+  app.post("/api/tickets", ticketUpload.single('screenshot'), async (req: any, res) => {
+    try {
+      const { departmentId, subject, description, priority } = req.body;
+
+      if (!departmentId || !subject || !description) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      let imageUrl = null;
+
+      // Process screenshot if provided
+      if (req.file) {
+        try {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+          const compressedFilename = `ticket-${uniqueSuffix}-compressed.jpeg`;
+          const compressedFilePath = path.join(uploadDestination, compressedFilename);
+
+          const sharp = await import('sharp');
+          await sharp.default(req.file.buffer)
+            .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 70 })
+            .toFile(compressedFilePath);
+
+          const baseUrl = process.env.NODE_ENV === 'production'
+            ? 'https://amu.echowkidar.in'
+            : `http://localhost:${process.env.PORT || 5001}`;
+
+          imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
+          console.log(`[Ticket] Image saved: ${imageUrl}`);
+        } catch (imgError) {
+          console.error("Error processing screenshot:", imgError);
+        }
+      }
+
+      const ticket = await storage.createTicket({
+        departmentId: parseInt(departmentId),
+        subject,
+        description,
+        priority: priority || 'medium',
+        status: 'Open',
+        imageUrl,
+      });
+
+      res.status(201).json(ticket);
+    } catch (error) {
+      console.error("Error creating ticket:", error);
+      res.status(500).json({ message: "Failed to create ticket" });
+    }
+  });
+
+  // Update ticket status (admin)
+  app.patch("/api/tickets/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, priority } = req.body;
+
+      const updates: any = {};
+      if (status) {
+        updates.status = status;
+        if (status === 'resolved') updates.resolvedAt = new Date();
+        if (status === 'closed') updates.closedAt = new Date();
+      }
+      if (priority) updates.priority = priority;
+
+      const ticket = await storage.updateTicket(id, updates);
+      res.json(ticket);
+    } catch (error) {
+      console.error("Error updating ticket:", error);
+      res.status(500).json({ message: "Failed to update ticket" });
+    }
+  });
+
+  // Add admin response to ticket (uses admin_response column)
+  app.post("/api/tickets/:id/replies", async (req: any, res) => {
+    try {
+      const ticketId = parseInt(req.params.id);
+      const { message } = req.body;
+
+      if (!message) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+
+      // Update ticket with admin response
+      const updatedTicket = await storage.updateTicket(ticketId, {
+        adminResponse: message,
+        status: 'In Progress',
+      });
+
+      res.status(201).json(updatedTicket);
+    } catch (error) {
+      console.error("Error adding response:", error);
+      res.status(500).json({ message: "Failed to add response" });
+    }
+  });
+
+  // Delete ticket (admin only)
+  app.delete("/api/tickets/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+
+      // Get ticket to delete screenshot if exists
+      const ticket = await storage.getTicket(id);
+      if (ticket?.imageUrl) {
+        await storage.deleteFile(ticket.imageUrl);
+      }
+
+      await storage.deleteTicket(id);
+      res.json({ message: "Ticket deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting ticket:", error);
+      res.status(500).json({ message: "Failed to delete ticket" });
     }
   });
 

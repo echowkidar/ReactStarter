@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { testDbConnection } from "./db";
-import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents, admins } from "@shared/schema";
+import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents, admins, tickets } from "@shared/schema";
 import { eq, and, or, like, sql, count, max } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import fs from "fs";
@@ -21,7 +21,9 @@ import type {
   InsertDocument,
   InsertDepartmentName,
   Admin,
-  InsertAdmin
+  InsertAdmin,
+  Ticket,
+  InsertTicket
 } from "@shared/schema";
 
 
@@ -559,5 +561,65 @@ export class DbStorage implements IStorage {
     } catch (error) {
       console.error(`[DbStorage] EXCEPTION during file deletion:`, error);
     }
+  }
+
+  // ========== TICKET METHODS ==========
+
+  async createTicket(ticket: InsertTicket): Promise<Ticket> {
+    const [newTicket] = await db.insert(tickets).values(ticket).returning();
+    // Fetch department name
+    const dept = await this.getDepartment(newTicket.departmentId);
+    return { ...newTicket, departmentName: dept?.name || 'Unknown' };
+  }
+
+  async getTicket(id: number): Promise<Ticket | undefined> {
+    const ticket = await db.query.tickets.findFirst({
+      where: eq(tickets.id, id)
+    });
+    if (!ticket) return undefined;
+    const dept = await this.getDepartment(ticket.departmentId);
+    return { ...ticket, departmentName: dept?.name || 'Unknown' };
+  }
+
+  async getTicketsByDepartment(departmentId: number): Promise<Ticket[]> {
+    const ticketList = await db.query.tickets.findMany({
+      where: eq(tickets.departmentId, departmentId),
+      orderBy: (tickets, { desc }) => [desc(tickets.createdAt)]
+    });
+    const dept = await this.getDepartment(departmentId);
+    return ticketList.map(t => ({ ...t, departmentName: dept?.name || 'Unknown' }));
+  }
+
+  async getAllTickets(): Promise<Ticket[]> {
+    const ticketList = await db.query.tickets.findMany({
+      orderBy: (tickets, { desc }) => [desc(tickets.createdAt)]
+    });
+    // Fetch all departments for mapping
+    const allDepts = await this.getAllDepartments();
+    const deptMap = new Map(allDepts.map(d => [d.id, d.name]));
+    return ticketList.map(t => ({ ...t, departmentName: deptMap.get(t.departmentId) || 'Unknown' }));
+  }
+
+  async getTicketStats(): Promise<{ open: number; inProgress: number; resolved: number; closed: number }> {
+    const ticketList = await db.query.tickets.findMany();
+    return {
+      open: ticketList.filter(t => t.status === 'Open').length,
+      inProgress: ticketList.filter(t => t.status === 'In Progress').length,
+      resolved: ticketList.filter(t => t.status === 'Resolved').length,
+      closed: ticketList.filter(t => t.status === 'Closed').length,
+    };
+  }
+
+  async updateTicket(id: number, updates: Partial<Ticket>): Promise<Ticket> {
+    const [updatedTicket] = await db
+      .update(tickets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tickets.id, id))
+      .returning();
+    return updatedTicket;
+  }
+
+  async deleteTicket(id: number): Promise<void> {
+    await db.delete(tickets).where(eq(tickets.id, id));
   }
 }

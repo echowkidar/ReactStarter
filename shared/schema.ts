@@ -204,3 +204,50 @@ export const insertAdminSchema = createInsertSchema(admins).omit({
 
 export type Admin = typeof admins.$inferSelect;
 export type InsertAdmin = z.infer<typeof insertAdminSchema>;
+
+// Support Tickets Schema
+// Status: 'Open', 'In Progress', 'Resolved', 'Closed'
+// Priority: 'low', 'medium', 'high'
+export const tickets = pgTable("tickets", {
+  id: serial("id").primaryKey(),
+  departmentId: integer("department_id").notNull(),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  priority: text("priority").notNull(),
+  status: text("status").notNull().default("Open"),
+  imageUrl: text("image_url"),
+  adminResponse: text("admin_response"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTicketSchema = createInsertSchema(tickets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Ticket = typeof tickets.$inferSelect & {
+  departmentName?: string;
+  replies?: TicketReply[];
+};
+export type InsertTicket = z.infer<typeof insertTicketSchema>;
+
+// Ticket Replies - this may need to be created in database
+export const ticketReplies = pgTable("ticket_replies", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull(),
+  message: text("message").notNull(),
+  isAdminReply: boolean("is_admin_reply").notNull().default(false),
+  adminName: text("admin_name"),
+  screenshotUrl: text("screenshot_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertTicketReplySchema = createInsertSchema(ticketReplies).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TicketReply = typeof ticketReplies.$inferSelect;
+export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;

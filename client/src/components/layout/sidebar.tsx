@@ -11,6 +11,7 @@ import {
   Settings,
   FileImage,
   HelpCircle,
+  Ticket,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -47,12 +48,12 @@ const N8nChatScript = () => {
       });
     `;
     document.body.appendChild(script);
-    
+
     return () => {
       document.body.removeChild(script);
     };
   }, []);
-  
+
   return null;
 };
 
@@ -61,6 +62,7 @@ const navigation = [
   { name: "Employees", href: "/dashboard/employees", icon: Users },
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
   { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
+  { name: "Support Tickets", href: "/dashboard/tickets", icon: Ticket },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Help", href: "/dashboard/help", icon: HelpCircle },
 ];
@@ -74,7 +76,7 @@ export default function Sidebar({ className }: SidebarProps) {
   const [department, setDepartment] = useState(getCurrentDepartment());
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
-  
+
   // Check and update department name if needed
   useEffect(() => {
     const updateDepartmentName = async () => {
@@ -83,7 +85,7 @@ export default function Sidebar({ className }: SidebarProps) {
         setDepartment(updatedDepartment);
       }
     };
-    
+
     updateDepartmentName();
   }, []);
 

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +93,20 @@ export default function AdminDashboard() {
       attendancePermitted: d.attendancePermitted !== false,
       employeeCount: d.employeeCount || 0
     })),
+  });
+
+  // Fetch ticket stats
+  const { data: ticketStats = { open: 0, inProgress: 0, resolved: 0, closed: 0 } } = useQuery<{
+    open: number;
+    inProgress: number;
+    resolved: number;
+    closed: number;
+  }>({
+    queryKey: ["/api/tickets/stats"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/tickets/stats");
+      return response.json();
+    },
   });
 
   // Calculate status for UI
@@ -522,6 +536,17 @@ export default function AdminDashboard() {
               <FileImage className="h-4 w-4" />
               Document Gallery
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/admin/tickets")}
+              className="flex items-center gap-2"
+            >
+              <Ticket className="h-4 w-4" />
+              Support Tickets
+              {ticketStats.open > 0 && (
+                <Badge className="ml-1 bg-red-500 text-white text-xs">{ticketStats.open}</Badge>
+              )}
+            </Button>
             {canManageEmployees && (
               <Button
                 variant="outline"
@@ -544,56 +569,25 @@ export default function AdminDashboard() {
         </div>
 
 
-        {/* Dashboard Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col justify-center">
+        {/* Dashboard Stats - 2x2 Grid Layout */}
+        {/* Row 1: Attendance Report Status + Status Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="bg-white p-4 rounded-lg border shadow-sm">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Attendance Report Status (Current Month)</h3>
-            <div className="flex items-center gap-8">
-              <div>
-                <p className="text-3xl font-bold text-green-600">{stats.sentCount}</p>
-                <p className="text-xs text-gray-500 font-medium">Received</p>
-              </div>
-              <div className="h-10 w-px bg-gray-200"></div>
-              <div>
-                <p className="text-3xl font-bold text-red-600">{stats.notSentCount}</p>
-                <p className="text-xs text-gray-500 font-medium">Not Received</p>
-              </div>
-              <div className="ml-auto flex items-center gap-3">
-                {/* Custom Circular Progress */}
-                <div className="relative h-12 w-12">
-                  <svg className="h-full w-full" viewBox="0 0 100 100">
-                    <circle
-                      className="text-gray-200 stroke-current"
-                      strokeWidth="12"
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="transparent"
-                    />
-                    <circle
-                      className="text-blue-600 stroke-current transition-all duration-1000 ease-out"
-                      strokeWidth="12"
-                      strokeLinecap="round"
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="transparent"
-                      strokeDasharray="251.2"
-                      strokeDashoffset={251.2 - (251.2 * (stats.sentCount / (stats.totalRelevant || 1)))}
-                      transform="rotate(-90 50 50)"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[10px] font-bold text-blue-700">
-                      {Math.round((stats.sentCount / (stats.totalRelevant || 1)) * 100)}%
-                    </span>
-                  </div>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-6">
+                <div>
+                  <p className="text-3xl font-bold text-green-600">{stats.sentCount}</p>
+                  <p className="text-[11px] uppercase tracking-wider text-green-700 font-semibold">Received</p>
                 </div>
-
-                <div className="text-right">
-                  <p className="text-xs text-gray-400">Total Departments</p>
-                  <p className="text-sm font-semibold">{stats.totalRelevant}</p>
+                <div>
+                  <p className="text-3xl font-bold text-red-500">{stats.notSentCount}</p>
+                  <p className="text-[11px] uppercase tracking-wider text-red-600 font-semibold">Not Received</p>
                 </div>
+              </div>
+              <div className="ml-auto bg-gray-50 p-3 rounded-md text-right">
+                <p className="text-[10px] uppercase tracking-wider text-gray-500">Total Departments</p>
+                <p className="text-sm font-semibold">{stats.totalRelevant}</p>
               </div>
             </div>
           </div>
@@ -609,15 +603,45 @@ export default function AdminDashboard() {
                 <p className="text-xl font-bold text-yellow-700">{stats.breakdown.draft}</p>
                 <p className="text-[10px] uppercase tracking-wider text-yellow-600 font-semibold">Draft</p>
               </div>
-              {/* Optional: Cancelled or others */}
-
               <div className="p-2 bg-red-50 rounded border border-red-100">
                 <p className="text-xl font-bold text-red-700">{stats.breakdown.cancelled}</p>
                 <p className="text-[10px] uppercase tracking-wider text-red-600 font-semibold">Cancelled</p>
               </div>
             </div>
           </div>
+        </div>
 
+        {/* Row 2: Support Tickets + Pending Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Support Tickets Stats */}
+          <div className="bg-white p-4 rounded-lg border shadow-sm">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-medium text-gray-500">Support Tickets</h3>
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-xs">
+                View All →
+              </Button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <div className="p-2 bg-blue-50 rounded border border-blue-100">
+                <p className="text-xl font-bold text-blue-700">{ticketStats.open}</p>
+                <p className="text-[10px] uppercase tracking-wider text-blue-600 font-semibold">Open</p>
+              </div>
+              <div className="p-2 bg-yellow-50 rounded border border-yellow-100">
+                <p className="text-xl font-bold text-yellow-700">{ticketStats.inProgress}</p>
+                <p className="text-[10px] uppercase tracking-wider text-yellow-600 font-semibold">In Progress</p>
+              </div>
+              <div className="p-2 bg-green-50 rounded border border-green-100">
+                <p className="text-xl font-bold text-green-700">{ticketStats.resolved}</p>
+                <p className="text-[10px] uppercase tracking-wider text-green-600 font-semibold">Resolved</p>
+              </div>
+              <div className="p-2 bg-gray-50 rounded border border-gray-100">
+                <p className="text-xl font-bold text-gray-700">{ticketStats.closed}</p>
+                <p className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold">Closed</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Pending Actions */}
           <div className="bg-white p-4 rounded-lg border shadow-sm">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Pending Actions</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -634,8 +658,6 @@ export default function AdminDashboard() {
         </div>
 
         {/* Attendance Control Panel - Super Admin Only */}
-
-
         {isSuperAdmin && (
           <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
             <div className="flex items-center justify-between">
