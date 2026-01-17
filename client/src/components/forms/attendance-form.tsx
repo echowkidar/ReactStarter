@@ -288,29 +288,53 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     }
   }, [initialData, form]);
 
-  // Add a function to select/deselect all employees
+  // Designations to exclude from "All" selection (Daily Wage employees with breaks)
+  const excludedDesignations = [
+    "DAILY WAGE (SEMI-SKILLED)",
+    "DAILY WAGE (CLERICAL/SKILLED)",
+    "DAILY WAGE (UN-SKILLED)"
+  ];
+
+  // Filter employees eligible for "All" selection (excludes Daily Wage)
+  const eligibleEmployees = employees.filter(
+    (emp: any) => !excludedDesignations.includes(emp.designation?.toUpperCase())
+  );
+
+  // Add a function to select/deselect all eligible employees (excludes Daily Wage)
   const toggleAllEmployees = () => {
-    if (includedEmployees.size === employees.length) {
-      // Deselect all
-      setIncludedEmployees(new Set());
-      form.setValue("entries", []);
+    const eligibleIds = new Set(eligibleEmployees.map((emp: any) => emp.id));
+    const currentEligibleSelected = [...includedEmployees].filter(id => eligibleIds.has(id));
+
+    if (currentEligibleSelected.length === eligibleEmployees.length && eligibleEmployees.length > 0) {
+      // Deselect all eligible (keep manually selected Daily Wage employees)
+      const dailyWageSelected = [...includedEmployees].filter(id => !eligibleIds.has(id));
+      setIncludedEmployees(new Set(dailyWageSelected));
+
+      // Remove only eligible employee entries
+      const currentEntries = form.getValues("entries") || [];
+      form.setValue("entries", currentEntries.filter(entry => !eligibleIds.has(entry.employeeId)));
     } else {
-      // Select all
-      const allEmployeeIds = new Set(employees.map((employee: any) => employee.id));
-      setIncludedEmployees(allEmployeeIds);
+      // Select all eligible employees (keep existing Daily Wage selections)
+      const newIncluded = new Set([...includedEmployees, ...eligibleEmployees.map((emp: any) => emp.id)]);
+      setIncludedEmployees(newIncluded);
 
-      // Initialize entries for all employees
-      const allEntries = employees.map((employee: any) => ({
-        employeeId: employee.id,
-        periods: [{
-          fromDate: formatDateForDisplay(defaultStartDate),
-          toDate: formatDateForDisplay(defaultEndDate),
-          days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
-          remarks: "",
-        }],
-      }));
+      // Initialize entries for newly added eligible employees
+      const currentEntries = form.getValues("entries") || [];
+      const existingIds = new Set(currentEntries.map(e => e.employeeId));
 
-      form.setValue("entries", allEntries);
+      const newEntries = eligibleEmployees
+        .filter((emp: any) => !existingIds.has(emp.id))
+        .map((employee: any) => ({
+          employeeId: employee.id,
+          periods: [{
+            fromDate: formatDateForDisplay(defaultStartDate),
+            toDate: formatDateForDisplay(defaultEndDate),
+            days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
+            remarks: "",
+          }],
+        }));
+
+      form.setValue("entries", [...currentEntries, ...newEntries]);
     }
   };
 
@@ -391,7 +415,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                 <TableHead className="w-[40px] px-2">
                   <div className="flex flex-col items-center">
                     <Checkbox
-                      checked={includedEmployees.size === employees.length && employees.length > 0}
+                      checked={eligibleEmployees.length > 0 &&
+                        eligibleEmployees.every((emp: any) => includedEmployees.has(emp.id))}
                       onCheckedChange={toggleAllEmployees}
                       disabled={isLoading}
                     />
