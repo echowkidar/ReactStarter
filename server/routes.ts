@@ -1841,9 +1841,15 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get all documents
-
-
-  // Get department-specific documents
+  app.get("/api/documents", async (req, res) => {
+    try {
+      const documents = await storage.getAllDocuments();
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching all documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });  // Get department-specific documents
   app.get("/api/departments/:departmentId/documents", async (req, res) => {
     try {
       const departmentId = parseInt(req.params.departmentId);

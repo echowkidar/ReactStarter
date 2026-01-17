@@ -5,10 +5,16 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrations";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 
 
@@ -77,7 +83,7 @@ export async function initApp() {
 (async () => {
   try {
     const { app, server } = await initApp();
-    const PORT = process.env.PORT || 5001;
+    const PORT = parseInt(process.env.PORT || "5001");
     server.listen(PORT, "0.0.0.0", () => {
       log(`serving on port ${PORT}`);
     });

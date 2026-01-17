@@ -42,10 +42,10 @@ const compressImage = async (file: File, maxWidthHeight = 800, quality = 0.7): P
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        
+
         // Calculate new dimensions - more aggressive scaling
         const aspectRatio = width / height;
-        
+
         // Scale down the image to fit within maxWidthHeight
         if (width > height) {
           width = Math.min(width, maxWidthHeight);
@@ -54,12 +54,12 @@ const compressImage = async (file: File, maxWidthHeight = 800, quality = 0.7): P
           height = Math.min(height, maxWidthHeight);
           width = Math.round(height * aspectRatio);
         }
-        
+
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        
+
         // Add watermark
         if (ctx) {
           // Configure watermark text
@@ -67,39 +67,39 @@ const compressImage = async (file: File, maxWidthHeight = 800, quality = 0.7): P
           ctx.fillStyle = 'rgba(100, 100, 100, 0.2)'; // Reduce opacity for better readability
           ctx.font = 'bold 16px Arial';
           ctx.textAlign = 'center';
-          
+
           // Save context before applying transformations
           ctx.save();
-          
+
           // Translate to center and rotate
           ctx.translate(width / 2, height / 2);
           ctx.rotate(-Math.PI / 8); // Slight adjustment to rotation
-          
+
           // Add text shadow for better readability on various backgrounds
           ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
           ctx.shadowBlur = 2;
           ctx.shadowOffsetX = 1;
           ctx.shadowOffsetY = 1;
-          
+
           // Draw main watermark in center
           ctx.fillText(watermarkText, 0, 0);
-          
+
           // Use larger spacing to avoid overlapping
           // Adjust spacing based on the image size
           const spacingX = Math.max(width / 2, 300); // Ensure minimum spacing
           const spacingY = Math.max(height / 2, 200); // Ensure minimum spacing
-          
+
           // Draw fewer watermarks with better spacing
           // Only add 4 additional watermarks at corners (instead of 8)
           // ctx.fillText(watermarkText, -spacingX/2, -spacingY/2); // Top left
           // ctx.fillText(watermarkText, spacingX/2, -spacingY/2);  // Top right
           // ctx.fillText(watermarkText, -spacingX/2, spacingY/2);  // Bottom left
           // ctx.fillText(watermarkText, spacingX/2, spacingY/2);   // Bottom right
-          
+
           // Restore original context
           ctx.restore();
         }
-        
+
         // Convert to blob and then to File with lower quality
         canvas.toBlob(
           (blob) => {
@@ -107,13 +107,13 @@ const compressImage = async (file: File, maxWidthHeight = 800, quality = 0.7): P
               reject(new Error('Canvas to Blob conversion failed'));
               return;
             }
-            
+
             // Create a new file with the same name but compressed
             const compressedFile = new File([blob], file.name, {
               type: 'image/jpeg',
               lastModified: Date.now(),
             });
-            
+
             resolve(compressedFile);
           },
           'image/jpeg',
@@ -136,7 +136,7 @@ export default function Documents() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const itemsPerPage = 20;
-  
+
   // Form state
   const [documentImage, setDocumentImage] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState("");
@@ -170,20 +170,20 @@ export default function Documents() {
       formData.append("subject", subject);
       formData.append("refNo", refNo);
       formData.append("date", date);
-      
+
       // Add department info from client-side since session might not work correctly
       if (department) {
         formData.append("departmentId", department.id.toString());
         formData.append("departmentName", department.name);
       }
-      
+
       const response = await apiRequest("POST", "/api/documents", formData, false);
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to upload document");
       }
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -199,12 +199,12 @@ export default function Documents() {
     onError: (error: any) => {
       console.error("Error uploading document:", error);
       let message = "Failed to upload document";
-      
+
       // Use the error message from the server if available
       if (error.message) {
         message = error.message;
       }
-      
+
       toast({
         variant: "destructive",
         title: "Error",
@@ -226,7 +226,7 @@ export default function Documents() {
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      
+
       // More strict check for image file types
       const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
       if (!allowedTypes.includes(file.type)) {
@@ -239,7 +239,7 @@ export default function Documents() {
         e.target.value = '';
         return;
       }
-      
+
       // Check file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         toast({
@@ -251,15 +251,15 @@ export default function Documents() {
         e.target.value = '';
         return;
       }
-      
+
       try {
         // Show compression indicator
         setIsCompressing(true);
-        
+
         // Compress the image before setting it
         const compressedFile = await compressImage(file);
         setDocumentImage(compressedFile);
-        
+
         // Create preview URL from the compressed image
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -267,25 +267,25 @@ export default function Documents() {
           setIsCompressing(false); // Hide compression indicator
         };
         reader.readAsDataURL(compressedFile);
-        
+
         // Log compression results
         console.log(`Original size: ${(file.size / 1024).toFixed(2)} KB`);
         console.log(`Compressed size: ${(compressedFile.size / 1024).toFixed(2)} KB`);
         console.log(`Compression ratio: ${((1 - compressedFile.size / file.size) * 100).toFixed(2)}%`);
-        
+
       } catch (error) {
         console.error("Image compression failed:", error);
         setIsCompressing(false);
-        
+
         toast({
           variant: "destructive",
           title: "Image compression failed",
           description: "Using original image instead. The upload may be slower.",
         });
-        
+
         // Fall back to original file if compression fails
         setDocumentImage(file);
-        
+
         // Create preview URL from the original image
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -305,7 +305,7 @@ export default function Documents() {
       const end = new Date(endDate);
       // Set end date to end of day
       end.setHours(23, 59, 59, 999);
-      
+
       if (docDate < start || docDate > end) {
         return false;
       }
@@ -324,10 +324,10 @@ export default function Documents() {
         return false;
       }
     }
-    
+
     // Then check for search term
     if (!searchTerm) return true;
-    
+
     const searchTermLower = searchTerm.toLowerCase();
     return (
       doc.documentType.toLowerCase().includes(searchTermLower) ||
@@ -362,16 +362,16 @@ export default function Documents() {
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = startPage + maxVisiblePages - 1;
-    
+
     if (endPage > totalPages) {
       endPage = totalPages;
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
-    
+
     for (let i = startPage; i <= endPage; i++) {
       pages.push(i);
     }
-    
+
     return pages;
   };
 
@@ -419,19 +419,19 @@ export default function Documents() {
                     }}
                   />
                   {(startDate || endDate) && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => {
                         setStartDate("");
                         setEndDate("");
                         setCurrentPage(1);
-                      }} 
+                      }}
                       className="h-8 w-8"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x">
-                        <path d="M18 6 6 18"/>
-                        <path d="m6 6 12 12"/>
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
                       </svg>
                     </Button>
                   )}
@@ -444,112 +444,117 @@ export default function Documents() {
                     Upload Document
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-3xl">
                   <DialogHeader>
                     <DialogTitle className="text-xl font-semibold">Upload New Document</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     addDocument.mutate();
-                  }} className="space-y-4 pt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="documentImage">Document Image <span className="text-red-500">*</span></Label>
-                      <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                        onClick={() => document.getElementById('documentImage')?.click()}>
-                        <input
-                          id="documentImage"
-                          type="file"
-                          accept="image/jpeg,image/png,image/jpg"
-                          className="hidden"
-                          onChange={handleImageChange}
-                        />
-                        {isCompressing ? (
-                          <div className="flex flex-col items-center text-muted-foreground">
-                            <FileImage className="h-12 w-12 mb-2 animate-pulse" />
-                            <p>Compressing image...</p>
-                          </div>
-                        ) : previewUrl ? (
-                          <div className="relative w-full">
-                            <img 
-                              src={previewUrl} 
-                              alt="Document preview" 
-                              className="w-full h-auto rounded-md max-h-[300px] object-contain"
-                            />
-                            <div className="mt-2 text-center text-sm text-muted-foreground">
-                              Click to change image
+                  }} className="pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Left Column: Image Upload */}
+                      <div className="space-y-2">
+                        <Label htmlFor="documentImage">Document Image <span className="text-red-500">*</span></Label>
+                        <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer hover:bg-gray-50 transition-colors h-[400px]"
+                          onClick={() => document.getElementById('documentImage')?.click()}>
+                          <input
+                            id="documentImage"
+                            type="file"
+                            accept="image/jpeg,image/png,image/jpg"
+                            className="hidden"
+                            onChange={handleImageChange}
+                          />
+                          {isCompressing ? (
+                            <div className="flex flex-col items-center text-muted-foreground">
+                              <FileImage className="h-12 w-12 mb-2 animate-pulse" />
+                              <p>Compressing image...</p>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center text-muted-foreground p-4">
-                            <FileImage className="h-12 w-12 mb-2" />
-                            <p className="font-medium">Click to upload document image</p>
-                            <p className="text-xs mt-1">Only JPEG, JPG and PNG files are allowed</p>
-                            <p className="text-xs mt-1 text-amber-600">Max size: 5MB</p>
-                          </div>
-                        )}
+                          ) : previewUrl ? (
+                            <div className="relative w-full h-full flex flex-col items-center justify-center">
+                              <img
+                                src={previewUrl}
+                                alt="Document preview"
+                                className="w-full h-full object-contain rounded-md max-h-[360px]"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center text-muted-foreground p-4 text-center">
+                              <FileImage className="h-16 w-16 mb-4 text-gray-300" />
+                              <p className="font-medium text-lg">Click to upload image</p>
+                              <p className="text-sm mt-2">JPEG, JPG, PNG allowed</p>
+                              <p className="text-xs mt-1 text-amber-600">Max size: 5MB</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="documentType">Document Type</Label>
-                      <Select value={documentType} onValueChange={setDocumentType} required>
-                        <SelectTrigger id="documentType">
-                          <SelectValue placeholder="Select document type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Office Memo">Office Memo</SelectItem>
-                          <SelectItem value="Office Order">Office Order</SelectItem>
-                          <SelectItem value="Circular / Notice">Circular / Notice</SelectItem>
-                          <SelectItem value="Other Important Document">Other Important Document</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                      {/* Right Column: Details */}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="documentType">Document Type</Label>
+                          <Select value={documentType} onValueChange={setDocumentType} required>
+                            <SelectTrigger id="documentType">
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Office Memo">Office Memo</SelectItem>
+                              <SelectItem value="Office Order">Office Order</SelectItem>
+                              <SelectItem value="Circular / Notice">Circular / Notice</SelectItem>
+                              <SelectItem value="Other Important Document">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="issuingAuthority">Issuing Authority</Label>
-                      <Input
-                        id="issuingAuthority"
-                        value={issuingAuthority}
-                        onChange={(e) => setIssuingAuthority(e.target.value)}
-                        required
-                      />
-                    </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="issuingAuthority">Issuing Authority</Label>
+                          <Input
+                            id="issuingAuthority"
+                            value={issuingAuthority}
+                            onChange={(e) => setIssuingAuthority(e.target.value)}
+                            placeholder="e.g. Finance Officer"
+                            required
+                          />
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="subject">Subject</Label>
-                      <Input
-                        id="subject"
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        required
-                      />
-                    </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="subject">Subject</Label>
+                          <Input
+                            id="subject"
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                            placeholder="Document subject line"
+                            required
+                          />
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="refNo">Ref. No. (Number only, plz exclude starting & ending characters)</Label>
-                      <Input
-                        id="refNo"
-                        value={refNo}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // Allow only numbers
-                          if (/^\d*$/.test(value)) {
-                              setRefNo(value);
-                          }
-                      }}
-                      required
-                      />
-                    </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="refNo">Ref. No. (Digits only)</Label>
+                          <Input
+                            id="refNo"
+                            value={refNo}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*$/.test(value)) {
+                                setRefNo(value);
+                              }
+                            }}
+                            placeholder="e.g. 1234"
+                            required
+                          />
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Dispatch Date</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        required
-                      />
+                        <div className="space-y-2">
+                          <Label htmlFor="date">Dispatch Date</Label>
+                          <Input
+                            id="date"
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex justify-end gap-2 pt-4">
@@ -559,8 +564,8 @@ export default function Documents() {
                       }}>
                         Cancel
                       </Button>
-                      <Button 
-                        type="submit" 
+                      <Button
+                        type="submit"
                         disabled={!documentImage || !documentType || !issuingAuthority || !subject || !refNo || !date || addDocument.isPending || isCompressing}
                       >
                         {addDocument.isPending ? "Uploading..." : "Upload"}
@@ -602,7 +607,7 @@ export default function Documents() {
               <h3 className="mt-4 text-lg font-medium">No documents found</h3>
               <p className="mt-1 text-muted-foreground">
                 {searchTerm || startDate || endDate
-                  ? "Try adjusting your search terms or date filters" 
+                  ? "Try adjusting your search terms or date filters"
                   : "Upload your first document to get started"}
               </p>
             </div>
@@ -613,9 +618,9 @@ export default function Documents() {
                   <div key={doc.id} className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                     <div className="aspect-video overflow-hidden bg-gray-100">
                       <a href={doc.imageUrl} target="_blank" rel="noopener noreferrer">
-                        <img 
-                          src={doc.imageUrl} 
-                          alt={doc.subject} 
+                        <img
+                          src={doc.imageUrl}
+                          alt={doc.subject}
                           className="w-full h-full object-cover hover:scale-105 transition-transform object-top"
                         />
                       </a>
@@ -641,18 +646,18 @@ export default function Documents() {
                   </div>
                 ))}
               </div>
-              
+
               {totalPages > 1 && (
                 <div className="mt-8 flex justify-center">
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
-                        <PaginationPrevious 
+                        <PaginationPrevious
                           onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
                           className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
                       </PaginationItem>
-                      
+
                       {currentPage > 2 && totalPages > 5 && (
                         <>
                           <PaginationItem>
@@ -665,10 +670,10 @@ export default function Documents() {
                           )}
                         </>
                       )}
-                      
+
                       {getPageNumbers().map(page => (
                         <PaginationItem key={page}>
-                          <PaginationLink 
+                          <PaginationLink
                             onClick={() => handlePageChange(page)}
                             isActive={page === currentPage}
                           >
@@ -676,7 +681,7 @@ export default function Documents() {
                           </PaginationLink>
                         </PaginationItem>
                       ))}
-                      
+
                       {currentPage < totalPages - 1 && totalPages > 5 && (
                         <>
                           {currentPage < totalPages - 2 && (
@@ -691,9 +696,9 @@ export default function Documents() {
                           </PaginationItem>
                         </>
                       )}
-                      
+
                       <PaginationItem>
-                        <PaginationNext 
+                        <PaginationNext
                           onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
                           className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
@@ -702,7 +707,7 @@ export default function Documents() {
                   </Pagination>
                 </div>
               )}
-              
+
               <div className="mt-4 text-center text-sm text-muted-foreground">
                 Showing {startIndex + 1}-{Math.min(endIndex, sortedDocuments.length)} of {sortedDocuments.length} documents
               </div>
