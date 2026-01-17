@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+
 import {
   Table,
   TableBody,
@@ -15,9 +16,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+
 
 type AttendanceEntry = {
   id: number;
@@ -63,7 +67,8 @@ export default function AttendanceReports() {
   const [salaryRegisterFilter, setSalaryRegisterFilter] = useState<string[]>([]);
   const [salaryAssistantFilter, setSalaryAssistantFilter] = useState<string[]>([]);
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
-  
+  const { toast } = useToast();
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
@@ -74,10 +79,35 @@ export default function AttendanceReports() {
     setIsSalaryAdmin(adminType === "salary");
   }, []);
 
-  // Fetch all attendance reports with status "sent"
+  // Fetch all attendance reports - include sent, cancel_requested, and cancelled
   const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
     queryKey: ["/api/admin/attendance"],
-    select: (data) => data.filter(report => report.status === "sent"),
+    select: (data) => data.filter(report =>
+      report.status === "sent" ||
+      report.status === "cancel_requested" ||
+      report.status === "cancelled"
+    ),
+  });
+
+  // Accept cancellation mutation
+  const acceptCancellation = useMutation({
+    mutationFn: async (reportId: number) => {
+      await apiRequest("POST", `/api/attendance/${reportId}/accept-cancel`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+      toast({
+        title: "Cancellation Accepted",
+        description: "Report cancelled successfully. Entries have been deleted.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to accept cancellation",
+      });
+    },
   });
 
   // Add this debug log to see the entire reports data
@@ -87,6 +117,7 @@ export default function AttendanceReports() {
   const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/departments"],
   });
+
 
   // Calculate all entries from sent reports with employee details
   const allEntries = useMemo(() => {
@@ -113,21 +144,21 @@ export default function AttendanceReports() {
           year: 'numeric',
           month: 'long'
         });
-        
+
         report.entries.forEach(entry => {
           if (entry.employee) {
             console.log("Employee data in attendance report:", entry.employee);
             console.log("Employee data keys:", Object.keys(entry.employee));
-            
+
             // First try direct access, then fall back to empty string
-            const salaryAssttValue = entry.employee.salary_asstt !== undefined ? 
-              String(entry.employee.salary_asstt) : 
-              (typeof entry.employee === 'object' && 'salary_asstt' in entry.employee) ? 
-                String(entry.employee.salary_asstt) : 
+            const salaryAssttValue = entry.employee.salary_asstt !== undefined ?
+              String(entry.employee.salary_asstt) :
+              (typeof entry.employee === 'object' && 'salary_asstt' in entry.employee) ?
+                String(entry.employee.salary_asstt) :
                 "";
-                
+
             console.log("Employee salary_asstt value:", salaryAssttValue);
-            
+
             try {
               const periods = JSON.parse(entry.periods);
               periods.forEach((period: any) => {
@@ -203,11 +234,11 @@ export default function AttendanceReports() {
   } = useMemo(() => {
     // Start with a filtered set of entries based on search term
     let result = [...allEntries];
-    
+
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       result = result.filter(
-        entry => 
+        entry =>
           entry.employeeId.toLowerCase().includes(lowerSearchTerm) ||
           entry.employeeName.toLowerCase().includes(lowerSearchTerm) ||
           entry.departmentName.toLowerCase().includes(lowerSearchTerm) ||
@@ -215,7 +246,7 @@ export default function AttendanceReports() {
           entry.remarks.toLowerCase().includes(lowerSearchTerm)
       );
     }
-    
+
     // Apply department filter when calculating available months and salary registers
     let departmentFilteredEntries = result;
     if (departmentFilter.length > 0) {
@@ -223,7 +254,7 @@ export default function AttendanceReports() {
         entry => departmentFilter.includes(entry.departmentId.toString())
       );
     }
-    
+
     // Apply month filter when calculating available departments and salary registers
     let monthFilteredEntries = result;
     if (monthFilter.length > 0) {
@@ -231,7 +262,7 @@ export default function AttendanceReports() {
         entry => monthFilter.includes(entry.month)
       );
     }
-    
+
     // Apply salary register filter when calculating available departments and months
     let salaryRegisterFilteredEntries = result;
     if (salaryRegisterFilter.length > 0) {
@@ -239,7 +270,7 @@ export default function AttendanceReports() {
         entry => salaryRegisterFilter.includes(entry.salaryRegisterNo)
       );
     }
-    
+
     // Apply salary assistant filter when calculating available departments, months, and registers
     let salaryAssistantFilteredEntries = result;
     if (salaryAssistantFilter.length > 0) {
@@ -247,42 +278,42 @@ export default function AttendanceReports() {
         entry => salaryAssistantFilter.includes(entry.salaryAsstt)
       );
     }
-    
+
     // Get available departments based on other filters
-    const filteredForDepartments = 
-      monthFilter.length > 0 ? monthFilteredEntries : 
-      salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
-      salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+    const filteredForDepartments =
+      monthFilter.length > 0 ? monthFilteredEntries :
+        salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
+          salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
     const deptIds = new Set(filteredForDepartments.map(entry => entry.departmentId.toString()));
-    
+
     // Get available months based on other filters
-    const filteredForMonths = 
-      departmentFilter.length > 0 ? departmentFilteredEntries : 
-      salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
-      salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+    const filteredForMonths =
+      departmentFilter.length > 0 ? departmentFilteredEntries :
+        salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
+          salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
     const months = new Set(filteredForMonths.map(entry => entry.month));
-    
+
     // Get available salary registers based on other filters
-    const filteredForSalaryRegisters = 
-      departmentFilter.length > 0 ? departmentFilteredEntries : 
-      monthFilter.length > 0 ? monthFilteredEntries :
-      salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+    const filteredForSalaryRegisters =
+      departmentFilter.length > 0 ? departmentFilteredEntries :
+        monthFilter.length > 0 ? monthFilteredEntries :
+          salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
     const salaryRegisters = new Set(filteredForSalaryRegisters.map(entry => entry.salaryRegisterNo));
-    
+
     // Get available salary assistants based on other filters
-    const filteredForSalaryAssistants = 
-      departmentFilter.length > 0 ? departmentFilteredEntries : 
-      monthFilter.length > 0 ? monthFilteredEntries :
-      salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries : result;
+    const filteredForSalaryAssistants =
+      departmentFilter.length > 0 ? departmentFilteredEntries :
+        monthFilter.length > 0 ? monthFilteredEntries :
+          salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries : result;
     const salaryAssistants = new Set(
       filteredForSalaryAssistants
         .map(entry => entry.salaryAsstt)
         .filter(value => value && value.trim() !== '')
     );
-    
+
     return {
-      filteredDepartments: availableDepartments.filter(dept => 
-        (monthFilter.length === 0 && salaryRegisterFilter.length === 0 && salaryAssistantFilter.length === 0) || 
+      filteredDepartments: availableDepartments.filter(dept =>
+        (monthFilter.length === 0 && salaryRegisterFilter.length === 0 && salaryAssistantFilter.length === 0) ||
         deptIds.has(dept.id.toString())
       ),
       filteredMonths: Array.from(months).sort(),
@@ -294,12 +325,12 @@ export default function AttendanceReports() {
   // Filter entries based on all criteria
   const filteredEntries = useMemo(() => {
     let result = [...allEntries];
-    
+
     // Apply search filter
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       result = result.filter(
-        entry => 
+        entry =>
           entry.employeeId.toLowerCase().includes(lowerSearchTerm) ||
           entry.employeeName.toLowerCase().includes(lowerSearchTerm) ||
           entry.departmentName.toLowerCase().includes(lowerSearchTerm) ||
@@ -307,27 +338,27 @@ export default function AttendanceReports() {
           entry.remarks.toLowerCase().includes(lowerSearchTerm)
       );
     }
-    
+
     // Apply department filter
     if (departmentFilter.length > 0) {
       result = result.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
     }
-    
+
     // Apply month filter
     if (monthFilter.length > 0) {
       result = result.filter(entry => monthFilter.includes(entry.month));
     }
-    
+
     // Apply salary register filter
     if (salaryRegisterFilter.length > 0) {
       result = result.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
     }
-    
+
     // Apply salary assistant filter
     if (salaryAssistantFilter.length > 0) {
       result = result.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
     }
-    
+
     return result;
   }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter]);
 
@@ -338,11 +369,11 @@ export default function AttendanceReports() {
       // First sort by department name
       const deptCompare = a.departmentName.localeCompare(b.departmentName);
       if (deptCompare !== 0) return deptCompare;
-      
+
       // If same department, sort by month
       const monthCompare = a.month.localeCompare(b.month);
       if (monthCompare !== 0) return monthCompare;
-      
+
       // Further sort by employee name
       return a.employeeName.localeCompare(b.employeeName);
     });
@@ -350,20 +381,20 @@ export default function AttendanceReports() {
     // Mark entries to indicate if department name should be shown
     let currentDeptId: number | null = null;
     let currentMonth: string | null = null;
-    
+
     return sorted.map((entry, index) => {
       const isFirstDeptEntry = entry.departmentId !== currentDeptId;
-      
+
       // Reset current month when department changes
       if (isFirstDeptEntry) {
         currentMonth = null;
       }
-      
+
       const isFirstMonthEntry = isFirstDeptEntry || entry.month !== currentMonth;
-      
+
       currentDeptId = entry.departmentId;
       currentMonth = entry.month;
-      
+
       return {
         ...entry,
         showDepartment: isFirstDeptEntry,
@@ -501,6 +532,65 @@ export default function AttendanceReports() {
               </div>
             </div>
 
+            {/* Pending Cancellation Requests Section */}
+            {reports.filter(r => r.status === "cancel_requested").length > 0 && (
+              <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                <h2 className="text-lg font-semibold text-orange-800 mb-3 flex items-center gap-2">
+                  <XCircle className="h-5 w-5" />
+                  Pending Cancellation Requests ({reports.filter(r => r.status === "cancel_requested").length})
+                </h2>
+                <div className="space-y-2">
+                  {reports.filter(r => r.status === "cancel_requested").map(report => (
+                    <div key={report.id} className="flex items-center justify-between bg-white p-3 rounded border">
+                      <div>
+                        <span className="font-medium">{report.department?.name || `Department ${report.departmentId}`}</span>
+                        <span className="text-muted-foreground mx-2">-</span>
+                        <span className="text-sm">
+                          {new Date(report.year, report.month - 1).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
+                        </span>
+                        <span className="text-muted-foreground mx-2">|</span>
+                        <span className="text-sm text-muted-foreground">Receipt: #{report.receiptNo}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => acceptCancellation.mutate(report.id)}
+                          disabled={acceptCancellation.isPending}
+                        >
+                          {acceptCancellation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                          )}
+                          Accept Cancellation
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cancelled Reports Notice */}
+            {reports.filter(r => r.status === "cancelled").length > 0 && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <span className="text-red-800 flex items-center gap-2">
+                  <XCircle className="h-4 w-4" />
+                  {reports.filter(r => r.status === "cancelled").length} cancelled report(s) in this view
+                </span>
+              </div>
+            )}
+
             <div className="flex flex-col md:flex-row gap-4 mb-6">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -583,9 +673,9 @@ export default function AttendanceReports() {
                   Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, processedEntries.length)} of {processedEntries.length} entries
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
@@ -594,9 +684,9 @@ export default function AttendanceReports() {
                   <div className="text-sm">
                     Page {currentPage} of {totalPages}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
                   >
@@ -672,9 +762,9 @@ export default function AttendanceReports() {
                   Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, processedEntries.length)} of {processedEntries.length} entries
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
@@ -683,9 +773,9 @@ export default function AttendanceReports() {
                   <div className="text-sm">
                     Page {currentPage} of {totalPages}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
                   >

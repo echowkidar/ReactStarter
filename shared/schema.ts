@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, date, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, date, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -9,7 +9,9 @@ export const departments = pgTable("departments", {
   hodName: text("hod_name").notNull(),
   email: text("email").notNull(),
   password: text("password").notNull(),
+  attendancePermitted: boolean("attendance_permitted").notNull().default(true),
 });
+
 
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
@@ -45,6 +47,7 @@ export const departmentNames = pgTable("department_names", {
   dealingAssistantCode: text("d_ast"),
 });
 
+// Status values: 'draft', 'submitted', 'sent', 'cancel_requested', 'cancelled'
 export const attendanceReports = pgTable("attendance_reports", {
   id: serial("id").primaryKey(),
   departmentId: integer("department_id").notNull(),
@@ -58,7 +61,10 @@ export const attendanceReports = pgTable("attendance_reports", {
   status: text("status").notNull().default("draft"),
   fileUrl: text("file_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  cancelRequestedAt: timestamp("cancel_requested_at"),
+  cancelledAt: timestamp("cancelled_at"),
 });
+
 
 export const attendanceEntries = pgTable("attendance_entries", {
   id: serial("id").primaryKey(),
@@ -176,7 +182,25 @@ export const documents = pgTable("documents", {
   uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
 });
 
-export const insertDocumentSchema = createInsertSchema(documents).omit({ 
+export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   uploadedAt: true
 });
+
+// Admin Schema
+export const admins = pgTable("admins", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(), // In production, hash this!
+  role: text("role").notNull(), // 'super' or 'salary'
+  name: text("name"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAdminSchema = createInsertSchema(admins).omit({
+  id: true,
+  createdAt: true
+});
+
+export type Admin = typeof admins.$inferSelect;
+export type InsertAdmin = z.infer<typeof insertAdminSchema>;

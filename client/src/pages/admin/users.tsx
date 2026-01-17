@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+
 
 import {
   Table,
@@ -37,7 +39,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Search as SearchIcon, Plus, Pencil, Trash2, Users, LogOut, Building } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
@@ -74,8 +78,8 @@ const userFormSchema = z.object({
 const departmentNameFormSchema = z.object({
   dept_name: z.string().min(3, { message: "Department name must be at least 3 characters" }),
   dept_code: z.string().min(1, { message: "Department code is required" }),
-    // Optional: Add regex validation for code format if needed
-    // .regex(/^[A-Z0-9]+$/, { message: "Code must be uppercase letters and numbers" })
+  // Optional: Add regex validation for code format if needed
+  // .regex(/^[A-Z0-9]+$/, { message: "Code must be uppercase letters and numbers" })
   dealingAssistantCode: z.string().optional().nullable(), // Added optional field for d_ast
 });
 
@@ -113,12 +117,17 @@ export default function AdminUsers() {
     queryKey: ["/api/admin/users"],
   });
 
+  // Fetch registered departments with permit status (for toggle switch)
+  const { data: registeredDepartments = [] } = useQuery<any[]>({
+    queryKey: ["/api/departments?registeredOnly=true"],
+  });
+
   // Restore the useEffect hook for admin check
   useEffect(() => {
     // Check if user is admin
     const adminType = localStorage.getItem("adminType");
     setIsAdmin(adminType === "super");
-    
+
     if (adminType !== "super") {
       // Redirect to dashboard if not super admin
       setLocation("/admin/dashboard");
@@ -129,6 +138,29 @@ export default function AdminUsers() {
       });
     }
   }, [setLocation, toast]); // Added dependencies
+
+  // Per-department attendance permit toggle mutation
+  const toggleDeptPermit = useMutation({
+    mutationFn: async ({ deptId, permitted }: { deptId: number; permitted: boolean }) => {
+      await apiRequest("PATCH", `/api/departments/${deptId}/attendance-permit`, { permitted });
+    },
+    onSuccess: (_, { permitted }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/departments?registeredOnly=true"] });
+      toast({
+        title: permitted ? "Attendance Enabled" : "Attendance Disabled",
+        description: permitted
+          ? "This department can now submit attendance reports"
+          : "This department is blocked from submitting attendance reports",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update department permission",
+      });
+    },
+  });
 
   // Setup form for creating/editing users (assuming 'form' is defined elsewhere or needs setup)
   const form = useForm<UserFormValues>({
@@ -156,7 +188,7 @@ export default function AdminUsers() {
   const openUserDialog = (user?: User) => {
     if (user) {
       setSelectedUser(user);
-      
+
       let targetDepartmentId: number | null = null;
       // If editing a department user, find the corresponding ID from the department_names list
       if (user.role === 'department' && user.departmentName) {
@@ -166,11 +198,11 @@ export default function AdminUsers() {
           targetDepartmentId = matchingDept.id; // Use the ID from department_names (fetched list)
           console.log(`Editing user ${user.name}, found matching department: ID ${targetDepartmentId}, Name: ${matchingDept.name}`);
         } else {
-           console.warn(`Could not find matching department ID for user ${user.name} with department name "${user.departmentName}". Check consistency.`);
-           // Keep targetDepartmentId as null, dropdown will show placeholder
+          console.warn(`Could not find matching department ID for user ${user.name} with department name "${user.departmentName}". Check consistency.`);
+          // Keep targetDepartmentId as null, dropdown will show placeholder
         }
       }
-      
+
       form.reset({
         name: user.name,
         email: user.email,
@@ -211,21 +243,21 @@ export default function AdminUsers() {
 
       if (data.role === "department") {
         if (!data.departmentId) {
-           toast({ title: "Error", description: "Please select a department for this user.", variant: "destructive" });
-           return;
+          toast({ title: "Error", description: "Please select a department for this user.", variant: "destructive" });
+          return;
         }
         const deptId = data.departmentId;
         const selectedDept = departments.find(d => d.id === deptId);
         if (!selectedDept) {
-           console.error(`Selected department ID ${deptId} not found in departments list.`);
-           toast({ title: "Error", description: "Selected department not found. Please refresh and try again.", variant: "destructive" });
-           return;
+          console.error(`Selected department ID ${deptId} not found in departments list.`);
+          toast({ title: "Error", description: "Selected department not found. Please refresh and try again.", variant: "destructive" });
+          return;
         }
         console.log("Validated selected department:", selectedDept);
       }
-      
+
       if (data.role !== "department") {
-         data.departmentId = null;
+        data.departmentId = null;
       }
 
       let response;
@@ -245,9 +277,9 @@ export default function AdminUsers() {
         console.log("API response:", response.status, responseData);
       } catch (e) {
         console.error("Failed to parse response as JSON:", e);
-        responseData = { message: response.statusText }; 
+        responseData = { message: response.statusText };
       }
-      
+
       if (!response.ok) {
         const errorMessage = responseData?.message || (selectedUser ? "Failed to update user" : "Failed to create user");
         toast({ variant: "destructive", title: "Error", description: errorMessage });
@@ -289,9 +321,9 @@ export default function AdminUsers() {
         toast({ variant: "destructive", title: "Error", description: errorMessage });
         // Optionally set form errors based on response
         if (responseData?.message?.includes("name")) {
-            departmentForm.setError("dept_name", { type: "manual", message: responseData.message });
+          departmentForm.setError("dept_name", { type: "manual", message: responseData.message });
         } else if (responseData?.message?.includes("code")) {
-            departmentForm.setError("dept_code", { type: "manual", message: responseData.message });
+          departmentForm.setError("dept_code", { type: "manual", message: responseData.message });
         }
       } else {
         toast({ title: "Success", description: "Department name created successfully" });
@@ -311,7 +343,7 @@ export default function AdminUsers() {
 
     try {
       console.log("Deleting user:", selectedUser);
-      
+
       const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
         method: "DELETE",
       });
@@ -322,26 +354,26 @@ export default function AdminUsers() {
       } catch (e) {
         responseData = null;
       }
-      
+
       console.log("Delete response:", responseData);
-      
+
       if (!response.ok) {
         throw new Error(responseData?.message || responseData?.details || "Failed to delete user");
       }
 
       setIsDeleteDialogOpen(false);
-      
+
       toast({
         title: "सफलता",
         description: "उपयोगकर्ता हटा दिया गया",
       });
 
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      
+
       setTimeout(async () => {
         await queryClient.refetchQueries({ queryKey: ["/api/admin/users"] });
       }, 500);
-      
+
     } catch (error) {
       console.error("Delete user error:", error);
       toast({
@@ -361,16 +393,16 @@ export default function AdminUsers() {
 
   // Update filteredDepartments when departments data loads or searchTerm changes
   useEffect(() => {
-    if (departments) { 
-       if (searchTerm === "") {
-         setFilteredDepartments(departments);
-       } else {
-         setFilteredDepartments(
-           departments.filter(dept => 
-             dept.name && dept.name.toLowerCase().includes(searchTerm.toLowerCase())
-           )
-         );
-       }
+    if (departments) {
+      if (searchTerm === "") {
+        setFilteredDepartments(departments);
+      } else {
+        setFilteredDepartments(
+          departments.filter(dept =>
+            dept.name && dept.name.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+        );
+      }
     }
   }, [searchTerm, departments]);
 
@@ -378,7 +410,7 @@ export default function AdminUsers() {
     return <Loading />;
   }
 
-  const filteredUsers = users?.filter(user => 
+  const filteredUsers = users?.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (user.departmentName && user.departmentName.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -426,7 +458,7 @@ export default function AdminUsers() {
               Logout
             </Button>
           </div>
-        </div> 
+        </div>
 
         <div className="mb-6">
           <Card>
@@ -446,8 +478,8 @@ export default function AdminUsers() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button onClick={openDepartmentDialog} variant="outline" className="flex items-center gap-2">
-                     <Building className="h-4 w-4" /> 
-                     New Department
+                    <Building className="h-4 w-4" />
+                    New Department
                   </Button>
                   <Button onClick={() => openUserDialog()} className="flex items-center gap-2">
                     <Plus className="h-4 w-4" />
@@ -480,9 +512,39 @@ export default function AdminUsers() {
                           <TableCell>{user.name}</TableCell>
                           <TableCell>{user.email}</TableCell>
                           <TableCell>{getRoleBadge(user.role)}</TableCell>
-                          <TableCell>{user.departmentName || "-"}</TableCell>
+                          <TableCell>
+                            <div>
+                              <div>{user.departmentName || "-"}</div>
+                              {user.departmentId && (() => {
+                                const dept = registeredDepartments.find((d: any) => d.id === user.departmentId);
+                                return dept && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {dept.employeeCount || 0} Employees
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
+                              {user.departmentId && (() => {
+                                const dept = registeredDepartments.find((d: any) => d.id === user.departmentId);
+                                const isPermitted = dept ? dept.attendancePermitted !== false : true;
+                                return (
+                                  <div className="mr-2 flex items-center" title={isPermitted ? "Attendance Allowed" : "Attendance Blocked"}>
+                                    <Switch
+                                      checked={isPermitted}
+                                      onCheckedChange={(checked) =>
+                                        toggleDeptPermit.mutate({
+                                          deptId: user.departmentId!,
+                                          permitted: checked
+                                        })
+                                      }
+                                      disabled={toggleDeptPermit.isPending}
+                                    />
+                                  </div>
+                                );
+                              })()}
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -558,10 +620,10 @@ export default function AdminUsers() {
                     <FormItem>
                       <FormLabel>{selectedUser ? "New Password (Optional)" : "Password"}</FormLabel>
                       <FormControl>
-                        <Input 
+                        <Input
                           type="password"
-                          placeholder={selectedUser ? "Leave empty if unchanged" : "Enter password"} 
-                          {...field} 
+                          placeholder={selectedUser ? "Leave empty if unchanged" : "Enter password"}
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -597,33 +659,33 @@ export default function AdminUsers() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Department</FormLabel>
-                        <Select 
+                        <Select
                           onValueChange={(value) => field.onChange(value ? Number(value) : null)}
                           value={field.value?.toString() ?? ""}
                         >
                           <FormControl>
                             <SelectTrigger>
                               {isLoadingDepartments ? (
-                                 <span className="flex items-center text-muted-foreground">
-                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading...
-                                 </span>
-                               ) : ( 
-                                 <SelectValue placeholder="Select department" />
-                               )}
+                                <span className="flex items-center text-muted-foreground">
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading...
+                                </span>
+                              ) : (
+                                <SelectValue placeholder="Select department" />
+                              )}
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="max-h-[300px]">
                             {isLoadingDepartments ? (
-                               <SelectItem value="loading" disabled>Loading...</SelectItem>
-                             ) : departments.length > 0 ? (
-                               departments.map((dept) => (
-                                 <SelectItem key={dept.id} value={dept.id.toString()}>
-                                   {dept.name}
-                                 </SelectItem>
-                               ))
-                             ) : (
-                               <SelectItem value="no-dept" disabled>No departments found</SelectItem>
-                             )}
+                              <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : departments.length > 0 ? (
+                              departments.map((dept) => (
+                                <SelectItem key={dept.id} value={dept.id.toString()}>
+                                  {dept.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-dept" disabled>No departments found</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />

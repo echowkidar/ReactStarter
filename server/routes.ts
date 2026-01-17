@@ -4,13 +4,13 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import multer from "multer";
 import { DbStorage } from "./dbStorage";
-import { 
-  Department, 
-  Employee, 
+import {
+  Department,
+  Employee,
   AttendanceReport,
   AttendanceEntry,
-  insertEmployeeSchema, 
-  insertAttendanceReportSchema, 
+  insertEmployeeSchema,
+  insertAttendanceReportSchema,
   insertAttendanceEntrySchema,
   insertDepartmentSchema,
   DepartmentName,
@@ -54,81 +54,102 @@ export async function registerRoutes(app: Express) {
     console.error("Failed to setup test email account:", error);
   }
 
+  // Seed default admins if they don't exist
+  try {
+    const existingSuperAdmin = await storage.getAdminByEmail("admin@amu.ac.in");
+    if (!existingSuperAdmin) {
+      console.log("Seeding default admins...");
+      await storage.createAdmin({
+        email: "admin@amu.ac.in",
+        password: "admin123", // In production, hash this!
+        role: "super_admin",
+        name: "Super Admin"
+      });
+      await storage.createAdmin({
+        email: "salary@amu.ac.in",
+        password: "admin123", // In production, hash this!
+        role: "salary_admin",
+        name: "Salary Section Admin"
+      });
+      console.log("Default admins seeded successfully.");
+    }
+  } catch (error) {
+    console.error("Error seeding admins:", error);
+  }
+
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
     const { email, password } = req.body;
 
-    // For demonstration purposes, using hardcoded admin credentials
-    // In production, this should be stored securely in a database
-    const ADMIN_EMAIL = "admin@amu.ac.in";
-    const ADMIN_PASSWORD = "admin123";
+    try {
+      const admin = await storage.getAdminByEmail(email);
 
-    // New admin account for salary section
-    const SALARY_ADMIN_EMAIL = "salary@amu.ac.in";
-    const SALARY_ADMIN_PASSWORD = "admin123";
+      // Verify password (plain text as per current system design, should be hashed in production)
+      if (!admin || admin.password !== password) {
+        return res.status(401).json({ message: "Invalid admin credentials" });
+      }
 
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-      return res.json({ 
+      // Map DB role to frontend adminType
+      // DB: 'super_admin', 'salary_admin'
+      // Frontend expects: 'super', 'salary'
+      const adminType = admin.role === 'salary_admin' ? 'salary' : 'super';
+
+      return res.json({
         role: "admin",
-        adminType: "super",
-        message: "Admin logged in successfully" 
+        adminType: adminType,
+        message: "Admin logged in successfully"
       });
-    } else if (email === SALARY_ADMIN_EMAIL && password === SALARY_ADMIN_PASSWORD) {
-      return res.json({ 
-        role: "admin",
-        adminType: "salary",
-        message: "Admin logged in successfully" 
-      });
+    } catch (error) {
+      console.error("Admin login error:", error);
+      return res.status(500).json({ message: "Internal server error" });
     }
-
-    return res.status(401).json({ message: "Invalid admin credentials" });
   });
 
   // Password reset routes
   app.post("/api/auth/forgot-password", async (req, res) => {
     const { email } = req.body;
-    
+
     try {
       // Check if email exists in departments
       const department = await storage.getDepartmentByEmail(email);
       if (!department) {
         return res.status(404).json({ message: "Email not found" });
       }
-      
+
       // Generate reset token (expires in 1 hour)
       const resetToken = uuid();
       const tokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
-      
+
       // Store token in database
       await storage.storeResetToken(department.id, resetToken, tokenExpiry);
-      
+
       // Create reset URL
-      const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://amu.echowkidar.in' 
+      const baseUrl = process.env.NODE_ENV === 'production'
+        ? 'https://amu.echowkidar.in'
         : 'http://localhost:5001';
-      
+
       const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-      
+
       // Send email with reset link
       const emailResult = await sendPasswordResetEmail(email, resetUrl, false);
-      
-      const response: any = { 
+
+      const response: any = {
         message: "Password reset link has been sent to your email"
       };
-      
+
       // For development only - include reset token and preview URL
       if (process.env.NODE_ENV !== 'production') {
         response.resetToken = resetToken;
         response.resetUrl = resetUrl;
-        
+
         if (emailResult.previewUrl) {
           response.emailPreviewUrl = emailResult.previewUrl;
         }
-        
+
         // Include isEthereal flag for UI customization
         response.isEthereal = emailResult.isEthereal;
       }
-      
+
       return res.json(response);
     } catch (error) {
       console.error("Forgot password error:", error);
@@ -138,31 +159,31 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/auth/reset-password", async (req, res) => {
     const { email, token, newPassword } = req.body;
-    
+
     try {
       // Validate that all required fields are present
       if (!email || !token || !newPassword) {
         return res.status(400).json({ message: "Missing required fields" });
       }
-      
+
       // Find department by email
       const department = await storage.getDepartmentByEmail(email);
       if (!department) {
         return res.status(404).json({ message: "Email not found" });
       }
-      
+
       // Verify token validity
       const isValidToken = await storage.validateResetToken(department.id, token);
       if (!isValidToken) {
         return res.status(400).json({ message: "Invalid or expired token" });
       }
-      
+
       // Update password
       await storage.updateDepartment(department.id, { password: newPassword });
-      
+
       // Clear used token
       await storage.clearResetToken(department.id);
-      
+
       return res.json({ message: "Password has been reset successfully" });
     } catch (error) {
       console.error("Reset password error:", error);
@@ -173,54 +194,54 @@ export async function registerRoutes(app: Express) {
   // Admin forgot/reset password routes
   app.post("/api/auth/admin/forgot-password", async (req, res) => {
     const { email } = req.body;
-    
+
     try {
       // For demo purposes, we'll only handle the two hardcoded admin accounts
       const ADMIN_EMAIL = "admin@amu.ac.in";
       const SALARY_ADMIN_EMAIL = "salary@amu.ac.in";
-      
+
       if (email !== ADMIN_EMAIL && email !== SALARY_ADMIN_EMAIL) {
         return res.status(404).json({ message: "Admin email not found" });
       }
-      
+
       // Generate reset token (expires in 1 hour)
       const resetToken = uuid();
       const tokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
-      
+
       // Store token (in a real app this would be in the database)
       // For demo, we'll use a global Map to store tokens
       if (!global.adminResetTokens) {
         global.adminResetTokens = new Map();
       }
       global.adminResetTokens.set(email, { token: resetToken, expiry: tokenExpiry });
-      
+
       // Create reset URL
-      const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://amu.echowkidar.in' 
+      const baseUrl = process.env.NODE_ENV === 'production'
+        ? 'https://amu.echowkidar.in'
         : 'http://localhost:5001';
-      
+
       const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-      
+
       // Send email with reset link
       const emailResult = await sendPasswordResetEmail(email, resetUrl, true);
-      
-      const response: any = { 
+
+      const response: any = {
         message: "Password reset link has been sent to your email"
       };
-      
+
       // For development only - include reset token and preview URL
       if (process.env.NODE_ENV !== 'production') {
         response.resetToken = resetToken;
         response.resetUrl = resetUrl;
-        
+
         if (emailResult.previewUrl) {
           response.emailPreviewUrl = emailResult.previewUrl;
         }
-        
+
         // Include isEthereal flag for UI customization
         response.isEthereal = emailResult.isEthereal;
       }
-      
+
       return res.json(response);
     } catch (error) {
       console.error("Admin forgot password error:", error);
@@ -230,36 +251,36 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/auth/admin/reset-password", async (req, res) => {
     const { email, token, newPassword } = req.body;
-    
+
     try {
       // Validate that all required fields are present 
       if (!email || !token || !newPassword) {
         return res.status(400).json({ message: "Missing required fields" });
       }
-      
+
       // For demo purposes only
       const ADMIN_EMAIL = "admin@amu.ac.in";
       const SALARY_ADMIN_EMAIL = "salary@amu.ac.in";
-      
+
       if (email !== ADMIN_EMAIL && email !== SALARY_ADMIN_EMAIL) {
         return res.status(404).json({ message: "Admin email not found" });
       }
-      
+
       // Check if token is valid
       if (!global.adminResetTokens || !global.adminResetTokens.has(email)) {
         return res.status(400).json({ message: "Invalid or expired token" });
       }
-      
+
       const tokenData = global.adminResetTokens.get(email);
       if (!tokenData || tokenData.token !== token || tokenData.expiry < new Date()) {
         return res.status(400).json({ message: "Invalid or expired token" });
       }
-      
+
       // In a real app, you would update the admin password in the database
-      
+
       // Clear used token
       global.adminResetTokens.delete(email);
-      
+
       return res.json({ message: "Admin password has been reset successfully" });
     } catch (error) {
       console.error("Admin reset password error:", error);
@@ -276,10 +297,10 @@ export async function registerRoutes(app: Express) {
 
     try {
       const { id: departmentNameId, name, hodTitle, hodName, email, password } = req.body;
-      
+
       if (!name || !hodTitle || !hodName || !email || !password) {
         console.log('[POST /api/auth/register] Missing required fields');
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: "Missing required fields",
           required: ["name", "hodTitle", "hodName", "email", "password"]
         });
@@ -333,7 +354,7 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('[POST /api/auth/register] Error:', error);
       // Send a proper error response
-      res.status(400).json({ 
+      res.status(400).json({
         message: "Failed to register department",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -381,7 +402,7 @@ export async function registerRoutes(app: Express) {
   // Ensure uploads directory exists with proper permissions
   const uploadDir = path.join(__dirname, '../uploads');
   console.log("Upload directory path:", uploadDir);
-  
+
   try {
     if (!fs.existsSync(uploadDir)) {
       console.log("Creating uploads directory since it doesn't exist");
@@ -417,14 +438,14 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  const upload = multer({ 
+  const upload = multer({
     storage: fileStorage,
     fileFilter: (req, file, cb) => {
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'image/webp'];
-      
+
       console.log(`Validating file: ${file.originalname}, mimetype: ${file.mimetype}`);
       console.log(`Request path: ${req.path}`);
-      
+
       if (allowedTypes.includes(file.mimetype)) {
         console.log(`File accepted: ${file.originalname} (${file.mimetype})`);
         cb(null, true);
@@ -474,15 +495,19 @@ export async function registerRoutes(app: Express) {
     });
 
     try {
-      let departmentList: Array<{ id: number; name: string; code?: string | null }> = [];
+      let departmentList: Array<{ id: number; name: string; code?: string | null; attendancePermitted?: boolean; employeeCount?: number }> = [];
 
       if (req.query.registeredOnly === 'true') {
         console.log('[GET /api/departments] Fetching only registered departments (from departments table)');
         const registeredDepartments = await storage.getAllDepartments();
+        const employeeCounts = await storage.getEmployeeCountsByDepartment();
+
         departmentList = registeredDepartments.map(dept => ({
           id: dept.id,
           name: dept.name,
-          code: null
+          code: null,
+          attendancePermitted: dept.attendancePermitted,
+          employeeCount: employeeCounts.get(dept.id) || 0
         }));
         console.log(`[GET /api/departments] Fetched ${departmentList.length} registered departments`);
       } else {
@@ -535,13 +560,13 @@ export async function registerRoutes(app: Express) {
 
       const employees = await storage.getEmployeesByDepartment(departmentId);
       console.log('Found employees:', employees.length ? employees : 'No employees found');
-      
+
       // Transform the response to match the expected format
       const transformedEmployees = employees.map(emp => ({
         ...emp,
         departmentName: department.name
       }));
-      
+
       res.json(transformedEmployees);
     } catch (error) {
       console.error('Error fetching department employees:', error);
@@ -602,13 +627,13 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error creating employee:', error);
       if (error instanceof Error) {
-        res.status(400).json({ 
+        res.status(400).json({
           message: "Invalid employee data",
           details: error.message,
           stack: error.stack
         });
       } else {
-        res.status(400).json({ 
+        res.status(400).json({
           message: "Invalid employee data",
           details: String(error)
         });
@@ -653,7 +678,7 @@ export async function registerRoutes(app: Express) {
       }
 
       console.log(`Department employee update - request received for employee ${employeeId} in department ${departmentId}`);
-      
+
       // Log files received (if any)
       if (req.files && Object.keys(req.files).length > 0) {
         console.log("Department employee update - files received:", Object.keys(req.files));
@@ -666,10 +691,10 @@ export async function registerRoutes(app: Express) {
       } else {
         console.log("Department employee update - no files received");
       }
-      
+
       // Log body data
       console.log("Department employee update - body fields:", Object.keys(req.body));
-      
+
       // Handle uploaded files exactly like admin route
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const updates = {
@@ -691,13 +716,13 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error updating employee from department:', error);
       if (error instanceof Error) {
-        res.status(400).json({ 
-          message: "Invalid employee update", 
+        res.status(400).json({
+          message: "Invalid employee update",
           details: error.message,
           stack: error.stack
         });
       } else {
-        res.status(400).json({ 
+        res.status(400).json({
           message: "Invalid employee update",
           details: String(error)
         });
@@ -711,17 +736,17 @@ export async function registerRoutes(app: Express) {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
-      
+
       console.log(`Upload API - File received: ${req.file.originalname}, size: ${req.file.size}, type: ${req.file.mimetype}`);
-      
+
       // Return the URL that can be used to access the file
-      const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://amu.echowkidar.in' 
+      const baseUrl = process.env.NODE_ENV === 'production'
+        ? 'https://amu.echowkidar.in'
         : `http://localhost:${process.env.PORT || 5001}`;
-      
+
       const imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
       console.log(`Upload API - File saved as: ${imageUrl}`);
-      
+
       res.json({ imageUrl });
     } catch (error) {
       console.error('Error uploading file:', error);
@@ -733,96 +758,96 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/upload", async (req, res) => {
     try {
       console.log("Delete file API called with body:", req.body);
-      
+
       const { imageUrl } = req.body;
-      
+
       if (!imageUrl) {
         console.log("No file URL provided in request body");
         return res.status(400).json({ message: "No file URL provided" });
       }
-      
+
       console.log(`Delete file API called for: ${imageUrl}`);
-      
+
       // Extract the filename from the URL
       // Expected format: /uploads/filename.ext
       const urlParts = imageUrl.split('/');
       const filename = urlParts[urlParts.length - 1];
-      
+
       if (!filename) {
         console.log("Invalid file URL format, couldn't extract filename");
         return res.status(400).json({ message: "Invalid file URL format" });
       }
-      
+
       // Get the absolute path to the uploads directory
       const uploadDir = path.join(__dirname, '../uploads');
       console.log(`Upload directory absolute path: ${uploadDir}`);
-      
+
       // Build the absolute file path
       const filePath = path.join(uploadDir, filename);
       console.log(`Full absolute file path: ${filePath}`);
-      
+
       // Double check that the file path is within the uploads directory
       if (!filePath.startsWith(uploadDir)) {
         console.error(`Security issue: File path ${filePath} is outside upload directory ${uploadDir}`);
         return res.status(400).json({ message: "Invalid file path" });
       }
-      
+
       console.log(`Checking if file exists at: ${filePath}`);
-      
+
       // Check if file exists
       if (!fs.existsSync(filePath)) {
         console.log(`File does not exist: ${filePath}`);
         // Still return success if file doesn't exist, as the end result is the same (no file)
         return res.status(200).json({ message: "File already removed or does not exist" });
       }
-      
+
       console.log(`File exists, attempting to delete file at: ${filePath}`);
-      
+
       try {
         // Delete the file
         fs.unlinkSync(filePath);
-        
+
         // Verify the file was deleted
         const fileStillExists = fs.existsSync(filePath);
         if (fileStillExists) {
           console.error(`Failed to delete file: ${filePath} - File still exists after deletion attempt`);
           return res.status(500).json({ message: "Failed to delete file: File still exists after deletion attempt" });
         }
-        
+
         console.log(`File successfully deleted: ${filePath}`);
-        
+
         // Ensure we're sending a proper JSON response
         res.setHeader('Content-Type', 'application/json');
         return res.status(200).json({ message: "File deleted successfully" });
       } catch (unlinkError) {
         // Handle specific unlink errors
         console.error(`Error when trying to delete file ${filePath}:`, unlinkError);
-        return res.status(500).json({ 
-          message: "Failed to delete file", 
+        return res.status(500).json({
+          message: "Failed to delete file",
           error: String(unlinkError),
           details: "Error occurred during fs.unlinkSync operation"
         });
       }
     } catch (error) {
       console.error('Error in delete file route:', error);
-      
+
       // Ensure we're sending a proper JSON response
       res.setHeader('Content-Type', 'application/json');
-      return res.status(500).json({ 
-        message: "Failed to delete file", 
-        error: String(error) 
+      return res.status(500).json({
+        message: "Failed to delete file",
+        error: String(error)
       });
     }
   });
 
   // User management endpoints
-  
+
   // Get all users
   app.get("/api/admin/users", async (req, res) => {
     try {
       // For the MVP, we'll use a simplified approach
       // In production, these would be stored in the database
-      
+
       // Hardcoded super admin and salary admin
       const hardcodedUsers = [
         {
@@ -842,25 +867,25 @@ export async function registerRoutes(app: Express) {
           departmentName: null
         }
       ];
-      
+
       // Get department admins from the departments table
       const departments = await storage.getAllDepartments();
-      
+
       // Only include departments with valid emails (non-empty and NOT placeholder emails)
-      const validDepartments = departments.filter(dept => 
-        dept.email && 
-        dept.email.trim() !== '' && 
+      const validDepartments = departments.filter(dept =>
+        dept.email &&
+        dept.email.trim() !== '' &&
         !dept.email.includes('unused_dept_') && // Filter out placeholder emails for deleted users
         !dept.email.includes('@placeholder.com') // Additional check for placeholder domain
       );
-      
+
       console.log(`Found ${departments.length} total departments, ${validDepartments.length} have valid emails`);
-      
+
       const departmentUsers = validDepartments.map((dept, index) => {
         // REMOVED: Logic to resolve names starting with "Department ID -"
         // The name should be correct in the database now.
         let departmentName = dept.name;
-        
+
         return {
           id: index + 3, // Start IDs after hardcoded users
           name: dept.hodName,
@@ -870,22 +895,22 @@ export async function registerRoutes(app: Express) {
           departmentName: departmentName // Use the name directly from the department record
         };
       });
-      
+
       // Combine all users
       const allUsers = [...hardcodedUsers, ...departmentUsers];
-      
+
       res.json(allUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
-  
+
   // Create a new user
   app.post("/api/admin/users", async (req, res) => {
     try {
       const { name, email, password, role, departmentId } = req.body;
-      
+
       console.log("POST /api/admin/users - Creating user with data:", {
         name,
         email,
@@ -893,35 +918,35 @@ export async function registerRoutes(app: Express) {
         departmentId: departmentId,
         departmentIdType: typeof departmentId
       });
-      
+
       // Validate required fields
       if (!name || !email || !password || !role) {
         return res.status(400).json({ message: "Missing required fields" });
       }
-      
+
       // Check if email already exists in departments
       const existingDeptByEmail = await storage.getDepartmentByEmail(email);
       if (existingDeptByEmail) {
         return res.status(400).json({ message: "Email already in use" });
       }
-      
+
       // For department role, associate with an existing department
       if (role === "department") {
         if (!departmentId) {
           return res.status(400).json({ message: "Department ID is required for department users" });
         }
-        
+
         const selectedDeptNameId = Number(departmentId); // ID from department_names table
         if (isNaN(selectedDeptNameId)) {
           return res.status(400).json({ message: "Invalid department ID format" });
         }
-        
+
         console.log(`Fetching details for department name ID: ${selectedDeptNameId}`);
         // Fetch details from department_names table using the ID from the dropdown
         const deptNameDetails = await storage.getDepartmentName(selectedDeptNameId);
 
         if (!deptNameDetails) {
-            return res.status(404).json({ message: `Department details not found for ID ${selectedDeptNameId}. Cannot create user.` });
+          return res.status(404).json({ message: `Department details not found for ID ${selectedDeptNameId}. Cannot create user.` });
         }
 
         console.log(`Found details: ${deptNameDetails.name} (Code: ${deptNameDetails.code})`);
@@ -931,95 +956,95 @@ export async function registerRoutes(app: Express) {
         const existingRegisteredDept = await storage.getDepartmentByName(deptNameDetails.name);
 
         if (existingRegisteredDept) {
-            // If it exists and has a valid email (not placeholder), prevent creating another user for it.
-            if (existingRegisteredDept.email && !existingRegisteredDept.email.includes('unused_dept_') && !existingRegisteredDept.email.includes('@placeholder.com')) {
-                console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) is already registered with user ${existingRegisteredDept.email}.`);
-                return res.status(409).json({ // 409 Conflict
-                     message: `Cannot create user: Department "${deptNameDetails.name}" is already associated with an active user (${existingRegisteredDept.email}).`
-                });
-            } else {
-                // If it exists but has a placeholder email, update it (assign the new user)
-                console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) exists but has no active user or a placeholder email. Updating it.`);
-                try {
-                    const updatedDepartment = await storage.updateDepartment(existingRegisteredDept.id, {
-                        hodName: name,
-                        email: email,
-                        password: password // Consider hashing
-                    });
-                    // Recalculate UI ID (Fragile) - Reuse existing calculation
-                    const allDepts = await storage.getAllDepartments();
-                    const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
-                    const userIndex = validDepts.findIndex(d => d.id === updatedDepartment.id);
-                    const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
-                    return res.status(200).json({ // 200 OK for update
-                        id: uiId,
-                        name: name,
-                        email: email,
-                        role: "department",
-                        departmentId: updatedDepartment.id, // The existing/updated department ID
-                        departmentName: updatedDepartment.name
-                    });
-                } catch (updateError: any) {
-                    console.error(`Error updating existing department ${existingRegisteredDept.id} ("${deptNameDetails.name}"):`, updateError);
-                    return res.status(500).json({ message: "Failed to update existing department entry for the new user." });
-                }
-            }
-        } else {
-            // Department name not found in 'departments' table by name. Proceed to create new entry.
-            console.log(`Department "${deptNameDetails.name}" not found by name in 'departments' table. Creating new entry.`);
+          // If it exists and has a valid email (not placeholder), prevent creating another user for it.
+          if (existingRegisteredDept.email && !existingRegisteredDept.email.includes('unused_dept_') && !existingRegisteredDept.email.includes('@placeholder.com')) {
+            console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) is already registered with user ${existingRegisteredDept.email}.`);
+            return res.status(409).json({ // 409 Conflict
+              message: `Cannot create user: Department "${deptNameDetails.name}" is already associated with an active user (${existingRegisteredDept.email}).`
+            });
+          } else {
+            // If it exists but has a placeholder email, update it (assign the new user)
+            console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) exists but has no active user or a placeholder email. Updating it.`);
             try {
-                // Create the new department entry
-                const newDepartment = await storage.createDepartment({
-                    name: deptNameDetails.name, // Use name from department_names
-                    hodTitle: "Chairperson", // Default
-                    hodName: name,
-                    email: email,
-                    password: password // Consider hashing
-                });
-                console.log(`Created new registered department: ID=${newDepartment.id}, Name=${newDepartment.name}`);
-
-                // Recalculate UI ID (Fragile)
-                const allDepts = await storage.getAllDepartments(); // Refetch might be needed
-                const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
-                const userIndex = validDepts.findIndex(d => d.id === newDepartment.id);
-                const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
-
-                return res.status(201).json({
-                    id: uiId,
-                    name: name,
-                    email: email,
-                    role: "department",
-                    departmentId: newDepartment.id, // The new ID from the 'departments' table
-                    departmentName: newDepartment.name
-                });
-            } catch (creationError: any) {
-                console.error('Error creating new department entry:', creationError);
-                // Handle potential duplicate key errors during creation (e.g., race condition or ID generation issue)
-                if (creationError.code === '23505') {
-                     console.warn(`Attempted to create a duplicate department for: ${deptNameDetails.name}. Constraint: ${creationError.constraint}. Detail: ${creationError.detail}`);
-                     // Try to find the conflicting department again, perhaps it was created between the check and the insert attempt
-                     const conflictingDept = await storage.getDepartmentByName(deptNameDetails.name); // Or by ID if detail provides it
-                     if (conflictingDept) {
-                         return res.status(409).json({
-                            message: `Failed to register user: A conflicting department entry for '${deptNameDetails.name}' (ID: ${conflictingDept.id}) was found after initial check. Please try again or contact support.`,
-                            detail: `Conflict likely due to race condition or concurrent creation. Found existing ID: ${conflictingDept.id}`
-                         });
-                     } else {
-                         return res.status(409).json({ // 409 Conflict
-                            message: `Failed to register user: A database conflict occurred while creating the department entry for '${deptNameDetails.name}'. Please check logs or contact support.`,
-                            detail: creationError.detail // Include DB detail for debugging
-                         });
-                     }
-                }
-                // Original fallback error
-                return res.status(500).json({ message: "Failed to register new department user due to database error during creation." });
+              const updatedDepartment = await storage.updateDepartment(existingRegisteredDept.id, {
+                hodName: name,
+                email: email,
+                password: password // Consider hashing
+              });
+              // Recalculate UI ID (Fragile) - Reuse existing calculation
+              const allDepts = await storage.getAllDepartments();
+              const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
+              const userIndex = validDepts.findIndex(d => d.id === updatedDepartment.id);
+              const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
+              return res.status(200).json({ // 200 OK for update
+                id: uiId,
+                name: name,
+                email: email,
+                role: "department",
+                departmentId: updatedDepartment.id, // The existing/updated department ID
+                departmentName: updatedDepartment.name
+              });
+            } catch (updateError: any) {
+              console.error(`Error updating existing department ${existingRegisteredDept.id} ("${deptNameDetails.name}"):`, updateError);
+              return res.status(500).json({ message: "Failed to update existing department entry for the new user." });
             }
+          }
+        } else {
+          // Department name not found in 'departments' table by name. Proceed to create new entry.
+          console.log(`Department "${deptNameDetails.name}" not found by name in 'departments' table. Creating new entry.`);
+          try {
+            // Create the new department entry
+            const newDepartment = await storage.createDepartment({
+              name: deptNameDetails.name, // Use name from department_names
+              hodTitle: "Chairperson", // Default
+              hodName: name,
+              email: email,
+              password: password // Consider hashing
+            });
+            console.log(`Created new registered department: ID=${newDepartment.id}, Name=${newDepartment.name}`);
+
+            // Recalculate UI ID (Fragile)
+            const allDepts = await storage.getAllDepartments(); // Refetch might be needed
+            const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
+            const userIndex = validDepts.findIndex(d => d.id === newDepartment.id);
+            const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
+
+            return res.status(201).json({
+              id: uiId,
+              name: name,
+              email: email,
+              role: "department",
+              departmentId: newDepartment.id, // The new ID from the 'departments' table
+              departmentName: newDepartment.name
+            });
+          } catch (creationError: any) {
+            console.error('Error creating new department entry:', creationError);
+            // Handle potential duplicate key errors during creation (e.g., race condition or ID generation issue)
+            if (creationError.code === '23505') {
+              console.warn(`Attempted to create a duplicate department for: ${deptNameDetails.name}. Constraint: ${creationError.constraint}. Detail: ${creationError.detail}`);
+              // Try to find the conflicting department again, perhaps it was created between the check and the insert attempt
+              const conflictingDept = await storage.getDepartmentByName(deptNameDetails.name); // Or by ID if detail provides it
+              if (conflictingDept) {
+                return res.status(409).json({
+                  message: `Failed to register user: A conflicting department entry for '${deptNameDetails.name}' (ID: ${conflictingDept.id}) was found after initial check. Please try again or contact support.`,
+                  detail: `Conflict likely due to race condition or concurrent creation. Found existing ID: ${conflictingDept.id}`
+                });
+              } else {
+                return res.status(409).json({ // 409 Conflict
+                  message: `Failed to register user: A database conflict occurred while creating the department entry for '${deptNameDetails.name}'. Please check logs or contact support.`,
+                  detail: creationError.detail // Include DB detail for debugging
+                });
+              }
+            }
+            // Original fallback error
+            return res.status(500).json({ message: "Failed to register new department user due to database error during creation." });
+          }
         }
       }
-      
+
       // Handle other roles (superadmin, salary) - For MVP, these are not stored/created via API
       if (role === "superadmin" || role === "salary") {
-         return res.status(400).json({ message: `Cannot create '${role}' user via API in this version.` });
+        return res.status(400).json({ message: `Cannot create '${role}' user via API in this version.` });
       }
 
       // Fallback for unhandled roles or errors
@@ -1030,35 +1055,35 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to create user" });
     }
   });
-  
+
   // Update an existing user
   app.put("/api/admin/users/:id", async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
       const { name, email, password, role, departmentId } = req.body;
-      
+
       console.log("PUT /api/admin/users/:id - Updating user:", {
         userId, name, email, role, departmentId
       });
-      
+
       // Handle hardcoded users (superadmin, salary) - cannot be updated via API
       if (userId <= 2) {
         return res.json({ message: "System users cannot be modified via API." });
       }
-      
+
       // Find the current department for this user
-        const allDepts = await storage.getAllDepartments();
-      const validDepartments = allDepts.filter(dept => 
+      const allDepts = await storage.getAllDepartments();
+      const validDepartments = allDepts.filter(dept =>
         dept.email && !dept.email.includes('unused_dept_') && !dept.email.includes('@placeholder.com')
       );
 
       const currentDepartment = validDepartments.find((dept, index) => {
-         const calculatedUserId = index + 3;
-         return calculatedUserId === userId;
+        const calculatedUserId = index + 3;
+        return calculatedUserId === userId;
       });
 
       if (!currentDepartment) {
-         return res.status(404).json({ message: `User with UI ID ${userId} not found (no corresponding department).` });
+        return res.status(404).json({ message: `User with UI ID ${userId} not found (no corresponding department).` });
       }
 
       console.log(`Found current department for UI user ID ${userId}: Dept ID ${currentDepartment.id} (${currentDepartment.name})`);
@@ -1066,38 +1091,38 @@ export async function registerRoutes(app: Express) {
       // Get the target department name from department_names
       const targetDeptNameId = Number(departmentId);
       if (isNaN(targetDeptNameId)) {
-         return res.status(400).json({ message: "Invalid target department ID format." });
+        return res.status(400).json({ message: "Invalid target department ID format." });
       }
 
       const targetDeptNameDetails = await storage.getDepartmentName(targetDeptNameId);
       if (!targetDeptNameDetails) {
-          return res.status(404).json({ message: `Target department details not found for ID ${targetDeptNameId}.` });
+        return res.status(404).json({ message: `Target department details not found for ID ${targetDeptNameId}.` });
       }
 
       // Check for email conflict with other departments
       if (email !== currentDepartment.email) {
-          const existingUserWithEmail = await storage.getDepartmentByEmail(email);
-          if (existingUserWithEmail && existingUserWithEmail.id !== currentDepartment.id) {
-             return res.status(400).json({ message: `Email ${email} is already in use by department ${existingUserWithEmail.name}.` });
-          }
+        const existingUserWithEmail = await storage.getDepartmentByEmail(email);
+        if (existingUserWithEmail && existingUserWithEmail.id !== currentDepartment.id) {
+          return res.status(400).json({ message: `Email ${email} is already in use by department ${existingUserWithEmail.name}.` });
+        }
       }
 
       // Update the current department with new details
       console.log(`Updating department ${currentDepartment.id} with new name "${targetDeptNameDetails.name}" and user details`);
       await storage.updateDepartment(currentDepartment.id, {
-          name: targetDeptNameDetails.name, // Update the department name
-              hodName: name,
-              email: email,
-              ...(password && password.trim() !== '' ? { password } : {})
-            });
-            
-            return res.json({
-              id: userId,
-              name,
-              email,
-              role: "department",
-          departmentId: currentDepartment.id,
-          departmentName: targetDeptNameDetails.name
+        name: targetDeptNameDetails.name, // Update the department name
+        hodName: name,
+        email: email,
+        ...(password && password.trim() !== '' ? { password } : {})
+      });
+
+      return res.json({
+        id: userId,
+        name,
+        email,
+        role: "department",
+        departmentId: currentDepartment.id,
+        departmentName: targetDeptNameDetails.name
       });
 
     } catch (error) {
@@ -1105,37 +1130,37 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to update user" });
     }
   });
-  
+
   // Delete a user
   app.delete("/api/admin/users/:id", async (req, res) => {
     try {
       const userId = parseInt(req.params.id); // Fragile UI ID
       console.log(`Attempting to delete user with UI ID: ${userId}`);
-      
+
       // Prevent deleting hardcoded users
       if (userId <= 2) {
         console.log(`Cannot delete system user with ID: ${userId}`);
         return res.status(403).json({ message: "Cannot delete system users" });
       }
-      
+
       // Find the department matching this UI user ID using .find()
       const allDepts = await storage.getAllDepartments();
-      
-      const validDepartments = allDepts.filter(dept => 
-         dept.email && !dept.email.includes('unused_dept_') && !dept.email.includes('@placeholder.com')
+
+      const validDepartments = allDepts.filter(dept =>
+        dept.email && !dept.email.includes('unused_dept_') && !dept.email.includes('@placeholder.com')
       );
 
       const departmentToDelete = validDepartments.find((dept, index) => {
-         const calculatedUserId = index + 3;
-         return calculatedUserId === userId;
+        const calculatedUserId = index + 3;
+        return calculatedUserId === userId;
       });
-      
+
       if (!departmentToDelete) {
         // No need for extra null check here
         console.log(`No department found for user ID: ${userId}`);
         return res.status(404).json({ message: "User not found" });
       }
-      
+
       // departmentToDelete is guaranteed to be a Department object here
       const deptId = departmentToDelete.id;
       const deptName = departmentToDelete.name;
@@ -1145,37 +1170,37 @@ export async function registerRoutes(app: Express) {
       // Check for associated employees before deleting
       const employees = await storage.getEmployeesByDepartment(deptId);
       if (employees.length > 0) {
-         console.log(`Cannot delete department ${deptId} - it has ${employees.length} employees. Clearing user info instead.`);
-         // Instead of deleting, clear the user-specific info (email, HOD, password)
-         try {
-            const placeholderEmail = `unused_dept_${deptId}_${Date.now()}@placeholder.com`;
-            await storage.updateDepartment(deptId, {
-               email: placeholderEmail,
-               hodName: "(User Deleted)",
-               password: uuid()
-            });
-      return res.json({ 
-               message: `User (department ${deptId}) cannot be deleted due to associated employees. User info cleared.`,
-        userId: userId,
-               departmentId: deptId,
-               departmentName: deptName
-            });
-         } catch (clearError) {
-            console.error(`Error clearing user info for department ${deptId} during delete:`, clearError);
-            return res.status(500).json({ message: "Failed to clear user info during deletion." });
-         }
-          } else {
-         // No employees, safe to delete the department record
-         await storage.deleteDepartment(deptId);
-         console.log(`Department ${deptId} deleted successfully.`);
-         return res.json({ 
-           message: "User deleted successfully",
-           userId: userId,
-           departmentId: deptId,
-           departmentName: deptName // Return the name before deletion
-         });
+        console.log(`Cannot delete department ${deptId} - it has ${employees.length} employees. Clearing user info instead.`);
+        // Instead of deleting, clear the user-specific info (email, HOD, password)
+        try {
+          const placeholderEmail = `unused_dept_${deptId}_${Date.now()}@placeholder.com`;
+          await storage.updateDepartment(deptId, {
+            email: placeholderEmail,
+            hodName: "(User Deleted)",
+            password: uuid()
+          });
+          return res.json({
+            message: `User (department ${deptId}) cannot be deleted due to associated employees. User info cleared.`,
+            userId: userId,
+            departmentId: deptId,
+            departmentName: deptName
+          });
+        } catch (clearError) {
+          console.error(`Error clearing user info for department ${deptId} during delete:`, clearError);
+          return res.status(500).json({ message: "Failed to clear user info during deletion." });
+        }
+      } else {
+        // No employees, safe to delete the department record
+        await storage.deleteDepartment(deptId);
+        console.log(`Department ${deptId} deleted successfully.`);
+        return res.json({
+          message: "User deleted successfully",
+          userId: userId,
+          departmentId: deptId,
+          departmentName: deptName // Return the name before deletion
+        });
       }
-      
+
       // REMOVED: Old logic trying to resolve names with getDepartmentNameFromNegativeId
 
     } catch (error) {
@@ -1190,11 +1215,11 @@ export async function registerRoutes(app: Express) {
     try {
       // Destructure the new optional field from the body
       const { dept_name, dept_code, dealingAssistantCode } = req.body;
-      
-      console.log("POST /api/admin/department-names - Creating department name:", { 
-        dept_name, 
-        dept_code, 
-        dealingAssistantCode 
+
+      console.log("POST /api/admin/department-names - Creating department name:", {
+        dept_name,
+        dept_code,
+        dealingAssistantCode
       });
 
       if (!dept_name || !dept_code) {
@@ -1214,7 +1239,7 @@ export async function registerRoutes(app: Express) {
       }
 
       // Re-introduce manual ID generation
-      const maxIdResult = await storage.getMaxDepartmentNameId(); 
+      const maxIdResult = await storage.getMaxDepartmentNameId();
       const newId = (maxIdResult?.maxId || 0) + 1;
 
       // Create object with correct field names for Drizzle schema ('name', 'code')
@@ -1234,10 +1259,10 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error creating department name:", error);
       if (error instanceof Error && error.message.includes("duplicate key value violates unique constraint")) {
-         // Handle potential race conditions if ID generation isn't atomic
-         res.status(409).json({ message: "Conflict creating department name, possibly duplicate ID or constraint violation." });
+        // Handle potential race conditions if ID generation isn't atomic
+        res.status(409).json({ message: "Conflict creating department name, possibly duplicate ID or constraint violation." });
       } else {
-         res.status(500).json({ message: "Failed to create department name" });
+        res.status(500).json({ message: "Failed to create department name" });
       }
     }
   });
@@ -1271,12 +1296,12 @@ export async function registerRoutes(app: Express) {
     try {
       // Create a safe copy of the request body
       const updates = { ...req.body };
-      
+
       // Handle date fields properly for PostgreSQL
       if (updates.despatchDate && typeof updates.despatchDate === 'string') {
         updates.despatchDate = new Date(updates.despatchDate);
       }
-      
+
       // Handle receipt date
       if (updates.receiptDate) {
         if (typeof updates.receiptDate === 'string') {
@@ -1288,7 +1313,7 @@ export async function registerRoutes(app: Express) {
           delete updates.receiptDate;
         }
       }
-      
+
       const report = await storage.updateAttendanceReport(Number(req.params.id), updates);
       res.json(report);
     } catch (error) {
@@ -1360,7 +1385,7 @@ export async function registerRoutes(app: Express) {
       const reports = await storage.getAllAttendanceReports();
       const reportsWithDetailsPromises = reports.map(async (report) => {
         const department = await storage.getDepartment(report.departmentId);
-        
+
         // Provide explicit type for entriesWithDetails
         let entriesWithDetails: (AttendanceEntry & { employee?: Employee | undefined })[] = [];
         if (report.status === "sent") {
@@ -1375,7 +1400,7 @@ export async function registerRoutes(app: Express) {
             })
           );
         }
-        
+
         return {
           ...report,
           department, // department is already Department | undefined
@@ -1384,7 +1409,7 @@ export async function registerRoutes(app: Express) {
           receiptDate: report.receiptDate,
         };
       });
-      
+
       const reportsWithDetails = await Promise.all(reportsWithDetailsPromises);
       res.json(reportsWithDetails);
     } catch (error) {
@@ -1427,29 +1452,170 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Delete attendance report (Admin only)
   app.delete("/api/attendance/:id", async (req, res) => {
     try {
-      await storage.deleteAttendanceReport(Number(req.params.id));
-      res.status(204).send();
+      const id = Number(req.params.id);
+      console.log(`[DELETE /api/attendance/${id}] Request received`);
+
+      const report = await storage.getAttendanceReport(id);
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      await storage.deleteAttendanceReport(id);
+
+      console.log(`[DELETE] Report ${id} fileUrl: '${report.fileUrl}'`);
+      if (report.fileUrl) {
+        console.log(`[DELETE] Calling deleteFile for report ${id}`);
+        await storage.deleteFile(report.fileUrl);
+      } else {
+        console.log(`[DELETE] No file to delete for report ${id}`);
+      }
+
+      res.json({ message: "Report deleted successfully" });
     } catch (error) {
-      console.error('Error deleting attendance report:', error);
-      res.status(500).json({ message: "Failed to delete attendance report" });
+      console.error(`[DELETE /api/attendance/${req.params.id}] Error:`, error);
+      res.status(500).json({ message: "Failed to delete report" });
     }
   });
+
+  // Request cancellation (Department side)
+  app.post("/api/attendance/:id/request-cancel", async (req, res) => {
+    try {
+      const reportId = Number(req.params.id);
+      const report = await storage.getAttendanceReport(reportId);
+
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      if (report.status !== 'sent') {
+        return res.status(400).json({
+          message: "Only sent reports can be cancelled. Current status: " + report.status
+        });
+      }
+
+      const updatedReport = await storage.updateAttendanceReport(reportId, {
+        status: 'cancel_requested',
+        cancelRequestedAt: new Date()
+      });
+
+      console.log(`Cancellation requested for report ${reportId}`);
+      res.json(updatedReport);
+    } catch (error) {
+      console.error('Error requesting cancellation:', error);
+      res.status(500).json({ message: "Failed to request cancellation" });
+    }
+  });
+
+  // Request Recall (Department side) - NEW
+  app.post("/api/attendance/:id/request-recall", async (req, res) => {
+    try {
+      const reportId = Number(req.params.id);
+      const report = await storage.getAttendanceReport(reportId);
+
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      if (report.status !== 'submitted') {
+        return res.status(400).json({
+          message: "Only submitted reports can be recalled. Current status: " + report.status
+        });
+      }
+
+      const updatedReport = await storage.updateAttendanceReport(reportId, {
+        status: 'recall_requested',
+        cancelRequestedAt: new Date() // Reusing field for timestamp
+      });
+
+      console.log(`Recall requested for report ${reportId}`);
+      res.json(updatedReport);
+    } catch (error) {
+      console.error('Error requesting recall:', error);
+      res.status(500).json({ message: "Failed to request recall" });
+    }
+  });
+
+  // Revert to Draft (Admin side) - NEW
+  app.post("/api/attendance/:id/revert-to-draft", async (req, res) => {
+    try {
+      const reportId = Number(req.params.id);
+      const report = await storage.getAttendanceReport(reportId);
+
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      // Allow reverting if recall_requested OR submitted (admin override)
+      // User asked: "Admin us attendance report ko jo submitted status me hogi usko draft me change kar sake"
+      if (report.status !== 'recall_requested' && report.status !== 'submitted') {
+        return res.status(400).json({
+          message: "Only submitted or recall-requested reports can be reverted to draft."
+        });
+      }
+
+      const updatedReport = await storage.updateAttendanceReport(reportId, {
+        status: 'draft',
+        cancelRequestedAt: null // Clear the request timestamp
+      });
+
+      console.log(`Report ${reportId} reverted to draft`);
+      res.json(updatedReport);
+    } catch (error) {
+      console.error('Error reverting to draft:', error);
+      res.status(500).json({ message: "Failed to revert to draft" });
+    }
+  });
+
+  // Accept cancellation (Admin side)
+  app.post("/api/attendance/:id/accept-cancel", async (req, res) => {
+    try {
+      const reportId = Number(req.params.id);
+      const report = await storage.getAttendanceReport(reportId);
+
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      if (report.status !== 'cancel_requested') {
+        return res.status(400).json({
+          message: "Only cancel_requested reports can be accepted. Current status: " + report.status
+        });
+      }
+
+      // Delete all entries for this report (keep PDF and receipt info)
+      await storage.deleteEntriesForReport(reportId);
+
+      // Update status to cancelled
+      const updatedReport = await storage.updateAttendanceReport(reportId, {
+        status: 'cancelled',
+        cancelledAt: new Date()
+      });
+
+      console.log(`Cancellation accepted for report ${reportId}. Entries deleted, PDF preserved.`);
+      res.json(updatedReport);
+    } catch (error) {
+      console.error('Error accepting cancellation:', error);
+      res.status(500).json({ message: "Failed to accept cancellation" });
+    }
+  });
+
 
   // Get all employees (admin)
   app.get("/api/admin/employees", async (req, res) => {
     try {
       console.log('[GET /api/admin/employees] Fetching all employees');
       const employees = await storage.getAllEmployees();
-      
+
       // Get all departments to add department names
       const departments = await storage.getAllDepartments();
       const departmentMap = new Map(departments.map(d => [d.id, d]));
 
       // Add department names to employees
       const employeesWithDepartments = employees.map(emp => ({
-          ...emp,
+        ...emp,
         departmentName: departmentMap.get(emp.departmentId)?.name || 'Unknown Department'
       }));
 
@@ -1476,15 +1642,15 @@ export async function registerRoutes(app: Express) {
   app.post("/api/admin/employees", upload.fields(documentFields), async (req, res) => {
     try {
       console.log("Admin - Received raw employee data:", req.body);
-      
+
       // Parse departmentId from the request
       const departmentId = Number(req.body.departmentId);
       console.log(`Processing department ID: ${departmentId}`);
-      
+
       // Check if department ID exists in departments table
       let departmentExists = false;
       let actualDepartmentId = departmentId; // The ID to use for employee creation
-      
+
       try {
         const department = await storage.getDepartment(departmentId);
         if (department) {
@@ -1492,25 +1658,25 @@ export async function registerRoutes(app: Express) {
           console.log(`Department ${departmentId} exists in departments table: ${department.name}`);
         } else {
           console.log(`Department ${departmentId} does not exist in departments table`);
-          
+
           // Try to find the department in department_names table
           const departmentNameRecord = await storage.getDepartmentName(departmentId);
-          
+
           if (departmentNameRecord) {
             console.log(`Found department in department_names: ${departmentId} - ${departmentNameRecord.name}`);
-            
+
             // Create a placeholder entry in departments table
             try {
               const placeholderDepartment = await storage.createDepartment({
                 name: departmentNameRecord.name,
                 hodTitle: "Placeholder",
-                hodName: "Placeholder", 
+                hodName: "Placeholder",
                 email: `placeholder_${departmentId}@placeholder.com`,
                 password: "placeholder_password"
               });
-              
+
               console.log(`Created placeholder department: ID=${placeholderDepartment.id}, Name=${placeholderDepartment.name}`);
-              
+
               // Use the newly created department ID instead of the original one
               actualDepartmentId = placeholderDepartment.id;
               departmentExists = true;
@@ -1536,7 +1702,7 @@ export async function registerRoutes(app: Express) {
           details: error instanceof Error ? error.message : String(error)
         });
       }
-      
+
       if (!departmentExists) {
         return res.status(400).json({
           message: "Invalid department ID",
@@ -1569,14 +1735,14 @@ export async function registerRoutes(app: Express) {
       console.log(`Final employee data using department ID: ${actualDepartmentId}`);
       const parsedData = insertEmployeeSchema.parse(employeeData);
       console.log("Admin - Parsed employee data:", parsedData);
-      
+
       try {
         const employee = await storage.createEmployee(parsedData);
         console.log(`Employee created successfully with ID: ${employee.id}`);
         res.status(201).json(employee);
       } catch (createEmployeeError) {
         console.error("Error creating employee:", createEmployeeError);
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: "Failed to create employee in database",
           details: createEmployeeError instanceof Error ? createEmployeeError.message : String(createEmployeeError)
         });
@@ -1584,13 +1750,13 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error creating employee:', error);
       if (error instanceof Error) {
-        res.status(400).json({ 
+        res.status(400).json({
           message: "Invalid employee data",
           details: error.message,
           stack: error.stack
         });
       } else {
-        res.status(400).json({ 
+        res.status(400).json({
           message: "Invalid employee data",
           details: String(error)
         });
@@ -1602,26 +1768,26 @@ export async function registerRoutes(app: Express) {
   app.put("/api/departments/:id/profile", async (req, res) => {
     const departmentId = parseInt(req.params.id);
     const { name, email, hodName, hodTitle, password, currentPassword } = req.body;
-    
+
     try {
       // Get current department data
       const department = await storage.getDepartment(departmentId);
       if (!department) {
         return res.status(404).json({ message: "Department not found" });
       }
-      
+
       // If updating password, verify current password
       if (password) {
         if (!currentPassword) {
           return res.status(400).json({ message: "Current password is required to update password" });
         }
-        
+
         // Verify current password
         if (department.password !== currentPassword) {
           return res.status(401).json({ message: "Current password is incorrect" });
         }
       }
-      
+
       // Build update object
       const updates: Partial<Department> = {};
       if (name) updates.name = name;
@@ -1629,13 +1795,13 @@ export async function registerRoutes(app: Express) {
       if (hodName) updates.hodName = hodName;
       if (hodTitle) updates.hodTitle = hodTitle;
       if (password) updates.password = password;
-      
+
       // Update department
       const updatedDepartment = await storage.updateDepartment(departmentId, updates);
-      
+
       // Return updated department data (excluding sensitive info)
       const { password: _, ...safeData } = updatedDepartment;
-      
+
       return res.json(safeData);
     } catch (error) {
       console.error("Department profile update error:", error);
@@ -1645,22 +1811,22 @@ export async function registerRoutes(app: Express) {
 
   // Document API Routes
   const uploadDestination = path.join(__dirname, "../uploads");
-  
+
   // Ensure upload directory exists
   if (!fs.existsSync(uploadDestination)) {
     fs.mkdirSync(uploadDestination, { recursive: true });
   }
-  
+
   // Configure multer for document uploads - use memory storage instead of disk storage
   // to avoid saving the original file to disk
-  const documentUpload = multer({ 
+  const documentUpload = multer({
     storage: multer.memoryStorage(), // Store file in memory instead of disk
     fileFilter: (req, file, cb) => {
       // Accept only specific image types
       const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-      
+
       console.log(`Document upload validation: ${file.originalname}, mimetype: ${file.mimetype}`);
-      
+
       if (allowedTypes.includes(file.mimetype)) {
         console.log(`Document file accepted: ${file.originalname} (${file.mimetype})`);
         cb(null, true);
@@ -1673,18 +1839,10 @@ export async function registerRoutes(app: Express) {
       fileSize: 5 * 1024 * 1024 // 5MB limit
     }
   });
-  
+
   // Get all documents
-  app.get("/api/documents", async (req, res) => {
-    try {
-      const documents = await storage.getAllDocuments();
-      res.json(documents);
-    } catch (error) {
-      console.error("Error fetching documents:", error);
-      res.status(500).json({ message: "Failed to fetch documents" });
-    }
-  });
-  
+
+
   // Get department-specific documents
   app.get("/api/departments/:departmentId/documents", async (req, res) => {
     try {
@@ -1696,7 +1854,7 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to fetch department documents" });
     }
   });
-  
+
   // Search documents
   app.get("/api/documents/search", async (req, res) => {
     try {
@@ -1704,7 +1862,7 @@ export async function registerRoutes(app: Express) {
       if (!searchTerm) {
         return res.status(400).json({ message: "Search term is required" });
       }
-      
+
       const documents = await storage.searchDocuments(searchTerm);
       res.json(documents);
     } catch (error) {
@@ -1712,52 +1870,52 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to search documents" });
     }
   });
-  
+
   // Upload new document
   app.post("/api/documents", documentUpload.single('documentImage'), async (req: any, res) => {
     try {
       const { documentType, issuingAuthority, subject, refNo, date, departmentId, departmentName } = req.body;
-      
+
       if (!req.file || !documentType || !issuingAuthority || !subject || !refNo || !date) {
         return res.status(400).json({ message: "Missing required fields" });
       }
-      
+
       // Check for duplicates
       const existingDoc = await storage.getDocumentByRefNoAndDate(refNo, date);
       if (existingDoc) {
-        return res.status(409).json({ 
-          message: "A document with the same Ref. No. and Date already exists" 
+        return res.status(409).json({
+          message: "A document with the same Ref. No. and Date already exists"
         });
       }
-      
+
       // Get department info from the request body first, then fall back to session if available
       let deptId = departmentId ? parseInt(departmentId) : undefined;
       let deptName = departmentName || undefined;
-      
+
       // If not in request body, try to get from session
       if ((!deptId || !deptName) && req.session?.department) {
         deptId = deptId || req.session.department.id;
         deptName = deptName || req.session.department.name;
       }
-      
+
       // If still missing department info, return error
       if (!deptId || !deptName) {
         return res.status(401).json({ message: "Unauthorized: Department information missing" });
       }
-      
+
       // Generate a unique filename
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
       const fileExt = req.file.originalname.split('.').pop();
       const filename = `document-${uniqueSuffix}.${fileExt}`;
-      
+
       // Set paths for the compressed file
       const compressedFilename = `${filename.replace(`.${fileExt}`, '')}-compressed.${fileExt === 'png' ? 'jpeg' : fileExt}`;
       const compressedFilePath = path.join(uploadDestination, compressedFilename);
-      
+
       try {
         // Import sharp for image processing
         const sharp = await import('sharp');
-        
+
         // Process the in-memory buffer directly and save compressed version to disk
         await sharp.default(req.file.buffer)
           .resize({
@@ -1768,16 +1926,16 @@ export async function registerRoutes(app: Express) {
           })
           .jpeg({ quality: 70 })
           .toFile(compressedFilePath);
-        
+
         console.log(`Image compressed and saved: ${compressedFilePath}`);
-        
+
         // Create file URL using the compressed file
-        const baseUrl = process.env.NODE_ENV === 'production' 
-          ? 'https://amu.echowkidar.in' 
+        const baseUrl = process.env.NODE_ENV === 'production'
+          ? 'https://amu.echowkidar.in'
           : `http://localhost:${process.env.PORT || 5001}`;
-        
+
         const imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
-        
+
         // Save document to database
         const newDocument = await storage.createDocument({
           documentType,
@@ -1789,7 +1947,7 @@ export async function registerRoutes(app: Express) {
           departmentId: deptId,
           departmentName: deptName
         });
-        
+
         res.status(201).json(newDocument);
       } catch (compressError) {
         console.error("Error processing image:", compressError);
@@ -1800,7 +1958,7 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to upload document" });
     }
   });
-  
+
   // Delete document
   app.delete("/api/documents/:id", async (req, res) => {
     try {
@@ -1817,18 +1975,18 @@ export async function registerRoutes(app: Express) {
   const cleanupOldFiles = () => {
     try {
       const files = fs.readdirSync(uploadDestination);
-      
+
       // Find files older than 30 days that might be orphaned
       const now = Date.now();
       const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-      
+
       // Check all files for age
       files.forEach(file => {
         const filePath = path.join(uploadDestination, file);
         try {
           const stats = fs.statSync(filePath);
           const fileCreationTime = stats.birthtime.getTime();
-          
+
           // Delete very old files (orphaned files)
           if (now - fileCreationTime > THIRTY_DAYS) {
             fs.unlinkSync(filePath);
@@ -1842,12 +2000,81 @@ export async function registerRoutes(app: Express) {
       console.error("Error during cleanup:", error);
     }
   };
-  
+
   // Run cleanup every 12 hours
   setInterval(cleanupOldFiles, 12 * 60 * 60 * 1000);
-  
+
   // Run cleanup on startup
   setTimeout(cleanupOldFiles, 5 * 60 * 1000); // Wait 5 minutes after server start
 
+  // ========== ATTENDANCE PERMISSION ROUTES (Super Admin Only) ==========
+
+  // Toggle attendance permission for all departments (global toggle)
+  app.patch("/api/admin/attendance-toggle-all", async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ message: "enabled must be a boolean" });
+      }
+
+      // Update all departments
+      await storage.updateAllDepartmentsAttendancePermission(enabled);
+      console.log(`Global attendance permission toggled: ${enabled ? 'ON' : 'OFF'}`);
+      res.json({ success: true, enabled });
+    } catch (error) {
+      console.error("Error toggling global attendance:", error);
+      res.status(500).json({ message: "Failed to toggle attendance permission" });
+    }
+  });
+
+  // Toggle attendance permission for a specific department
+  app.patch("/api/departments/:id/attendance-permit", async (req, res) => {
+    try {
+      const deptId = Number(req.params.id);
+      const { permitted } = req.body;
+
+      if (typeof permitted !== 'boolean') {
+        return res.status(400).json({ message: "permitted must be a boolean" });
+      }
+
+      const updated = await storage.updateDepartmentAttendancePermission(deptId, permitted);
+      console.log(`Department ${deptId} attendance permission: ${permitted ? 'PERMITTED' : 'REVOKED'}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating department permission:", error);
+      res.status(500).json({ message: "Failed to update permission" });
+    }
+  });
+
+  // Get attendance permission status for current department
+  app.get("/api/departments/:id/attendance-status", async (req, res) => {
+    try {
+      const deptId = Number(req.params.id);
+      const department = await storage.getDepartment(deptId);
+
+      if (!department) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+
+      // Calculate deadline info
+      const now = new Date();
+      const deadlineDay = 20;
+      const currentDay = now.getDate();
+      const daysRemaining = deadlineDay - currentDay;
+      const isPastDeadline = currentDay > deadlineDay;
+
+      res.json({
+        permitted: department.attendancePermitted,
+        deadlineDay,
+        daysRemaining: isPastDeadline ? 0 : daysRemaining,
+        isPastDeadline
+      });
+    } catch (error) {
+      console.error("Error getting attendance status:", error);
+      res.status(500).json({ message: "Failed to get attendance status" });
+    }
+  });
+
   return httpServer;
 }
+

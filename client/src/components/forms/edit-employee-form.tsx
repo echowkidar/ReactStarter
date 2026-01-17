@@ -75,14 +75,13 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     // Clear any previous errors for this field
     setFileErrors(prev => ({ ...prev, [fieldName]: "" }));
 
-    // Update selected files state
-    setSelectedFiles(prev => ({
-      ...prev,
-      [fieldName]: file
-    }));
-
     if (!file) {
-      // Clear the URL for this field
+      // Clear the file and URL for this field
+      setSelectedFiles(prev => ({
+        ...prev,
+        [fieldName]: null
+      }));
+
       let urlField: keyof typeof fileUrls;
 
       // Special case for bank account proof which has a different URL field name
@@ -110,11 +109,19 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       // Compress the image to WebP format
       const result = await compressImageToWebP(file);
 
-      // Log the conversion to verify WebP format
-      console.log(`Converted ${file.name} to WebP: ${result.fileName}`);
-      console.log(`Blob type: ${result.blob.type}`);
+      // Create a File object from the compressed blob for upload
+      const compressedFile = new File([result.blob], result.fileName, { type: 'image/webp' });
 
-      // Set the URL in fileUrls state
+      // Log the conversion to verify WebP format
+      console.log(`Compressed ${file.name} (${Math.round(file.size / 1024)}KB) to ${result.fileName} (${Math.round(result.blob.size / 1024)}KB)`);
+
+      // Store the COMPRESSED file for upload
+      setSelectedFiles(prev => ({
+        ...prev,
+        [fieldName]: compressedFile
+      }));
+
+      // Set the URL in fileUrls state for preview
       let urlField: keyof typeof fileUrls;
 
       // Special case for bank account proof which has a different URL field name
@@ -135,6 +142,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       setFileErrors(prev => ({ ...prev, [fieldName]: "Failed to process image" }));
     }
   };
+
 
   // File removal handler
   const handleRemoveFile = async (fileType: string) => {
@@ -157,10 +165,12 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
     const isAdmin = window.location.pathname.includes('/admin');
     console.log("File deletion:", isAdmin ? "Admin mode" : "Department mode");
 
-    // If file URL exists, also remove from server
-    if (currentFileUrl) {
+    // If file URL exists and is a SERVER URL (not base64 data URL), also remove from server
+    // Base64 URLs start with "data:" and are not yet uploaded to server
+    if (currentFileUrl && !currentFileUrl.startsWith('data:')) {
       try {
         console.log(`Attempting to remove file from server: ${currentFileUrl}`);
+
 
         // Add the complete endpoint URL here
         const apiUrl = `/api/upload`;
@@ -171,8 +181,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ fileUrl: currentFileUrl })
+          body: JSON.stringify({ imageUrl: currentFileUrl })
         });
+
 
         // Log server response
         console.log(`Status code: ${response.status}`);
@@ -378,7 +389,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return res.json();
           }).then(result => {
             console.log("PAN Card upload result:", result);
-            return result.fileUrl;
+            return result.imageUrl;
           });
         }
 
@@ -394,7 +405,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return res.json();
           }).then(result => {
             console.log("Bank proof upload result:", result);
-            return result.fileUrl;
+            return result.imageUrl;
           });
         }
 
@@ -410,7 +421,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return res.json();
           }).then(result => {
             console.log("Aadhar Card upload result:", result);
-            return result.fileUrl;
+            return result.imageUrl;
           });
         }
 
@@ -426,7 +437,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return res.json();
           }).then(result => {
             console.log("Office Memo upload result:", result);
-            return result.fileUrl;
+            return result.imageUrl;
           });
         }
 
@@ -442,7 +453,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return res.json();
           }).then(result => {
             console.log("Joining Report upload result:", result);
-            return result.fileUrl;
+            return result.imageUrl;
           });
         }
 
@@ -458,7 +469,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
             return res.json();
           }).then(result => {
             console.log("Term Extension Office Memo upload result:", result);
-            return result.fileUrl;
+            return result.imageUrl;
           });
         }
 

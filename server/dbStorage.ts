@@ -1,8 +1,11 @@
 import { db } from "./db";
 import { testDbConnection } from "./db";
-import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents } from "@shared/schema";
-import { eq, and, or, like } from "drizzle-orm";
+import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents, admins } from "@shared/schema";
+import { eq, and, or, like, sql, count, max } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from 'url';
 import type { IStorage } from "./storage";
 import type {
   Department,
@@ -16,9 +19,11 @@ import type {
   DepartmentName,
   Document,
   InsertDocument,
-  InsertDepartmentName
+  InsertDepartmentName,
+  Admin,
+  InsertAdmin
 } from "@shared/schema";
-import { sql, max } from "drizzle-orm";
+
 
 // Create a temporary in-memory storage for reset tokens
 // In a production app, these would be stored in the database
@@ -41,7 +46,7 @@ export class DbStorage implements IStorage {
       return false;
     }
   }
-  
+
   // Authentication methods
   async adminLogin(email: string, password: string): Promise<any> {
     try {
@@ -56,21 +61,21 @@ export class DbStorage implements IStorage {
       return null;
     }
   }
-  
+
   async departmentLogin(email: string, password: string): Promise<Department | null> {
     try {
       const department = await this.getDepartmentByEmail(email);
-      
+
       if (!department) {
         return null;
       }
-      
+
       // In a real app, you'd use bcrypt to compare the password
       // This is simplified for demo purposes
       if (department.password === password) {
         return department;
       }
-      
+
       return null;
     } catch (error) {
       console.error("Department login error:", error);
@@ -91,6 +96,17 @@ export class DbStorage implements IStorage {
     });
   }
 
+  async getAdminByEmail(email: string): Promise<Admin | undefined> {
+    return await db.query.admins.findFirst({
+      where: eq(admins.email, email),
+    });
+  }
+
+  async createAdmin(insertAdmin: InsertAdmin): Promise<Admin> {
+    const [admin] = await db.insert(admins).values(insertAdmin).returning();
+    return admin;
+  }
+
   async createDepartment(department: InsertDepartment): Promise<Department> {
     // Use a transaction to reset the sequence before inserting
     return await db.transaction(async (tx) => {
@@ -107,7 +123,7 @@ export class DbStorage implements IStorage {
       } catch (error) {
         console.error("Error in createDepartment transaction:", error);
         // Rethrow the error so the route handler can catch it
-        throw error; 
+        throw error;
       }
     });
   }
@@ -138,16 +154,16 @@ export class DbStorage implements IStorage {
 
   // Add method to get single department name by ID
   async getDepartmentName(id: number): Promise<DepartmentName | undefined> {
-     return await db.query.departmentNames.findFirst({
-       where: eq(departmentNames.id, id),
-     });
+    return await db.query.departmentNames.findFirst({
+      where: eq(departmentNames.id, id),
+    });
   }
 
   // Add method to get single department by Name
   async getDepartmentByName(name: string): Promise<Department | undefined> {
-     return await db.query.departments.findFirst({
-       where: eq(departments.name, name),
-     });
+    return await db.query.departments.findFirst({
+      where: eq(departments.name, name),
+    });
   }
 
   // Add methods for department_names table
@@ -205,6 +221,29 @@ export class DbStorage implements IStorage {
     }
   }
 
+  async getEmployeeCountsByDepartment(): Promise<Map<number, number>> {
+    try {
+      const result = await db
+        .select({
+          departmentId: employees.departmentId,
+          count: count(employees.id)
+        })
+        .from(employees)
+        .groupBy(employees.departmentId);
+
+      const map = new Map<number, number>();
+      result.forEach(row => {
+        if (row.departmentId) {
+          map.set(row.departmentId, Number(row.count));
+        }
+      });
+      return map;
+    } catch (error) {
+      console.error("[DbStorage] Error counting employees:", error);
+      return new Map();
+    }
+  }
+
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
     // Use a transaction to ensure sequence reset and insert happen together
     return await db.transaction(async (tx) => {
@@ -213,7 +252,7 @@ export class DbStorage implements IStorage {
         await tx.execute(sql`
           SELECT setval('employees_id_seq', coalesce((SELECT MAX(id) FROM employees), 0) + 1, false);
         `);
-        
+
         // Now perform the insert within the same transaction
         const [newEmployee] = await tx.insert(employees).values(employee).returning();
         return newEmployee;
@@ -229,7 +268,7 @@ export class DbStorage implements IStorage {
     await db.transaction(async (tx) => {
       console.log(`[DbStorage] Deleting attendance entries for employee ${id}`);
       await tx.delete(attendanceEntries).where(eq(attendanceEntries.employeeId, id));
-      
+
       console.log(`[DbStorage] Deleting employee ${id}`);
       await tx.delete(employees).where(eq(employees.id, id));
     });
@@ -267,7 +306,7 @@ export class DbStorage implements IStorage {
       ...report,
       transactionId: uuid().slice(0, 8).toUpperCase()
     };
-    
+
     const [newReport] = await db.insert(attendanceReports).values(reportWithTransactionId).returning();
     return newReport;
   }
@@ -293,46 +332,50 @@ export class DbStorage implements IStorage {
     if (updates.status === "sent") {
       // First get the current report
       const currentReport = await this.getAttendanceReport(id);
-      
+
       // If the report doesn't already have a receipt number, generate one
       if (currentReport && !currentReport.receiptNo) {
         // Find the highest receipt number in the database
         const reports = await this.getAllAttendanceReports();
-        
+
         // Filter out reports with no receipt number and find the maximum
         const maxReceiptNo = reports
           .filter(report => report.receiptNo !== null)
           .reduce((max, report) => Math.max(max, report.receiptNo || 0), 0);
-        
+
         // Start from 1 if no receipt numbers exist, otherwise increment by 1
         const newReceiptNo = maxReceiptNo > 0 ? maxReceiptNo + 1 : 1;
-        
+
         // Add receipt number and date to updates
         updates.receiptNo = newReceiptNo;
-        
+
         // Make sure receiptDate is a proper date object
         if (!updates.receiptDate) {
           updates.receiptDate = new Date();
         }
       }
     }
-    
+
     // Perform the update
     const [updatedReport] = await db
       .update(attendanceReports)
       .set(updates)
       .where(eq(attendanceReports.id, id))
       .returning();
-    
+
     return updatedReport;
   }
 
   async deleteAttendanceReport(id: number): Promise<void> {
-    // First, delete all associated entries to avoid foreign key constraint violations
-    await db.delete(attendanceEntries).where(eq(attendanceEntries.reportId, id));
-    
-    // Then delete the report itself
-    await db.delete(attendanceReports).where(eq(attendanceReports.id, id));
+    // Use a transaction to ensure both deletions succeed or fail together
+    await db.transaction(async (tx) => {
+      console.log(`[DbStorage] Deleting attendance entries for report ${id}`);
+      await tx.delete(attendanceEntries).where(eq(attendanceEntries.reportId, id));
+
+      console.log(`[DbStorage] Deleting attendance report ${id}`);
+      await tx.delete(attendanceReports).where(eq(attendanceReports.id, id));
+    });
+    console.log(`[DbStorage] Successfully deleted report ${id} and related entries`);
   }
 
   async createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry> {
@@ -355,6 +398,12 @@ export class DbStorage implements IStorage {
     return updatedEntry;
   }
 
+  // Delete only entries for a report (keep the report record itself)
+  async deleteEntriesForReport(reportId: number): Promise<void> {
+    await db.delete(attendanceEntries).where(eq(attendanceEntries.reportId, reportId));
+  }
+
+
   // Password reset token methods
   async storeResetToken(departmentId: number, token: string, expiry: Date): Promise<void> {
     resetTokens.set(departmentId, { token, expiry });
@@ -363,16 +412,16 @@ export class DbStorage implements IStorage {
   async validateResetToken(departmentId: number, token: string): Promise<boolean> {
     const tokenData = resetTokens.get(departmentId);
     if (!tokenData) return false;
-    
+
     if (tokenData.token !== token) return false;
-    
+
     // Check if token has expired
     if (tokenData.expiry < new Date()) {
       // Token expired, clean it up
       resetTokens.delete(departmentId);
       return false;
     }
-    
+
     return true;
   }
 
@@ -425,4 +474,75 @@ export class DbStorage implements IStorage {
   async deleteDocument(id: number): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
   }
-} 
+
+  // ========== ATTENDANCE PERMISSION METHODS ==========
+
+  async updateAllDepartmentsAttendancePermission(enabled: boolean): Promise<void> {
+    await db.update(departments).set({ attendancePermitted: enabled });
+  }
+
+  async updateDepartmentAttendancePermission(departmentId: number, permitted: boolean): Promise<Department | undefined> {
+    const [updated] = await db.update(departments)
+      .set({ attendancePermitted: permitted })
+      .where(eq(departments.id, departmentId))
+      .returning();
+    return updated;
+  }
+
+  async deleteFile(filePath: string): Promise<void> {
+    console.log(`[Debug] deleteFile called with: '${filePath}'`);
+
+    if (!filePath) return;
+
+    // Use relaxed check to handle leading slashes or missing slashes
+    if (!filePath.includes('uploads')) {
+      console.log('[DbStorage] Invalid file path (does not contain "uploads"):', filePath);
+      return;
+    }
+
+    try {
+      // Fix for __dirname in ES modules
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      console.log(`[Debug] __dirname: ${__dirname}`);
+
+      let cleanPath = filePath;
+      // Handle full URLs (e.g. http://localhost:5001/uploads/file.png)
+      if (filePath.startsWith('http')) {
+        try {
+          const url = new URL(filePath);
+          cleanPath = url.pathname; // Should be /uploads/file.png
+          console.log(`[Debug] Extracted pathname from URL: ${cleanPath}`);
+        } catch (e) {
+          console.log(`[Debug] Failed to parse URL: ${filePath}, using as is.`);
+        }
+      }
+
+      // Normalize filePath: strip all leading slashes/backslashes to get clean relative path
+      // e.g. "/uploads/file.png" -> "uploads/file.png"
+      const relativePath = cleanPath.replace(/^[\/\\]+/, '');
+      console.log(`[Debug] Normalized relativePath: ${relativePath}`);
+
+      // Construct absolute path. Assuming __dirname is '.../server', so '..' is root.
+      const absolutePath = path.join(__dirname, '..', relativePath);
+      console.log(`[Debug] Absolute path: ${absolutePath}`);
+
+      if (fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+        console.log(`[DbStorage] SUCCESS: Deleted file: ${absolutePath}`);
+      } else {
+        console.log(`[DbStorage] FAILURE: File not found at path: ${absolutePath}`);
+        // Debug: list project root uploads folder
+        const uploadsDir = path.join(__dirname, '..', 'uploads');
+        if (fs.existsSync(uploadsDir)) {
+          const files = fs.readdirSync(uploadsDir);
+          console.log(`[Debug] Contents of ${uploadsDir}:`, files);
+        } else {
+          console.log(`[Debug] Uploads dir does not exist at ${uploadsDir}`);
+        }
+      }
+    } catch (error) {
+      console.error(`[DbStorage] EXCEPTION during file deletion:`, error);
+    }
+  }
+}

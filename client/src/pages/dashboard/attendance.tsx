@@ -38,14 +38,17 @@ interface AttendanceReport {
   departmentId: number;
   month: number;
   year: number;
-  status: 'draft' | 'submitted' | 'sent';
+  status: 'draft' | 'submitted' | 'sent' | 'cancel_requested' | 'cancelled' | 'recall_requested';
   transactionId?: string;
   fileUrl?: string;
   despatchNo?: string;
   despatchDate?: string;
   receiptNo?: number;
   receiptDate?: string;
+  cancelRequestedAt?: string;
+  cancelledAt?: string;
 }
+
 
 interface DespatchDetails {
   despatchNo: string;
@@ -65,21 +68,21 @@ interface AttendanceEntry {
 }
 
 // Add a new component for PDF dialog content
-const PDFDialogContent = ({ 
-  report, 
-  department, 
-  handleUpload, 
+const PDFDialogContent = ({
+  report,
+  department,
+  handleUpload,
   formatDate,
-  toast 
-}: { 
+  toast
+}: {
   report: AttendanceReport;
-  department: any; 
+  department: any;
   handleUpload: (file: File, reportId: number, despatchDetails?: DespatchDetails) => Promise<any>;
   formatDate: (date: string | Date) => string;
   toast: any;
 }) => {
   const [refreshedReport, setRefreshedReport] = React.useState<AttendanceReport>(report);
-  
+
   // State for file handling
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [processedFile, setProcessedFile] = React.useState<File | null>(null);
@@ -327,8 +330,8 @@ const PDFDialogContent = ({
 
           const reportId = currentReport.id;
           const possibleFiles = files.filter((file: string) => {
-            return file.includes(`${reportId}`) || 
-                   (currentReport.fileUrl && file.includes(currentReport.fileUrl.split('/').pop() || ''));
+            return file.includes(`${reportId}`) ||
+              (currentReport.fileUrl && file.includes(currentReport.fileUrl.split('/').pop() || ''));
           });
 
           if (possibleFiles.length > 0) {
@@ -348,7 +351,7 @@ const PDFDialogContent = ({
 
     // Only attempt if file isn't already found by URL check
     if (!fileExists && isCheckingFile === false) {
-       attemptToFindFile();
+      attemptToFindFile();
     }
   }, [currentReport.id, currentReport.fileUrl, fileExists, isCheckingFile]);
 
@@ -403,7 +406,7 @@ const PDFDialogContent = ({
                   </div>
                 </object>
               ) : (
-                 <img src={workingFileUrl} alt="Uploaded Report Document" className="w-full h-full object-contain" />
+                <img src={workingFileUrl} alt="Uploaded Report Document" className="w-full h-full object-contain" />
               )
             ) : (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
@@ -427,8 +430,8 @@ const PDFDialogContent = ({
                 ) : (
                   <>
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={() => {
                           const urls = getProperFileUrl(currentReport.fileUrl);
                           if (urls.length > 0) {
@@ -438,8 +441,8 @@ const PDFDialogContent = ({
                       >
                         Try Opening in New Tab
                       </Button>
-                      <Button 
-                        variant="default" 
+                      <Button
+                        variant="default"
                         onClick={() => {
                           const rerequestFile = async () => {
                             try {
@@ -461,7 +464,7 @@ const PDFDialogContent = ({
                         Refresh File Status
                       </Button>
                     </div>
-                    
+
                     {errorDetails && (
                       <div className="mt-4 text-left w-full">
                         <details className="text-sm">
@@ -496,9 +499,9 @@ const PDFDialogContent = ({
               <label htmlFor="despatchDate" className="text-sm font-medium">
                 Despatch Date
               </label>
-              <Input 
-                id="despatchDate" 
-                type="date" 
+              <Input
+                id="despatchDate"
+                type="date"
                 defaultValue={report.despatchDate ? new Date(report.despatchDate).toISOString().split('T')[0] : undefined}
               />
             </div>
@@ -506,11 +509,11 @@ const PDFDialogContent = ({
               <label htmlFor="pdfOrImageFile" className="text-sm font-medium">
                 PDF or Image File
               </label>
-              <Input 
+              <Input
                 ref={fileInputRef}
-                id="pdfOrImageFile" 
-                type="file" 
-                accept=".pdf,application/pdf,image/jpeg,image/png,image/jpg" 
+                id="pdfOrImageFile"
+                type="file"
+                accept=".pdf,application/pdf,image/jpeg,image/png,image/jpg"
                 className="cursor-pointer"
                 onChange={handleFileChange}
               />
@@ -526,9 +529,9 @@ const PDFDialogContent = ({
                 </div>
               )}
               {!processedFile && selectedFile && selectedFile.type.startsWith('application/pdf') && (
-                 <div className="text-sm text-blue-600 mt-2">
-                   PDF Selected: {selectedFile.name}
-                 </div>
+                <div className="text-sm text-blue-600 mt-2">
+                  PDF Selected: {selectedFile.name}
+                </div>
               )}
             </div>
           </div>
@@ -545,9 +548,9 @@ const PDFDialogContent = ({
                   try {
                     const despatchNoInput = form.querySelector("#despatchNo") as HTMLInputElement;
                     const despatchDateInput = form.querySelector("#despatchDate") as HTMLInputElement;
-                    
+
                     const fileToUpload = processedFile || selectedFile;
-                    
+
                     const despatchNo = despatchNoInput?.value || report.despatchNo || '';
                     const despatchDate = despatchDateInput?.value || (report.despatchDate ? new Date(report.despatchDate).toISOString().split('T')[0] : '');
 
@@ -559,27 +562,27 @@ const PDFDialogContent = ({
                       });
                       return;
                     }
-                    
+
                     const button = e.currentTarget;
                     const originalText = button.innerHTML;
                     button.innerHTML = '<span class="animate-spin mr-2">⏳</span> Uploading...';
                     button.disabled = true;
-                    
+
                     try {
                       const result = await handleUpload(fileToUpload, report.id, {
                         despatchNo,
                         despatchDate,
                       });
-                      
-                      await queryClient.refetchQueries({ 
-                        queryKey: [`/api/departments/${department?.id}/attendance`] 
+
+                      await queryClient.refetchQueries({
+                        queryKey: [`/api/departments/${department?.id}/attendance`]
                       });
-                      
+
                       const closeButton = document.querySelector("[data-dialog-close]");
                       if (closeButton instanceof HTMLButtonElement) {
                         closeButton.click();
                       }
-                      
+
                       setTimeout(() => {
                         window.location.reload();
                       }, 500);
@@ -595,11 +598,11 @@ const PDFDialogContent = ({
                       title: "Error",
                       description: "An unexpected error occurred"
                     });
-                    
+
                     const button = e.currentTarget;
                     if (button.disabled) {
-                       button.innerHTML = '<span>Submit</span>';
-                       button.disabled = false;
+                      button.innerHTML = '<span>Submit</span>';
+                      button.disabled = false;
                     }
                   }
                 }
@@ -621,6 +624,13 @@ export default function Attendance() {
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
+  const [cancelDialogReportId, setCancelDialogReportId] = useState<number | null>(null);
+  const [recallDialogReportId, setRecallDialogReportId] = useState<number | null>(null);
+
+  // Check if cancellation is allowed (only before 23rd of each month)
+  const today = new Date();
+  const canRequestCancellation = today.getDate() <= 23;
+
 
   const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
     queryKey: [`/api/departments/${department?.id}/attendance`],
@@ -628,7 +638,7 @@ export default function Attendance() {
     select: (data) => {
       if (!Array.isArray(data)) return [];
       // Sort a shallow copy to avoid potential mutation issues
-      return [...data].sort((a, b) => { 
+      return [...data].sort((a, b) => {
         const aValue = a.receiptNo ?? -Infinity; // Treat null/undefined as lowest
         const bValue = b.receiptNo ?? -Infinity;
         return bValue - aValue; // Descending order
@@ -701,18 +711,18 @@ export default function Attendance() {
   ) => {
     try {
       console.log("Starting PDF upload for report", reportId);
-      
+
       // Based on server code examination, the server uses multer with the following format:
       // file.fieldname + '-' + Date.now() + '-' + Math.round(Math.random() * 1E9) + original extension
       // The fieldname is "file" for single file uploads
       // We'll use the standard FormData to let the server handle naming as it normally does
-      
+
       const formData = new FormData();
       formData.append("file", file);
-      
+
       console.log("Uploading PDF file using native FormData");
       console.log("Original file name:", file.name);
-      
+
       const uploadResponse = await fetch(`/api/upload`, {
         method: "POST",
         body: formData,
@@ -728,11 +738,11 @@ export default function Attendance() {
       // Parse the upload response to get the file URL
       const uploadData = await uploadResponse.json();
       console.log("Complete upload response:", uploadData);
-      
+
       // Extract the server-generated filename from the response
       // The server might return either { fileUrl: "/uploads/filename" } or { imageUrl: "/uploads/filename" }
       let fileUrlToSave = '';
-      
+
       if (uploadData?.fileUrl) {
         fileUrlToSave = uploadData.fileUrl;
         console.log("Found fileUrl in response:", fileUrlToSave);
@@ -742,7 +752,7 @@ export default function Attendance() {
       } else {
         // Try a few common fields from server response
         const possibleFields = ['url', 'path', 'file', 'filePath', 'location'];
-        
+
         for (const field of possibleFields) {
           if (uploadData && uploadData[field]) {
             fileUrlToSave = uploadData[field];
@@ -750,34 +760,34 @@ export default function Attendance() {
             break;
           }
         }
-        
+
         // If we still don't have a URL, check if uploadData itself is a string URL
         if (!fileUrlToSave && typeof uploadData === 'string' && (uploadData.startsWith('/') || uploadData.startsWith('http'))) {
           fileUrlToSave = uploadData;
           console.log("Response appears to be a direct URL string:", fileUrlToSave);
         }
-        
+
         // Last resort: Log the issue if no URL is found. An error will be thrown later if fileUrlToSave is still empty.
         if (!fileUrlToSave) {
           console.error("Server response doesn't contain recognizable URL fields:", uploadData);
         }
       }
-      
+
       if (!fileUrlToSave) {
         throw new Error("Server did not return a recognizable file URL");
       }
-      
+
       console.log("Final URL to use:", fileUrlToSave);
-      
+
       // Verify the file is accessible at the exact URL the server provided
       try {
-        const verifyResponse = await fetch(fileUrlToSave, { 
+        const verifyResponse = await fetch(fileUrlToSave, {
           method: 'HEAD',
           cache: 'no-cache'
         });
-        
+
         console.log("File verification response:", verifyResponse.status);
-        
+
         if (!verifyResponse.ok) {
           console.warn("Warning: Could not verify file at the server URL. Status:", verifyResponse.status);
         } else {
@@ -786,10 +796,10 @@ export default function Attendance() {
       } catch (error) {
         console.error("Error verifying file existence:", error);
       }
-      
+
       // Step 2: Now update the attendance report with our consistent filename URL
       console.log("Updating attendance report with consistent URL:", fileUrlToSave);
-      
+
       // Update the updatePayload to use this URL
       const updatePayload = {
         status: "sent",
@@ -798,9 +808,9 @@ export default function Attendance() {
         despatchDate: despatchDetails?.despatchDate ? new Date(despatchDetails.despatchDate) : new Date(),
         receiptDate: new Date(),
       };
-      
+
       console.log("Update payload:", JSON.stringify(updatePayload));
-      
+
       const updateResponse = await fetch(`/api/attendance/${reportId}`, {
         method: "PATCH",
         headers: {
@@ -826,7 +836,7 @@ export default function Attendance() {
       // Force a refetch of the reports data to ensure UI is updated
       await queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
       await queryClient.refetchQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
-      
+
       toast({
         title: "Success",
         description: "PDF uploaded successfully",
@@ -867,10 +877,17 @@ export default function Attendance() {
         return "secondary";
       case "sent":
         return "success";
+      case "cancel_requested":
+      case "recall_requested":
+        return "outline"; // Yellow/orange indicator
+      case "cancelled":
+        return "destructive";
       default:
         return "default";
     }
   };
+
+
 
   const deleteAttendance = useMutation({
     mutationFn: async (reportId: number) => {
@@ -912,6 +929,72 @@ export default function Attendance() {
     },
   });
 
+  const requestCancellation = useMutation({
+    mutationFn: async (reportId: number) => {
+      await apiRequest("POST", `/api/attendance/${reportId}/request-cancel`);
+    },
+    onSuccess: () => {
+      setCancelDialogReportId(null); // Close the dialog
+      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      toast({
+        title: "Success",
+        description: "Cancellation request sent to admin",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to request cancellation",
+      });
+    },
+  });
+
+  // Request Recall mutation
+  const requestRecall = useMutation({
+    mutationFn: async (reportId: number) => {
+      await apiRequest("POST", `/api/attendance/${reportId}/request-recall`);
+    },
+    onSuccess: () => {
+      setRecallDialogReportId(null);
+      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      toast({
+        title: "Success",
+        description: "Recall request sent to admin",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to request recall",
+      });
+    },
+  });
+
+
+
+  // Calculate deadline countdown (reusing 'today' from above)
+  const deadlineDay = 20;
+  const currentDay = today.getDate();
+  const daysRemaining = deadlineDay - currentDay;
+  const isPastDeadline = currentDay > deadlineDay;
+
+
+  // Check if department is permitted to create reports
+  const { data: attendanceStatus } = useQuery<{ permitted: boolean; daysRemaining: number; isPastDeadline: boolean }>({
+    queryKey: [`/api/departments/${department?.id}/attendance-status`],
+    enabled: !!department?.id,
+  });
+
+  // Check if a report already exists for the current month (and is not cancelled)
+  // Note: 'today' is defined above
+  const currentMonthYear = today.getFullYear();
+  const currentMonthIdx = today.getMonth() + 1;
+  const existingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled');
+
+  const canCreateReport = attendanceStatus?.permitted !== false && !isPastDeadline && !existingReport;
+
   if (isLoading || loadingEntries) return <Loading />;
 
   return (
@@ -920,20 +1003,83 @@ export default function Attendance() {
       <div className="flex-1 flex flex-col">
         <Header />
         <main className="flex-1 p-6">
+          {/* Countdown Banner - only show when permitted */}
+          {attendanceStatus?.permitted !== false && (
+            <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${isPastDeadline
+              ? 'bg-red-100 border border-red-300 text-red-800'
+              : daysRemaining <= 5
+                ? 'bg-orange-100 border border-orange-300 text-orange-800'
+                : 'bg-blue-100 border border-blue-300 text-blue-800'
+              }`}>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📅</span>
+                {isPastDeadline ? (
+                  <span className="font-medium">
+                    ⚠️ Deadline passed! Attendance report submission deadline was 20th.
+                  </span>
+                ) : (
+                  <span className="font-medium">
+                    {daysRemaining === 0
+                      ? "🔔 Today is the last day to submit attendance report!"
+                      : `⏳ ${daysRemaining} day${daysRemaining > 1 ? 's' : ''} remaining to submit attendance report (Deadline: 20th)`
+                    }
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Existing Report Warning Banner */}
+          {existingReport && !isPastDeadline && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 flex items-center gap-2">
+              <span className="text-xl">ℹ️</span>
+              <span className="font-medium">
+                You have already created a report for this month ({existingReport.status}).
+                {existingReport.status === 'draft' && " Please delete the existing draft to create a new one."}
+                {(existingReport.status === 'submitted' || existingReport.status === 'recall_requested') && " Please recall the report to modify it."}
+                {existingReport.status === 'sent' && " Please request cancellation to create a new one."}
+              </span>
+            </div>
+          )}
+
+          {/* Permission blocked message */}
+          {attendanceStatus?.permitted === false && (
+            <div className="mb-4 p-4 bg-orange-50 border border-orange-300 rounded-lg text-orange-800">
+              <span className="font-medium">⚠️ Currently, the facility to submit attendance reports is not available.</span>
+            </div>
+          )}
+
+
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Attendance Reports</h1>
             <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
               <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary">
+                <Button
+                  className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
+                  disabled={!canCreateReport}
+                  title={
+                    !canCreateReport
+                      ? (isPastDeadline
+                        ? "Deadline passed"
+                        : existingReport
+                          ? (existingReport.status === 'draft' ? "Draft report already exists. Please delete it to create new."
+                            : existingReport.status === 'submitted' || existingReport.status === 'recall_requested' ? "Report submitted. Use 'Recall' to modify."
+                              : "Report sent. Request cancellation to recreate.")
+                          : "Attendance submission disabled")
+                      : "Create new report"
+                  }
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Report
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-7xl max-h-[85vh] overflow-hidden flex flex-col">
+
+              <DialogContent className="max-w-[95vw] w-[1400px] max-h-[85vh] overflow-hidden flex flex-col">
                 <DialogHeader className="flex-shrink-0">
                   <DialogTitle className="text-xl font-semibold">Create Attendance Report</DialogTitle>
                 </DialogHeader>
-                <div className="overflow-y-auto flex-grow pr-1">
+                <div className="overflow-auto flex-grow pr-1">
+
                   <AttendanceForm
                     onSubmit={async (data) => {
                       try {
@@ -987,7 +1133,7 @@ export default function Attendance() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {report.status === "sent" && report.despatchNo ? (
+                      {(report.status === "sent" || report.status === "cancelled" || report.status === "cancel_requested") && report.despatchNo ? (
                         <div className="text-sm">
                           <p>
                             <span className="font-medium">No:</span> {report.despatchNo}
@@ -1000,6 +1146,7 @@ export default function Attendance() {
                       ) : (
                         "-"
                       )}
+
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -1076,7 +1223,7 @@ export default function Attendance() {
                                 </Button>
                               </DialogTrigger>
                               <DialogContent>
-                                <PDFDialogContent 
+                                <PDFDialogContent
                                   report={report}
                                   department={department}
                                   handleUpload={handleUpload}
@@ -1087,15 +1234,127 @@ export default function Attendance() {
                             </Dialog>
                           </>
                         )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </Button>
+                        {/* Request to Cancel button for sent reports - only before 23rd */}
+                        {report.status === "sent" && canRequestCancellation && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                              onClick={() => setCancelDialogReportId(report.id)}
+                            >
+                              Request to Cancel
+                            </Button>
+                            <Dialog open={cancelDialogReportId === report.id} onOpenChange={(open) => !open && setCancelDialogReportId(null)}>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Request Cancellation</DialogTitle>
+                                  <DialogDescription>
+                                    Are you sure you want to request cancellation of this report?
+                                    This will send a request to the admin for approval.
+                                    The entries will be deleted but the PDF and receipt number will be preserved.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter>
+                                  <Button variant="outline" onClick={() => setCancelDialogReportId(null)}>Cancel</Button>
+                                  <Button
+                                    variant="destructive"
+                                    onClick={() => requestCancellation.mutate(report.id)}
+                                    disabled={requestCancellation.isPending}
+                                  >
+                                    {requestCancellation.isPending ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Requesting...
+                                      </>
+                                    ) : (
+                                      "Request Cancellation"
+                                    )}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </>
+                        )}
+                        {/* Show when cancellation not allowed (after 23rd) */}
+                        {report.status === "sent" && !canRequestCancellation && (
+                          <span className="text-xs text-gray-500">
+                            Cancel N/A after 23rd
+                          </span>
+                        )}
+                        {/* Request Recall for Submitted reports */}
+                        {report.status === "submitted" && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-yellow-600 border-yellow-300 hover:bg-yellow-50"
+                              onClick={() => setRecallDialogReportId(report.id)}
+                            >
+                              Request Recall
+                            </Button>
+                            <Dialog open={recallDialogReportId === report.id} onOpenChange={(open) => !open && setRecallDialogReportId(null)}>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Request Recall</DialogTitle>
+                                  <DialogDescription>
+                                    Are you sure you want to recall this submitted report?
+                                    This will send a request to the admin to revert it to draft status, allowing you to modify it.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter>
+                                  <Button variant="outline" onClick={() => setRecallDialogReportId(null)}>Cancel</Button>
+                                  <Button
+                                    variant="default"
+                                    className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                                    onClick={() => requestRecall.mutate(report.id)}
+                                    disabled={requestRecall.isPending}
+                                  >
+                                    {requestRecall.isPending ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Requesting...
+                                      </>
+                                    ) : (
+                                      "Request Recall"
+                                    )}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </>
+                        )}
+                        {report.status === "recall_requested" && (
+                          <span className="text-sm font-medium text-yellow-600">
+                            ⏳ Recall Pending
+                          </span>
+                        )}
+                        {/* Show status for cancel_requested and cancelled */}
+                        {report.status === "cancel_requested" && (
+                          <span className="text-sm font-medium text-orange-600">
+                            ⏳ Cancellation Pending
+                          </span>
+                        )}
+                        {report.status === "cancelled" && (
+                          <span className="text-sm font-medium text-green-600">
+                            ✅ Cancellation Accepted
+                          </span>
+                        )}
+
+                        {/* View Details button - hidden for cancelled reports */}
+                        {report.status !== "cancelled" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
+                        )}
+
                       </div>
+
                     </TableCell>
                   </TableRow>
                 ))}

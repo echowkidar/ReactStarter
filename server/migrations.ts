@@ -112,6 +112,21 @@ export async function runMigrations() {
       ALTER TABLE employees ADD COLUMN IF NOT EXISTS salary_asstt TEXT;
     `);
 
+    // Add cancel_requested_at column to attendance_reports table
+    await db.execute(sql`
+      ALTER TABLE attendance_reports ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMP;
+    `);
+
+    // Add cancelled_at column to attendance_reports table
+    await db.execute(sql`
+      ALTER TABLE attendance_reports ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP;
+    `);
+
+    // Add attendance_permitted column to departments table
+    await db.execute(sql`
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS attendance_permitted BOOLEAN NOT NULL DEFAULT true;
+    `);
+
     console.log("Database migrations completed successfully");
   } catch (error) {
     console.error("Error running migrations:", error);

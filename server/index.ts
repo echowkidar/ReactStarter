@@ -7,8 +7,10 @@ import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrations";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: false, limit: '5mb' }));
+
+
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -45,7 +47,7 @@ export async function initApp() {
   try {
     // Run database migrations
     await runMigrations();
-    
+
     const server = await registerRoutes(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -72,16 +74,16 @@ export async function initApp() {
 
 // Start server for local development
 
-  (async () => {
-    try {
-      const { app, server } = await initApp();
-      const PORT = process.env.PORT || 5001;
-      server.listen(PORT, "0.0.0.0", () => {
-        log(`serving on port ${PORT}`);
-      });
-    } catch (error) {
-      console.error("Failed to start server:", error);
-      process.exit(1);
-    }
-  })();
+(async () => {
+  try {
+    const { app, server } = await initApp();
+    const PORT = process.env.PORT || 5001;
+    server.listen(PORT, "0.0.0.0", () => {
+      log(`serving on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
+})();
 

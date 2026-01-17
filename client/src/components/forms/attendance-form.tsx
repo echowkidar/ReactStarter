@@ -36,7 +36,7 @@ const formatDateForInput = (dateStr: string): string => {
     console.error("Invalid date string:", dateStr);
     return "";
   }
-  
+
   try {
     const [day, month, year] = dateStr.split('-').map(Number);
     const result = `20${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -112,13 +112,13 @@ interface AttendanceFormProps {
 // Add the formatTermExpiry function
 const formatTermExpiry = (dateStr: string | null | undefined): string => {
   if (!dateStr) return "-";
-  
+
   try {
     const date = new Date(dateStr);
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const year = date.getFullYear().toString().slice(-2);
-    
+
     return `${day}-${month}-${year}`;
   } catch (error) {
     console.error("Error formatting term expiry date:", error);
@@ -140,11 +140,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           // First sort by pay level (higher levels first)
           const payLevelA = getPayLevelOrder(a.payLevel || "L-0");
           const payLevelB = getPayLevelOrder(b.payLevel || "L-0");
-          
+
           if (payLevelA !== payLevelB) {
             return payLevelB - payLevelA; // Descending order (higher pay levels first)
           }
-          
+
           // If pay levels are the same, sort by EPID in ascending order
           if (!a.epid) return 1;
           if (!b.epid) return -1;
@@ -298,7 +298,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       // Select all
       const allEmployeeIds = new Set(employees.map((employee: any) => employee.id));
       setIncludedEmployees(allEmployeeIds);
-      
+
       // Initialize entries for all employees
       const allEntries = employees.map((employee: any) => ({
         employeeId: employee.id,
@@ -309,7 +309,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           remarks: "",
         }],
       }));
-      
+
       form.setValue("entries", allEntries);
     }
   };
@@ -385,10 +385,10 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         </div>
 
         <div className="rounded-md border overflow-x-auto">
-          <Table>
+          <Table style={{ minWidth: '1100px' }}>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]">
+                <TableHead className="w-[40px] px-2">
                   <div className="flex flex-col items-center">
                     <Checkbox
                       checked={includedEmployees.size === employees.length && employees.length > 0}
@@ -398,57 +398,60 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                     <span className="text-xs mt-1">All</span>
                   </div>
                 </TableHead>
-                <TableHead className="w-[60px]">S.No.</TableHead>
-                <TableHead className="w-[80px]">EPID</TableHead>
-                <TableHead className="w-[120px]">Name</TableHead>
-                <TableHead className="w-[120px]">Designation</TableHead>
-                <TableHead className="w-[120px]">Term_Expiry</TableHead>
-                <TableHead className="w-[100px]">Reg No.</TableHead>
-                <TableHead className="min-w-[500px] px-0">
+                <TableHead className="w-[40px] px-1">S.No.</TableHead>
+                <TableHead className="w-[60px] px-1">EPID</TableHead>
+                <TableHead className="w-[150px] px-2">Name</TableHead>
+                <TableHead className="w-[180px] px-2">Designation</TableHead>
+                <TableHead className="w-[70px] px-1">Expiry</TableHead>
+                <TableHead className="w-[80px] px-1">Reg No.</TableHead>
+                <TableHead className="px-2" style={{ minWidth: '450px' }}>
                   <div className="text-left mb-2">Attendance Periods</div>
-                  <div className="grid grid-cols-11 gap-2 text-xs font-normal">
-                    <div className="col-span-3">From Date</div>
-                    <div className="col-span-3">To Date</div>
-                    <div className="col-span-1 text-center">Days</div>
-                    <div className="col-span-3">Remarks</div>
-                    <div className="col-span-1 text-center">Action</div>
+                  <div className="grid grid-cols-[105px_105px_40px_1fr_30px] gap-1 text-xs font-normal">
+                    <div>From Date</div>
+                    <div>To Date</div>
+                    <div className="text-center">Days</div>
+                    <div>Remarks</div>
+                    <div className="text-center">X</div>
                   </div>
                 </TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {employees.map((employee: any) => (
                 <TableRow key={employee.id}>
-                  <TableCell>
+                  <TableCell className="px-2">
                     <Checkbox
                       checked={includedEmployees.has(employee.id)}
                       onCheckedChange={() => toggleEmployee(employee.id)}
                       disabled={isLoading}
                     />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {includedEmployees.has(employee.id) ? 
+                  <TableCell className="whitespace-nowrap px-1">
+                    {includedEmployees.has(employee.id) ?
                       employees
                         .filter((e: any) => includedEmployees.has(e.id))
                         .findIndex((e: any) => e.id === employee.id) + 1
                       : '-'}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{employee.epid}</TableCell>
-                  <TableCell className="whitespace-nowrap">{employee.name}</TableCell>
-                  <TableCell className="whitespace-nowrap">{employee.designation}</TableCell>
-                  <TableCell className="whitespace-nowrap">{formatTermExpiry(employee.termExpiry)}</TableCell>
-                  <TableCell className="whitespace-nowrap">{employee.salaryRegisterNo || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap px-1">{employee.epid}</TableCell>
+                  <TableCell className="px-2">{employee.name}</TableCell>
+                  <TableCell className="px-2">{employee.designation}</TableCell>
+                  <TableCell className="whitespace-nowrap px-1">{formatTermExpiry(employee.termExpiry)}</TableCell>
+                  <TableCell className="whitespace-nowrap px-1">{employee.salaryRegisterNo || '-'}</TableCell>
+
                   <TableCell>
                     <div className="space-y-1">
                       {form.getValues("entries")
                         ?.find(entry => entry.employeeId === employee.id)
                         ?.periods?.map((period, periodIndex) => (
-                          <div key={periodIndex} className="border p-1.5 rounded-md bg-slate-50 dark:bg-slate-900">
-                            <div className="grid grid-cols-11 gap-2 items-center">
-                              <div className="col-span-3">
+                          <div key={periodIndex} className="border p-1 rounded-md bg-slate-50 dark:bg-slate-900">
+                            <div className="grid grid-cols-[105px_105px_40px_1fr_30px] gap-1 items-center">
+
+                              <div>
                                 <input
                                   type="date"
-                                  className="w-full p-2 border rounded-md"
+                                  className="w-full p-1 text-sm border rounded-md"
                                   value={formatDateForInput(period.fromDate)}
                                   onChange={(e) => {
                                     const entries = form.getValues("entries");
@@ -466,10 +469,10 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 />
                               </div>
 
-                              <div className="col-span-3">
+                              <div>
                                 <input
                                   type="date"
-                                  className="w-full p-2 border rounded-md"
+                                  className="w-full p-1 text-sm border rounded-md"
                                   value={formatDateForInput(period.toDate)}
                                   onChange={(e) => {
                                     const entries = form.getValues("entries");
@@ -487,17 +490,17 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 />
                               </div>
 
-                              <div className="col-span-1 text-center">
-                                <div className="p-2 bg-blue-50 dark:bg-blue-900/30 border rounded-md text-center">
+                              <div className="text-center">
+                                <div className="p-1 bg-blue-50 dark:bg-blue-900/30 border rounded-md text-center text-sm">
                                   {period.days}
                                 </div>
                               </div>
 
-                              <div className="col-span-3">
+                              <div>
                                 <input
                                   type="text"
-                                  placeholder="Enter remarks"
-                                  className="w-full p-2 border rounded-md"
+                                  placeholder="Remarks"
+                                  className="w-full p-1 text-sm border rounded-md"
                                   value={period.remarks}
                                   onChange={(e) => {
                                     const entries = form.getValues("entries");
@@ -512,29 +515,31 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 />
                               </div>
 
-                              <div className="col-span-1 flex justify-center">
+                              <div className="flex justify-center">
                                 <button
                                   type="button"
-                                  className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-md flex items-center justify-center h-10 w-10"
+                                  className="p-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-md flex items-center justify-center h-7 w-7"
                                   onClick={() => removePeriod(employee.id, periodIndex)}
                                   disabled={isLoading || !includedEmployees.has(employee.id)}
                                 >
-                                  <X className="h-4 w-4" />
+                                  <X className="h-3 w-3" />
                                 </button>
                               </div>
                             </div>
                           </div>
+
                         ))}
                       {includedEmployees.has(employee.id) && (
                         <button
                           type="button"
-                          className="w-full mt-1 h-10 border rounded-md bg-white hover:bg-gray-50 flex items-center justify-center"
+                          className="w-full mt-1 h-7 text-sm border rounded-md bg-white hover:bg-gray-50 flex items-center justify-center"
                           onClick={() => addPeriod(employee.id)}
                           disabled={isLoading}
                         >
-                          <Plus className="h-4 w-4 mr-1" />
+                          <Plus className="h-3 w-3 mr-1" />
                           Add
                         </button>
+
                       )}
                     </div>
                   </TableCell>

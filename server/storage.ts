@@ -13,7 +13,9 @@ import {
   InsertAttendanceEntry,
   DepartmentName,
   Document,
-  InsertDocument
+  InsertDocument,
+  Admin,
+  InsertAdmin
 } from "@shared/schema";
 
 // Fix for __dirname in ES modules
@@ -51,6 +53,7 @@ export interface IStorage {
   // Employee operations
   getEmployee(id: number): Promise<Employee | undefined>;
   getEmployeesByDepartment(departmentId: number): Promise<Employee[]>;
+  getEmployeeCountsByDepartment(): Promise<Map<number, number>>;
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
   updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee>;
@@ -71,6 +74,11 @@ export interface IStorage {
   searchDocuments(searchTerm: string): Promise<Document[]>;
   getDocumentByRefNoAndDate(refNo: string, date: string): Promise<Document | undefined>;
   deleteDocument(id: number): Promise<void>;
+  // File operations
+  deleteFile(filePath: string): Promise<void>;
+  // Admin operations
+  getAdminByEmail(email: string): Promise<Admin | undefined>;
+  createAdmin(admin: InsertAdmin): Promise<Admin>;
 }
 
 export class MemStorage implements IStorage {
@@ -79,6 +87,7 @@ export class MemStorage implements IStorage {
   private attendanceReports: Map<number, AttendanceReport>;
   private attendanceEntries: Map<number, AttendanceEntry>;
   private documents: Map<number, Document>;
+  private admins: Map<number, Admin>;
   private currentId: { [key: string]: number };
   private lastReceiptNo: number;
 
@@ -94,23 +103,43 @@ export class MemStorage implements IStorage {
       report: 1,
       entry: 1,
       document: 1,
+      admin: 1,
     };
     this.lastReceiptNo = 0;
+    this.admins = new Map();
+  }
+
+  async getAdminByEmail(email: string): Promise<Admin | undefined> {
+    return Array.from(this.admins.values()).find(a => a.email === email);
+  }
+
+  async createAdmin(insertAdmin: InsertAdmin): Promise<Admin> {
+    const id = this.currentId.admin++;
+    const admin: Admin = {
+      ...insertAdmin,
+      id,
+      name: insertAdmin.name || null,
+      createdAt: new Date(),
+    };
+    this.admins.set(id, admin);
+    return admin;
   }
 
   async getDepartment(id: number): Promise<Department | undefined> {
     return this.departments.get(id);
   }
 
-  async getDepartmentByEmail(email: string): Promise<Department | undefined> {
-    return Array.from(this.departments.values()).find(d => d.email === email);
+  async updateAllDepartmentsAttendancePermission(enabled: boolean): Promise<void> {
+    Array.from(this.departments.values()).forEach(d => d.attendancePermitted = enabled);
   }
 
-  async createDepartment(department: InsertDepartment): Promise<Department> {
-    const id = this.currentId.department++;
-    const newDepartment: Department = { id, ...department };
-    this.departments.set(id, newDepartment);
-    return newDepartment;
+  async updateDepartmentAttendancePermission(departmentId: number, permitted: boolean): Promise<Department | undefined> {
+    const dept = this.departments.get(departmentId);
+    if (dept) {
+      dept.attendancePermitted = permitted;
+      this.departments.set(departmentId, dept);
+    }
+    return dept;
   }
 
   async updateDepartment(id: number, updates: Partial<Department>): Promise<Department> {
@@ -141,6 +170,15 @@ export class MemStorage implements IStorage {
     return Array.from(this.employees.values()).filter(
       e => e.departmentId === departmentId
     );
+  }
+
+  async getEmployeeCountsByDepartment(): Promise<Map<number, number>> {
+    const counts = new Map<number, number>();
+    this.employees.forEach(emp => {
+      const current = counts.get(emp.departmentId) || 0;
+      counts.set(emp.departmentId, current + 1);
+    });
+    return counts;
   }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
@@ -311,8 +349,8 @@ export class MemStorage implements IStorage {
 
   async createDocument(document: InsertDocument): Promise<Document> {
     const id = this.currentId.document++;
-    const newDocument: Document = { 
-      id, 
+    const newDocument: Document = {
+      id,
       ...document,
       uploadedAt: new Date()
     };
@@ -334,7 +372,7 @@ export class MemStorage implements IStorage {
   async searchDocuments(searchTerm: string): Promise<Document[]> {
     const searchTermLower = searchTerm.toLowerCase();
     return Array.from(this.documents.values())
-      .filter(doc => 
+      .filter(doc =>
         doc.documentType.toLowerCase().includes(searchTermLower) ||
         doc.issuingAuthority.toLowerCase().includes(searchTermLower) ||
         doc.subject.toLowerCase().includes(searchTermLower) ||

@@ -18,6 +18,8 @@ import { format } from "date-fns";
 import * as XLSX from "xlsx";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
 import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
+import { compressImageToWebP } from "@/lib/image-utils";
+
 
 // Import master data for designations and register numbers
 import designationsData from "@/lib/designations.json";
@@ -353,22 +355,61 @@ export default function AdminEmployees() {
     }
   });
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadState) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadState) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
+    // Size validation - 200KB max per image
+    const maxSizeKB = 200;
+    if (file.size > maxSizeKB * 1024) {
+      const currentSizeKB = Math.round(file.size / 1024);
+      toast({
+        variant: "destructive",
+        title: "File too large",
+        description: `Image must be under ${maxSizeKB}KB. Current size: ${currentSizeKB}KB. Please compress or resize the image.`
+      });
+      event.target.value = ''; // Clear the input
+      return;
+    }
+
+    // Check if it's an image file
+    if (!file.type.startsWith('image/')) {
+      toast({
+        variant: "destructive",
+        title: "Invalid file type",
+        description: "Only image files are allowed"
+      });
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      // Compress image to WebP format
+      const result = await compressImageToWebP(file, 800, 0.7);
+
+      // Create a File object from the compressed blob
+      const compressedFile = new File([result.blob], result.fileName, { type: 'image/webp' });
+
+      console.log(`Compressed ${file.name} (${Math.round(file.size / 1024)}KB) to ${result.fileName} (${Math.round(result.blob.size / 1024)}KB)`);
+
       setUploads(prev => ({
         ...prev,
         [type]: {
-          file,
-          preview: reader.result as string
+          file: compressedFile,
+          preview: result.url
         }
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error compressing image:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to process image. Please try again."
+      });
+      event.target.value = '';
+    }
   };
+
 
   const handleRemoveFile = async (type: keyof UploadState) => {
     const upload = uploads[type];
@@ -387,8 +428,9 @@ export default function AdminEmployees() {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ fileUrl: upload.preview }),
+          body: JSON.stringify({ imageUrl: upload.preview }),
         });
+
 
         // Log server response
         console.log(`Server response status: ${response.status}`);
