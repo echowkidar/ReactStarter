@@ -77,6 +77,36 @@ export async function registerRoutes(app: Express) {
     console.error("Error seeding admins:", error);
   }
 
+  // Initialize notices tables
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS notices (
+        id SERIAL PRIMARY KEY,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        image_url TEXT,
+        is_global BOOLEAN NOT NULL DEFAULT true,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS notice_recipients (
+        id SERIAL PRIMARY KEY,
+        notice_id INTEGER NOT NULL,
+        department_id INTEGER NOT NULL
+      )
+    `);
+
+    console.log("Notices tables initialized successfully.");
+  } catch (error) {
+    console.error("Error initializing notices tables:", error);
+  }
+
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
     const { email, password } = req.body;
@@ -2387,6 +2417,137 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // ========== NOTICE SYSTEM ROUTES ==========
+
+  // Create notice (admin only) - with image compression
+  app.post("/api/notices", upload.single("image"), async (req: any, res) => {
+    try {
+      const { subject, message, isGlobal, createdBy, departmentIds } = req.body;
+
+      if (!subject || !message || !createdBy) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      let imageUrl = null;
+      if (req.file) {
+        const baseUrl = process.env.NODE_ENV === 'production'
+          ? 'https://amu.echowkidar.in'
+          : `http://localhost:${process.env.PORT || 5001}`;
+
+        // Compress image if it's an image file
+        if (req.file.mimetype.startsWith('image/')) {
+          try {
+            const sharp = await import('sharp');
+            const originalPath = path.join(uploadDir, req.file.filename);
+            const compressedFilename = `notice-${Date.now()}-compressed.jpeg`;
+            const compressedPath = path.join(uploadDir, compressedFilename);
+
+            await sharp.default(originalPath)
+              .resize(1200, 1200, {
+                fit: 'inside',
+                withoutEnlargement: true,
+              })
+              .jpeg({ quality: 70 })
+              .toFile(compressedPath);
+
+            // Delete original and use compressed
+            fs.unlinkSync(originalPath);
+            imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
+            console.log(`Notice image compressed: ${compressedFilename}`);
+          } catch (compressError) {
+            console.error("Image compression failed, using original:", compressError);
+            imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+          }
+        } else {
+          imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+        }
+      }
+
+      const notice = await storage.createNotice({
+        subject,
+        message,
+        imageUrl,
+        isGlobal: isGlobal === 'true' || isGlobal === true,
+        createdBy,
+        departmentIds: departmentIds ? JSON.parse(departmentIds) : [],
+      });
+
+      res.status(201).json(notice);
+    } catch (error) {
+      console.error("Error creating notice:", error);
+      res.status(500).json({ message: "Failed to create notice" });
+    }
+  });
+
+  // Get all notices (admin)
+  app.get("/api/notices", async (req, res) => {
+    try {
+      const notices = await storage.getAllNotices();
+      res.json(notices);
+    } catch (error) {
+      console.error("Error fetching notices:", error);
+      res.status(500).json({ message: "Failed to fetch notices" });
+    }
+  });
+
+  // Get notices for a department
+  app.get("/api/departments/:departmentId/notices", async (req, res) => {
+    try {
+      const departmentId = parseInt(req.params.departmentId);
+      const notices = await storage.getNoticesForDepartment(departmentId);
+      res.json(notices);
+    } catch (error) {
+      console.error("Error fetching department notices:", error);
+      res.status(500).json({ message: "Failed to fetch notices" });
+    }
+  });
+
+  // Get single notice
+  app.get("/api/notices/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const notice = await storage.getNotice(id);
+      if (!notice) {
+        return res.status(404).json({ message: "Notice not found" });
+      }
+      res.json(notice);
+    } catch (error) {
+      console.error("Error fetching notice:", error);
+      res.status(500).json({ message: "Failed to fetch notice" });
+    }
+  });
+
+  // Delete notice (admin only) - also deletes image file
+  app.delete("/api/notices/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+
+      // Get notice first to get image URL
+      const notice = await storage.getNotice(id);
+
+      // Delete image file if exists
+      if (notice?.image_url) {
+        try {
+          const urlParts = notice.image_url.split('/');
+          const filename = urlParts[urlParts.length - 1];
+          const filePath = path.join(uploadDir, filename);
+
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`Deleted notice image: ${filename}`);
+          }
+        } catch (fileError) {
+          console.error("Error deleting notice image file:", fileError);
+        }
+      }
+
+      await storage.deleteNotice(id);
+      res.json({ message: "Notice deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting notice:", error);
+      res.status(500).json({ message: "Failed to delete notice" });
+    }
+  });
+
   return httpServer;
 }
-

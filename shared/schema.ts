@@ -251,3 +251,36 @@ export const insertTicketReplySchema = createInsertSchema(ticketReplies).omit({
 
 export type TicketReply = typeof ticketReplies.$inferSelect;
 export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;
+
+// Notices/Announcements System
+export const notices = pgTable("notices", {
+  id: serial("id").primaryKey(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  imageUrl: text("image_url"),
+  isGlobal: boolean("is_global").notNull().default(true), // true = sent to all departments
+  createdBy: text("created_by").notNull(), // admin username
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertNoticeSchema = createInsertSchema(notices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Notice = typeof notices.$inferSelect;
+export type InsertNotice = z.infer<typeof insertNoticeSchema>;
+
+// Notice Recipients - for targeted notices (when isGlobal = false)
+export const noticeRecipients = pgTable("notice_recipients", {
+  id: serial("id").primaryKey(),
+  noticeId: integer("notice_id").notNull(),
+  departmentId: integer("department_id").notNull(),
+});
+
+export const insertNoticeRecipientSchema = createInsertSchema(noticeRecipients).omit({
+  id: true,
+});
+
+export type NoticeRecipient = typeof noticeRecipients.$inferSelect;
+export type InsertNoticeRecipient = z.infer<typeof insertNoticeRecipientSchema>;

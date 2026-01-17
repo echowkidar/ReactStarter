@@ -622,4 +622,97 @@ export class DbStorage implements IStorage {
   async deleteTicket(id: number): Promise<void> {
     await db.delete(tickets).where(eq(tickets.id, id));
   }
+
+  // ========== NOTICE SYSTEM ==========
+
+  async createNotice(data: { subject: string; message: string; imageUrl?: string | null; isGlobal: boolean; createdBy: string; departmentIds?: number[] }): Promise<any> {
+    // First ensure tables exist
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS notices (
+        id SERIAL PRIMARY KEY,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        image_url TEXT,
+        is_global BOOLEAN NOT NULL DEFAULT true,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS notice_recipients (
+        id SERIAL PRIMARY KEY,
+        notice_id INTEGER NOT NULL,
+        department_id INTEGER NOT NULL
+      )
+    `);
+
+    // Insert notice
+    const result = await db.execute(sql`
+      INSERT INTO notices (subject, message, image_url, is_global, created_by)
+      VALUES (${data.subject}, ${data.message}, ${data.imageUrl || null}, ${data.isGlobal}, ${data.createdBy})
+      RETURNING *
+    `);
+
+    const notice = result.rows[0] as any;
+
+    // If not global, add recipient departments
+    if (!data.isGlobal && data.departmentIds && data.departmentIds.length > 0) {
+      for (const deptId of data.departmentIds) {
+        await db.execute(sql`
+          INSERT INTO notice_recipients (notice_id, department_id)
+          VALUES (${notice.id}, ${deptId})
+        `);
+      }
+    }
+
+    return notice;
+  }
+
+  async getAllNotices(): Promise<any[]> {
+    try {
+      const result = await db.execute(sql`
+        SELECT * FROM notices ORDER BY created_at DESC
+      `);
+      return result.rows as any[];
+    } catch {
+      return [];
+    }
+  }
+
+  async getNoticesForDepartment(departmentId: number): Promise<any[]> {
+    try {
+      // Get global notices + notices specifically for this department
+      const result = await db.execute(sql`
+        SELECT DISTINCT n.* FROM notices n
+        LEFT JOIN notice_recipients nr ON n.id = nr.notice_id
+        WHERE n.is_global = true 
+           OR nr.department_id = ${departmentId}
+        ORDER BY n.created_at DESC
+      `);
+      return result.rows as any[];
+    } catch {
+      return [];
+    }
+  }
+
+  async getNotice(id: number): Promise<any | null> {
+    try {
+      const result = await db.execute(sql`
+        SELECT * FROM notices WHERE id = ${id}
+      `);
+      return result.rows[0] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteNotice(id: number): Promise<void> {
+    try {
+      await db.execute(sql`DELETE FROM notice_recipients WHERE notice_id = ${id}`);
+      await db.execute(sql`DELETE FROM notices WHERE id = ${id}`);
+    } catch (error) {
+      console.error("Error deleting notice:", error);
+    }
+  }
 }

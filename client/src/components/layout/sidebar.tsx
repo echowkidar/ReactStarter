@@ -12,10 +12,20 @@ import {
   FileImage,
   HelpCircle,
   Ticket,
+  Megaphone,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 
 // n8n chat integration
 // Add n8n chat styles
@@ -67,6 +77,15 @@ const navigation = [
   { name: "Help", href: "/dashboard/help", icon: HelpCircle },
 ];
 
+interface Notice {
+  id: number;
+  subject: string;
+  message: string;
+  image_url: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 interface SidebarProps {
   className?: string;
 }
@@ -76,6 +95,7 @@ export default function Sidebar({ className }: SidebarProps) {
   const [department, setDepartment] = useState(getCurrentDepartment());
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
 
   // Check and update department name if needed
   useEffect(() => {
@@ -88,6 +108,12 @@ export default function Sidebar({ className }: SidebarProps) {
 
     updateDepartmentName();
   }, []);
+
+  // Fetch notices for this department
+  const { data: notices = [] } = useQuery<Notice[]>({
+    queryKey: [`/api/departments/${department?.id}/notices`],
+    enabled: !!department?.id,
+  });
 
   const handleLogout = () => {
     logout();
@@ -122,6 +148,30 @@ export default function Sidebar({ className }: SidebarProps) {
           ))}
         </div>
       </div>
+
+      {/* Notices Section */}
+      {notices.length > 0 && (
+        <div className="px-3 py-2 border-t">
+          <div className="flex items-center gap-2 px-4 mb-2">
+            <Megaphone className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-semibold text-gray-700">Notices</span>
+          </div>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {notices.slice(0, 5).map((notice) => (
+              <Button
+                key={notice.id}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs text-left h-auto py-2 px-4 hover:bg-blue-50"
+                onClick={() => setSelectedNotice(notice)}
+              >
+                <span className="truncate">{notice.subject}</span>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-auto px-3 py-2">
         <Button
           variant="ghost"
@@ -132,6 +182,33 @@ export default function Sidebar({ className }: SidebarProps) {
           Logout
         </Button>
       </div>
+
+      {/* Notice Detail Dialog */}
+      <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="h-5 w-5 text-blue-600" />
+              {selectedNotice?.subject}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedNotice?.created_at && format(new Date(selectedNotice.created_at), "dd MMM yyyy, HH:mm")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="whitespace-pre-wrap text-sm">{selectedNotice?.message}</div>
+            {selectedNotice?.image_url && (
+              <div className="border rounded-lg overflow-hidden">
+                <img
+                  src={selectedNotice.image_url}
+                  alt="Notice attachment"
+                  className="w-full max-h-64 object-contain"
+                />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
