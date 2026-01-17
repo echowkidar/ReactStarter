@@ -475,6 +475,15 @@ export class DbStorage implements IStorage {
     await db.delete(documents).where(eq(documents.id, id));
   }
 
+  async updateDocument(id: number, updates: Partial<Document>): Promise<Document> {
+    const [updatedDocument] = await db
+      .update(documents)
+      .set(updates)
+      .where(eq(documents.id, id))
+      .returning();
+    return updatedDocument;
+  }
+
   // ========== ATTENDANCE PERMISSION METHODS ==========
 
   async updateAllDepartmentsAttendancePermission(enabled: boolean): Promise<void> {

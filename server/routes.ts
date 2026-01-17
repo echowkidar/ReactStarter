@@ -1895,17 +1895,18 @@ export async function registerRoutes(app: Express) {
       }
 
       // Get department info from the request body first, then fall back to session if available
-      let deptId = departmentId ? parseInt(departmentId) : undefined;
+      let deptId = departmentId !== undefined ? parseInt(departmentId) : undefined;
       let deptName = departmentName || undefined;
 
       // If not in request body, try to get from session
-      if ((!deptId || !deptName) && req.session?.department) {
-        deptId = deptId || req.session.department.id;
+      if ((deptId === undefined || deptId === null) && req.session?.department) {
+        deptId = req.session.department.id;
         deptName = deptName || req.session.department.name;
       }
 
-      // If still missing department info, return error
-      if (!deptId || !deptName) {
+      // Allow admin uploads (departmentId = 0) with proper department name
+      // For admin uploads, departmentId will be 0 and departmentName will be set
+      if ((deptId === undefined || deptId === null) || !deptName) {
         return res.status(401).json({ message: "Unauthorized: Department information missing" });
       }
 
@@ -1974,6 +1975,27 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting document:", error);
       res.status(500).json({ message: "Failed to delete document" });
+    }
+  });
+
+  // Update document metadata
+  app.patch("/api/documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { documentType, issuingAuthority, subject, refNo, date } = req.body;
+
+      const updatedDocument = await storage.updateDocument(id, {
+        documentType,
+        issuingAuthority,
+        subject,
+        refNo,
+        date,
+      });
+
+      res.json(updatedDocument);
+    } catch (error) {
+      console.error("Error updating document:", error);
+      res.status(500).json({ message: "Failed to update document" });
     }
   });
 
