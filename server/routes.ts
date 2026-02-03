@@ -41,6 +41,51 @@ const __dirname = path.dirname(__filename);
 // Initialize database storage
 const storage = new DbStorage();
 
+// ============ Active Users Tracking ============
+// In-memory store for active users (session-based heartbeat)
+interface ActiveSession {
+  id: string;
+  type: 'department' | 'admin';
+  name: string;
+  email?: string;
+  lastHeartbeat: Date;
+}
+
+const activeUsers = new Map<string, ActiveSession>();
+
+// Cleanup expired sessions (older than 2 minutes)
+const HEARTBEAT_TIMEOUT = 2 * 60 * 1000; // 2 minutes
+
+function cleanupExpiredSessions() {
+  const now = Date.now();
+  const entries = Array.from(activeUsers.entries());
+  for (const [sessionId, session] of entries) {
+    if (now - session.lastHeartbeat.getTime() > HEARTBEAT_TIMEOUT) {
+      activeUsers.delete(sessionId);
+    }
+  }
+}
+
+// Run cleanup every minute
+setInterval(cleanupExpiredSessions, 60 * 1000);
+
+function getActiveUsersCount() {
+  cleanupExpiredSessions();
+  const departments = Array.from(activeUsers.values()).filter(s => s.type === 'department');
+  const admins = Array.from(activeUsers.values()).filter(s => s.type === 'admin');
+  return {
+    total: activeUsers.size,
+    departments: departments.length,
+    admins: admins.length,
+    users: Array.from(activeUsers.values()).map(s => ({
+      type: s.type,
+      name: s.name,
+      lastSeen: s.lastHeartbeat
+    }))
+  };
+}
+// ============ End Active Users Tracking ============
+
 // Define the type expected by the client components for this route
 // Note: Adjust fields based on what's *actually* needed by the client dropdowns
 
@@ -83,9 +128,25 @@ export async function registerRoutes(app: Express) {
       )
     `);
 
-    console.log("Notices tables initialized successfully.");
+    // Create visitors table for analytics
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS visitors (
+        id SERIAL PRIMARY KEY,
+        visitor_id TEXT NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT,
+        screen_resolution TEXT,
+        timezone TEXT,
+        language TEXT,
+        visited_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        page_visited TEXT,
+        department_id INTEGER
+      )
+    `);
+
+    console.log("Notices and visitors tables initialized successfully.");
   } catch (error) {
-    console.error("Error initializing notices tables:", error);
+    console.error("Error initializing tables:", error);
   }
 
   // Admin auth routes
@@ -148,6 +209,152 @@ export async function registerRoutes(app: Express) {
       return res.status(500).json({ valid: false, message: "Verification failed" });
     }
   });
+
+  // ============ Active Users Tracking Endpoints ============
+  // Heartbeat - clients call this every 30 seconds to stay active
+  app.post("/api/heartbeat", async (req, res) => {
+    const { sessionId, type, name, email } = req.body;
+
+    if (!sessionId || !type || !name) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    activeUsers.set(sessionId, {
+      id: sessionId,
+      type: type as 'department' | 'admin',
+      name,
+      email,
+      lastHeartbeat: new Date()
+    });
+
+    return res.json({ success: true });
+  });
+
+  // Logout - remove session from active users
+  app.post("/api/heartbeat/logout", async (req, res) => {
+    const { sessionId } = req.body;
+    if (sessionId) {
+      activeUsers.delete(sessionId);
+    }
+    return res.json({ success: true });
+  });
+
+  // Get active users count (admin only)
+  app.get("/api/admin/active-users", async (req, res) => {
+    try {
+      const stats = getActiveUsersCount();
+      return res.json(stats);
+    } catch (error) {
+      console.error("Error getting active users:", error);
+      return res.status(500).json({ message: "Failed to get active users" });
+    }
+  });
+  // ============ End Active Users Tracking Endpoints ============
+
+  // ============ Visitor Analytics Endpoints ============
+  // Track a visitor - called on page load
+  app.post("/api/visitors/track", async (req, res) => {
+    try {
+      const { visitorId, screenResolution, timezone, language, pageVisited, departmentId } = req.body;
+
+      if (!visitorId) {
+        return res.status(400).json({ message: "visitorId is required" });
+      }
+
+      // Get IP from request (considering proxy headers)
+      const ipAddress = req.headers['x-forwarded-for'] as string ||
+        req.headers['x-real-ip'] as string ||
+        req.socket.remoteAddress || '';
+      const userAgent = req.headers['user-agent'] || '';
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      // Insert visit record
+      await db.execute(sql`
+        INSERT INTO visitors (visitor_id, ip_address, user_agent, screen_resolution, timezone, language, page_visited, department_id, visited_at)
+        VALUES (${visitorId}, ${ipAddress}, ${userAgent}, ${screenResolution || null}, ${timezone || null}, ${language || null}, ${pageVisited || null}, ${departmentId || null}, NOW())
+      `);
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Error tracking visitor:", error);
+      return res.status(500).json({ message: "Failed to track visitor" });
+    }
+  });
+
+  // Get visitor stats for admin dashboard
+  app.get("/api/admin/visitor-stats", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+
+      // Calculate previous month
+      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+      // Get unique visitors for current month (by visitor_id fingerprint)
+      const currentMonthResult = await db.execute(sql`
+        SELECT COUNT(DISTINCT visitor_id) as unique_count, COUNT(*) as total_visits
+        FROM visitors
+        WHERE EXTRACT(YEAR FROM visited_at) = ${currentYear}
+        AND EXTRACT(MONTH FROM visited_at) = ${currentMonth}
+      `);
+
+      // Get unique visitors for previous month
+      const prevMonthResult = await db.execute(sql`
+        SELECT COUNT(DISTINCT visitor_id) as unique_count, COUNT(*) as total_visits
+        FROM visitors
+        WHERE EXTRACT(YEAR FROM visited_at) = ${prevYear}
+        AND EXTRACT(MONTH FROM visited_at) = ${prevMonth}
+      `);
+
+      // Get unique IPs for comparison (to show shared IP users)
+      const currentMonthIPs = await db.execute(sql`
+        SELECT COUNT(DISTINCT ip_address) as unique_ips
+        FROM visitors
+        WHERE EXTRACT(YEAR FROM visited_at) = ${currentYear}
+        AND EXTRACT(MONTH FROM visited_at) = ${currentMonth}
+      `);
+
+      const prevMonthIPs = await db.execute(sql`
+        SELECT COUNT(DISTINCT ip_address) as unique_ips
+        FROM visitors
+        WHERE EXTRACT(YEAR FROM visited_at) = ${prevYear}
+        AND EXTRACT(MONTH FROM visited_at) = ${prevMonth}
+      `);
+
+      const currentStats = currentMonthResult.rows[0] as any || { unique_count: 0, total_visits: 0 };
+      const prevStats = prevMonthResult.rows[0] as any || { unique_count: 0, total_visits: 0 };
+      const currentIPs = currentMonthIPs.rows[0] as any || { unique_ips: 0 };
+      const prevIPs = prevMonthIPs.rows[0] as any || { unique_ips: 0 };
+
+      return res.json({
+        currentMonth: {
+          year: currentYear,
+          month: currentMonth,
+          uniqueVisitors: parseInt(currentStats.unique_count) || 0,
+          totalVisits: parseInt(currentStats.total_visits) || 0,
+          uniqueIPs: parseInt(currentIPs.unique_ips) || 0,
+        },
+        previousMonth: {
+          year: prevYear,
+          month: prevMonth,
+          uniqueVisitors: parseInt(prevStats.unique_count) || 0,
+          totalVisits: parseInt(prevStats.total_visits) || 0,
+          uniqueIPs: parseInt(prevIPs.unique_ips) || 0,
+        }
+      });
+    } catch (error) {
+      console.error("Error getting visitor stats:", error);
+      return res.status(500).json({ message: "Failed to get visitor stats" });
+    }
+  });
+  // ============ End Visitor Analytics Endpoints ============
 
   // Password reset routes
   app.post("/api/auth/forgot-password", async (req, res) => {
@@ -426,6 +633,15 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
+      // Update last login timestamp
+      try {
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`UPDATE departments SET last_login = NOW() WHERE id = ${department.id}`);
+      } catch (err) {
+        console.error('Failed to update lastLogin:', err);
+      }
+
       // Return the department data in the expected format
       res.json({
         success: true,
@@ -539,7 +755,7 @@ export async function registerRoutes(app: Express) {
     });
 
     try {
-      let departmentList: Array<{ id: number; name: string; code?: string | null; attendancePermitted?: boolean; employeeCount?: number }> = [];
+      let departmentList: Array<{ id: number; name: string; code?: string | null; attendancePermitted?: boolean; employeeCount?: number; lastLogin?: Date | string | null }> = [];
 
       if (req.query.registeredOnly === 'true') {
         console.log('[GET /api/departments] Fetching only registered departments (from departments table)');
@@ -551,7 +767,8 @@ export async function registerRoutes(app: Express) {
           name: dept.name,
           code: null,
           attendancePermitted: dept.attendancePermitted,
-          employeeCount: employeeCounts.get(dept.id) || 0
+          employeeCount: employeeCounts.get(dept.id) || 0,
+          lastLogin: dept.lastLogin || null
         }));
         console.log(`[GET /api/departments] Fetched ${departmentList.length} registered departments`);
       } else {

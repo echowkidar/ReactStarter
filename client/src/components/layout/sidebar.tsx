@@ -23,6 +23,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -115,6 +116,13 @@ export default function Sidebar({ className }: SidebarProps) {
     enabled: !!department?.id,
   });
 
+  // Send heartbeat for active user tracking
+  useHeartbeat({
+    type: 'department',
+    name: department?.name || 'Unknown Department',
+    email: department?.email
+  });
+
   const handleLogout = () => {
     logout();
   };
@@ -185,24 +193,24 @@ export default function Sidebar({ className }: SidebarProps) {
 
       {/* Notice Detail Dialog */}
       <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Megaphone className="h-5 w-5 text-blue-600" />
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pb-4 border-b">
+            <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
+              <Megaphone className="h-7 w-7 text-blue-600" />
               {selectedNotice?.subject}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-base pt-1">
               {selectedNotice?.created_at && format(new Date(selectedNotice.created_at), "dd MMM yyyy, HH:mm")}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="whitespace-pre-wrap text-sm">{selectedNotice?.message}</div>
+          <div className="space-y-6 py-4">
+            <div className="whitespace-pre-wrap text-lg leading-relaxed">{selectedNotice?.message}</div>
             {selectedNotice?.image_url && (
               <div className="border rounded-lg overflow-hidden">
                 <img
                   src={selectedNotice.image_url}
                   alt="Notice attachment"
-                  className="w-full max-h-64 object-contain"
+                  className="w-full max-h-[500px] object-contain"
                 />
               </div>
             )}

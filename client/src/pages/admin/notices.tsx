@@ -321,21 +321,24 @@ export default function AdminNotices() {
 
                 {/* View Notice Dialog */}
                 <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>
-                    <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                            <DialogTitle>{selectedNotice?.subject}</DialogTitle>
-                            <DialogDescription>
+                    <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+                        <DialogHeader className="pb-4 border-b">
+                            <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
+                                <Megaphone className="h-7 w-7 text-blue-600" />
+                                {selectedNotice?.subject}
+                            </DialogTitle>
+                            <DialogDescription className="text-base pt-1">
                                 By {selectedNotice?.created_by} • {selectedNotice?.created_at && format(new Date(selectedNotice.created_at), "dd MMM yyyy, HH:mm")}
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4">
-                            <div className="whitespace-pre-wrap text-sm">{selectedNotice?.message}</div>
+                        <div className="space-y-6 py-4">
+                            <div className="whitespace-pre-wrap text-lg leading-relaxed">{selectedNotice?.message}</div>
                             {selectedNotice?.image_url && (
                                 <div className="border rounded-lg overflow-hidden">
                                     <img
                                         src={selectedNotice.image_url}
                                         alt="Notice attachment"
-                                        className="w-full max-h-96 object-contain"
+                                        className="w-full max-h-[500px] object-contain"
                                     />
                                 </div>
                             )}

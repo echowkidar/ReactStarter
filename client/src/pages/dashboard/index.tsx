@@ -9,10 +9,14 @@ import Loading from "@/components/layout/loading";
 import { Users, ClipboardCheck, Ticket as TicketIcon, AlertCircle, Clock, CheckCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useVisitorTracking } from "@/hooks/useVisitorTracking";
 
 export default function Dashboard() {
   const [department, setDepartment] = useState(getCurrentDepartment());
   const [, setLocation] = useLocation();
+
+  // Track visitor with department ID
+  useVisitorTracking({ pageVisited: '/dashboard', departmentId: department?.id });
 
   // Check and update department name if needed
   useEffect(() => {

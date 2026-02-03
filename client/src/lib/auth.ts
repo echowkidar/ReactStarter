@@ -33,9 +33,30 @@ export async function register(departmentData: Record<string, string>) {
 }
 
 export function logout(redirectToLogin = true) {
+  // Send logout signal to remove from active users
+  const sessionId = sessionStorage.getItem('heartbeat_session_id');
+  if (sessionId) {
+    // Use Blob for sendBeacon to set correct Content-Type
+    const data = JSON.stringify({ sessionId });
+    const blob = new Blob([data], { type: 'application/json' });
+
+    try {
+      navigator.sendBeacon('/api/heartbeat/logout', blob);
+    } catch {
+      // Fallback to fetch if sendBeacon fails
+      fetch('/api/heartbeat/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: data,
+        keepalive: true
+      }).catch(() => { });
+    }
+    sessionStorage.removeItem('heartbeat_session_id');
+  }
+
   // Clear all auth-related data
   localStorage.removeItem("department");
-  
+
   // Force page reload to reset application state
   if (redirectToLogin) {
     window.location.href = "/";
@@ -68,29 +89,29 @@ export function getCurrentAdmin(): AdminInfo | null {
 export async function checkDepartmentName() {
   const department = getCurrentDepartment();
   if (!department) return null;
-  
+
   // Only attempt to update if the name follows the "Department ID -XXXX" pattern
   if (department.name.startsWith("Department ID -")) {
     try {
       const res = await apiRequest("GET", `/api/departments/${department.id}/check-name`);
       if (!res.ok) return department;
-      
+
       const data = await res.json();
-      
+
       // If name was updated, update local storage
       if (data.updated) {
         const updatedDepartment = { ...department, name: data.name };
         localStorage.setItem("department", JSON.stringify(updatedDepartment));
         return updatedDepartment;
       }
-      
+
       return department;
     } catch (error) {
       console.error("Error checking department name:", error);
       return department;
     }
   }
-  
+
   return department;
 }
 
@@ -109,9 +130,9 @@ export async function updateDepartmentProfile(id: string, data: {
       const errorData = await res.json();
       throw new Error(errorData.message || 'Profile update failed');
     }
-    
+
     const updatedDepartment = await res.json();
-    
+
     // Update local storage with the new department data
     const currentDepartment = getCurrentDepartment();
     if (currentDepartment) {
@@ -124,7 +145,7 @@ export async function updateDepartmentProfile(id: string, data: {
       };
       localStorage.setItem("department", JSON.stringify(newDepartmentData));
     }
-    
+
     return updatedDepartment;
   } catch (error) {
     console.error('Profile update error:', error);

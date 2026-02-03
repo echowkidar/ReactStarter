@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useVisitorTracking } from "@/hooks/useVisitorTracking";
 import { Loader2 } from "lucide-react";
 
 // n8n chat integration
@@ -44,12 +45,12 @@ const N8nChatScript = () => {
       });
     `;
     document.body.appendChild(script);
-    
+
     return () => {
       document.body.removeChild(script);
     };
   }, []);
-  
+
   return null;
 };
 
@@ -62,6 +63,9 @@ export default function Login() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Track visitor
+  useVisitorTracking({ pageVisited: '/login' });
 
   // Check if already logged in and redirect to dashboard
   useEffect(() => {

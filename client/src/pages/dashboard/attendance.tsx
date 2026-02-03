@@ -993,7 +993,20 @@ export default function Attendance() {
   const currentMonthIdx = today.getMonth() + 1;
   const existingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled');
 
-  const canCreateReport = attendanceStatus?.permitted !== false && !isPastDeadline && !existingReport;
+  // Logic for canCreateReport:
+  // 1. If department is explicitly permitted by admin (permitted === true): ignore deadline, only check existing report
+  // 2. If department is NOT permitted (permitted === false): ALWAYS disable (regardless of deadline)
+  // 3. If permitted is undefined (loading/error): respect deadline as fallback
+  const canCreateReport = attendanceStatus?.permitted === true
+    ? !existingReport  // Permitted: ignore deadline, only check for existing report
+    : attendanceStatus?.permitted === false
+      ? false  // Explicitly NOT permitted: always disable
+      : (!isPastDeadline && !existingReport);  // Undefined/loading: respect deadline
+
+  // Override canRequestCancellation: allow if permitted OR before 23rd
+  // Note: canRequestCancellation was initially defined above as today.getDate() <= 23
+  // Now we override it to also allow when department has special permission
+  const canRequestCancellationFinal = canRequestCancellation || attendanceStatus?.permitted === true;
 
   if (isLoading || loadingEntries) return <Loading />;
 
@@ -1003,10 +1016,12 @@ export default function Attendance() {
       <div className="flex-1 flex flex-col">
         <Header />
         <main className="flex-1 p-6">
-          {/* Countdown Banner - only show when permitted */}
-          {attendanceStatus?.permitted !== false && (
+          {/* Countdown Banner - show when permitted OR when deadline has passed */}
+          {(attendanceStatus?.permitted !== false || isPastDeadline) && (
             <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${isPastDeadline
-              ? 'bg-red-100 border border-red-300 text-red-800'
+              ? (attendanceStatus?.permitted === true
+                ? 'bg-green-100 border border-green-300 text-green-800'  // Permitted after deadline - show green
+                : 'bg-red-100 border border-red-300 text-red-800')
               : daysRemaining <= 5
                 ? 'bg-orange-100 border border-orange-300 text-orange-800'
                 : 'bg-blue-100 border border-blue-300 text-blue-800'
@@ -1015,7 +1030,10 @@ export default function Attendance() {
                 <span className="text-xl">📅</span>
                 {isPastDeadline ? (
                   <span className="font-medium">
-                    ⚠️ Deadline passed! Attendance report submission deadline was 20th.
+                    {attendanceStatus?.permitted === true
+                      ? "⚠️ Deadline passed! Attendance report submission deadline was 20th. (Special permission granted)"
+                      : "⚠️ Deadline passed! Attendance report submission deadline was 20th."
+                    }
                   </span>
                 ) : (
                   <span className="font-medium">
@@ -1042,8 +1060,8 @@ export default function Attendance() {
             </div>
           )}
 
-          {/* Permission blocked message */}
-          {attendanceStatus?.permitted === false && (
+          {/* Permission blocked message - only show BEFORE deadline passes */}
+          {attendanceStatus?.permitted === false && !isPastDeadline && (
             <div className="mb-4 p-4 bg-orange-50 border border-orange-300 rounded-lg text-orange-800">
               <span className="font-medium">⚠️ Currently, the facility to submit attendance reports is not available.</span>
             </div>
@@ -1059,12 +1077,12 @@ export default function Attendance() {
                   disabled={!canCreateReport}
                   title={
                     !canCreateReport
-                      ? (isPastDeadline
-                        ? "Deadline passed"
-                        : existingReport
-                          ? (existingReport.status === 'draft' ? "Draft report already exists. Please delete it to create new."
-                            : existingReport.status === 'submitted' || existingReport.status === 'recall_requested' ? "Report submitted. Use 'Recall' to modify."
-                              : "Report sent. Request cancellation to recreate.")
+                      ? (existingReport
+                        ? (existingReport.status === 'draft' ? "Draft report already exists. Please delete it to create new."
+                          : existingReport.status === 'submitted' || existingReport.status === 'recall_requested' ? "Report submitted. Use 'Recall' to modify."
+                            : "Report sent. Request cancellation to recreate.")
+                        : (isPastDeadline && attendanceStatus?.permitted !== true)
+                          ? "Deadline passed"
                           : "Attendance submission disabled")
                       : "Create new report"
                   }
@@ -1234,8 +1252,8 @@ export default function Attendance() {
                             </Dialog>
                           </>
                         )}
-                        {/* Request to Cancel button for sent reports - only before 23rd */}
-                        {report.status === "sent" && canRequestCancellation && (
+                        {/* Request to Cancel button for sent reports - only for CURRENT MONTH and (before 23rd OR with special permission) */}
+                        {report.status === "sent" && canRequestCancellationFinal && report.year === currentMonthYear && report.month === currentMonthIdx && (
                           <>
                             <Button
                               variant="outline"
@@ -1276,8 +1294,8 @@ export default function Attendance() {
                             </Dialog>
                           </>
                         )}
-                        {/* Show when cancellation not allowed (after 23rd) */}
-                        {report.status === "sent" && !canRequestCancellation && (
+                        {/* Show when cancellation not allowed (after 23rd AND no special permission) - ONLY for current month */}
+                        {report.status === "sent" && !canRequestCancellationFinal && report.year === currentMonthYear && report.month === currentMonthIdx && (
                           <span className="text-xs text-gray-500">
                             Cancel N/A after 23rd
                           </span>

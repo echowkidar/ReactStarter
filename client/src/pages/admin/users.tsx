@@ -496,78 +496,98 @@ export default function AdminUsers() {
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Department</TableHead>
+                      <TableHead>Last Login</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredUsers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredUsers.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell>{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{getRoleBadge(user.role)}</TableCell>
-                          <TableCell>
-                            <div>
-                              <div>{user.departmentName || "-"}</div>
-                              {user.departmentId && (() => {
-                                const dept = registeredDepartments.find((d: any) => d.id === user.departmentId);
-                                return dept && (
+                      filteredUsers.map((user) => {
+                        const dept = registeredDepartments.find((d: any) => d.id === user.departmentId);
+                        const lastLogin = dept?.lastLogin;
+                        const formatLastLogin = (date: string | null) => {
+                          if (!date) return <span className="text-muted-foreground text-xs">Never</span>;
+                          const d = new Date(date);
+                          const now = new Date();
+                          const diffMs = now.getTime() - d.getTime();
+                          const diffMins = Math.floor(diffMs / 60000);
+                          const diffHours = Math.floor(diffMs / 3600000);
+                          const diffDays = Math.floor(diffMs / 86400000);
+
+                          if (diffMins < 1) return <span className="text-green-600 text-xs font-medium">Just now</span>;
+                          if (diffMins < 60) return <span className="text-green-600 text-xs">{diffMins}m ago</span>;
+                          if (diffHours < 24) return <span className="text-blue-600 text-xs">{diffHours}h ago</span>;
+                          if (diffDays < 7) return <span className="text-yellow-600 text-xs">{diffDays}d ago</span>;
+                          return <span className="text-muted-foreground text-xs">{d.toLocaleDateString()}</span>;
+                        };
+
+                        return (
+                          <TableRow key={user.id}>
+                            <TableCell>{user.name}</TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>{getRoleBadge(user.role)}</TableCell>
+                            <TableCell>
+                              <div>
+                                <div>{user.departmentName || "-"}</div>
+                                {user.departmentId && dept && (
                                   <div className="text-xs text-muted-foreground">
                                     {dept.employeeCount || 0} Employees
                                   </div>
-                                );
-                              })()}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {user.departmentId && (() => {
-                                const dept = registeredDepartments.find((d: any) => d.id === user.departmentId);
-                                const isPermitted = dept ? dept.attendancePermitted !== false : true;
-                                return (
-                                  <div className="mr-2 flex items-center" title={isPermitted ? "Attendance Allowed" : "Attendance Blocked"}>
-                                    <Switch
-                                      checked={isPermitted}
-                                      onCheckedChange={(checked) =>
-                                        toggleDeptPermit.mutate({
-                                          deptId: user.departmentId!,
-                                          permitted: checked
-                                        })
-                                      }
-                                      disabled={toggleDeptPermit.isPending}
-                                    />
-                                  </div>
-                                );
-                              })()}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openUserDialog(user)}
-                                className="flex items-center gap-1"
-                              >
-                                <Pencil className="h-3 w-3" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openDeleteDialog(user)}
-                                className="flex items-center gap-1 text-destructive"
-                                disabled={user.email === "admin@amu.ac.in"} // Prevent deleting super admin
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                Delete
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {user.role === 'department' ? formatLastLogin(lastLogin) : <span className="text-muted-foreground text-xs">-</span>}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {user.departmentId && (() => {
+                                  const isPermitted = dept ? dept.attendancePermitted !== false : true;
+                                  return (
+                                    <div className="mr-2 flex items-center" title={isPermitted ? "Attendance Allowed" : "Attendance Blocked"}>
+                                      <Switch
+                                        checked={isPermitted}
+                                        onCheckedChange={(checked) =>
+                                          toggleDeptPermit.mutate({
+                                            deptId: user.departmentId!,
+                                            permitted: checked
+                                          })
+                                        }
+                                        disabled={toggleDeptPermit.isPending}
+                                      />
+                                    </div>
+                                  );
+                                })()}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openUserDialog(user)}
+                                  className="flex items-center gap-1"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openDeleteDialog(user)}
+                                  className="flex items-center gap-1 text-destructive"
+                                  disabled={user.email === "admin@amu.ac.in"} // Prevent deleting super admin
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
                     )}
                   </TableBody>
                 </Table>

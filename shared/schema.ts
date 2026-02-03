@@ -10,6 +10,7 @@ export const departments = pgTable("departments", {
   email: text("email").notNull(),
   password: text("password").notNull(),
   attendancePermitted: boolean("attendance_permitted").notNull().default(true),
+  lastLogin: timestamp("last_login"),
 });
 
 
@@ -284,3 +285,25 @@ export const insertNoticeRecipientSchema = createInsertSchema(noticeRecipients).
 
 export type NoticeRecipient = typeof noticeRecipients.$inferSelect;
 export type InsertNoticeRecipient = z.infer<typeof insertNoticeRecipientSchema>;
+
+// Visitor Analytics - Track unique visitors using browser fingerprinting
+export const visitors = pgTable("visitors", {
+  id: serial("id").primaryKey(),
+  visitorId: text("visitor_id").notNull(), // Unique browser fingerprint
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  screenResolution: text("screen_resolution"),
+  timezone: text("timezone"),
+  language: text("language"),
+  visitedAt: timestamp("visited_at").notNull().defaultNow(),
+  pageVisited: text("page_visited"), // Which page was visited
+  departmentId: integer("department_id"), // If logged in as department
+});
+
+export const insertVisitorSchema = createInsertSchema(visitors).omit({
+  id: true,
+  visitedAt: true,
+});
+
+export type Visitor = typeof visitors.$inferSelect;
+export type InsertVisitor = z.infer<typeof insertVisitorSchema>;

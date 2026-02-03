@@ -24,6 +24,7 @@ import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, 
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useHeartbeat } from "@/hooks/useHeartbeat";
 
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -74,6 +75,15 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  // Send heartbeat for admin user tracking
+  const adminName = localStorage.getItem("adminUsername") || "Admin";
+  const adminEmail = localStorage.getItem("adminEmail") || "";
+  useHeartbeat({
+    type: 'admin',
+    name: adminName,
+    email: adminEmail
+  });
+
   const { data: reports, isLoading } = useQuery<ReportWithDepartment[]>({
     queryKey: ["/api/admin/attendance"],
   });
@@ -107,6 +117,40 @@ export default function AdminDashboard() {
       const response = await apiRequest("GET", "/api/tickets/stats");
       return response.json();
     },
+  });
+
+  // Fetch active users count (refresh every 10 seconds)
+  const { data: activeUsersStats = { total: 0, departments: 0, admins: 0 } } = useQuery<{
+    total: number;
+    departments: number;
+    admins: number;
+  }>({
+    queryKey: ["/api/admin/active-users"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/active-users");
+      return response.json();
+    },
+    refetchInterval: 10000, // Refresh every 10 seconds
+  });
+
+  // Fetch visitor analytics stats
+  interface VisitorMonthStats {
+    year: number;
+    month: number;
+    uniqueVisitors: number;
+    totalVisits: number;
+    uniqueIPs: number;
+  }
+  const { data: visitorStats } = useQuery<{
+    currentMonth: VisitorMonthStats;
+    previousMonth: VisitorMonthStats;
+  }>({
+    queryKey: ["/api/admin/visitor-stats"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/visitor-stats");
+      return response.json();
+    },
+    refetchInterval: 60000, // Refresh every minute
   });
 
   // Calculate status for UI
@@ -483,9 +527,90 @@ export default function AdminDashboard() {
   }, [reports, searchTerm, statusFilter, monthFilter, departmentFilter, sortConfig]);
 
   const handleLogout = () => {
+    // Send logout signal to remove from active users
+    const sessionId = sessionStorage.getItem('heartbeat_session_id');
+    if (sessionId) {
+      const data = JSON.stringify({ sessionId });
+      const blob = new Blob([data], { type: 'application/json' });
+      try {
+        navigator.sendBeacon('/api/heartbeat/logout', blob);
+      } catch {
+        fetch('/api/heartbeat/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: data,
+          keepalive: true
+        }).catch(() => { });
+      }
+      sessionStorage.removeItem('heartbeat_session_id');
+    }
+
     // Clear admin data from localStorage
     localStorage.removeItem("adminType");
+    localStorage.removeItem("adminEmail");
+    localStorage.removeItem("adminUsername");
     setLocation("/admin/login");
+  };
+
+  // Download Excel (CSV format) for reports
+  const handleDownloadExcel = () => {
+    if (!reports || reports.length === 0) {
+      toast({ title: "No data", description: "No reports to export", variant: "destructive" });
+      return;
+    }
+
+    // Create CSV header
+    const headers = [
+      "Receipt No.",
+      "Receipt Date",
+      "Month",
+      "Year",
+      "Department",
+      "Transaction ID",
+      "Despatch No.",
+      "Despatch Date",
+      "Status",
+      "Created At"
+    ];
+
+    // Create CSV rows
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"];
+    const rows = reports.map((report: ReportWithDepartment) => {
+      const dept = departments.find(d => d.id === report.departmentId);
+      return [
+        report.receiptNo || "",
+        report.receiptDate ? new Date(report.receiptDate).toLocaleDateString() : "",
+        monthNames[report.month - 1] || "",
+        report.year || "",
+        dept?.name || `Department ${report.departmentId}`,
+        report.transactionId || "",
+        report.despatchNo || "",
+        report.despatchDate ? new Date(report.despatchDate).toLocaleDateString() : "",
+        report.status || "",
+        report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""
+      ];
+    });
+
+    // Combine header and rows
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row: (string | number)[]) => row.map((cell: string | number) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const today = new Date();
+    link.setAttribute("download", `attendance_reports_${today.getFullYear()}_${today.getMonth() + 1}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({ title: "Downloaded", description: `Exported ${reports.length} reports to CSV` });
   };
 
   if (isLoading) return <Loading />;
@@ -502,76 +627,85 @@ export default function AdminDashboard() {
               Salary Section
             </Badge>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setLocation("/admin/attendance-reports")}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1"
             >
               <FileCheck className="h-4 w-4" />
-              Detailed View
+              <span className="hidden sm:inline">Detailed View</span>
             </Button>
             {!isSalaryAdmin && (
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => setLocation("/admin/users")}
-                className="flex items-center gap-2"
+                className="flex items-center gap-1"
               >
                 <Users className="h-4 w-4" />
-                User Management
+                <span className="hidden sm:inline">User Management</span>
               </Button>
             )}
             <Button
               variant="outline"
-              onClick={() => alert("Download Excel functionality to be implemented.")}
+              size="sm"
+              onClick={handleDownloadExcel}
+              className="flex items-center gap-1"
             >
-              <Download className="mr-2 h-4 w-4" />
-              Download Excel
+              <Download className="h-4 w-4" />
+              <span className="hidden md:inline">Download Excel</span>
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setLocation("/admin/documents")}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1"
             >
               <FileImage className="h-4 w-4" />
-              Document Gallery
+              <span className="hidden md:inline">Documents</span>
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setLocation("/admin/tickets")}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1"
             >
               <Ticket className="h-4 w-4" />
-              Support Tickets
+              <span className="hidden md:inline">Tickets</span>
               {ticketStats.open > 0 && (
                 <Badge className="ml-1 bg-red-500 text-white text-xs">{ticketStats.open}</Badge>
               )}
             </Button>
             <Button
               variant="default"
+              size="sm"
               onClick={() => setLocation("/admin/notices")}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700"
             >
               <Megaphone className="h-4 w-4" />
-              Send Notice
+              <span className="hidden sm:inline">Notice</span>
             </Button>
             {canManageEmployees && (
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => setLocation("/admin/employees")}
-                className="flex items-center gap-2"
+                className="flex items-center gap-1"
               >
                 <Users className="h-4 w-4" />
-                Manage Employees
+                <span className="hidden lg:inline">Employees</span>
               </Button>
             )}
             <Button
               variant="outline"
+              size="sm"
               onClick={handleLogout}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1 text-red-600 border-red-200 hover:bg-red-50"
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>
@@ -619,47 +753,123 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Row 2: Support Tickets + Pending Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {/* Support Tickets Stats */}
-          <div className="bg-white p-4 rounded-lg border shadow-sm">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-medium text-gray-500">Support Tickets</h3>
-              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-xs">
-                View All →
-              </Button>
+        {/* Row 2: Active Users, Visitor Stats, Tickets, Pending Actions - 4 column grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {/* Live Active Users */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-3 rounded-lg border border-purple-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-purple-100 rounded-full">
+                <Users className="h-4 w-4 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-purple-800">Active Users</h3>
+                <p className="text-[9px] text-purple-600">Live • Auto-refresh</p>
+              </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              <div className="p-2 bg-blue-50 rounded border border-blue-100">
-                <p className="text-xl font-bold text-blue-700">{ticketStats.open}</p>
-                <p className="text-[10px] uppercase tracking-wider text-blue-600 font-semibold">Open</p>
+            <div className="grid grid-cols-3 gap-1">
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-purple-100">
+                <p className="text-lg font-bold text-purple-700">{activeUsersStats.total}</p>
+                <p className="text-[8px] uppercase tracking-wider text-purple-600 font-semibold">Total</p>
               </div>
-              <div className="p-2 bg-yellow-50 rounded border border-yellow-100">
-                <p className="text-xl font-bold text-yellow-700">{ticketStats.inProgress}</p>
-                <p className="text-[10px] uppercase tracking-wider text-yellow-600 font-semibold">In Progress</p>
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-purple-100">
+                <p className="text-lg font-bold text-blue-600">{activeUsersStats.departments}</p>
+                <p className="text-[8px] uppercase tracking-wider text-blue-500 font-semibold">Depts</p>
               </div>
-              <div className="p-2 bg-green-50 rounded border border-green-100">
-                <p className="text-xl font-bold text-green-700">{ticketStats.resolved}</p>
-                <p className="text-[10px] uppercase tracking-wider text-green-600 font-semibold">Resolved</p>
-              </div>
-              <div className="p-2 bg-gray-50 rounded border border-gray-100">
-                <p className="text-xl font-bold text-gray-700">{ticketStats.closed}</p>
-                <p className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold">Closed</p>
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-purple-100">
+                <p className="text-lg font-bold text-indigo-600">{activeUsersStats.admins}</p>
+                <p className="text-[8px] uppercase tracking-wider text-indigo-500 font-semibold">Admins</p>
               </div>
             </div>
           </div>
 
-          {/* Pending Actions */}
-          <div className="bg-white p-4 rounded-lg border shadow-sm">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Pending Actions</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col items-center justify-center p-3 bg-orange-50 rounded border border-orange-100">
-                <p className="text-2xl font-bold text-orange-700">{stats.requests.cancellation}</p>
-                <p className="text-[11px] uppercase tracking-wider text-orange-600 font-semibold text-center">Cancel Requests</p>
+          {/* Visitors - Current Month */}
+          <div className="bg-gradient-to-br from-teal-50 to-cyan-50 p-3 rounded-lg border border-teal-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-teal-100 rounded-full">
+                <Eye className="h-4 w-4 text-teal-600" />
               </div>
-              <div className="flex flex-col items-center justify-center p-3 bg-yellow-50 rounded border border-yellow-100">
-                <p className="text-2xl font-bold text-yellow-700">{stats.requests.recall}</p>
-                <p className="text-[11px] uppercase tracking-wider text-yellow-600 font-semibold text-center">Recall Requests</p>
+              <div>
+                <h3 className="text-xs font-semibold text-teal-800">Visitors - Current</h3>
+                <p className="text-[9px] text-teal-600">
+                  {visitorStats?.currentMonth?.month ? new Date(2000, visitorStats.currentMonth.month - 1).toLocaleString('default', { month: 'short' }) : '...'} {visitorStats?.currentMonth?.year || ''}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-teal-100">
+                <p className="text-lg font-bold text-teal-700">{visitorStats?.currentMonth?.uniqueVisitors || 0}</p>
+                <p className="text-[8px] uppercase tracking-wider text-teal-600 font-semibold">Unique</p>
+              </div>
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-teal-100">
+                <p className="text-lg font-bold text-cyan-600">{visitorStats?.currentMonth?.totalVisits || 0}</p>
+                <p className="text-[8px] uppercase tracking-wider text-cyan-500 font-semibold">Visits</p>
+              </div>
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-teal-100">
+                <p className="text-lg font-bold text-blue-600">{visitorStats?.currentMonth?.uniqueIPs || 0}</p>
+                <p className="text-[8px] uppercase tracking-wider text-blue-500 font-semibold">IPs</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Visitors - Previous Month */}
+          <div className="bg-gradient-to-br from-slate-50 to-gray-50 p-3 rounded-lg border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-slate-100 rounded-full">
+                <Eye className="h-4 w-4 text-slate-600" />
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-slate-800">Visitors - Previous</h3>
+                <p className="text-[9px] text-slate-600">
+                  {visitorStats?.previousMonth?.month ? new Date(2000, visitorStats.previousMonth.month - 1).toLocaleString('default', { month: 'short' }) : '...'} {visitorStats?.previousMonth?.year || ''}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-slate-100">
+                <p className="text-lg font-bold text-slate-700">{visitorStats?.previousMonth?.uniqueVisitors || 0}</p>
+                <p className="text-[8px] uppercase tracking-wider text-slate-600 font-semibold">Unique</p>
+              </div>
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-slate-100">
+                <p className="text-lg font-bold text-gray-600">{visitorStats?.previousMonth?.totalVisits || 0}</p>
+                <p className="text-[8px] uppercase tracking-wider text-gray-500 font-semibold">Visits</p>
+              </div>
+              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-slate-100">
+                <p className="text-lg font-bold text-slate-600">{visitorStats?.previousMonth?.uniqueIPs || 0}</p>
+                <p className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold">IPs</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Support Tickets + Pending Actions Combined */}
+          <div className="bg-white p-3 rounded-lg border shadow-sm">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-xs font-semibold text-gray-700">Tickets & Actions</h3>
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-[10px] h-5 px-1">
+                View →
+              </Button>
+            </div>
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              <div className="text-center py-1 px-0.5 bg-blue-50 rounded border border-blue-100">
+                <p className="text-sm font-bold text-blue-700">{ticketStats.open}</p>
+                <p className="text-[7px] uppercase text-blue-600 font-medium">Open</p>
+              </div>
+              <div className="text-center py-1 px-0.5 bg-yellow-50 rounded border border-yellow-100">
+                <p className="text-sm font-bold text-yellow-700">{ticketStats.inProgress}</p>
+                <p className="text-[7px] uppercase text-yellow-600 font-medium">Progress</p>
+              </div>
+              <div className="text-center py-1 px-0.5 bg-green-50 rounded border border-green-100">
+                <p className="text-sm font-bold text-green-700">{ticketStats.resolved}</p>
+                <p className="text-[7px] uppercase text-green-600 font-medium">Resolved</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              <div className="text-center py-1.5 bg-orange-50 rounded border border-orange-100">
+                <p className="text-sm font-bold text-orange-700">{stats.requests.cancellation}</p>
+                <p className="text-[7px] uppercase text-orange-600 font-medium">Cancel Req</p>
+              </div>
+              <div className="text-center py-1.5 bg-amber-50 rounded border border-amber-100">
+                <p className="text-sm font-bold text-amber-700">{stats.requests.recall}</p>
+                <p className="text-[7px] uppercase text-amber-600 font-medium">Recall Req</p>
               </div>
             </div>
           </div>
