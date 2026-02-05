@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { testDbConnection } from "./db";
-import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents, admins, tickets } from "@shared/schema";
-import { eq, and, or, like, sql, count, max } from "drizzle-orm";
+import { departments, employees, attendanceReports, attendanceEntries, departmentNames, documents, admins, tickets, transferRequests, employeeHistory } from "@shared/schema";
+import { eq, and, or, like, ne, sql, count, max, desc } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import fs from "fs";
 import path from "path";
@@ -23,7 +23,11 @@ import type {
   Admin,
   InsertAdmin,
   Ticket,
-  InsertTicket
+  InsertTicket,
+  TransferRequest,
+  InsertTransferRequest,
+  EmployeeHistory,
+  InsertEmployeeHistory
 } from "@shared/schema";
 
 
@@ -210,6 +214,18 @@ export class DbStorage implements IStorage {
     }
   }
 
+  async getEmployeeByEpid(epid: string): Promise<Employee | undefined> {
+    try {
+      const result = await db.query.employees.findFirst({
+        where: eq(employees.epid, epid)
+      });
+      return result;
+    } catch (error) {
+      console.error('[DbStorage] Error fetching employee by EPID:', error);
+      return undefined;
+    }
+  }
+
   async getEmployeeCountsByDepartment(): Promise<Map<number, number>> {
     try {
       const result = await db
@@ -286,6 +302,45 @@ export class DbStorage implements IStorage {
       console.error('[DbStorage] Error fetching all employees:', error);
       throw error;
     }
+  }
+
+  async searchEmployeesGlobal(query: string, excludeDepartmentId: number): Promise<any[]> {
+    // Basic validation
+    if (!query || query.length < 2) return [];
+
+    const searchPattern = `%${query}%`;
+
+    // Perform search
+    const results = await db.query.employees.findMany({
+      where: and(
+        ne(employees.departmentId, excludeDepartmentId),
+        or(
+          like(employees.name, searchPattern),
+          like(employees.epid, searchPattern),
+          like(employees.designation, searchPattern)
+        )
+      ),
+      limit: 20
+    });
+
+    // We need to fetch department names for these employees
+    // Efficient way: get all depts involved
+    const deptIds = Array.from(new Set(results.map(e => e.departmentId)));
+    const deptMap = new Map<number, string>();
+
+    // Determine which depts we need to fetch
+    // Actually, getting all departments is cached/fast enough usually, or we can fetch individually
+    // For now, let's just fetch all departments if list is small, or use getDepartment helper
+    // Better: Helper to enrich
+    const enrichedResults = await Promise.all(results.map(async (emp) => {
+      const dept = await this.getDepartment(emp.departmentId);
+      return {
+        ...emp,
+        departmentName: dept?.name || "Unknown Department"
+      };
+    }));
+
+    return enrichedResults;
   }
 
   // Attendance operations
@@ -700,6 +755,266 @@ export class DbStorage implements IStorage {
       await db.execute(sql`DELETE FROM notices WHERE id = ${id}`);
     } catch (error) {
       console.error("Error deleting notice:", error);
+    }
+  }
+
+  // ========== TRANSFER REQUEST METHODS ==========
+
+  async createTransferRequest(request: InsertTransferRequest): Promise<TransferRequest> {
+    const [newRequest] = await db.insert(transferRequests).values(request).returning();
+    return newRequest;
+  }
+
+  async getTransferRequest(id: number): Promise<TransferRequest | undefined> {
+    return await db.query.transferRequests.findFirst({
+      where: eq(transferRequests.id, id)
+    });
+  }
+
+  async getTransferRequestsForDepartment(departmentId: number, type: 'incoming' | 'outgoing'): Promise<TransferRequest[]> {
+    if (type === 'incoming') {
+      return await db.query.transferRequests.findMany({
+        where: eq(transferRequests.toDepartmentId, departmentId),
+        orderBy: (transferRequests, { desc }) => [desc(transferRequests.createdAt)]
+      });
+    } else {
+      return await db.query.transferRequests.findMany({
+        where: eq(transferRequests.fromDepartmentId, departmentId),
+        orderBy: (transferRequests, { desc }) => [desc(transferRequests.createdAt)]
+      });
+    }
+  }
+
+  async getPendingTransferCount(departmentId: number): Promise<number> {
+    const result = await db
+      .select({ count: count(transferRequests.id) })
+      .from(transferRequests)
+      .where(and(
+        eq(transferRequests.toDepartmentId, departmentId),
+        eq(transferRequests.status, 'pending')
+      ));
+    return Number(result[0]?.count || 0);
+  }
+
+  async updateTransferRequest(id: number, updates: Partial<TransferRequest>): Promise<TransferRequest> {
+    const [updatedRequest] = await db
+      .update(transferRequests)
+      .set(updates)
+      .where(eq(transferRequests.id, id))
+      .returning();
+    return updatedRequest;
+  }
+
+  async getTransferRequestByEmployee(employeeId: number): Promise<TransferRequest | undefined> {
+    return await db.query.transferRequests.findFirst({
+      where: and(
+        eq(transferRequests.employeeId, employeeId),
+        eq(transferRequests.status, 'pending')
+      )
+    });
+  }
+
+  async getLastTransferRequest(employeeId: number): Promise<TransferRequest | undefined> {
+    return await db.query.transferRequests.findFirst({
+      where: eq(transferRequests.employeeId, employeeId),
+      orderBy: (transferRequests, { desc }) => [desc(transferRequests.createdAt)]
+    });
+  }
+
+  async getGlobalTransferStats(): Promise<{ pendingTransfer: number; pendingRelease: number; resolved: number }> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Helper to count based on conditions
+    // Note: In Drizzle with standard pg driver, count() returns distinct rows.
+    // We'll fetch all and filter for flexibility or use raw SQL if performance needed later.
+    // For now, findMany with where clause is clean.
+
+    const allRequests = await db.query.transferRequests.findMany();
+
+    const pendingTransfer = allRequests.filter(r => r.status === 'pending').length;
+    const pendingRelease = allRequests.filter(r => r.status === 'release_requested').length;
+
+    // Resolved in current month (Accepted or Rejected)
+    const resolved = allRequests.filter(r => {
+      const isResolvedStatus = r.status === 'accepted' || r.status === 'rejected';
+      if (!isResolvedStatus) return false;
+
+      // Check processedAt date
+      const processedDate = r.processedAt ? new Date(r.processedAt) : null;
+      return processedDate && processedDate >= startOfMonth;
+    }).length;
+
+    return {
+      pendingTransfer,
+      pendingRelease,
+      resolved
+    };
+  }
+
+  async getAllTransferRequests(): Promise<any[]> {
+    const requests = await db.query.transferRequests.findMany({
+      orderBy: (transferRequests, { desc }) => [desc(transferRequests.createdAt)]
+    });
+
+    // Enrich with names
+    // Optimization: Fetch all needed employees and departments in one go if list is huge.
+    // For MVP, Promise.all is acceptable.
+    const enriched = await Promise.all(requests.map(async (req) => {
+      const employee = await this.getEmployee(req.employeeId);
+      const fromDept = await this.getDepartment(req.fromDepartmentId);
+      const toDept = await this.getDepartment(req.toDepartmentId);
+
+      return {
+        ...req,
+        employeeName: employee?.name || 'Unknown',
+        employeeEpid: employee?.epid || 'Unknown',
+        fromDepartmentName: fromDept?.name || 'Unknown',
+        toDepartmentName: toDept?.name || 'Unknown'
+      };
+    }));
+
+    return enriched;
+  }
+
+  // ========== EMPLOYEE HISTORY / AUDIT TRAIL METHODS ==========
+
+  async createHistoryEntry(entry: InsertEmployeeHistory): Promise<EmployeeHistory> {
+    const [newEntry] = await db.insert(employeeHistory).values(entry).returning();
+    return newEntry;
+  }
+
+  async getEmployeeHistory(employeeId: number): Promise<any[]> {
+    return await db.select({
+      id: employeeHistory.id,
+      employeeId: employeeHistory.employeeId,
+      action: employeeHistory.action,
+      field: employeeHistory.field,
+      previousValue: employeeHistory.previousValue,
+      changedBy: employeeHistory.changedBy,
+      changedByRole: employeeHistory.changedByRole,
+      departmentId: employeeHistory.departmentId,
+      timestamp: employeeHistory.timestamp,
+      departmentName: departments.name
+    })
+      .from(employeeHistory)
+      .leftJoin(departments, eq(employeeHistory.departmentId, departments.id))
+      .where(eq(employeeHistory.employeeId, employeeId))
+      .orderBy(desc(employeeHistory.timestamp));
+  }
+
+  // Helper method to log employee changes (for audit trail)
+  async logEmployeeChange(
+    employeeId: number,
+    action: string,
+    field: string,
+    previousValue: string | null,
+    changedBy: string,
+    changedByRole: string,
+    departmentId?: number
+  ): Promise<void> {
+    try {
+      await db.insert(employeeHistory).values({
+        employeeId,
+        action,
+        field,
+        previousValue,
+        changedBy,
+        changedByRole,
+        departmentId: departmentId || null
+      });
+    } catch (error) {
+      console.error("Error logging employee change:", error);
+      // Don't throw - audit logging failure shouldn't break the main operation
+    }
+  }
+
+  // Batch log multiple changes for an employee update
+  async logEmployeeChanges(
+    employeeId: number,
+    oldEmployee: Partial<Employee>,
+    newEmployee: Partial<Employee>,
+    changedBy: string,
+    changedByRole: string,
+    departmentId?: number
+  ): Promise<void> {
+    const fieldsToTrack = [
+      'epid', 'name', 'panNumber', 'bankAccount', 'aadharCard',
+      'designation', 'employmentStatus', 'payLevel', 'termExpiry',
+      'joiningDate', 'salaryRegisterNo', 'officeMemoNo', 'joiningShift',
+      'salary_asstt', 'isActive', 'disableReason', 'disableWefDate', 'remarks',
+      'departmentId' // Added departmentId to tracking
+    ];
+
+    // Helper to normalize values for comparison
+    const normalize = (val: any): string => {
+      if (val === null || val === undefined) return '';
+      if (val instanceof Date) return val.toISOString().split('T')[0];
+      return String(val).trim();
+    };
+
+    for (const field of fieldsToTrack) {
+      // Skip fields not present in the update payload
+      if (newEmployee[field as keyof Employee] === undefined) continue;
+
+      const oldValue = oldEmployee[field as keyof Employee];
+      const newValue = newEmployee[field as keyof Employee];
+
+      const normOld = normalize(oldValue);
+      const normNew = normalize(newValue);
+
+      if (normOld !== normNew) {
+        let displayValue = normOld;
+
+        // If tracking departmentId, try to resolve the department name
+        if (field === 'departmentId' && oldValue) {
+          try {
+            const dept = await this.getDepartment(Number(oldValue));
+            if (dept) {
+              displayValue = dept.name;
+            }
+          } catch (err) {
+            console.error("Error fetching department name for log:", err);
+          }
+        }
+
+        await this.logEmployeeChange(
+          employeeId,
+          'update',
+          field,
+          displayValue, // Log the resolved name or normalized value
+          changedBy,
+          changedByRole,
+          departmentId
+        );
+      }
+    }
+
+    // Track document changes
+    const docFields = ['panCardUrl', 'bankProofUrl', 'aadharCardUrl', 'officeMemoUrl', 'joiningReportUrl', 'termExtensionUrl'];
+    for (const field of docFields) {
+      // Skip fields not present in the update payload - Fixes false 'Document Deleted' logs
+      if (newEmployee[field as keyof Employee] === undefined) continue;
+
+      const oldValue = oldEmployee[field as keyof Employee];
+      const newValue = newEmployee[field as keyof Employee];
+
+      // Normalize logic for documents as well to handle null vs empty string
+      const normOld = normalize(oldValue);
+      const normNew = normalize(newValue);
+
+      if (normOld !== normNew) {
+        const action = newValue ? 'document_update' : 'document_delete';
+        await this.logEmployeeChange(
+          employeeId,
+          action,
+          field,
+          normOld === '' ? 'none' : normOld,
+          changedBy,
+          changedByRole,
+          departmentId
+        );
+      }
     }
   }
 }

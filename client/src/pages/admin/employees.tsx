@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown, History, AlertCircle } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
@@ -19,6 +19,7 @@ import * as XLSX from "xlsx";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
 import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
 import { compressImageToWebP } from "@/lib/image-utils";
+import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 
 
 // Import master data for designations and register numbers
@@ -57,6 +58,45 @@ export default function AdminEmployees() {
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // DUPLICATE EPID CHECK
+  const [watchedEpid, setWatchedEpid] = useState("");
+  const [duplicateEmployee, setDuplicateEmployee] = useState<{ name: string; departmentName: string } | null>(null);
+
+  useEffect(() => {
+    const checkEpid = async () => {
+      // If empty or same as current employee (editing self), clear warning
+      if (!watchedEpid || watchedEpid.trim() === "" || (selectedEmployee && watchedEpid === selectedEmployee.epid)) {
+        setDuplicateEmployee(null);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/employees/check-epid?epid=${encodeURIComponent(watchedEpid)}`);
+        const data = await res.json();
+        if (data.exists) {
+          setDuplicateEmployee(data.employee);
+        } else {
+          setDuplicateEmployee(null);
+        }
+      } catch (error) {
+        console.error("Failed to check EPID:", error);
+      }
+    };
+
+    const timer = setTimeout(checkEpid, 500); // 500ms debounce
+    return () => clearTimeout(timer);
+  }, [watchedEpid, selectedEmployee]);
+
+  // When opening dialog for edit, prepopulate watchedEpid
+  useEffect(() => {
+    if (selectedEmployee) {
+      setWatchedEpid(selectedEmployee.epid);
+    } else {
+      setWatchedEpid("");
+    }
+  }, [selectedEmployee, isDialogOpen]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -865,7 +905,10 @@ export default function AdminEmployees() {
                       setSelectedDesignation("");
                       setSelectedSalaryRegisterNo("");
                       setSelectedSalaryAsstt("");
+                      setSelectedSalaryAsstt("");
                       setUploads({});
+                      setWatchedEpid("");
+                      setDuplicateEmployee(null);
                     }}
 
 
@@ -886,14 +929,34 @@ export default function AdminEmployees() {
                         <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                           <div>
-                            <Label htmlFor="epid">EPID</Label>
+                            <Label htmlFor="epid">EPID {selectedEmployee?.epid && <span className="text-xs text-muted-foreground ml-2">(Cannot be changed)</span>}</Label>
                             <Input
                               id="epid"
                               name="epid"
                               defaultValue={selectedEmployee?.epid}
-                              className="bg-white dark:bg-slate-800"
+                              className={`bg-white dark:bg-slate-800 ${selectedEmployee?.epid ? 'opacity-70 cursor-not-allowed' : ''}`}
                               required
+                              maxLength={5}
+                              disabled={!!selectedEmployee?.epid}
+                              onChange={(e) => {
+                                // Only allow numeric input
+                                const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+                                e.target.value = value;
+                                setWatchedEpid(value);
+                              }}
                             />
+                            {duplicateEmployee && (
+                              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800 animate-in fade-in slide-in-from-top-1">
+                                <div className="font-semibold flex items-center gap-2">
+                                  <AlertCircle className="h-4 w-4" />
+                                  Employee Already Exists
+                                </div>
+                                <div className="mt-2 text-xs space-y-1 pl-6">
+                                  <p>Name: <span className="font-medium">{duplicateEmployee.name}</span></p>
+                                  <p>Department: <span className="font-medium">{duplicateEmployee.departmentName}</span></p>
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <div>
                             <Label htmlFor="name">Name</Label>
@@ -1385,6 +1448,17 @@ export default function AdminEmployees() {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
+                            setSelectedEmployee(employee);
+                            setIsHistoryOpen(true);
+                          }}
+                          title="View History"
+                        >
+                          <History className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
                             console.log("Selected employee for edit:", employee);
                             // Output the employee properties for debugging
                             console.log("Employee properties:", Object.keys(employee));
@@ -1450,6 +1524,14 @@ export default function AdminEmployees() {
           </CardContent>
         </Card>
       </div>
+      {selectedEmployee && (
+        <EmployeeHistoryModal
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          employeeId={selectedEmployee.id}
+          employeeName={selectedEmployee.name}
+        />
+      )}
     </div>
   );
 }

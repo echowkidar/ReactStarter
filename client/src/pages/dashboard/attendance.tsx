@@ -972,10 +972,114 @@ export default function Attendance() {
     },
   });
 
+  const [editingReportData, setEditingReportData] = useState<any>(null);
+  const [editingReportId, setEditingReportId] = useState<number | null>(null);
+
+  const editReport = useMutation({
+    mutationFn: async ({ reportId, data }: { reportId: number; data: any }) => {
+      console.log(`[editReport] Starting update for report ${reportId}`);
+
+      // 1. Update report metadata (month, year)
+      await apiRequest("PATCH", `/api/attendance/${reportId}`, {
+        month: parseInt(data.month),
+        year: parseInt(data.year),
+      });
+
+      // 2. Clear existing entries completely
+      console.log(`[editReport] Clearing entries for report ${reportId}`);
+      await apiRequest("POST", `/api/attendance/${reportId}/clear-entries`);
+
+      // 3. Re-create entries
+      console.log(`[editReport] Re-creating ${data.entries.length} entries`);
+      for (const entry of data.entries) {
+        if (!entry.periods || entry.periods.length === 0) continue;
+
+        const periods = entry.periods.map((period: any) => ({
+          fromDate: period.fromDate,
+          toDate: period.toDate,
+          days: period.days,
+          remarks: period.remarks || "",
+        }));
+
+        await apiRequest("POST", `/api/attendance/${reportId}/entries`, {
+          employeeId: entry.employeeId,
+          periods,
+        });
+      }
+      console.log(`[editReport] Update complete`);
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate the general list
+      queryClient.invalidateQueries({
+        queryKey: [`/api/departments/${department?.id}/attendance`],
+      });
+      // Invalidate the specific report entries (CRITICAL for View Details to show new data)
+      queryClient.invalidateQueries({
+        queryKey: [`/api/attendance/${variables.reportId}/entries`],
+      });
+      // Invalidate specific report details
+      queryClient.invalidateQueries({
+        queryKey: [`/api/attendance/${variables.reportId}`],
+      });
+
+      setIsCreatingReport(false);
+      setEditingReportData(null);
+      setEditingReportId(null);
+      toast({
+        title: "Success",
+        description: "Attendance report updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      console.error("[editReport] Error:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update attendance report",
+      });
+    },
+  });
+
+  const handleEditClick = async (report: AttendanceReport) => {
+    try {
+      // Fetch entries for this report
+      console.log("Fetching entries for report", report.id);
+      const res = await apiRequest("GET", `/api/attendance/${report.id}/entries`);
+      const entries = await res.json();
+      console.log("Entries fetched:", entries);
+
+      // Parse JSON periods if they are strings (schema says periods is text/JSON)
+      const parsedEntries = entries.map((entry: any) => ({
+        ...entry,
+        periods: typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods
+      }));
+
+      const formData = {
+        month: String(report.month),
+        year: String(report.year),
+        entries: parsedEntries.map((entry: any) => ({
+          employeeId: entry.employeeId,
+          periods: entry.periods
+        }))
+      };
+
+      setEditingReportId(report.id);
+      setEditingReportData(formData);
+      setIsCreatingReport(true);
+    } catch (error) {
+      console.error("Failed to fetch report details for editing", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load report details",
+      });
+    }
+  };
+
 
 
   // Calculate deadline countdown (reusing 'today' from above)
-  const deadlineDay = 20;
+  const deadlineDay = 15;
   const currentDay = today.getDate();
   const daysRemaining = deadlineDay - currentDay;
   const isPastDeadline = currentDay > deadlineDay;
@@ -1031,15 +1135,15 @@ export default function Attendance() {
                 {isPastDeadline ? (
                   <span className="font-medium">
                     {attendanceStatus?.permitted === true
-                      ? "⚠️ Deadline passed! Attendance report submission deadline was 20th. (Special permission granted)"
-                      : "⚠️ Deadline passed! Attendance report submission deadline was 20th."
+                      ? "⚠️ Deadline passed! Attendance report submission deadline was 15th. (Special permission granted)"
+                      : "⚠️ Deadline passed! Attendance report submission deadline was 15th."
                     }
                   </span>
                 ) : (
                   <span className="font-medium">
                     {daysRemaining === 0
                       ? "🔔 Today is the last day to submit attendance report!"
-                      : `⏳ ${daysRemaining} day${daysRemaining > 1 ? 's' : ''} remaining to submit attendance report (Deadline: 20th)`
+                      : `⏳ ${daysRemaining} day${daysRemaining > 1 ? 's' : ''} remaining to submit attendance report (Deadline: 15th)`
                     }
                   </span>
                 )}
@@ -1094,20 +1198,26 @@ export default function Attendance() {
 
               <DialogContent className="max-w-[95vw] w-[1400px] max-h-[85vh] overflow-hidden flex flex-col">
                 <DialogHeader className="flex-shrink-0">
-                  <DialogTitle className="text-xl font-semibold">Create Attendance Report</DialogTitle>
+                  <DialogTitle className="text-xl font-semibold">
+                    {editingReportId ? "Edit Attendance Report" : "Create Attendance Report"}
+                  </DialogTitle>
                 </DialogHeader>
                 <div className="overflow-auto flex-grow pr-1">
 
                   <AttendanceForm
                     onSubmit={async (data) => {
                       try {
-                        await createReport.mutateAsync(data);
-                        setIsCreatingReport(false);
+                        if (editingReportId) {
+                          await editReport.mutateAsync({ reportId: editingReportId, data });
+                        } else {
+                          await createReport.mutateAsync(data);
+                        }
                       } catch (error) {
-                        console.error("Failed to create report:", error);
+                        console.error("Failed to create/update report:", error);
                       }
                     }}
-                    isLoading={createReport.isPending}
+                    isLoading={createReport.isPending || editReport.isPending}
+                    initialData={editingReportData}
                   />
                 </div>
               </DialogContent>
@@ -1170,6 +1280,16 @@ export default function Attendance() {
                       <div className="flex items-center gap-2">
                         {report.status === "draft" && (
                           <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditClick(report)}
+                              title="Edit Report"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
+                              </svg>
+                            </Button>
                             <Dialog>
                               <DialogTrigger asChild>
                                 <Button variant="destructive" size="sm">

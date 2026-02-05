@@ -54,6 +54,7 @@ export interface IStorage {
   getEmployee(id: number): Promise<Employee | undefined>;
   getEmployeesByDepartment(departmentId: number): Promise<Employee[]>;
   getEmployeeCountsByDepartment(): Promise<Map<number, number>>;
+  getEmployeeByEpid(epid: string): Promise<Employee | undefined>; // NEW
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
   updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee>;
@@ -169,6 +170,12 @@ export class MemStorage implements IStorage {
   async getEmployeesByDepartment(departmentId: number): Promise<Employee[]> {
     return Array.from(this.employees.values()).filter(
       e => e.departmentId === departmentId
+    );
+  }
+
+  async getEmployeeByEpid(epid: string): Promise<Employee | undefined> {
+    return Array.from(this.employees.values()).find(
+      e => e.epid === epid
     );
   }
 

@@ -10,11 +10,12 @@ import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
 import EmployeeForm from "@/components/forms/employee-form";
-import { Plus, Eye, Pencil, Search, X } from "lucide-react";
+import { Plus, Eye, Pencil, Search, X, ArrowRightLeft, History } from "lucide-react";
 import { Employee } from "@shared/schema";
 import { format } from "date-fns";
 import { EditEmployeeForm } from "@/components/forms/edit-employee-form";
 import { Input } from "@/components/ui/input";
+import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 
 const EmployeeDetails = ({ employee }: { employee: Employee }) => {
   return (
@@ -80,10 +81,10 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
             <label className="text-sm font-medium text-muted-foreground">PAN Card</label>
             {employee.panCardUrl ? (
               <p>
-                <a 
-                  href={employee.panCardUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={employee.panCardUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-blue-600 hover:underline"
                 >
                   View Document
@@ -93,15 +94,15 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
               <p className="text-muted-foreground">Not available</p>
             )}
           </div>
-          
+
           <div>
             <label className="text-sm font-medium text-muted-foreground">Bank Account Proof</label>
             {employee.bankProofUrl ? (
               <p>
-                <a 
-                  href={employee.bankProofUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={employee.bankProofUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-blue-600 hover:underline"
                 >
                   View Document
@@ -111,15 +112,15 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
               <p className="text-muted-foreground">Not available</p>
             )}
           </div>
-          
+
           <div>
             <label className="text-sm font-medium text-muted-foreground">Adhar Number</label>
             {employee.aadharCardUrl ? (
               <p>
-                <a 
-                  href={employee.aadharCardUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={employee.aadharCardUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-blue-600 hover:underline"
                 >
                   View Document
@@ -129,15 +130,15 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
               <p className="text-muted-foreground">Not available</p>
             )}
           </div>
-          
+
           <div>
             <label className="text-sm font-medium text-muted-foreground">Office Memo</label>
             {employee.officeMemoUrl ? (
               <p>
-                <a 
-                  href={employee.officeMemoUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={employee.officeMemoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-blue-600 hover:underline"
                 >
                   View Document
@@ -147,15 +148,15 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
               <p className="text-muted-foreground">Not available</p>
             )}
           </div>
-          
+
           <div>
             <label className="text-sm font-medium text-muted-foreground">Joining Report</label>
             {employee.joiningReportUrl ? (
               <p>
-                <a 
-                  href={employee.joiningReportUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={employee.joiningReportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-blue-600 hover:underline"
                 >
                   View Document
@@ -172,10 +173,10 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
               <label className="text-sm font-medium text-muted-foreground">Term Extension Office Memo</label>
               {employee.termExtensionUrl ? (
                 <p>
-                  <a 
-                    href={employee.termExtensionUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
+                  <a
+                    href={employee.termExtensionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="text-blue-600 hover:underline"
                   >
                     View Document
@@ -198,6 +199,7 @@ export default function Employees() {
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
@@ -210,17 +212,17 @@ export default function Employees() {
   });
 
   // Sort employees by EPID in ascending order
-  const sortedEmployees = [...(employees || [])].sort((a, b) => 
+  const sortedEmployees = [...(employees || [])].sort((a, b) =>
     a.epid.localeCompare(b.epid, undefined, { numeric: true })
   );
 
   // Filter employees based on search query
-  const filteredEmployees = searchQuery.trim() 
-    ? sortedEmployees.filter(employee => 
-        employee.epid.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        employee.designation.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+  const filteredEmployees = searchQuery.trim()
+    ? sortedEmployees.filter(employee =>
+      employee.epid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      employee.designation.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : sortedEmployees;
 
   const addEmployee = useMutation({
@@ -229,17 +231,17 @@ export default function Employees() {
       try {
         const response = await apiRequest("GET", `/api/departments/${department?.id}/employees`);
         const existingEmployees = await response.json();
-        
+
         const existingEpid = existingEmployees.find((emp: Employee) => emp.epid === data.epid);
         if (existingEpid) {
           throw new Error("An employee with this EPID already exists. Please use a unique EPID.");
         }
-        
+
         const formData = new FormData();
-        
+
         // Log the form data for debugging
         console.log("Form data before processing:", data);
-        
+
         // Handle file uploads - improved method
         const fileFields = {
           panCardDoc: data.panCardDoc,
@@ -249,7 +251,7 @@ export default function Employees() {
           joiningReportDoc: data.joiningReportDoc,
           termExtensionDoc: data.termExtensionDoc,
         };
-        
+
         // Process each file field
         for (const [key, value] of Object.entries(fileFields)) {
           if (value && typeof value === 'string') {
@@ -261,7 +263,7 @@ export default function Employees() {
                 const blob = await response.blob();
                 const filename = `${key}-${Date.now()}.jpg`;
                 console.log(`Created blob for ${key}, size: ${blob.size}`);
-                
+
                 // Create a File object from the blob
                 const file = new File([blob], filename, { type: blob.type });
                 formData.append(key, file);
@@ -273,7 +275,7 @@ export default function Employees() {
                 const blob = await response.blob();
                 const filename = `${key}-${Date.now()}.jpg`;
                 console.log(`Created blob for ${key}, size: ${blob.size}, type: ${blob.type}`);
-                
+
                 // Create a File object from the blob
                 const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
                 formData.append(key, file);
@@ -283,7 +285,7 @@ export default function Employees() {
             }
           }
         }
-        
+
         // Add all other form fields
         Object.entries(data).forEach(([key, value]) => {
           if (key.endsWith("Doc")) return; // Skip document fields, already handled
@@ -291,13 +293,13 @@ export default function Employees() {
             formData.append(key, String(value));
           }
         });
-        
+
         // Log FormData entries for debugging
         console.log("FormData contents:");
         Array.from(formData.entries()).forEach(pair => {
           console.log(`${pair[0]}: ${pair[1] instanceof File ? `File: ${pair[1].name}, ${pair[1].size} bytes` : pair[1]}`);
         });
-        
+
         // Make the API request with the FormData
         const result = await apiRequest("POST", `/api/departments/${department?.id}/employees`, formData, false);
         return result.json();
@@ -410,22 +412,30 @@ export default function Employees() {
                     <TableCell>{employee.designation}</TableCell>
                     <TableCell>{employee.employmentStatus}</TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        employee.isActive === "active" 
-                          ? "bg-green-100 text-green-800" 
+                      <div className="flex items-center gap-1">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee.isActive === "active"
+                          ? "bg-green-100 text-green-800"
                           : "bg-red-100 text-red-800"
-                      }`}>
-                        {employee.isActive === "active" ? "Active" : "Disabled"}
-                      </span>
+                          }`}>
+                          {employee.isActive === "active" ? "Active" : "Disabled"}
+                        </span>
+                        {/* Transfer status badge */}
+                        {employee.transferStatus === "pending" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800" title="Transfer Pending">
+                            <ArrowRightLeft className="h-3 w-3" />
+                            Transfer
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {(employee.employmentStatus === "Probation" ||
                         employee.employmentStatus === "Temporary") &&
                         employee.termExpiry ? (
-                          format(new Date(employee.termExpiry), "dd MMM yyyy")
-                        ) : (
-                          "-"
-                        )}
+                        format(new Date(employee.termExpiry), "dd MMM yyyy")
+                      ) : (
+                        "-"
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -446,6 +456,19 @@ export default function Employees() {
                             {selectedEmployee && <EmployeeDetails employee={selectedEmployee} />}
                           </DialogContent>
                         </Dialog>
+
+                        {/* History Button */}
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedEmployee(employee);
+                            setIsHistoryOpen(true);
+                          }}
+                          title="View History"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
 
                         {/* Edit Button */}
                         <Button
@@ -475,18 +498,26 @@ export default function Employees() {
 
           {/* Edit Employee Dialog */}
           {selectedEmployee && (
-            <EditEmployeeForm
-              employee={selectedEmployee}
-              isOpen={isEditDialogOpen}
-              onClose={() => {
-                setIsEditDialogOpen(false);
-                setSelectedEmployee(null);
-              }}
-              onSuccess={() => {
-                queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
-                setIsEditDialogOpen(false);
-              }}
-            />
+            <>
+              <EditEmployeeForm
+                employee={selectedEmployee}
+                isOpen={isEditDialogOpen}
+                onClose={() => {
+                  setIsEditDialogOpen(false);
+                  setSelectedEmployee(null);
+                }}
+                onSuccess={() => {
+                  queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
+                  setIsEditDialogOpen(false);
+                }}
+              />
+              <EmployeeHistoryModal
+                isOpen={isHistoryOpen}
+                onClose={() => setIsHistoryOpen(false)}
+                employeeId={selectedEmployee.id}
+                employeeName={selectedEmployee.name}
+              />
+            </>
           )}
         </main>
       </div>

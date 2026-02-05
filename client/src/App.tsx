@@ -22,7 +22,9 @@ import AttendanceReports from "@/pages/admin/attendance-reports";
 import AdminDocuments from "@/pages/admin/documents";
 import AdminTickets from "@/pages/admin/tickets";
 import AdminNotices from "@/pages/admin/notices";
+import TransferRequests from "@/pages/admin/transfer-requests";
 import Tickets from "@/pages/dashboard/tickets";
+import GlobalSearch from "@/pages/dashboard/global-search";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import AdminForgotPassword from "@/pages/admin/forgot-password";
@@ -41,6 +43,7 @@ function AppRouter() {
       <ProtectedRoute path="/dashboard/documents" component={Documents} />
       <ProtectedRoute path="/dashboard/reports/:id" component={ReportDetails} />
       <ProtectedRoute path="/dashboard/help" component={Help} />
+      <ProtectedRoute path="/dashboard/global-search" component={GlobalSearch} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/forgot-password" component={AdminForgotPassword} />
       <Route path="/admin/reset-password" component={AdminResetPassword} />
@@ -52,6 +55,7 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/documents" component={AdminDocuments} />
       <ProtectedAdminRoute path="/admin/tickets" component={AdminTickets} />
       <ProtectedAdminRoute path="/admin/notices" component={AdminNotices} />
+      <ProtectedAdminRoute path="/admin/transfer-requests" component={TransferRequests} />
       <ProtectedRoute path="/dashboard/tickets" component={Tickets} />
       <Route component={NotFound} />
     </Switch>

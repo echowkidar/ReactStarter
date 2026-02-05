@@ -39,6 +39,15 @@ export const employees = pgTable("employees", {
   officeMemoUrl: text("office_memo_url"),
   joiningReportUrl: text("joining_report_url"),
   termExtensionUrl: text("term_extension_url"),
+  // Disable reason fields
+  disableReason: text("disable_reason"),         // retire, vrs, resign, term_complete, terminate
+  disableWefDate: date("disable_wef_date"),      // With Effect From date
+  disabledAt: timestamp("disabled_at"),          // When was disabled
+  disabledBy: text("disabled_by"),               // Who disabled (department email/name)
+  // Remarks field
+  remarks: text("remarks"),                      // General remarks about employee
+  // Transfer status
+  transferStatus: text("transfer_status"),       // pending, null
 });
 
 export const departmentNames = pgTable("department_names", {
@@ -82,6 +91,7 @@ export const insertDepartmentSchema = createInsertSchema(departments).omit({ id:
 export const insertEmployeeSchema = createInsertSchema(employees)
   .omit({ id: true })
   .extend({
+    epid: z.string().length(5, "EPID must be exactly 5 digits").regex(/^\d+$/, "EPID must only contain numbers"),
     joiningDate: z.union([
       z.string(),
       z.date().transform(date => date.toISOString().split('T')[0])
@@ -307,3 +317,50 @@ export const insertVisitorSchema = createInsertSchema(visitors).omit({
 
 export type Visitor = typeof visitors.$inferSelect;
 export type InsertVisitor = z.infer<typeof insertVisitorSchema>;
+
+// Transfer Requests - for inter-department employee transfers
+export const transferRequests = pgTable("transfer_requests", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull(),
+  fromDepartmentId: integer("from_department_id").notNull(),
+  toDepartmentId: integer("to_department_id").notNull(),
+  orderNumber: text("order_number"),
+  orderDate: date("order_date"),
+  relievingDate: date("relieving_date"),
+  remarks: text("remarks").notNull(),
+  hodSignature: text("hod_signature").notNull(),       // "HOD, Department Name" (not editable)
+  status: text("status").notNull().default("pending"), // pending, accepted, rejected
+  rejectionRemarks: text("rejection_remarks"),
+  rejectedBy: text("rejected_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const insertTransferRequestSchema = createInsertSchema(transferRequests).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TransferRequest = typeof transferRequests.$inferSelect;
+export type InsertTransferRequest = z.infer<typeof insertTransferRequestSchema>;
+
+// Employee History - Audit trail for employee changes
+export const employeeHistory = pgTable("employee_history", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull(),
+  action: text("action").notNull(),              // update, document_update, document_delete, transfer, disable
+  field: text("field").notNull(),                // Which field was changed
+  previousValue: text("previous_value"),         // Previous value (stored as text)
+  changedBy: text("changed_by").notNull(),       // Who made the change (email/name)
+  changedByRole: text("changed_by_role").notNull(), // department, salary_admin
+  departmentId: integer("department_id"),        // Department that made the change
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export const insertEmployeeHistorySchema = createInsertSchema(employeeHistory).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type EmployeeHistory = typeof employeeHistory.$inferSelect;
+export type InsertEmployeeHistory = z.infer<typeof insertEmployeeHistorySchema>;

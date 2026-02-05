@@ -210,6 +210,18 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Clear entries route (Placed early to avoid shadowing)
+  app.post("/api/attendance/:reportId/clear-entries", async (req, res) => {
+    console.log(`[POST] Request to clear entries for report ${req.params.reportId}`);
+    try {
+      await storage.deleteEntriesForReport(Number(req.params.reportId));
+      res.json({ message: "Entries cleared successfully" });
+    } catch (error) {
+      console.error("Error clearing entries:", error);
+      res.status(500).json({ message: "Failed to clear entries" });
+    }
+  });
+
   // ============ Active Users Tracking Endpoints ============
   // Heartbeat - clients call this every 30 seconds to stay active
   app.post("/api/heartbeat", async (req, res) => {
@@ -805,6 +817,34 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Check if EPID exists
+  app.get("/api/employees/check-epid", async (req, res) => {
+    try {
+      const epid = req.query.epid as string;
+      if (!epid) {
+        return res.json({ exists: false });
+      }
+
+      const employee = await storage.getEmployeeByEpid(epid);
+
+      if (employee) {
+        const department = await storage.getDepartment(employee.departmentId);
+        return res.json({
+          exists: true,
+          employee: {
+            name: employee.name,
+            departmentName: department?.name || "Unknown Department"
+          }
+        });
+      }
+
+      return res.json({ exists: false });
+    } catch (error) {
+      console.error("Error checking EPID:", error);
+      res.status(500).json({ message: "Failed to check EPID" });
+    }
+  });
+
   // Get employees for a department
   app.get("/api/departments/:departmentId/employees", async (req, res) => {
     try {
@@ -905,6 +945,14 @@ export async function registerRoutes(app: Express) {
   // Update employee (admin)
   app.patch("/api/employees/:id", upload.fields(documentFields), async (req, res) => {
     try {
+      const employeeId = Number(req.params.id);
+
+      // Get current employee state for audit logging
+      const currentEmployee = await storage.getEmployee(employeeId);
+      if (!currentEmployee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
       // Handle uploaded files
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const updates = {
@@ -918,7 +966,76 @@ export async function registerRoutes(app: Express) {
         ...(files?.termExtensionDoc && { termExtensionUrl: `/uploads/${files.termExtensionDoc[0].filename}` })
       };
 
-      const employee = await storage.updateEmployee(Number(req.params.id), updates);
+      const employee = await storage.updateEmployee(employeeId, updates);
+
+      // Log changes
+      // Attempt to get user info, default to generic admin if not present
+      // Note: req.user is usually populated by auth middleware
+      let user = (req as any).user;
+      const session = (req as any).session;
+
+      // Try to identify admin from x-session-token header (sent by client)
+      const sessionToken = req.headers['x-session-token'];
+
+      console.log('--- AUTH DEBUG ---');
+      console.log('Header x-session-token:', sessionToken ? 'Present' : 'Missing');
+      if (typeof sessionToken === 'string') {
+        console.log('Token Length:', sessionToken.length);
+      }
+
+      if (!user && typeof sessionToken === 'string' && sessionToken) {
+        try {
+          const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
+          console.log('Decoded Token Part:', decoded.split(':')[0]);
+
+          // Format is email:password (simple basic auth style used in this app)
+          const parts = decoded.split(':');
+          if (parts.length >= 2) {
+            const email = parts[0];
+            const password = parts.slice(1).join(':'); // Handle passwords with colons
+
+            const admin = await storage.getAdminByEmail(email);
+            if (admin) {
+              console.log('Admin Found:', admin.email, 'Role:', admin.role);
+              if (admin.password === password) {
+                user = {
+                  email: admin.email,
+                  role: admin.role, // Should be 'super_admin' or 'salary_admin'
+                  name: admin.name
+                };
+                console.log('Admin Authenticated Successfully. Computed Role:', user.role);
+              } else {
+                console.log('Password Mismatch');
+              }
+            } else {
+              console.log('Admin Not Found in DB');
+            }
+          }
+        } catch (e) {
+          console.error('Token parsing failed', e);
+        }
+      }
+      console.log('Final Computed User Role:', user?.role);
+      console.log('------------------');
+
+      // Log changes only if NOT Super Admin (as requested)
+      // Check for both 'super' and 'super_admin' (correct DB value)
+      const role = user?.role || session?.admin?.role;
+
+      if (role !== 'super' && role !== 'super_admin') {
+        const changedBy = user?.email || session?.admin?.email || 'salary.fo@amu.ac.in';
+        const changedByRole = role || 'salary_admin';
+
+        await storage.logEmployeeChanges(
+          employeeId,
+          currentEmployee,
+          updates,
+          changedBy,
+          changedByRole,
+          undefined // No department ID for admin updates
+        );
+      }
+
       res.json(employee);
     } catch (error) {
       console.error('Error updating employee:', error);
@@ -937,6 +1054,9 @@ export async function registerRoutes(app: Express) {
       if (!employee || employee.departmentId !== departmentId) {
         return res.status(404).json({ message: "Employee not found in department" });
       }
+
+      // Get department info for audit logging
+      const department = await storage.getDepartment(departmentId);
 
       console.log(`Department employee update - request received for employee ${employeeId} in department ${departmentId}`);
 
@@ -958,7 +1078,7 @@ export async function registerRoutes(app: Express) {
 
       // Handle uploaded files exactly like admin route
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-      const updates = {
+      const updates: any = {
         ...req.body,
         // Only update URLs if new files are uploaded (same as admin side)
         ...(files?.panCardDoc && { panCardUrl: `/uploads/${files.panCardDoc[0].filename}` }),
@@ -969,7 +1089,31 @@ export async function registerRoutes(app: Express) {
         ...(files?.termExtensionDoc && { termExtensionUrl: `/uploads/${files.termExtensionDoc[0].filename}` })
       };
 
+      // Handle disable with reason and WEF date
+      if (updates.isActive === 'disabled' && employee.isActive !== 'disabled') {
+        // Validate disable reason and WEF date
+        if (!updates.disableReason) {
+          return res.status(400).json({ message: "Disable reason is required when disabling an employee" });
+        }
+        if (!updates.disableWefDate) {
+          return res.status(400).json({ message: "With Effect From (WEF) date is required when disabling an employee" });
+        }
+        // Add disable metadata
+        updates.disabledAt = new Date();
+        updates.disabledBy = department?.email || 'unknown';
+      }
+
       console.log("Department employee update - processed updates:", JSON.stringify(updates, null, 2));
+
+      // Log changes before update (for audit trail)
+      await storage.logEmployeeChanges(
+        employeeId,
+        employee,
+        updates,
+        department?.email || 'unknown',
+        'department',
+        departmentId
+      );
 
       const updatedEmployee = await storage.updateEmployee(employeeId, updates);
       console.log("Successfully updated employee:", JSON.stringify(updatedEmployee, null, 2));
@@ -1727,6 +1871,8 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+
+
   // Admin routes
   app.get("/api/admin/attendance", async (req, res) => {
     try {
@@ -2450,7 +2596,7 @@ export async function registerRoutes(app: Express) {
 
       // Calculate deadline info
       const now = new Date();
-      const deadlineDay = 20;
+      const deadlineDay = 15;
       const currentDay = now.getDate();
       const daysRemaining = deadlineDay - currentDay;
       const isPastDeadline = currentDay > deadlineDay;
@@ -2777,6 +2923,548 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting notice:", error);
       res.status(500).json({ message: "Failed to delete notice" });
+    }
+  });
+
+  // ========== TRANSFER REQUEST ENDPOINTS ==========
+
+  // Create transfer request
+  app.post("/api/departments/:departmentId/employees/:employeeId/transfer", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const employeeId = Number(req.params.employeeId);
+      const { toDepartmentId, orderNumber, orderDate, relievingDate, remarks } = req.body;
+
+      // Validate required fields
+      if (!toDepartmentId || !orderNumber || !orderDate || !relievingDate) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Verify employee belongs to department
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee || employee.departmentId !== departmentId) {
+        return res.status(404).json({ message: "Employee not found in department" });
+      }
+
+      // Check if employee already has pending transfer
+      const existingRequest = await storage.getTransferRequestByEmployee(employeeId);
+      if (existingRequest) {
+        return res.status(400).json({ message: "Employee already has a pending transfer request" });
+      }
+
+      // Get department info for HOD signature
+      const fromDepartment = await storage.getDepartment(departmentId);
+      const hodSignature = `HOD, ${fromDepartment?.name || 'Unknown Department'}`;
+
+      // Create default remarks if not provided
+      const defaultRemarks = `He/She was present till his/her relieving i.e. ${relievingDate}`;
+      const fullRemarks = remarks ? `${remarks}\n\n${defaultRemarks}` : defaultRemarks;
+
+      // Create transfer request
+      const transferRequest = await storage.createTransferRequest({
+        employeeId,
+        fromDepartmentId: departmentId,
+        toDepartmentId: Number(toDepartmentId),
+        orderNumber,
+        orderDate,
+        relievingDate,
+        remarks: fullRemarks,
+        hodSignature,
+        status: 'pending'
+      });
+
+      // Update employee transfer status
+      await storage.updateEmployee(employeeId, { transferStatus: 'pending' });
+
+      // Get target department name for logging
+      const toDepartment = await storage.getDepartment(Number(toDepartmentId));
+
+      // Log the transfer request in history
+      await storage.logEmployeeChange(
+        employeeId,
+        'transfer',
+        'transferStatus',
+        `Transfer initiated: ${fromDepartment?.name || 'Unknown'} → ${toDepartment?.name || 'Unknown'}`,
+        fromDepartment?.email || 'unknown',
+        'department',
+        departmentId
+      );
+
+      res.status(201).json(transferRequest);
+    } catch (error) {
+      console.error("Error creating transfer request:", error);
+      res.status(500).json({ message: "Failed to create transfer request" });
+    }
+  });
+
+  // Get pending transfer request count for a department (for dashboard card)
+  app.get("/api/departments/:departmentId/transfer-requests/count", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const count = await storage.getPendingTransferCount(departmentId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error getting transfer count:", error);
+      res.status(500).json({ message: "Failed to get transfer count" });
+    }
+  });
+
+  // Get incoming transfer requests for a department
+  app.get("/api/departments/:departmentId/transfer-requests/incoming", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const requests = await storage.getTransferRequestsForDepartment(departmentId, 'incoming');
+
+      // Filter for only pending requests
+      const pendingRequests = requests.filter(req => req.status === 'pending');
+
+      // Enrich with employee and department names
+      const enrichedRequests = await Promise.all(pendingRequests.map(async (req) => {
+        const employee = await storage.getEmployee(req.employeeId);
+        const fromDept = await storage.getDepartment(req.fromDepartmentId);
+        const toDept = await storage.getDepartment(req.toDepartmentId);
+        return {
+          ...req,
+          employeeName: employee?.name || 'Unknown',
+          employeeEpid: employee?.epid || 'Unknown',
+          fromDepartmentName: fromDept?.name || 'Unknown',
+          toDepartmentName: toDept?.name || 'Unknown'
+        };
+      }));
+
+      res.json(enrichedRequests);
+    } catch (error) {
+      console.error("Error fetching incoming transfer requests:", error);
+      res.status(500).json({ message: "Failed to fetch transfer requests" });
+    }
+  });
+
+  // Get outgoing transfer requests for a department
+  app.get("/api/departments/:departmentId/transfer-requests/outgoing", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const requests = await storage.getTransferRequestsForDepartment(departmentId, 'outgoing');
+
+      // Enrich with employee and department names
+      const enrichedRequests = await Promise.all(requests.map(async (req) => {
+        const employee = await storage.getEmployee(req.employeeId);
+        const fromDept = await storage.getDepartment(req.fromDepartmentId);
+        const toDept = await storage.getDepartment(req.toDepartmentId);
+        return {
+          ...req,
+          employeeName: employee?.name || 'Unknown',
+          employeeEpid: employee?.epid || 'Unknown',
+          fromDepartmentName: fromDept?.name || 'Unknown',
+          toDepartmentName: toDept?.name || 'Unknown'
+        };
+      }));
+
+      res.json(enrichedRequests);
+    } catch (error) {
+      console.error("Error fetching outgoing transfer requests:", error);
+      res.status(500).json({ message: "Failed to fetch transfer requests" });
+    }
+  });
+
+  // Accept transfer request
+  app.post("/api/departments/:departmentId/transfer-requests/:requestId/accept", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const requestId = Number(req.params.requestId);
+
+      // Get transfer request
+      const request = await storage.getTransferRequest(requestId);
+      if (!request || request.toDepartmentId !== departmentId) {
+        return res.status(404).json({ message: "Transfer request not found" });
+      }
+
+      if (request.status !== 'pending') {
+        return res.status(400).json({ message: "Transfer request is no longer pending" });
+      }
+
+      // Get department info
+      const toDepartment = await storage.getDepartment(departmentId);
+
+      // Update employee's department
+      await storage.updateEmployee(request.employeeId, {
+        departmentId: departmentId,
+        transferStatus: null
+      });
+
+      // Update transfer request status
+      await storage.updateTransferRequest(requestId, {
+        status: 'accepted',
+        processedAt: new Date()
+      });
+
+      // Get from department info for logging
+      const fromDepartment = await storage.getDepartment(request.fromDepartmentId);
+
+      // Log in history
+      await storage.logEmployeeChange(
+        request.employeeId,
+        'transfer',
+        'departmentId',
+        `Transfer completed: ${fromDepartment?.name || 'Unknown'} → ${toDepartment?.name || 'Unknown'}`,
+        toDepartment?.email || 'unknown',
+        'department',
+        departmentId
+      );
+
+      res.json({ message: "Transfer accepted successfully" });
+    } catch (error) {
+      console.error("Error accepting transfer:", error);
+      res.status(500).json({ message: "Failed to accept transfer" });
+    }
+  });
+
+  // Get outbound transfer requests (initiated by this department OR request releases from others)
+  app.get("/api/departments/:departmentId/transfer-requests/outgoing", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const requests = await storage.getTransferRequestsForDepartment(departmentId, 'outgoing');
+
+      // Enrich with employee and department names
+      const enrichedRequests = await Promise.all(requests.map(async (req) => {
+        const employee = await storage.getEmployee(req.employeeId);
+        const toDept = await storage.getDepartment(req.toDepartmentId);
+        return {
+          ...req,
+          employeeName: employee?.name || 'Unknown',
+          employeeEpid: employee?.epid || 'Unknown',
+          toDepartmentName: toDept?.name || 'Unknown' // For outgoing, we want to know where it's going
+        };
+      }));
+
+      res.json(enrichedRequests);
+    } catch (error) {
+      console.error("Error fetching outgoing transfer requests:", error);
+      res.status(500).json({ message: "Failed to fetch outgoing requests" });
+    }
+  });
+
+  // Reject transfer request
+  app.post("/api/departments/:departmentId/transfer-requests/:requestId/reject", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const requestId = Number(req.params.requestId);
+      const { rejectionRemarks } = req.body;
+
+      if (!rejectionRemarks) {
+        return res.status(400).json({ message: "Rejection remarks are required" });
+      }
+
+      // Get transfer request
+      const request = await storage.getTransferRequest(requestId);
+
+      // Authorize: either receiver (standard) or sender (release request) can reject
+      if (!request || (request.toDepartmentId !== departmentId && request.fromDepartmentId !== departmentId)) {
+        return res.status(404).json({ message: "Transfer request not found or unauthorized" });
+      }
+
+      if (request.status !== 'pending' && request.status !== 'release_requested') {
+        return res.status(400).json({ message: "Transfer request is no longer pending" });
+      }
+
+      // Get department info for rejection signature
+      const toDepartment = await storage.getDepartment(departmentId);
+      const rejectedBy = `HOD, ${toDepartment?.name || 'Unknown Department'}`;
+
+      // Update employee transfer status (allow retry)
+      await storage.updateEmployee(request.employeeId, {
+        transferStatus: null
+      });
+
+      // Update transfer request status
+      await storage.updateTransferRequest(requestId, {
+        status: 'rejected',
+        rejectionRemarks: `${rejectionRemarks}\n\n${rejectedBy}`,
+        rejectedBy,
+        processedAt: new Date()
+      });
+
+      // Log the rejection in history
+      await storage.logEmployeeChange(
+        request.employeeId,
+        'transfer',
+        'transferStatus',
+        `Transfer rejected: ${toDepartment?.name || 'Unknown'} (Reason: ${rejectionRemarks})`,
+        toDepartment?.email || 'unknown',
+        'department',
+        departmentId
+      );
+
+      res.json({ message: "Transfer rejected successfully" });
+    } catch (error) {
+      console.error("Error rejecting transfer:", error);
+      res.status(500).json({ message: "Failed to reject transfer" });
+    }
+  });
+
+  // Get employee's pending transfer request (for edit form status display)
+  app.get("/api/employees/:employeeId/transfer-request", async (req, res) => {
+    try {
+      const employeeId = Number(req.params.employeeId);
+      const request = await storage.getTransferRequestByEmployee(employeeId);
+
+      if (request) {
+        const toDept = await storage.getDepartment(request.toDepartmentId);
+        res.json({
+          ...request,
+          toDepartmentName: toDept?.name || 'Unknown'
+        });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      console.error("Error fetching employee transfer request:", error);
+      res.status(500).json({ message: "Failed to fetch transfer request" });
+    }
+  });
+
+  // Get employee's latest REJECTED transfer request (for displaying logic)
+  app.get("/api/employees/:employeeId/latest-rejected-transfer", async (req, res) => {
+    try {
+      const employeeId = Number(req.params.employeeId);
+      // Fetch the absolute LAST request (regardless of status)
+      const request = await storage.getLastTransferRequest(employeeId);
+
+      // Only return it if it is REJECTED. 
+      // If the latest one is Pending or Accepted, we should NOT show the previous rejection.
+      if (request && request.status === 'rejected') {
+        const toDept = await storage.getDepartment(request.toDepartmentId);
+        res.json({
+          ...request,
+          toDepartmentName: toDept?.name || 'Unknown'
+        });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      console.error("Error fetching rejected transfer request:", error);
+      res.status(500).json({ message: "Failed to fetch rejected request" });
+    }
+  });
+
+  // ========== ADMIN TRANSFER ROUTES ==========
+
+  // Get global transfer stats (for dashboard card)
+  app.get("/api/admin/transfer-stats", async (req, res) => {
+    try {
+      const stats = await storage.getGlobalTransferStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching transfer stats:", error);
+      res.status(500).json({ message: "Failed to fetch transfer stats" });
+    }
+  });
+
+  // Get all transfer requests (for admin detail view)
+  app.get("/api/admin/transfer-requests", async (req, res) => {
+    try {
+      const requests = await storage.getAllTransferRequests();
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching all transfer requests:", error);
+      res.status(500).json({ message: "Failed to fetch transfer requests" });
+    }
+  });
+
+  // ========== GLOBAL SEARCH & RELEASE REQUEST ==========
+
+  // Global Search
+  app.get("/api/employees/global-search", async (req: any, res) => {
+    try {
+      const query = req.query.query as string;
+      const deptId = req.session?.department?.id; // Assuming session is populated
+
+      if (!query || query.length < 2) {
+        return res.json([]);
+      }
+
+      // If no session department (e.g. testing), exclude 0 or handle error
+      const excludeDeptId = deptId || 0;
+
+      const results = await storage.searchEmployeesGlobal(query, excludeDeptId);
+      res.json(results);
+    } catch (error) {
+      console.error("Error in global search:", error);
+      res.status(500).json({ message: "Search failed" });
+    }
+  });
+
+  // Request Release (Pull Request)
+  app.post("/api/departments/:departmentId/transfer-requests/request-release", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId); // Requester (To Dept)
+      const { targetEmployeeId, remarks } = req.body;
+
+      if (!targetEmployeeId) {
+        return res.status(400).json({ message: "Target employee ID required" });
+      }
+
+      const employee = await storage.getEmployee(targetEmployeeId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      if (employee.departmentId === departmentId) {
+        return res.status(400).json({ message: "Employee is already in your department" });
+      }
+
+      const fromDepartment = await storage.getDepartment(employee.departmentId);
+      const toDepartment = await storage.getDepartment(departmentId);
+
+      // Check if Inactive (Disabled) -> Auto Transfer
+      if (employee.isActive === 'disabled') {
+        // Auto Transfer Logic
+
+        // Update Employee
+        await storage.updateEmployee(employee.id, {
+          departmentId: departmentId,
+          transferStatus: null // Clear any status
+        });
+
+        // Create Accepted Request Record
+        const transferRequest = await storage.createTransferRequest({
+          employeeId: employee.id,
+          fromDepartmentId: employee.departmentId,
+          toDepartmentId: departmentId,
+          orderNumber: "AUTO-RELEASE",
+          orderDate: new Date().toISOString(),
+          relievingDate: new Date().toISOString(),
+          remarks: `Auto-release (Inactive Employee) requested by ${toDepartment?.name}. \nRemarks: ${remarks || 'None'}`,
+          hodSignature: "System Auto-Process",
+          status: 'accepted',
+          processedAt: new Date()
+        });
+
+        // Log History
+        await storage.logEmployeeChange(
+          employee.id,
+          'transfer',
+          'departmentId',
+          `Auto-Transfer (Inactive Pull): ${fromDepartment?.name} → ${toDepartment?.name}`,
+          toDepartment?.email || 'unknown',
+          'department',
+          departmentId
+        );
+
+        return res.json({ message: "Employee auto-transferred successfully (Inactive)", transferred: true });
+
+      } else {
+        // Active Employee -> Create Release Request (pending approval from sender)
+
+        // Check for existing pending requests
+        const existingRequest = await storage.getTransferRequestByEmployee(employee.id);
+        if (existingRequest) {
+          return res.status(400).json({ message: "Employee already has a pending transfer/release request" });
+        }
+
+        const transferRequest = await storage.createTransferRequest({
+          employeeId: employee.id,
+          fromDepartmentId: employee.departmentId, // Current Owner
+          toDepartmentId: departmentId,            // Requester
+          orderNumber: null, // Unknown yet
+          orderDate: null,
+          relievingDate: null,
+          remarks: `Release Requested by ${toDepartment?.name}. \nRemarks: ${remarks || 'None'}`,
+          hodSignature: `Pending Approval from ${fromDepartment?.name}`,
+          status: 'release_requested', // NEW STATUS
+        });
+
+        await storage.updateEmployee(employee.id, {
+          transferStatus: 'pending' // UI shows pending icon
+        });
+
+        // Log Request
+        await storage.logEmployeeChange(
+          employee.id,
+          'transfer_request',
+          'transferStatus',
+          `Release Requested by ${toDepartment?.name}`,
+          toDepartment?.email || 'unknown',
+          'department',
+          departmentId
+        );
+
+        return res.json({ message: "Release request sent to current department", transferred: false });
+      }
+
+    } catch (error) {
+      console.error("Error requesting release:", error);
+      res.status(500).json({ message: "Failed to request release" });
+    }
+  });
+
+  // Approve Release (Sender approves the release request)
+  app.post("/api/departments/:departmentId/transfer-requests/:requestId/approve-release", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId); // Existing Owner (From Dept)
+      const requestId = Number(req.params.requestId);
+      const { orderNumber, orderDate, relievingDate, remarks } = req.body;
+
+      // REMOVED required check for order details as per user request
+      // if (!orderNumber || !orderDate || !relievingDate) { ... }
+
+      const request = await storage.getTransferRequest(requestId);
+      if (!request || request.fromDepartmentId !== departmentId) {
+        return res.status(404).json({ message: "Release request not found or unauthorized" });
+      }
+
+      if (request.status !== 'release_requested') {
+        return res.status(400).json({ message: "Request is not in 'release_requested' state" });
+      }
+
+      // Execute Transfer
+      const toDepartment = await storage.getDepartment(request.toDepartmentId);
+
+      // Update Employee
+      await storage.updateEmployee(request.employeeId, {
+        departmentId: request.toDepartmentId,
+        transferStatus: null
+      });
+
+      // Update Request
+      await storage.updateTransferRequest(requestId, {
+        status: 'accepted',
+        orderNumber,
+        orderDate, // Assuming string ISO
+        relievingDate,
+        remarks: `${request.remarks}\n\nApproved Remarks: ${remarks || ''}`,
+        processedAt: new Date()
+      });
+
+      // Log
+      const fromDepartment = await storage.getDepartment(departmentId);
+
+      await storage.logEmployeeChange(
+        request.employeeId,
+        'transfer',
+        'departmentId',
+        `Release Approved: ${fromDepartment?.name} → ${toDepartment?.name}`,
+        fromDepartment?.email || 'unknown',
+        'department',
+        departmentId
+      );
+
+      res.json({ message: "Release request approved and transfer completed" });
+
+    } catch (error) {
+      console.error("Error approving release:", error);
+      res.status(500).json({ message: "Failed to approve release" });
+    }
+  });
+
+  // Get employee history (for admin or department)
+  app.get("/api/employees/:employeeId/history", async (req, res) => {
+    try {
+      const employeeId = Number(req.params.employeeId);
+      const history = await storage.getEmployeeHistory(employeeId);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching employee history:", error);
+      res.status(500).json({ message: "Failed to fetch employee history" });
     }
   });
 

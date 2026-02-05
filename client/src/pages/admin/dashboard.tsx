@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -151,6 +151,20 @@ export default function AdminDashboard() {
       return response.json();
     },
     refetchInterval: 60000, // Refresh every minute
+  });
+
+  // Fetch transfer stats
+  const { data: transferStats = { pendingTransfer: 0, pendingRelease: 0, resolved: 0 } } = useQuery<{
+    pendingTransfer: number;
+    pendingRelease: number;
+    resolved: number;
+  }>({
+    queryKey: ["/api/admin/transfer-stats"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/transfer-stats");
+      return response.json();
+    },
+    refetchInterval: 30000,
   });
 
   // Calculate status for UI
@@ -713,7 +727,9 @@ export default function AdminDashboard() {
 
         {/* Dashboard Stats - 2x2 Grid Layout */}
         {/* Row 1: Attendance Report Status + Status Breakdown */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        {/* Dashboard Stats - 3x1 Grid Layout (Modified) */}
+        {/* Row 1: Attendance Report Status + Status Breakdown + Transfer Requests */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           <div className="bg-white p-4 rounded-lg border shadow-sm">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Attendance Report Status (Current Month)</h3>
             <div className="flex items-center gap-6">
@@ -748,6 +764,34 @@ export default function AdminDashboard() {
               <div className="p-2 bg-red-50 rounded border border-red-100">
                 <p className="text-xl font-bold text-red-700">{stats.breakdown.cancelled}</p>
                 <p className="text-[10px] uppercase tracking-wider text-red-600 font-semibold">Cancelled</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Transfer Requests Card - Moved to top row */}
+          <div className="bg-white p-4 rounded-lg border shadow-sm border-l-4 border-l-orange-500">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Transfer Requests</h3>
+                <p className="text-xs text-muted-foreground">Manage employee transfers</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/transfer-requests")} className="h-6 w-6 p-0 rounded-full">
+                <ArrowRightLeft className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              <div className="text-center p-2 bg-orange-50 rounded border border-orange-100">
+                <p className="text-xl font-bold text-orange-700">{transferStats.pendingTransfer}</p>
+                <p className="text-[9px] uppercase tracking-wider text-orange-600 font-semibold">Transfers</p>
+              </div>
+              <div className="text-center p-2 bg-indigo-50 rounded border border-indigo-100">
+                <p className="text-xl font-bold text-indigo-700">{transferStats.pendingRelease}</p>
+                <p className="text-[9px] uppercase tracking-wider text-indigo-600 font-semibold">Releases</p>
+              </div>
+              <div className="text-center p-2 bg-green-50 rounded border border-green-100">
+                <p className="text-xl font-bold text-green-700">{transferStats.resolved}</p>
+                <p className="text-[9px] uppercase tracking-wider text-green-600 font-semibold">Done (Mo)</p>
               </div>
             </div>
           </div>
@@ -1133,8 +1177,8 @@ export default function AdminDashboard() {
                           Accept Cancel
                         </Button>
                       )}
-                      {/* Revert to Draft button (Recall or manual revert) */}
-                      {(report.status === "submitted" || report.status === "recall_requested") && (
+                      {/* Revert to Draft button (Recall or manual revert) - SUPER ADMIN ONLY */}
+                      {(report.status === "submitted" || report.status === "recall_requested") && isSuperAdmin && (
                         <Button
                           variant="outline"
                           size="sm"

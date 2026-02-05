@@ -223,13 +223,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       remarks: "",
     };
 
-    const updatedPeriods = [...currentEntries[entryIndex].periods, newPeriod];
-    currentEntries[entryIndex] = {
-      ...currentEntries[entryIndex],
-      periods: updatedPeriods,
+    const newEntries = [...currentEntries];
+    newEntries[entryIndex] = {
+      ...newEntries[entryIndex],
+      periods: [...newEntries[entryIndex].periods, newPeriod],
     };
 
-    form.setValue("entries", currentEntries, { shouldDirty: true });
+    form.setValue("entries", newEntries, { shouldDirty: true });
     form.trigger("entries");
   };
 
@@ -252,7 +252,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         ...newEntries[entryIndex],
         periods: newEntries[entryIndex].periods.filter((_, index) => index !== periodIndex),
       };
-      form.setValue("entries", newEntries);
+      form.setValue("entries", newEntries, { shouldDirty: true });
     }
   };
 
@@ -484,10 +484,20 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     if (entryIndex !== -1) {
                                       const newEntries = [...entries];
                                       const newFromDate = formatDateFromInput(e.target.value);
-                                      newEntries[entryIndex].periods[periodIndex].fromDate = newFromDate;
-                                      newEntries[entryIndex].periods[periodIndex].days =
-                                        calculateDays(newFromDate, period.toDate);
-                                      form.setValue("entries", newEntries);
+
+                                      // Create deep copy of the entry and periods
+                                      newEntries[entryIndex] = {
+                                        ...newEntries[entryIndex],
+                                        periods: [...newEntries[entryIndex].periods]
+                                      };
+
+                                      newEntries[entryIndex].periods[periodIndex] = {
+                                        ...newEntries[entryIndex].periods[periodIndex],
+                                        fromDate: newFromDate,
+                                        days: calculateDays(newFromDate, period.toDate)
+                                      };
+
+                                      form.setValue("entries", newEntries, { shouldDirty: true });
                                     }
                                   }}
                                   disabled={isLoading || !includedEmployees.has(employee.id)}
@@ -505,10 +515,20 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     if (entryIndex !== -1) {
                                       const newEntries = [...entries];
                                       const newToDate = formatDateFromInput(e.target.value);
-                                      newEntries[entryIndex].periods[periodIndex].toDate = newToDate;
-                                      newEntries[entryIndex].periods[periodIndex].days =
-                                        calculateDays(period.fromDate, newToDate);
-                                      form.setValue("entries", newEntries);
+
+                                      // Create deep copy of the entry and periods
+                                      newEntries[entryIndex] = {
+                                        ...newEntries[entryIndex],
+                                        periods: [...newEntries[entryIndex].periods]
+                                      };
+
+                                      newEntries[entryIndex].periods[periodIndex] = {
+                                        ...newEntries[entryIndex].periods[periodIndex],
+                                        toDate: newToDate,
+                                        days: calculateDays(period.fromDate, newToDate)
+                                      };
+
+                                      form.setValue("entries", newEntries, { shouldDirty: true });
                                     }
                                   }}
                                   disabled={isLoading || !includedEmployees.has(employee.id)}
@@ -532,8 +552,19 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
                                     if (entryIndex !== -1) {
                                       const newEntries = [...entries];
-                                      newEntries[entryIndex].periods[periodIndex].remarks = e.target.value;
-                                      form.setValue("entries", newEntries);
+
+                                      // Create deep copy of the entry and periods
+                                      newEntries[entryIndex] = {
+                                        ...newEntries[entryIndex],
+                                        periods: [...newEntries[entryIndex].periods]
+                                      };
+
+                                      newEntries[entryIndex].periods[periodIndex] = {
+                                        ...newEntries[entryIndex].periods[periodIndex],
+                                        remarks: e.target.value
+                                      };
+
+                                      form.setValue("entries", newEntries, { shouldDirty: true });
                                     }
                                   }}
                                   disabled={isLoading || !includedEmployees.has(employee.id)}
@@ -585,7 +616,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
               Saving...
             </>
           ) : (
-            "Create Report"
+            initialData ? "Update Report" : "Create Report"
           )}
         </button>
       </form>

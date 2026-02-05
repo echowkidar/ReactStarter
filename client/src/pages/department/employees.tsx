@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Pencil, Eye, Plus } from "lucide-react";
+import { Pencil, Eye, Plus, ArrowRightLeft } from "lucide-react";
 import { EditEmployeeForm } from "@/components/forms/edit-employee-form";
 import { apiRequest } from "@/lib/queryClient";
 import { getCurrentDepartment } from "@/lib/auth";
@@ -21,7 +21,7 @@ export default function DepartmentEmployees() {
   const { data: employees = [], refetch } = useQuery<Employee[]>({
     queryKey: ["/api/departments", departmentId, "employees"],
     queryFn: async () => {
-      const response = await apiRequest(`/api/departments/${departmentId}/employees`);
+      const response = await apiRequest("GET", `/api/departments/${departmentId}/employees`);
       return response.json();
     },
     enabled: !!departmentId
@@ -63,7 +63,23 @@ export default function DepartmentEmployees() {
                 <td className="p-4">{employee.epid}</td>
                 <td className="p-4">{employee.name}</td>
                 <td className="p-4">{employee.designation}</td>
-                <td className="p-4">{employee.employmentStatus}</td>
+                <td className="p-4">
+                  <div className="flex items-center gap-1">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee.isActive === "active"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                      }`}>
+                      {employee.isActive === "active" ? "Active" : "Disabled"}
+                    </span>
+                    {/* Transfer status badge */}
+                    {employee.transferStatus === "pending" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800" title="Transfer Pending">
+                        <ArrowRightLeft className="h-3 w-3" />
+                        Transfer
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="p-4">
                   <div className="flex space-x-2">
                     <Button
@@ -101,7 +117,7 @@ export default function DepartmentEmployees() {
       {selectedEmployee && (
         <EditEmployeeForm
           employee={selectedEmployee}
-          isOpen={isEditDialogOpen} 
+          isOpen={isEditDialogOpen}
           onClose={() => {
             setIsEditDialogOpen(false);
             setSelectedEmployee(null);

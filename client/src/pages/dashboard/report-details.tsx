@@ -94,13 +94,13 @@ export default function ReportDetails() {
 
   const formatTermExpiry = (dateStr: string | null | undefined): string => {
     if (!dateStr) return "-";
-    
+
     try {
       const date = new Date(dateStr);
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear().toString().slice(-2);
-      
+
       return `${day}-${month}-${year}`;
     } catch (error) {
       console.error("Error formatting term expiry date:", error);
@@ -113,45 +113,45 @@ export default function ReportDetails() {
     // Check if period starts from day 1
     const fromParts = fromDate.split('-');
     if (fromParts.length !== 3 || fromParts[0] !== '01') return false;
-    
+
     // Extract month and year from the period
     const fromMonth = parseInt(fromParts[1]);
     const fromYear = parseInt(fromParts[2].length === 2 ? `20${fromParts[2]}` : fromParts[2]);
-    
+
     // Check if period ends on the last day of month
     const toParts = toDate.split('-');
     if (toParts.length !== 3) return false;
-    
+
     const toMonth = parseInt(toParts[1]);
     const toYear = parseInt(toParts[2].length === 2 ? `20${toParts[2]}` : toParts[2]);
-    
+
     // Months should be same for whole month period
     if (fromMonth !== toMonth || fromYear !== toYear) return false;
-    
+
     // Calculate last day of the month
     const lastDay = new Date(fromYear, fromMonth, 0).getDate();
-    
+
     // Check if end date is the last day of month
     const isCompleteMonth = parseInt(toParts[0]) === lastDay;
-    
+
     // NEW CONDITION: Also check if this period month matches the report month/year
     const matchesReportMonth = fromMonth === reportMonth && fromYear === reportYear;
-    
+
     return isCompleteMonth && matchesReportMonth;
   };
 
   const handlePrint = () => {
     setTimeout(() => {
       const printContent = document.querySelector('.print-content');
-      
+
       if (printContent) {
         const printWindow = window.open('', '_blank');
-        
+
         if (!printWindow) {
           alert('Please allow popups for this website to use the print feature.');
           return;
         }
-        
+
         // Get the current page's styling
         const styles = Array.from(document.styleSheets)
           .map(styleSheet => {
@@ -165,11 +165,11 @@ export default function ReportDetails() {
             }
           })
           .join('\n');
-        
+
         // Extract custom print styles from the current page
         const printStyleElement = document.querySelector('style[media="print"]');
         const printStyles = printStyleElement ? printStyleElement.textContent : '';
-        
+
         // Write the content to the new window with proper styling
         printWindow.document.write(`
           <html>
@@ -334,48 +334,48 @@ export default function ReportDetails() {
             </body>
           </html>
         `);
-        
+
         printWindow.document.close();
-        
+
         // Wait for content to load before printing
-        printWindow.onload = function() {
+        printWindow.onload = function () {
           // Apply additional class transformations for print window
           const cards = printWindow.document.querySelectorAll('[class*="card"]');
           cards.forEach(card => {
             card.classList.add('card');
           });
-          
+
           const cardHeaders = printWindow.document.querySelectorAll('[class*="cardHeader"]');
           cardHeaders.forEach(header => {
             header.classList.add('card-header');
           });
-          
+
           const cardContents = printWindow.document.querySelectorAll('[class*="cardContent"]');
           cardContents.forEach(content => {
             content.classList.add('card-content');
           });
-          
+
           const cardTitles = printWindow.document.querySelectorAll('[class*="cardTitle"]');
           cardTitles.forEach(title => {
             title.classList.add('card-title');
           });
-          
+
           const infoItems = printWindow.document.querySelectorAll('.text-sm.font-medium');
           infoItems.forEach(item => {
             item.classList.add('info-label');
           });
-          
+
           const certificationSection = printWindow.document.querySelector('.mt-8');
           if (certificationSection) {
             certificationSection.classList.add('certification');
           }
-          
+
           // Add barcode font
           const linkElement = printWindow.document.createElement('link');
           linkElement.rel = 'stylesheet';
           linkElement.href = 'https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap';
           printWindow.document.head.appendChild(linkElement);
-          
+
           // Add transaction ID barcode to the print window
           const contentElement = printWindow.document.querySelector('.print-content');
           if (contentElement) {
@@ -383,17 +383,17 @@ export default function ReportDetails() {
             barcodeElement.className = 'page-footer-barcode';
             barcodeElement.innerHTML = `*${report.transactionId || "DRAFT"}*`;
             printWindow.document.body.appendChild(barcodeElement);
-            
+
             const transactionTextElement = printWindow.document.createElement('div');
             transactionTextElement.className = 'transaction-id-text';
             transactionTextElement.innerHTML = report.transactionId || "DRAFT";
             printWindow.document.body.appendChild(transactionTextElement);
           }
-          
+
           setTimeout(() => {
             printWindow.focus();
             printWindow.print();
-            printWindow.onafterprint = function() {
+            printWindow.onafterprint = function () {
               printWindow.close();
             };
           }, 300);
@@ -432,8 +432,8 @@ export default function ReportDetails() {
           entry.employee?.designation,
           formatTermExpiry(entry.employee?.termExpiry),
           entry.employee?.salaryRegisterNo || '-',
-          isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year) 
-            ? "- " 
+          isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
+            ? "- "
             : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
           period.days,
           period.remarks || '-'
@@ -654,21 +654,21 @@ export default function ReportDetails() {
               <InfoItem label="Department" value={report.department?.name} />
               <InfoItem label="Month/Year" value={formatPeriod(report.year, report.month)} />
               <InfoItem label="Transaction ID" value={report.status === "draft" ? "*****" : (report.transactionId || "-")} />
-              <InfoItem 
-                label="Status" 
+              <InfoItem
+                label="Status"
                 value={
                   <Badge variant={report.status === "submitted" ? "default" : "secondary"}>
                     {report.status}
                   </Badge>
-                } 
+                }
               />
               {report.despatchNo && (
                 <InfoItem label="Despatch No" value={report.despatchNo} />
               )}
               {report.despatchDate && (
-                <InfoItem 
-                  label="Despatch Date" 
-                  value={report.despatchDate ? formatDispatchDate(report.despatchDate) : '-'} 
+                <InfoItem
+                  label="Despatch Date"
+                  value={report.despatchDate ? formatDispatchDate(report.despatchDate) : '-'}
                 />
               )}
             </div>
@@ -691,32 +691,34 @@ export default function ReportDetails() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {report.entries
-                ?.sort((a, b) => {
-                  // Sort by pay level first (higher levels first)
-                  const payLevelA = a.employee?.payLevel || "L-0";
-                  const payLevelB = b.employee?.payLevel || "L-0";
-                  
-                  if (payLevelA !== payLevelB) {
-                    return getPayLevelOrder(payLevelB) - getPayLevelOrder(payLevelA);
-                  }
-                  
-                  // If pay levels are same, sort by EPID
-                  const epidA = a.employee?.epid || '';
-                  const epidB = b.employee?.epid || '';
-                  return epidA.localeCompare(epidB);
-                })
-                .flatMap((entry, entryIndex) => {
-                  try {
-                    const periods = typeof entry.periods === 'string' 
-                      ? JSON.parse(entry.periods) 
-                      : entry.periods;
+              {(() => {
+                console.log("Rendering ReportDetails. Entries count:", report.entries?.length);
+                return [...(report.entries || [])]
+                  .sort((a, b) => {
+                    // Sort by pay level first (higher levels first)
+                    const payLevelA = a.employee?.payLevel || "L-0";
+                    const payLevelB = b.employee?.payLevel || "L-0";
 
-                    return periods.map((period: any, periodIndex: number) => {
-                      // Calculate serial number based on flattened entries array
-                      const serialNumber = 
-                        (report.entries
-                          ? report.entries
+                    if (payLevelA !== payLevelB) {
+                      return getPayLevelOrder(payLevelB) - getPayLevelOrder(payLevelA);
+                    }
+
+                    // If pay levels are same, sort by EPID
+                    const epidA = a.employee?.epid || '';
+                    const epidB = b.employee?.epid || '';
+                    return epidA.localeCompare(epidB);
+                  })
+                  .flatMap((entry, entryIndex) => {
+                    try {
+                      const periods = typeof entry.periods === 'string'
+                        ? JSON.parse(entry.periods)
+                        : entry.periods;
+
+                      return periods.map((period: any, periodIndex: number) => {
+                        // Calculate serial number based on flattened entries array
+                        const serialNumber =
+                          (report.entries
+                            ? report.entries
                               .slice(0, entryIndex)
                               .reduce((count, prevEntry) => {
                                 const prevPeriods = typeof prevEntry.periods === 'string'
@@ -724,31 +726,32 @@ export default function ReportDetails() {
                                   : prevEntry.periods || [];
                                 return count + (prevPeriods?.length || 0);
                               }, 0)
-                          : 0) + periodIndex + 1;
+                            : 0) + periodIndex + 1;
 
-                      return (
-                        <TableRow key={`${entry.id}-${periodIndex}`}>
-                          <TableCell className="whitespace-nowrap">{serialNumber}</TableCell>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
-                          <TableCell>{entry.employee?.name}</TableCell>
-                          <TableCell>{entry.employee?.designation}</TableCell>
-                          <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year) 
-                              ? "- " 
-                              : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{period.days}</TableCell>
-                          <TableCell>{period.remarks || "-"}</TableCell>
-                        </TableRow>
-                      );
-                    });
-                  } catch (error) {
-                    console.error('Error parsing periods:', error);
-                    return null;
-                  }
-                })}
+                        return (
+                          <TableRow key={`${entry.id}-${periodIndex}`}>
+                            <TableCell className="whitespace-nowrap">{serialNumber}</TableCell>
+                            <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
+                            <TableCell>{entry.employee?.name}</TableCell>
+                            <TableCell>{entry.employee?.designation}</TableCell>
+                            <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
+                            <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
+                                ? "- "
+                                : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{period.days}</TableCell>
+                            <TableCell>{period.remarks || "-"}</TableCell>
+                          </TableRow>
+                        );
+                      });
+                    } catch (error) {
+                      console.error('Error parsing periods:', error);
+                      return null;
+                    }
+                  })
+              })()}
             </TableBody>
           </Table>
         </div>
@@ -756,7 +759,7 @@ export default function ReportDetails() {
         <div className="mt-8 space-y-4 text-right certification-section">
           <p>.Certified that the above attendance report is correct.</p>
           <div className="space-y-1">
-          <div style={{ height: '3em' }}></div>
+            <div style={{ height: '3em' }}></div>
             <p>{report.department?.hodTitle}</p>
             <p>{report.department?.hodName}</p>
             <p>{report.department?.name}</p>

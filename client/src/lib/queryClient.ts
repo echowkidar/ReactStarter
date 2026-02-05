@@ -14,6 +14,13 @@ export async function apiRequest(
   useJSON: boolean = true
 ): Promise<Response> {
   const headers: Record<string, string> = {};
+
+  // Auto-inject admin session token if present
+  const adminSessionToken = localStorage.getItem("adminSessionToken");
+  if (adminSessionToken) {
+    headers["x-session-token"] = adminSessionToken;
+  }
+
   let body: BodyInit | null | undefined = undefined;
 
   if (data) {
@@ -46,18 +53,18 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
-      credentials: "include",
-    });
+    async ({ queryKey }) => {
+      const res = await fetch(queryKey[0] as string, {
+        credentials: "include",
+      });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        return null;
+      }
 
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+      await throwIfResNotOk(res);
+      return await res.json();
+    };
 
 export const queryClient = new QueryClient({
   defaultOptions: {

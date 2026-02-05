@@ -9,9 +9,9 @@ import { FileUpload } from "@/components/ui/file-upload";
 import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
 import { employmentStatuses } from "@/lib/departments";
 import { PAY_LEVELS } from "@/lib/pay-levels";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // Import master data for designations and register numbers
 import designationsData from "@/lib/designations.json";
@@ -55,6 +55,7 @@ interface EmployeeFormProps {
 
 export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps) {
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+  const [duplicateEmployee, setDuplicateEmployee] = useState<{ name: string; departmentName: string } | null>(null);
 
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
@@ -132,6 +133,33 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
     }
   };
 
+  // Duplicate EPID Check
+  const watchedEpid = form.watch("epid");
+
+  useEffect(() => {
+    const checkEpid = async () => {
+      if (!watchedEpid || watchedEpid.trim() === "") {
+        setDuplicateEmployee(null);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/employees/check-epid?epid=${encodeURIComponent(watchedEpid)}`);
+        const data = await res.json();
+        if (data.exists) {
+          setDuplicateEmployee(data.employee);
+        } else {
+          setDuplicateEmployee(null);
+        }
+      } catch (error) {
+        console.error("Failed to check EPID:", error);
+      }
+    };
+
+    const timer = setTimeout(checkEpid, 500);
+    return () => clearTimeout(timer);
+  }, [watchedEpid]);
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto px-1">
@@ -141,14 +169,43 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
             <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <FormField
-                control={form.control}
                 name="epid"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>EPID</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                      <Input
+                        {...field}
+                        disabled={isLoading}
+                        className="bg-white dark:bg-slate-800"
+                        maxLength={5}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+                          field.onChange(value);
+                        }}
+                      />
                     </FormControl>
+                    {duplicateEmployee && (
+                      <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800 animate-in fade-in slide-in-from-top-1">
+                        <div className="font-semibold flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          Employee Already Exists
+                        </div>
+                        <div className="mt-2 text-xs space-y-1 pl-6">
+                          <p>Name: <span className="font-medium">{duplicateEmployee.name}</span></p>
+                          <p>Department: <span className="font-medium">{duplicateEmployee.departmentName}</span></p>
+                          <div className="pt-2 text-amber-700">
+                            To add this employee to your department:
+                            <ol className="list-decimal ml-4 mt-1 space-y-1">
+                              <li>Close this form.</li>
+                              <li>Go to <strong>Global Search</strong>.</li>
+                              <li>Search by EPID: <strong>{watchedEpid}</strong>.</li>
+                              <li>Click <strong>Request Release / Transfer</strong>.</li>
+                            </ol>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
