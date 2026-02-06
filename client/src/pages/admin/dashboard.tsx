@@ -25,6 +25,7 @@ import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -130,7 +131,24 @@ export default function AdminDashboard() {
       const response = await apiRequest("GET", "/api/admin/active-users");
       return response.json();
     },
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 60000, // Refresh every minute to match graph
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0,
+  });
+
+  // Active Users Graph Data
+  const [activeUsersPeriod, setActiveUsersPeriod] = useState<string>("6h");
+  const { data: activeUsersHistory = [] } = useQuery<{ timestamp: string; count: number }[]>({
+    queryKey: ["/api/admin/active-users/history", activeUsersPeriod],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/admin/active-users/history?period=${activeUsersPeriod}`);
+      return response.json();
+    },
+    refetchInterval: 60000, // Refresh graph data every minute
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0,
   });
 
   // Fetch visitor analytics stats
@@ -798,122 +816,220 @@ export default function AdminDashboard() {
         </div>
 
         {/* Row 2: Active Users, Visitor Stats, Tickets, Pending Actions - 4 column grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {/* Row 2: Active Users, Visitor Stats, Tickets, Pending Actions - 12 column grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 mb-4">
           {/* Live Active Users */}
-          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-3 rounded-lg border border-purple-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-purple-100 rounded-full">
-                <Users className="h-4 w-4 text-purple-600" />
+          {/* Live Active Users - Expanded with Graph */}
+          <div className="col-span-1 sm:col-span-2 lg:col-span-6 bg-gradient-to-br from-purple-50 to-indigo-50 p-2 rounded-lg border border-purple-200 shadow-sm flex gap-3 h-[160px]">
+
+            {/* Sidebar: Header + Stats + Controls */}
+            <div className="flex flex-col justify-between w-32 shrink-0 border-r border-purple-100 pr-2">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <div className="p-1 bg-purple-100 rounded-full">
+                    <Users className="h-3.5 w-3.5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-[11px] font-bold text-purple-800 leading-tight">Active Users</h3>
+                    <p className="text-[8px] text-purple-600">Live • Auto-refresh</p>
+                  </div>
+                </div>
+
+                {/* Compact Stats Grid */}
+                <div className="grid grid-cols-2 gap-1 mt-2">
+                  <div className="text-center py-1 px-1 bg-white/70 rounded border border-purple-100 shadow-sm col-span-2">
+                    <p className="text-xl font-bold text-purple-700 leading-none">{activeUsersStats.total}</p>
+                    <p className="text-[8px] uppercase tracking-wider text-purple-600 font-semibold">Total</p>
+                  </div>
+                  <div className="text-center py-1 px-0.5 bg-white/70 rounded border border-purple-100">
+                    <p className="text-sm font-bold text-blue-600 leading-none">{activeUsersStats.departments}</p>
+                    <p className="text-[7px] uppercase tracking-wider text-blue-500 font-semibold">Depts</p>
+                  </div>
+                  <div className="text-center py-1 px-0.5 bg-white/70 rounded border border-purple-100">
+                    <p className="text-sm font-bold text-indigo-600 leading-none">{activeUsersStats.admins}</p>
+                    <p className="text-[7px] uppercase tracking-wider text-indigo-500 font-semibold">Admins</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xs font-semibold text-purple-800">Active Users</h3>
-                <p className="text-[9px] text-purple-600">Live • Auto-refresh</p>
-              </div>
+
+              {/* Time Period Selector - Compact */}
+              <Select value={activeUsersPeriod} onValueChange={setActiveUsersPeriod}>
+                <SelectTrigger className="w-full h-6 text-[10px] bg-white/80 border-purple-200 px-2 min-h-0">
+                  <SelectValue placeholder="Period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1h">1 Hour</SelectItem>
+                  <SelectItem value="6h">6 Hours</SelectItem>
+                  <SelectItem value="24h">24 Hours</SelectItem>
+                  <SelectItem value="7d">7 Days</SelectItem>
+                  <SelectItem value="current_month">This Month</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="grid grid-cols-3 gap-1">
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-purple-100">
-                <p className="text-lg font-bold text-purple-700">{activeUsersStats.total}</p>
-                <p className="text-[8px] uppercase tracking-wider text-purple-600 font-semibold">Total</p>
-              </div>
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-purple-100">
-                <p className="text-lg font-bold text-blue-600">{activeUsersStats.departments}</p>
-                <p className="text-[8px] uppercase tracking-wider text-blue-500 font-semibold">Depts</p>
-              </div>
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-purple-100">
-                <p className="text-lg font-bold text-indigo-600">{activeUsersStats.admins}</p>
-                <p className="text-[8px] uppercase tracking-wider text-indigo-500 font-semibold">Admins</p>
-              </div>
+
+            {/* Graph Area */}
+            <div className="flex-1 min-w-0 h-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={activeUsersHistory?.map(d => ({ ...d, timestamp: new Date(d.timestamp).getTime() })) || []}
+                  margin={{ top: 5, right: 0, left: -25, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+                  <XAxis
+                    dataKey="timestamp"
+                    type="number"
+                    domain={(() => {
+                      // Calculate domain based on DATA, not just "now", to prevent the "blank gap"
+                      // Use the latest data point as the "end" time, or fallback to now if empty
+                      const data = activeUsersHistory?.map(d => ({ ...d, timestamp: new Date(d.timestamp).getTime() })) || [];
+                      const latestDataTime = data.length > 0 ? Math.max(...data.map(d => d.timestamp)) : Date.now();
+
+                      // However, if we only use latestDataTime, the graph stops. 
+                      // But the user likes "updates with heartbeat". 
+                      // If we use Date.now(), we get a gap.
+                      // So we use latestDataTime. This means the time axis "stalls" until next update.
+                      const endTime = latestDataTime;
+
+                      let start = endTime - 6 * 60 * 60 * 1000; // default 6h
+                      if (activeUsersPeriod === '1h') start = endTime - 1 * 60 * 60 * 1000;
+                      if (activeUsersPeriod === '6h') start = endTime - 6 * 60 * 60 * 1000;
+                      if (activeUsersPeriod === '24h') start = endTime - 24 * 60 * 60 * 1000;
+                      if (activeUsersPeriod === '7d') start = endTime - 7 * 24 * 60 * 60 * 1000;
+                      if (activeUsersPeriod === 'current_month') {
+                        const d = new Date();
+                        d.setDate(1); d.setHours(0, 0, 0, 0);
+                        start = d.getTime();
+                      }
+                      return [start, endTime];
+                    })()}
+                    scale="time"
+                    tick={{ fontSize: 9 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(val) => {
+                      const d = new Date(val);
+                      return activeUsersPeriod === '1h' || activeUsersPeriod === '6h' || activeUsersPeriod === '24h'
+                        ? d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: false })
+                        : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' });
+                    }}
+                    minTickGap={30}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    width={45}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    labelFormatter={(val) => new Date(val).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                    contentStyle={{ fontSize: '11px', borderRadius: '6px', padding: '4px 8px' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#8884d8"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorCount)"
+                    animationDuration={500}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
           {/* Visitors - Current Month */}
-          <div className="bg-gradient-to-br from-teal-50 to-cyan-50 p-3 rounded-lg border border-teal-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-teal-100 rounded-full">
-                <Eye className="h-4 w-4 text-teal-600" />
+          {/* Visitors - Current Month */}
+          {/* Visitors - Current Month - Compact Height */}
+          <div className="col-span-1 lg:col-span-2 bg-gradient-to-br from-teal-50 to-cyan-50 p-2 rounded-lg border border-teal-200 shadow-sm h-[160px] flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-teal-100 rounded-full">
+                <Eye className="h-3.5 w-3.5 text-teal-600" />
               </div>
-              <div>
-                <h3 className="text-xs font-semibold text-teal-800">Visitors - Current</h3>
-                <p className="text-[9px] text-teal-600">
+              <div className="min-w-0">
+                <h3 className="text-[11px] font-semibold text-teal-800 truncate">Visitors - Current</h3>
+                <p className="text-[8px] text-teal-600 truncate">
                   {visitorStats?.currentMonth?.month ? new Date(2000, visitorStats.currentMonth.month - 1).toLocaleString('default', { month: 'short' }) : '...'} {visitorStats?.currentMonth?.year || ''}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-1">
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-teal-100">
-                <p className="text-lg font-bold text-teal-700">{visitorStats?.currentMonth?.uniqueVisitors || 0}</p>
-                <p className="text-[8px] uppercase tracking-wider text-teal-600 font-semibold">Unique</p>
+            <div className="flex flex-col gap-1.5 flex-1 justify-center">
+              <div className="flex bg-white/70 rounded border border-teal-100 items-center justify-between px-2 py-1">
+                <p className="text-[9px] uppercase tracking-wider text-teal-600 font-semibold">Unique</p>
+                <p className="text-base font-bold text-teal-700">{visitorStats?.currentMonth?.uniqueVisitors || 0}</p>
               </div>
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-teal-100">
-                <p className="text-lg font-bold text-cyan-600">{visitorStats?.currentMonth?.totalVisits || 0}</p>
-                <p className="text-[8px] uppercase tracking-wider text-cyan-500 font-semibold">Visits</p>
+              <div className="flex bg-white/70 rounded border border-teal-100 items-center justify-between px-2 py-1">
+                <p className="text-[9px] uppercase tracking-wider text-cyan-500 font-semibold">Visits</p>
+                <p className="text-base font-bold text-cyan-600">{visitorStats?.currentMonth?.totalVisits || 0}</p>
               </div>
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-teal-100">
-                <p className="text-lg font-bold text-blue-600">{visitorStats?.currentMonth?.uniqueIPs || 0}</p>
-                <p className="text-[8px] uppercase tracking-wider text-blue-500 font-semibold">IPs</p>
+              <div className="flex bg-white/70 rounded border border-teal-100 items-center justify-between px-2 py-1">
+                <p className="text-[9px] uppercase tracking-wider text-blue-500 font-semibold">IPs</p>
+                <p className="text-base font-bold text-blue-600">{visitorStats?.currentMonth?.uniqueIPs || 0}</p>
               </div>
             </div>
           </div>
 
-          {/* Visitors - Previous Month */}
-          <div className="bg-gradient-to-br from-slate-50 to-gray-50 p-3 rounded-lg border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-slate-100 rounded-full">
-                <Eye className="h-4 w-4 text-slate-600" />
+          {/* Visitors - Previous Month - Compact Height */}
+          <div className="col-span-1 lg:col-span-2 bg-gradient-to-br from-slate-50 to-gray-50 p-2 rounded-lg border border-slate-200 shadow-sm h-[160px] flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-slate-100 rounded-full">
+                <Eye className="h-3.5 w-3.5 text-slate-600" />
               </div>
-              <div>
-                <h3 className="text-xs font-semibold text-slate-800">Visitors - Previous</h3>
-                <p className="text-[9px] text-slate-600">
+              <div className="min-w-0">
+                <h3 className="text-[11px] font-semibold text-slate-800 truncate">Visitors - Previous</h3>
+                <p className="text-[8px] text-slate-600 truncate">
                   {visitorStats?.previousMonth?.month ? new Date(2000, visitorStats.previousMonth.month - 1).toLocaleString('default', { month: 'short' }) : '...'} {visitorStats?.previousMonth?.year || ''}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-1">
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-slate-100">
-                <p className="text-lg font-bold text-slate-700">{visitorStats?.previousMonth?.uniqueVisitors || 0}</p>
-                <p className="text-[8px] uppercase tracking-wider text-slate-600 font-semibold">Unique</p>
+            <div className="flex flex-col gap-1.5 flex-1 justify-center">
+              <div className="flex bg-white/70 rounded border border-slate-100 items-center justify-between px-2 py-1">
+                <p className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold">Unique</p>
+                <p className="text-base font-bold text-slate-700">{visitorStats?.previousMonth?.uniqueVisitors || 0}</p>
               </div>
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-slate-100">
-                <p className="text-lg font-bold text-gray-600">{visitorStats?.previousMonth?.totalVisits || 0}</p>
-                <p className="text-[8px] uppercase tracking-wider text-gray-500 font-semibold">Visits</p>
+              <div className="flex bg-white/70 rounded border border-slate-100 items-center justify-between px-2 py-1">
+                <p className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Visits</p>
+                <p className="text-base font-bold text-gray-600">{visitorStats?.previousMonth?.totalVisits || 0}</p>
               </div>
-              <div className="text-center py-1.5 px-1 bg-white/70 rounded border border-slate-100">
-                <p className="text-lg font-bold text-slate-600">{visitorStats?.previousMonth?.uniqueIPs || 0}</p>
-                <p className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold">IPs</p>
+              <div className="flex bg-white/70 rounded border border-slate-100 items-center justify-between px-2 py-1">
+                <p className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">IPs</p>
+                <p className="text-base font-bold text-slate-600">{visitorStats?.previousMonth?.uniqueIPs || 0}</p>
               </div>
             </div>
           </div>
 
-          {/* Support Tickets + Pending Actions Combined */}
-          <div className="bg-white p-3 rounded-lg border shadow-sm">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-xs font-semibold text-gray-700">Tickets & Actions</h3>
-              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-[10px] h-5 px-1">
-                View →
+          {/* Support Tickets + Pending Actions - Compact Height */}
+          <div className="col-span-1 lg:col-span-2 bg-white p-2 rounded-lg border shadow-sm h-[160px] flex flex-col">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-[11px] font-semibold text-gray-700">Tickets/Actions</h3>
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-[9px] h-4 px-1">
+                View
               </Button>
             </div>
-            <div className="grid grid-cols-3 gap-1 mb-2">
-              <div className="text-center py-1 px-0.5 bg-blue-50 rounded border border-blue-100">
-                <p className="text-sm font-bold text-blue-700">{ticketStats.open}</p>
+
+            <div className="grid grid-cols-2 gap-1 flex-1 content-center">
+              <div className="text-center py-1 bg-blue-50 rounded border border-blue-100">
+                <p className="text-lg font-bold text-blue-700 leading-none">{ticketStats.open}</p>
                 <p className="text-[7px] uppercase text-blue-600 font-medium">Open</p>
               </div>
-              <div className="text-center py-1 px-0.5 bg-yellow-50 rounded border border-yellow-100">
-                <p className="text-sm font-bold text-yellow-700">{ticketStats.inProgress}</p>
-                <p className="text-[7px] uppercase text-yellow-600 font-medium">Progress</p>
+              <div className="text-center py-1 bg-green-50 rounded border border-green-100">
+                <p className="text-lg font-bold text-green-700 leading-none">{ticketStats.resolved}</p>
+                <p className="text-[7px] uppercase text-green-600 font-medium">Done</p>
               </div>
-              <div className="text-center py-1 px-0.5 bg-green-50 rounded border border-green-100">
-                <p className="text-sm font-bold text-green-700">{ticketStats.resolved}</p>
-                <p className="text-[7px] uppercase text-green-600 font-medium">Resolved</p>
+              <div className="text-center py-1 bg-orange-50 rounded border border-orange-100 col-span-2">
+                <p className="text-lg font-bold text-orange-700 leading-none">{stats.requests.cancellation + stats.requests.recall}</p>
+                <p className="text-[7px] uppercase text-orange-600 font-medium">Pending Requests</p>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <div className="text-center py-1.5 bg-orange-50 rounded border border-orange-100">
-                <p className="text-sm font-bold text-orange-700">{stats.requests.cancellation}</p>
-                <p className="text-[7px] uppercase text-orange-600 font-medium">Cancel Req</p>
-              </div>
-              <div className="text-center py-1.5 bg-amber-50 rounded border border-amber-100">
-                <p className="text-sm font-bold text-amber-700">{stats.requests.recall}</p>
-                <p className="text-[7px] uppercase text-amber-600 font-medium">Recall Req</p>
+              <div className="hidden">
+                <p>{stats.requests.cancellation}</p>
+                <p>{stats.requests.recall}</p>
               </div>
             </div>
           </div>

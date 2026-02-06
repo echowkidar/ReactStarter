@@ -144,7 +144,18 @@ export async function registerRoutes(app: Express) {
       )
     `);
 
-    console.log("Notices and visitors tables initialized successfully.");
+    // Create active_user_snapshots table for graph history
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS active_user_snapshots (
+        id SERIAL PRIMARY KEY,
+        count INTEGER NOT NULL,
+        admin_count INTEGER NOT NULL,
+        department_count INTEGER NOT NULL,
+        timestamp TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    console.log("Notices, visitors, and active_user_snapshots tables initialized successfully.");
   } catch (error) {
     console.error("Error initializing tables:", error);
   }
@@ -261,6 +272,57 @@ export async function registerRoutes(app: Express) {
       return res.status(500).json({ message: "Failed to get active users" });
     }
   });
+
+  // Get active users history (for graph) - sourced from active_user_snapshots (Session State)
+  app.get("/api/admin/active-users/history", async (req, res) => {
+    try {
+      const { period } = req.query;
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      let interval = "6 hours"; // Default to 6h per new default
+      if (period === "1h") interval = "1 hour";
+      if (period === "6h") interval = "6 hours";
+      if (period === "24h") interval = "24 hours";
+      if (period === "7d") interval = "7 days";
+      if (period === "current_month") interval = "30 days";
+
+      // Simple query for snapshots
+      // No need for generate_series as snapshots are taken regularly by the server
+      const history = await db.execute(sql`
+        SELECT timestamp AT TIME ZONE 'UTC' as timestamp, count 
+        FROM active_user_snapshots 
+        WHERE timestamp AT TIME ZONE 'UTC' > NOW() - ${interval}::interval 
+        ORDER BY timestamp ASC
+      `);
+
+      return res.json(history.rows.map(row => ({
+        timestamp: row.timestamp,
+        count: parseInt((row.count as any).toString())
+      })));
+    } catch (error) {
+      console.error("Error getting active users history:", error);
+      return res.status(500).json({ message: "Failed to get history" });
+    }
+  });
+
+  // Snapshot task - Every 1 minute
+  setInterval(async () => {
+    try {
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const stats = getActiveUsersCount();
+
+      await db.execute(sql`
+        INSERT INTO active_user_snapshots (count, admin_count, department_count, timestamp)
+        VALUES (${stats.total}, ${stats.admins}, ${stats.departments}, NOW())
+      `);
+      // Cleanup old snapshots (> 30 days)
+      await db.execute(sql`DELETE FROM active_user_snapshots WHERE timestamp < NOW() - INTERVAL '30 days'`);
+    } catch (err) {
+      console.error("Error saving active user snapshot:", err);
+    }
+  }, 60 * 1000); // Every 1 minute
   // ============ End Active Users Tracking Endpoints ============
 
   // ============ Visitor Analytics Endpoints ============

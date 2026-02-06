@@ -193,10 +193,21 @@ export const documents = pgTable("documents", {
   uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
 });
 
+
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   uploadedAt: true
 });
+
+export const activeUserSnapshots = pgTable("active_user_snapshots", {
+  id: serial("id").primaryKey(),
+  count: integer("count").notNull(),
+  adminCount: integer("admin_count").notNull(),
+  departmentCount: integer("department_count").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export type ActiveUserSnapshot = typeof activeUserSnapshots.$inferSelect;
 
 // Admin Schema
 export const admins = pgTable("admins", {
