@@ -913,8 +913,9 @@ export default function Attendance() {
     mutationFn: async (report: AttendanceReport) => {
       await apiRequest("PATCH", `/api/attendance/${report.id}`, { status: "submitted" });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/attendance/${variables.id}`] });
       toast({
         title: "Success",
         description: "Report submitted successfully",
@@ -1020,6 +1021,10 @@ export default function Attendance() {
       // Invalidate specific report details
       queryClient.invalidateQueries({
         queryKey: [`/api/attendance/${variables.reportId}`],
+      });
+      // Invalidate admin report details (used by report-details page)
+      queryClient.invalidateQueries({
+        queryKey: [`/api/admin/attendance/${variables.reportId}`],
       });
 
       setIsCreatingReport(false);

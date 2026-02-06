@@ -1767,7 +1767,11 @@ export async function registerRoutes(app: Express) {
 
   // Attendance routes
   app.get("/api/departments/:departmentId/attendance", async (req, res) => {
-    const reports = await storage.getAttendanceReportsByDepartment(Number(req.params.departmentId));
+    const departmentId = Number(req.params.departmentId);
+    if (isNaN(departmentId)) {
+      return res.status(400).json({ error: "Invalid department ID" });
+    }
+    const reports = await storage.getAttendanceReportsByDepartment(departmentId);
     res.json(reports);
   });
 

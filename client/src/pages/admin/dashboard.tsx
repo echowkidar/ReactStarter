@@ -1177,8 +1177,8 @@ export default function AdminDashboard() {
                           Accept Cancel
                         </Button>
                       )}
-                      {/* Revert to Draft button (Recall or manual revert) - SUPER ADMIN ONLY */}
-                      {(report.status === "submitted" || report.status === "recall_requested") && isSuperAdmin && (
+                      {/* Revert to Draft button (Recall or manual revert) - Manual revert Super Admin only, Recall approval all admins */}
+                      {((report.status === "submitted" && isSuperAdmin) || report.status === "recall_requested") && (
                         <Button
                           variant="outline"
                           size="sm"

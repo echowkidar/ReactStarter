@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, X } from "lucide-react";
 
 const months = [
@@ -74,6 +76,11 @@ const calculateDays = (fromDate: string, toDate: string): number => {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 };
 
+const parseDateFromDisplay = (dateStr: string): Date => {
+  const [day, month, year] = dateStr.split('-').map(Number);
+  return new Date(2000 + year, month - 1, day);
+};
+
 const attendanceSchema = z.object({
   month: z.string().min(1),
   year: z.string().min(1),
@@ -129,6 +136,8 @@ const formatTermExpiry = (dateStr: string | null | undefined): string => {
 export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData }: AttendanceFormProps) {
   const department = getCurrentDepartment();
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
+  const [includeExcluded, setIncludeExcluded] = useState(false); // Mode: With Break
+  const [includeExcludedFull, setIncludeExcludedFull] = useState(false); // Mode: Full Month
 
   const { data: employees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
@@ -295,9 +304,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     "DAILY WAGE (UN-SKILLED)"
   ];
 
-  // Filter employees eligible for "All" selection (excludes Daily Wage)
+  // Filter employees eligible for "All" selection
   const eligibleEmployees = employees.filter(
-    (emp: any) => !excludedDesignations.includes(emp.designation?.toUpperCase())
+    (emp: any) => includeExcluded || includeExcludedFull || !excludedDesignations.includes(emp.designation?.toUpperCase())
   );
 
   // Add a function to select/deselect all eligible employees (excludes Daily Wage)
@@ -324,15 +333,27 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
       const newEntries = eligibleEmployees
         .filter((emp: any) => !existingIds.has(emp.id))
-        .map((employee: any) => ({
-          employeeId: employee.id,
-          periods: [{
-            fromDate: formatDateForDisplay(defaultStartDate),
-            toDate: formatDateForDisplay(defaultEndDate),
-            days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
-            remarks: "",
-          }],
-        }));
+        .map((employee: any) => {
+          // Check if excluded designation (Daily Wage)
+          const isExcluded = excludedDesignations.includes(employee.designation?.toUpperCase());
+          let endDate = defaultEndDate;
+
+          if (isExcluded) {
+            // One day before month end for Daily Wagers
+            endDate = new Date(defaultEndDate);
+            endDate.setDate(endDate.getDate() - 1);
+          }
+
+          return {
+            employeeId: employee.id,
+            periods: [{
+              fromDate: formatDateForDisplay(defaultStartDate),
+              toDate: formatDateForDisplay(endDate),
+              days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(endDate)),
+              remarks: "",
+            }],
+          };
+        });
 
       form.setValue("entries", [...currentEntries, ...newEntries]);
     }
@@ -346,6 +367,42 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     );
   }
 
+  // Logic for Mixed State Visuals
+  const formEntries = form.getValues("entries") || [];
+  const excludedEmployeesForMixed = employees.filter(
+    (emp: any) => excludedDesignations.includes(emp.designation?.toUpperCase())
+  );
+  const selectedExcludedIds = excludedEmployeesForMixed
+    .map((emp: any) => emp.id)
+    .filter((id: number) => includedEmployees.has(id));
+
+  let isBreakMixed = false;
+  let isFullMixed = false;
+
+  if (selectedExcludedIds.length > 0) {
+    const selectedEntries = formEntries.filter(e => selectedExcludedIds.includes(e.employeeId));
+
+    const allHaveBreak = selectedEntries.every(entry => {
+      const period = entry.periods[0];
+      if (!period?.toDate) return false;
+      const endDate = parseDateFromDisplay(period.toDate);
+      const breakDate = new Date(defaultEndDate);
+      breakDate.setDate(breakDate.getDate() - 1);
+      return endDate.getDate() === breakDate.getDate();
+    });
+
+    const allHaveFull = selectedEntries.every(entry => {
+      const period = entry.periods[0];
+      if (!period?.toDate) return false;
+      const endDate = parseDateFromDisplay(period.toDate);
+      return endDate.getDate() === defaultEndDate.getDate();
+    });
+
+    if (includeExcluded && !allHaveBreak) isBreakMixed = true;
+    if (includeExcludedFull && !allHaveFull) isFullMixed = true;
+  }
+
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -356,24 +413,14 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Month</FormLabel>
-                <Select
-                  disabled={isLoading}
-                  onValueChange={field.onChange}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {months.map((month, index) => (
-                      <SelectItem key={month} value={String(index + 1)}>
-                        {month}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Input
+                    value={months[parseInt(field.value) - 1]}
+                    readOnly
+                    disabled
+                    className="opacity-100 bg-muted"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -384,29 +431,172 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Year</FormLabel>
-                <Select
-                  disabled={isLoading}
-                  onValueChange={field.onChange}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={String(year)}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Input
+                    value={field.value}
+                    readOnly
+                    disabled
+                    className="opacity-100 bg-muted"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
+
+        <div className="flex flex-col gap-2 mb-2">
+          <div className={`flex items-center space-x-2 ${isBreakMixed ? 'opacity-50' : ''}`} title={isBreakMixed ? "Some Daily Wagers have manually modified periods" : ""}>
+            <Checkbox
+              id="include-excluded"
+              checked={includeExcluded}
+              onCheckedChange={(checked) => {
+
+                const isChecked = checked as boolean;
+                setIncludeExcluded(isChecked);
+                if (isChecked) setIncludeExcludedFull(false);
+
+                const targetMode = isChecked ? 'break' : 'none';
+
+                // Logic to update rows based on mode
+                // 1. Identify "Regular" employees
+                const regularEmployees = employees.filter(
+                  (emp: any) => !excludedDesignations.includes(emp.designation?.toUpperCase())
+                );
+
+                // 2. Check if all regular employees are currently selected
+                const allRegularsSelected = regularEmployees.length > 0 &&
+                  regularEmployees.every((emp: any) => includedEmployees.has(emp.id));
+
+                // 3. Identify daily wagers
+                const excludedEmployees = employees.filter(
+                  (emp: any) => excludedDesignations.includes(emp.designation?.toUpperCase())
+                );
+                const excludedIds = excludedEmployees.map((emp: any) => emp.id);
+
+                if (targetMode === 'none') {
+                  // Remove daily wagers
+                  setIncludedEmployees(prev => {
+                    const next = new Set(prev);
+                    excludedIds.forEach((id: number) => next.delete(id));
+                    return next;
+                  });
+                  const currentEntries = form.getValues("entries") || [];
+                  form.setValue("entries", currentEntries.filter(entry => !excludedIds.includes(entry.employeeId)));
+                } else if (allRegularsSelected) {
+                  // Add daily wagers with correct date
+                  setIncludedEmployees(prev => {
+                    const next = new Set(prev);
+                    excludedIds.forEach((id: number) => next.add(id));
+                    return next;
+                  });
+
+                  const currentEntries = form.getValues("entries") || [];
+                  // Remove existing daily wager entries first to update date, or just add missing
+                  // Better to remove and re-add to ensure date is correct
+                  const cleanEntries = currentEntries.filter(entry => !excludedIds.includes(entry.employeeId));
+
+                  const newEntries = excludedEmployees.map((employee: any) => {
+                    let endDate = defaultEndDate;
+                    if (targetMode === 'break') {
+                      endDate = new Date(defaultEndDate);
+                      endDate.setDate(endDate.getDate() - 1);
+                    }
+
+                    return {
+                      employeeId: employee.id,
+                      periods: [{
+                        fromDate: formatDateForDisplay(defaultStartDate),
+                        toDate: formatDateForDisplay(endDate),
+                        days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(endDate)),
+                        remarks: "",
+                      }],
+                    };
+                  });
+
+                  form.setValue("entries", [...cleanEntries, ...newEntries]);
+                }
+              }}
+            />
+            <label
+              htmlFor="include-excluded"
+              className="text-sm font-medium leading-none cursor-pointer"
+            >
+              Include Unselected (Daily Wagers etc. with One Day Break) in 'All' option
+            </label>
+          </div>
+
+          <div className={`flex items-center space-x-2 ${isFullMixed ? 'opacity-50' : ''}`} title={isFullMixed ? "Some Daily Wagers have manually modified periods" : ""}>
+            <Checkbox
+              id="include-excluded-full"
+              checked={includeExcludedFull}
+              onCheckedChange={(checked) => {
+                const isChecked = checked as boolean;
+                setIncludeExcludedFull(isChecked);
+                if (isChecked) setIncludeExcluded(false);
+
+                const targetMode = isChecked ? 'full' : 'none';
+
+                // Logic to update rows based on mode (Duplicated for simplicity/independence context)
+                const regularEmployees = employees.filter(
+                  (emp: any) => !excludedDesignations.includes(emp.designation?.toUpperCase())
+                );
+
+                const allRegularsSelected = regularEmployees.length > 0 &&
+                  regularEmployees.every((emp: any) => includedEmployees.has(emp.id));
+
+                const excludedEmployees = employees.filter(
+                  (emp: any) => excludedDesignations.includes(emp.designation?.toUpperCase())
+                );
+                const excludedIds = excludedEmployees.map((emp: any) => emp.id);
+
+                if (targetMode === 'none') {
+                  setIncludedEmployees(prev => {
+                    const next = new Set(prev);
+                    excludedIds.forEach((id: number) => next.delete(id));
+                    return next;
+                  });
+                  const currentEntries = form.getValues("entries") || [];
+                  form.setValue("entries", currentEntries.filter(entry => !excludedIds.includes(entry.employeeId)));
+                } else if (allRegularsSelected) {
+                  setIncludedEmployees(prev => {
+                    const next = new Set(prev);
+                    excludedIds.forEach((id: number) => next.add(id));
+                    return next;
+                  });
+
+                  const currentEntries = form.getValues("entries") || [];
+                  const cleanEntries = currentEntries.filter(entry => !excludedIds.includes(entry.employeeId));
+
+                  const newEntries = excludedEmployees.map((employee: any) => {
+                    let endDate = defaultEndDate;
+                    // Full mode -> defaultEndDate
+
+                    return {
+                      employeeId: employee.id,
+                      periods: [{
+                        fromDate: formatDateForDisplay(defaultStartDate),
+                        toDate: formatDateForDisplay(endDate),
+                        days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(endDate)),
+                        remarks: "",
+                      }],
+                    };
+                  });
+
+                  form.setValue("entries", [...cleanEntries, ...newEntries]);
+                }
+              }}
+            />
+            <label
+              htmlFor="include-excluded-full"
+              className="text-sm font-medium leading-none cursor-pointer"
+            >
+              Include Unselected (Daily Wagers etc. with Full Month) in 'All' option
+            </label>
+          </div>
+        </div>
+
+
 
         <div className="rounded-md border overflow-x-auto">
           <Table style={{ minWidth: '1100px' }}>
@@ -471,6 +661,58 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                         ?.find(entry => entry.employeeId === employee.id)
                         ?.periods?.map((period, periodIndex) => (
                           <div key={periodIndex} className="border p-1 rounded-md bg-slate-50 dark:bg-slate-900">
+                            {excludedDesignations.includes(employee.designation?.toUpperCase()) && (
+                              <div className="flex items-center gap-2 mb-2 pb-2 border-b">
+                                <Switch
+                                  checked={(() => {
+                                    // Check if current end date is One Day Less
+                                    if (!period.toDate) return false;
+                                    const currentEndDate = parseDateFromDisplay(period.toDate);
+                                    const monthEndDate = defaultEndDate;
+
+                                    // If currentEndDate is day before month end -> IT IS "One Day Break" mode -> Checked
+                                    // If currentEndDate is month end -> Full Month -> Unchecked
+
+                                    // Are we in break mode?
+                                    // currentEndDate == monthEndDate - 1 day
+                                    const breakDate = new Date(monthEndDate);
+                                    breakDate.setDate(breakDate.getDate() - 1);
+
+                                    return currentEndDate.getDate() === breakDate.getDate();
+                                  })()}
+                                  onCheckedChange={(checked) => {
+                                    const currentEntries = form.getValues("entries");
+                                    const entryIndex = currentEntries.findIndex(e => e.employeeId === employee.id);
+                                    if (entryIndex === -1) return;
+
+                                    const updatedEntries = [...currentEntries];
+                                    const currentEntry = { ...updatedEntries[entryIndex] };
+                                    const updatedPeriods = [...currentEntry.periods];
+
+                                    let newEndDate = defaultEndDate;
+                                    if (checked) {
+                                      // Enable Break Mode: End Date = Month End - 1
+                                      newEndDate = new Date(defaultEndDate);
+                                      newEndDate.setDate(newEndDate.getDate() - 1);
+                                    }
+                                    // else Disable Break Mode: End Date = Month End
+
+                                    updatedPeriods[periodIndex] = {
+                                      ...updatedPeriods[periodIndex],
+                                      toDate: formatDateForDisplay(newEndDate),
+                                      days: calculateDays(updatedPeriods[periodIndex].fromDate, formatDateForDisplay(newEndDate))
+                                    };
+
+                                    currentEntry.periods = updatedPeriods;
+                                    updatedEntries[entryIndex] = currentEntry;
+                                    form.setValue("entries", updatedEntries);
+                                  }}
+                                />
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 cursor-default">
+                                  One Day Break
+                                </Badge>
+                              </div>
+                            )}
                             <div className="grid grid-cols-[105px_105px_40px_1fr_30px] gap-1 items-center">
 
                               <div>
@@ -619,7 +861,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             initialData ? "Update Report" : "Create Report"
           )}
         </button>
-      </form>
-    </Form>
+      </form >
+    </Form >
   );
 }
