@@ -115,7 +115,7 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 ### 3. git commit -m "massage / note"
 ### 4. git push origin main
 
-### Console commands To fetch in vps in folder of attendance.echowkidar.in
+### Console commands To fetch in vps in folder of salarysection.com
 ### 1. pm2 stop all
 ### 2. git checkout main # or git checkout master
 ### 3. git pull origin main # or git pull origin master
@@ -152,7 +152,7 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 
 
 
-### Console commands To fetch in vps in folder of attendance.echowkidar.in (if have any branch)
+### Console commands To fetch in vps in folder of salarysection.com (if have any branch)
 ## git fetch origin
 ## git reset --hard origin/complete_project
 ## git config --global core.autocrlf input

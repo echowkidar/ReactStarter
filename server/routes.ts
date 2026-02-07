@@ -450,7 +450,7 @@ export async function registerRoutes(app: Express) {
 
       // Create reset URL
       const baseUrl = process.env.NODE_ENV === 'production'
-        ? 'https://amu.echowkidar.in'
+        ? 'https://salarysection.com'
         : 'http://localhost:5001';
 
       const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
@@ -542,7 +542,7 @@ export async function registerRoutes(app: Express) {
 
       // Create reset URL
       const baseUrl = process.env.NODE_ENV === 'production'
-        ? 'https://amu.echowkidar.in'
+        ? 'https://salarysection.com'
         : 'http://localhost:5001';
 
       const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
