@@ -117,8 +117,8 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 
 ### Console commands To fetch in vps in folder of salarysection.com
 ### 1. pm2 stop all
-### 2. git checkout main # or git checkout master
-### 3. git pull origin main # or git pull origin master
+### 2. git checkout digital_ocean
+### 3. git pull origin digital_ocean
 ### 4. npm install # or yarn install
 ### 5. npm run build # or yarn build
 ### 6. pm2 start ecosystem.config.cjs --force
@@ -154,7 +154,7 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 
 ### Console commands To fetch in vps in folder of salarysection.com (if have any branch)
 ## git fetch origin
-## git reset --hard origin/complete_project
+## git reset --hard origin/digital_ocean
 ## git config --global core.autocrlf input
 ## git clean -fd
 ## pm2 stop all
