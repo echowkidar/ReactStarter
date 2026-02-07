@@ -11,13 +11,13 @@ module.exports = {
       NODE_ENV: "production",
       DATABASE_URL: "postgresql://postgres:salary@167.71.230.230:5432/postgres",
       PORT: 5001,
-      BASE_URL: "https://amu.echowkidar.in"
+      BASE_URL: "https://salarysection.com"
     },
     env_production: {
       NODE_ENV: "production",
       DATABASE_URL: "postgresql://postgres:salary@167.71.230.230:5432/postgres",
       PORT: 5001,
-      BASE_URL: "https://amu.echowkidar.in"
+      BASE_URL: "https://salarysection.com"
     }
   }]
 }; 
