@@ -454,6 +454,7 @@ export async function registerRoutes(app: Express) {
         : 'http://localhost:5001';
 
       const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      console.log('[DEBUG] Generated Customer Reset URL:', resetUrl); // Debug log
 
       // Send email with reset link
       const emailResult = await sendPasswordResetEmail(email, resetUrl, false);
@@ -546,6 +547,7 @@ export async function registerRoutes(app: Express) {
         : 'http://localhost:5001';
 
       const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      console.log('[DEBUG] Generated Admin Reset URL:', resetUrl); // Debug log
 
       // Send email with reset link
       const emailResult = await sendPasswordResetEmail(email, resetUrl, true);
