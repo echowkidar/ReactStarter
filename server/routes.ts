@@ -263,7 +263,18 @@ export async function registerRoutes(app: Express) {
       )
     `);
 
-    console.log("Notices, visitors, and active_user_snapshots tables initialized successfully.");
+    // Create login_attempts table for brute force protection
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        id SERIAL PRIMARY KEY,
+        identifier TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL DEFAULT 1,
+        last_attempt_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        locked_until TIMESTAMP
+      )
+    `);
+
+    console.log("Notices, visitors, active_user_snapshots, and login_attempts tables initialized successfully.");
   } catch (error) {
     console.error("Error initializing tables:", error);
   }
