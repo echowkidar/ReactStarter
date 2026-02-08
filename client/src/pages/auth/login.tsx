@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 
 // n8n chat integration
 import { useEffect as useEffectOnce } from "react";
@@ -47,12 +47,17 @@ const N8nChatScript = () => {
     document.body.appendChild(script);
 
     return () => {
-      document.body.removeChild(script);
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
     };
   }, []);
 
   return null;
 };
+
+// Turnstile Site Key
+const TURNSTILE_SITE_KEY = "0x4AAAAAACZTOpxqkHGef-Qz";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -63,6 +68,9 @@ export default function Login() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [lockMessage, setLockMessage] = useState<string | null>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null);
 
   // Track visitor
   useVisitorTracking({ pageVisited: '/login' });
@@ -75,6 +83,45 @@ export default function Login() {
     }
   }, [setLocation]);
 
+  // Load Turnstile script
+  useEffect(() => {
+    // Only load Turnstile if not on localhost (development testing without CAPTCHA)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (isLocalhost) {
+      // For development, auto-set a fake token to allow testing
+      setTurnstileToken('development-bypass');
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    script.async = true;
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      try {
+        if (window.turnstile && turnstileRef.current) {
+          window.turnstile.render(turnstileRef.current, {
+            sitekey: TURNSTILE_SITE_KEY,
+            callback: (token: string) => setTurnstileToken(token),
+            "expired-callback": () => setTurnstileToken(null),
+          });
+        }
+      } catch (error) {
+        console.error('Turnstile render error:', error);
+        // Allow login even if Turnstile fails
+        setTurnstileToken('error-bypass');
+      }
+    };
+
+    return () => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, []);
+
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -85,15 +132,37 @@ export default function Login() {
 
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
+    setLockMessage(null);
     try {
-      await login(values);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...values, turnstileToken }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.locked) {
+          setLockMessage(`Account locked. Try again in ${data.remainingMinutes} minutes.`);
+        }
+        throw new Error(data.message || "Invalid credentials");
+      }
+
+      // Store department info
+      localStorage.setItem("department", JSON.stringify(data.department));
       setLocation("/dashboard");
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Invalid credentials. Please try again.",
+        description: error instanceof Error ? error.message : "Invalid credentials. Please try again.",
       });
+      // Reset Turnstile
+      if (window.turnstile && turnstileRef.current) {
+        window.turnstile.reset(turnstileRef.current);
+        setTurnstileToken(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -114,6 +183,12 @@ export default function Login() {
           </p>
         </CardHeader>
         <CardContent>
+          {lockMessage && (
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-sm">{lockMessage}</span>
+            </div>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -142,7 +217,11 @@ export default function Login() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              {/* Turnstile CAPTCHA */}
+              <div className="flex justify-center">
+                <div ref={turnstileRef}></div>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading || !turnstileToken}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -176,4 +255,14 @@ export default function Login() {
       </Card>
     </div>
   );
+}
+
+// Add Turnstile type declaration
+declare global {
+  interface Window {
+    turnstile: {
+      render: (element: HTMLElement, options: { sitekey: string; callback: (token: string) => void; "expired-callback": () => void }) => void;
+      reset: (element: HTMLElement) => void;
+    };
+  }
 }

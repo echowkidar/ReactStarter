@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -8,6 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { AlertTriangle } from "lucide-react";
+
+// Turnstile Site Key
+const TURNSTILE_SITE_KEY = "0x4AAAAAACZTOpxqkHGef-Qz";
 
 const adminLoginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -20,6 +24,46 @@ export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [lockMessage, setLockMessage] = useState<string | null>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null);
+
+  // Load Turnstile script
+  useEffect(() => {
+    // Only load Turnstile if not on localhost (development testing without CAPTCHA)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (isLocalhost) {
+      setTurnstileToken('development-bypass');
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    script.async = true;
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      try {
+        if (window.turnstile && turnstileRef.current) {
+          window.turnstile.render(turnstileRef.current, {
+            sitekey: TURNSTILE_SITE_KEY,
+            callback: (token: string) => setTurnstileToken(token),
+            "expired-callback": () => setTurnstileToken(null),
+          });
+        }
+      } catch (error) {
+        console.error('Turnstile render error:', error);
+        setTurnstileToken('error-bypass');
+      }
+    };
+
+    return () => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, []);
 
   const form = useForm<AdminLoginForm>({
     resolver: zodResolver(adminLoginSchema),
@@ -31,24 +75,27 @@ export default function AdminLogin() {
 
   const onSubmit = async (data: AdminLoginForm) => {
     setIsLoading(true);
+    setLockMessage(null);
     try {
       const response = await fetch("/api/auth/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, turnstileToken }),
       });
-
-      if (!response.ok) {
-        throw new Error("Invalid credentials");
-      }
 
       const responseData = await response.json();
 
+      if (!response.ok) {
+        if (responseData.locked) {
+          setLockMessage(`Account locked. Try again in ${responseData.remainingMinutes} minutes.`);
+        }
+        throw new Error(responseData.message || "Invalid credentials");
+      }
+
       // Store admin information in localStorage
       localStorage.setItem("adminType", responseData.adminType || "super");
-      localStorage.setItem("adminSessionToken", responseData.sessionToken); // For session verification
+      localStorage.setItem("adminSessionToken", responseData.sessionToken);
 
-      // Store admin info as object
       localStorage.setItem("admin", JSON.stringify({
         email: data.email,
         name: responseData.adminName || "Admin",
@@ -63,9 +110,14 @@ export default function AdminLogin() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Invalid admin credentials",
+        description: error instanceof Error ? error.message : "Invalid admin credentials",
         variant: "destructive",
       });
+      // Reset Turnstile
+      if (window.turnstile && turnstileRef.current) {
+        window.turnstile.reset(turnstileRef.current);
+        setTurnstileToken(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -81,6 +133,12 @@ export default function AdminLogin() {
           <CardTitle className="text-2xl text-center">Admin Login</CardTitle>
         </CardHeader>
         <CardContent>
+          {lockMessage && (
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-sm">{lockMessage}</span>
+            </div>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -109,7 +167,11 @@ export default function AdminLogin() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              {/* Turnstile CAPTCHA */}
+              <div className="flex justify-center">
+                <div ref={turnstileRef}></div>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading || !turnstileToken}>
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </form>
@@ -136,4 +198,14 @@ export default function AdminLogin() {
       </Card>
     </div>
   );
+}
+
+// Add Turnstile type declaration
+declare global {
+  interface Window {
+    turnstile: {
+      render: (element: HTMLElement, options: { sitekey: string; callback: (token: string) => void; "expired-callback": () => void }) => void;
+      reset: (element: HTMLElement) => void;
+    };
+  }
 }

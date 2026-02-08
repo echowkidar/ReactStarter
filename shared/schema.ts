@@ -13,6 +13,15 @@ export const departments = pgTable("departments", {
   lastLogin: timestamp("last_login"),
 });
 
+// Login Attempts - for brute force protection
+export const loginAttempts = pgTable("login_attempts", {
+  id: serial("id").primaryKey(),
+  identifier: text("identifier").notNull(),  // email or IP
+  attemptCount: integer("attempt_count").notNull().default(1),
+  lastAttemptAt: timestamp("last_attempt_at").notNull().defaultNow(),
+  lockedUntil: timestamp("locked_until"),
+});
+
 
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),

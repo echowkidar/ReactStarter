@@ -41,6 +41,114 @@ const __dirname = path.dirname(__filename);
 // Initialize database storage
 const storage = new DbStorage();
 
+// ============ Login Security: Turnstile & Rate Limiting ============
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+
+// Verify Cloudflare Turnstile token
+async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
+  const secretKey = process.env.TURNSTILE_SECRET_KEY;
+  if (!secretKey) {
+    console.warn('TURNSTILE_SECRET_KEY not set, skipping verification');
+    return true; // Skip in development if not configured
+  }
+
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        secret: secretKey,
+        response: token,
+        remoteip: ip
+      })
+    });
+    const data = await response.json() as { success: boolean };
+    return data.success;
+  } catch (error) {
+    console.error('Turnstile verification error:', error);
+    return false;
+  }
+}
+
+// Check if account is locked
+async function isAccountLocked(identifier: string): Promise<{ locked: boolean; remainingMs?: number }> {
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+
+    const result = await db.execute(sql`
+      SELECT locked_until FROM login_attempts 
+      WHERE identifier = ${identifier} 
+      AND locked_until IS NOT NULL 
+      AND locked_until > NOW()
+    `);
+
+    if (result.rows.length > 0) {
+      const lockedUntil = new Date(result.rows[0].locked_until as string);
+      const remainingMs = lockedUntil.getTime() - Date.now();
+      return { locked: true, remainingMs };
+    }
+    return { locked: false };
+  } catch (error) {
+    console.error('Error checking account lock:', error);
+    return { locked: false };
+  }
+}
+
+// Record failed login attempt
+async function recordFailedAttempt(identifier: string): Promise<{ locked: boolean; attemptsRemaining: number }> {
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+
+    // Get current attempt count
+    const existing = await db.execute(sql`
+      SELECT id, attempt_count FROM login_attempts WHERE identifier = ${identifier}
+    `);
+
+    if (existing.rows.length > 0) {
+      const currentCount = (existing.rows[0].attempt_count as number) + 1;
+      const shouldLock = currentCount >= MAX_LOGIN_ATTEMPTS;
+
+      await db.execute(sql`
+        UPDATE login_attempts 
+        SET attempt_count = ${currentCount},
+            last_attempt_at = NOW(),
+            locked_until = ${shouldLock ? sql`NOW() + INTERVAL '30 minutes'` : sql`NULL`}
+        WHERE identifier = ${identifier}
+      `);
+
+      return {
+        locked: shouldLock,
+        attemptsRemaining: Math.max(0, MAX_LOGIN_ATTEMPTS - currentCount)
+      };
+    } else {
+      // First attempt
+      await db.execute(sql`
+        INSERT INTO login_attempts (identifier, attempt_count, last_attempt_at)
+        VALUES (${identifier}, 1, NOW())
+      `);
+      return { locked: false, attemptsRemaining: MAX_LOGIN_ATTEMPTS - 1 };
+    }
+  } catch (error) {
+    console.error('Error recording failed attempt:', error);
+    return { locked: false, attemptsRemaining: MAX_LOGIN_ATTEMPTS };
+  }
+}
+
+// Clear login attempts on successful login
+async function clearLoginAttempts(identifier: string): Promise<void> {
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`DELETE FROM login_attempts WHERE identifier = ${identifier}`);
+  } catch (error) {
+    console.error('Error clearing login attempts:', error);
+  }
+}
+// ============ End Login Security ============
+
 // ============ Active Users Tracking ============
 // In-memory store for active users (session-based heartbeat)
 interface ActiveSession {
@@ -162,29 +270,64 @@ export async function registerRoutes(app: Express) {
 
   // Admin auth routes
   app.post("/api/auth/admin/login", async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, turnstileToken } = req.body;
+    const clientIp = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
 
     try {
-      const admin = await storage.getAdminByEmail(email);
-
-      // Verify password (plain text as per current system design, should be hashed in production)
-      if (!admin || admin.password !== password) {
-        return res.status(401).json({ message: "Invalid admin credentials" });
+      // Check if account is locked
+      const lockStatus = await isAccountLocked(email);
+      if (lockStatus.locked) {
+        const remainingMinutes = Math.ceil((lockStatus.remainingMs || 0) / 60000);
+        return res.status(429).json({
+          message: `Account locked. Try again in ${remainingMinutes} minutes.`,
+          locked: true,
+          remainingMinutes
+        });
       }
 
+      // Verify Turnstile CAPTCHA
+      if (turnstileToken) {
+        const isValidCaptcha = await verifyTurnstile(turnstileToken, clientIp);
+        if (!isValidCaptcha) {
+          return res.status(400).json({ message: "CAPTCHA verification failed. Please try again." });
+        }
+      } else if (process.env.TURNSTILE_SECRET_KEY) {
+        // Only require CAPTCHA if configured
+        return res.status(400).json({ message: "CAPTCHA verification required." });
+      }
+
+      const admin = await storage.getAdminByEmail(email);
+
+      // Verify password
+      if (!admin || admin.password !== password) {
+        const attemptResult = await recordFailedAttempt(email);
+        if (attemptResult.locked) {
+          return res.status(429).json({
+            message: "Too many failed attempts. Account locked for 30 minutes.",
+            locked: true,
+            remainingMinutes: 30
+          });
+        }
+        return res.status(401).json({
+          message: `Invalid admin credentials. ${attemptResult.attemptsRemaining} attempts remaining.`,
+          attemptsRemaining: attemptResult.attemptsRemaining
+        });
+      }
+
+      // Clear failed attempts on successful login
+      await clearLoginAttempts(email);
+
       // Map DB role to frontend adminType
-      // DB: 'super_admin', 'salary_admin'
-      // Frontend expects: 'super', 'salary'
       const adminType = admin.role === 'salary_admin' ? 'salary' : 'super';
 
-      // Create session token based on password (for session invalidation on password change)
+      // Create session token
       const sessionToken = Buffer.from(`${admin.email}:${admin.password}`).toString('base64');
 
       return res.json({
         role: "admin",
         adminType: adminType,
         adminName: admin.name || "Admin",
-        sessionToken: sessionToken, // For session verification
+        sessionToken: sessionToken,
         message: "Admin logged in successfully"
       });
     } catch (error) {
@@ -691,23 +834,69 @@ export async function registerRoutes(app: Express) {
   // Auth routes
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, turnstileToken } = req.body;
+      const clientIp = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
       console.log('Login attempt for:', email);
 
-      const department = await storage.getDepartmentByEmail(email);
-      console.log('Found department:', department);
-
-      if (!department) {
-        return res.status(401).json({ message: "Invalid credentials" });
+      // Check if account is locked
+      const lockStatus = await isAccountLocked(email);
+      if (lockStatus.locked) {
+        const remainingMinutes = Math.ceil((lockStatus.remainingMs || 0) / 60000);
+        return res.status(429).json({
+          message: `Account locked. Try again in ${remainingMinutes} minutes.`,
+          locked: true,
+          remainingMinutes
+        });
       }
 
-      // Make sure both the stored password and provided password are strings
+      // Verify Turnstile CAPTCHA
+      if (turnstileToken) {
+        const isValidCaptcha = await verifyTurnstile(turnstileToken, clientIp);
+        if (!isValidCaptcha) {
+          return res.status(400).json({ message: "CAPTCHA verification failed. Please try again." });
+        }
+      } else if (process.env.TURNSTILE_SECRET_KEY) {
+        return res.status(400).json({ message: "CAPTCHA verification required." });
+      }
+
+      const department = await storage.getDepartmentByEmail(email);
+
+      if (!department) {
+        const attemptResult = await recordFailedAttempt(email);
+        if (attemptResult.locked) {
+          return res.status(429).json({
+            message: "Too many failed attempts. Account locked for 30 minutes.",
+            locked: true,
+            remainingMinutes: 30
+          });
+        }
+        return res.status(401).json({
+          message: `Invalid credentials. ${attemptResult.attemptsRemaining} attempts remaining.`,
+          attemptsRemaining: attemptResult.attemptsRemaining
+        });
+      }
+
+      // Make sure both passwords are strings
       const storedPassword = String(department.password);
       const providedPassword = String(password);
 
       if (storedPassword !== providedPassword) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        const attemptResult = await recordFailedAttempt(email);
+        if (attemptResult.locked) {
+          return res.status(429).json({
+            message: "Too many failed attempts. Account locked for 30 minutes.",
+            locked: true,
+            remainingMinutes: 30
+          });
+        }
+        return res.status(401).json({
+          message: `Invalid credentials. ${attemptResult.attemptsRemaining} attempts remaining.`,
+          attemptsRemaining: attemptResult.attemptsRemaining
+        });
       }
+
+      // Clear failed attempts on successful login
+      await clearLoginAttempts(email);
 
       // Update last login timestamp
       try {
@@ -718,7 +907,7 @@ export async function registerRoutes(app: Express) {
         console.error('Failed to update lastLogin:', err);
       }
 
-      // Return the department data in the expected format
+      // Return the department data
       res.json({
         success: true,
         department: {
