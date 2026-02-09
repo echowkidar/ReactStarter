@@ -1409,7 +1409,7 @@ export async function registerRoutes(app: Express) {
       console.log(`Upload API - File received: ${req.file.originalname}, size: ${req.file.size}, type: ${req.file.mimetype}`);
 
       const baseUrl = process.env.NODE_ENV === 'production'
-        ? 'https://amu.echowkidar.in'
+        ? 'https://salarysection.com'
         : `http://localhost:${process.env.PORT || 5001}`;
 
       let finalFilename = req.file.filename;
@@ -2700,7 +2700,7 @@ export async function registerRoutes(app: Express) {
 
         // Create file URL using the compressed file
         const baseUrl = process.env.NODE_ENV === 'production'
-          ? 'https://amu.echowkidar.in'
+          ? 'https://salarysection.com'
           : `http://localhost:${process.env.PORT || 5001}`;
 
         const imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
@@ -2972,7 +2972,7 @@ export async function registerRoutes(app: Express) {
             .toFile(compressedFilePath);
 
           const baseUrl = process.env.NODE_ENV === 'production'
-            ? 'https://amu.echowkidar.in'
+            ? 'https://salarysection.com'
             : `http://localhost:${process.env.PORT || 5001}`;
 
           imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
@@ -3076,7 +3076,7 @@ export async function registerRoutes(app: Express) {
       let imageUrl = null;
       if (req.file) {
         const baseUrl = process.env.NODE_ENV === 'production'
-          ? 'https://amu.echowkidar.in'
+          ? 'https://salarysection.com'
           : `http://localhost:${process.env.PORT || 5001}`;
 
         // Compress image if it's an image file
