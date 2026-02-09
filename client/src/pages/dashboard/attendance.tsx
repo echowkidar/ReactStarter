@@ -1492,7 +1492,9 @@ export default function Attendance() {
                             onClick={() => setLocation(`/dashboard/reports/${report.id}`)}
                           >
                             <Eye className="h-4 w-4 mr-2" />
-                            View Details
+                            {report.status === "submitted" || report.status === "sent"
+                              ? "View / Print Report"
+                              : "View Details"}
                           </Button>
                         )}
 

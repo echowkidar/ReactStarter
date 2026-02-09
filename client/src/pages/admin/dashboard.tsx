@@ -572,7 +572,15 @@ export default function AdminDashboard() {
         if (aValue === null || aValue === undefined) return 1;
         if (bValue === null || bValue === undefined) return -1;
 
-        // Convert to strings for safe comparison
+        // Use numerical comparison for receiptNo
+        if (sortConfig.key === "receiptNo") {
+          const aNum = Number(aValue) || 0;
+          const bNum = Number(bValue) || 0;
+          const comparison = aNum - bNum;
+          return sortConfig.direction === "asc" ? comparison : -comparison;
+        }
+
+        // Convert to strings for other fields
         const aString = String(aValue);
         const bString = String(bValue);
 

@@ -629,14 +629,18 @@ export default function ReportDetails() {
               View PDF
             </Button>
           )}
-          <Button variant="outline" onClick={handleDownload}>
-            <Download className="h-4 w-4 mr-2" />
-            Download Excel
-          </Button>
-          <Button variant="outline" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
+          {report.status !== "draft" && (
+            <>
+              <Button variant="outline" onClick={handleDownload}>
+                <Download className="h-4 w-4 mr-2" />
+                Download Excel
+              </Button>
+              <Button variant="outline" onClick={handlePrint}>
+                <Printer className="h-4 w-4 mr-2" />
+                Print
+              </Button>
+            </>
+          )}
           <Button variant="outline" onClick={() => setLocation("/dashboard/attendance")}>
             <X className="h-4 w-4 mr-2" />
             Close
