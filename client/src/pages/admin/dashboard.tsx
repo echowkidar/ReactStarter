@@ -48,13 +48,41 @@ type SortConfig = {
 };
 
 const PdfPreview = ({ pdfUrl }: { pdfUrl: string }) => {
+  // Normalize URL to use current origin - handles domain migration and relative paths
+  const normalizedUrl = (() => {
+    if (!pdfUrl) return '';
+
+    // If it's an absolute URL with old domain, extract path and use current origin
+    if (pdfUrl.includes('amu.echowkidar.in')) {
+      const urlPath = pdfUrl.replace(/https?:\/\/amu\.echowkidar\.in/, '');
+      return `${window.location.origin}${urlPath}`;
+    }
+
+    // If it's a relative path starting with /
+    if (pdfUrl.startsWith('/')) {
+      return `${window.location.origin}${pdfUrl}`;
+    }
+
+    // If it starts with http but not current origin, try to extract and use path
+    if (pdfUrl.startsWith('http') && !pdfUrl.startsWith(window.location.origin)) {
+      try {
+        const url = new URL(pdfUrl);
+        return `${window.location.origin}${url.pathname}`;
+      } catch {
+        return pdfUrl;
+      }
+    }
+
+    return pdfUrl;
+  })();
+
   return (
     <div className="space-y-6">
       <div className="w-full h-[600px] border rounded-lg overflow-hidden">
-        <object data={pdfUrl} type="application/pdf" className="w-full h-full">
+        <object data={normalizedUrl} type="application/pdf" className="w-full h-full">
           <p>
             Unable to display PDF.{" "}
-            <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+            <a href={normalizedUrl} target="_blank" rel="noopener noreferrer">
               Click here to download
             </a>
           </p>
