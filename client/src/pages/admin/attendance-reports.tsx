@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle } from "lucide-react";
+import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -56,6 +56,7 @@ type AttendanceReport = {
   status: string;
   receiptNo?: number;
   receiptDate?: string;
+  fileUrl?: string;
   entries?: AttendanceEntry[];
 };
 
@@ -134,6 +135,7 @@ export default function AttendanceReports() {
       remarks: string;
       reportId: number;
       departmentId: number;
+      fileUrl?: string;
     }> = [];
 
     reports.forEach(report => {
@@ -175,6 +177,7 @@ export default function AttendanceReports() {
                   remarks: period.remarks || "",
                   reportId: report.id,
                   departmentId: report.departmentId,
+                  fileUrl: report.fileUrl || undefined,
                 });
               });
             } catch (error) {
@@ -738,15 +741,28 @@ export default function AttendanceReports() {
                         <TableCell>{entry.days}</TableCell>
                         <TableCell>{entry.remarks || "-"}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setLocation(`/admin/reports/${entry.reportId}`)}
-                            className="flex items-center gap-2"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View Report
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setLocation(`/admin/reports/${entry.reportId}`)}
+                              title="View Report Details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {entry.fileUrl && (
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => window.open(entry.fileUrl, '_blank')}
+                                title="View Signed Report"
+                              >
+                                <FileText className="h-4 w-4 text-blue-600" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
