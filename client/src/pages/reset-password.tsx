@@ -22,13 +22,19 @@ export default function ResetPassword() {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const { toast } = useToast();
+
+  // State
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccessful, setIsSuccessful] = useState(false);
-  // New state for token validation
   const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // Extract token and email from URL params and check if this is direct access
+  const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isDirectAccess, setIsDirectAccess] = useState(true);
+
+  // Extract token and email from URL params and verify token
   useEffect(() => {
     const params = new URLSearchParams(search);
     const tokenParam = params.get("token");
@@ -52,8 +58,8 @@ export default function ResetPassword() {
       });
       setIsValidToken(false);
     } else {
-      // Verify token immediately
-      verifyToken(emailParam, tokenParam, isAdminParam);
+      // Verify token
+      verifyToken(emailParam!, tokenParam!, isAdminParam);
     }
   }, [search, toast]);
 
@@ -240,4 +246,4 @@ export default function ResetPassword() {
       </Card>
     </div>
   );
-} 
+}
