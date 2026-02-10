@@ -756,7 +756,17 @@ export default function AttendanceReports() {
                                 variant="outline"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => window.open(entry.fileUrl, '_blank')}
+                                onClick={() => {
+                                  let url = entry.fileUrl!;
+                                  // Normalize URL - handle old domain migration
+                                  if (url.includes('amu.echowkidar.in')) {
+                                    const urlPath = url.replace(/https?:\/\/amu\.echowkidar\.in/, '');
+                                    url = `${window.location.origin}${urlPath}`;
+                                  } else if (url.startsWith('/')) {
+                                    url = `${window.location.origin}${url}`;
+                                  }
+                                  window.open(url, '_blank');
+                                }}
                                 title="View Signed Report"
                               >
                                 <FileText className="h-4 w-4 text-blue-600" />
