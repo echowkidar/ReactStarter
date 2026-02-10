@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ const employeeSchema = z.object({
   epid: z.string().min(1, "EPID is required"),
   name: z.string().min(1, "Name is required"),
   panNumber: z.string().optional(),
-  bankAccount: z.string().min(1, "Bank Account is required"),
+  bankAccount: z.string().optional(),
   aadharCard: z.string().optional(),
   designation: z.string().min(1, "Designation is required"),
 
@@ -56,6 +57,14 @@ interface EmployeeFormProps {
 export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps) {
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
   const [duplicateEmployee, setDuplicateEmployee] = useState<{ name: string; departmentName: string } | null>(null);
+
+  // Fetch field visibility settings
+  const { data: fieldSettings } = useQuery<Record<string, string>>({
+    queryKey: ["/api/admin/settings"],
+  });
+  const showPan = fieldSettings?.show_pan_field !== "false";
+  const showBank = fieldSettings?.show_bank_field !== "false";
+  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
 
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
@@ -320,50 +329,58 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
           </div>
 
           {/* Identification Details Section */}
-          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="panNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PAN Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+          {(showPan || showBank || showAadhar) && (
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {showPan && (
+                  <FormField
+                    control={form.control}
+                    name="panNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>PAN Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="bankAccount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bank Account</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                {showBank && (
+                  <FormField
+                    control={form.control}
+                    name="bankAccount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bank Account</FormLabel>
+                        <FormControl>
+                          <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="aadharCard"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Adhar Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                {showAadhar && (
+                  <FormField
+                    control={form.control}
+                    name="aadharCard"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Adhar Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Office Details Section */}
           <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
@@ -472,60 +489,66 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
           <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
             <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="panCardDoc"
-                render={({ field }) => (
-                  <FormItem>
-                    <FileUpload
-                      label="PAN Card"
-                      name="panCardDoc"
-                      value={field.value}
-                      onChange={(file) => handleFileChange(file, "panCardDoc")}
-                      disabled={isLoading}
-                      onlyImages={true}
-                      errorMessage={fileErrors.panCardDoc}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="bankAccountDoc"
-                render={({ field }) => (
-                  <FormItem>
-                    <FileUpload
-                      label="Bank Account Proof"
-                      name="bankAccountDoc"
-                      value={field.value}
-                      onChange={(file) => handleFileChange(file, "bankAccountDoc")}
-                      disabled={isLoading}
-                      onlyImages={true}
-                      errorMessage={fileErrors.bankAccountDoc}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="aadharCardDoc"
-                render={({ field }) => (
-                  <FormItem>
-                    <FileUpload
-                      label="Adhar Number"
-                      name="aadharCardDoc"
-                      value={field.value}
-                      onChange={(file) => handleFileChange(file, "aadharCardDoc")}
-                      disabled={isLoading}
-                      onlyImages={true}
-                      errorMessage={fileErrors.aadharCardDoc}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {showPan && (
+                <FormField
+                  control={form.control}
+                  name="panCardDoc"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FileUpload
+                        label="PAN Card"
+                        name="panCardDoc"
+                        value={field.value}
+                        onChange={(file) => handleFileChange(file, "panCardDoc")}
+                        disabled={isLoading}
+                        onlyImages={true}
+                        errorMessage={fileErrors.panCardDoc}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {showBank && (
+                <FormField
+                  control={form.control}
+                  name="bankAccountDoc"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FileUpload
+                        label="Bank Account Proof"
+                        name="bankAccountDoc"
+                        value={field.value}
+                        onChange={(file) => handleFileChange(file, "bankAccountDoc")}
+                        disabled={isLoading}
+                        onlyImages={true}
+                        errorMessage={fileErrors.bankAccountDoc}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {showAadhar && (
+                <FormField
+                  control={form.control}
+                  name="aadharCardDoc"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FileUpload
+                        label="Adhar Number"
+                        name="aadharCardDoc"
+                        value={field.value}
+                        onChange={(file) => handleFileChange(file, "aadharCardDoc")}
+                        disabled={isLoading}
+                        onlyImages={true}
+                        errorMessage={fileErrors.aadharCardDoc}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="officeMemoDoc"

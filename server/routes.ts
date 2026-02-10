@@ -775,6 +775,49 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Endpoint to verify reset token validity (for frontend check)
+  app.post("/api/auth/verify-reset-token", async (req, res) => {
+    const { email, token, isAdmin } = req.body;
+
+    if (!email || !token) {
+      return res.status(400).json({ valid: false, message: "Missing fields" });
+    }
+
+    try {
+      if (isAdmin) {
+        // Validation for Admin
+        if (!global.adminResetTokens || !global.adminResetTokens.has(email)) {
+          return res.status(200).json({ valid: false, message: "Invalid or expired token" });
+        }
+
+        const tokenData = global.adminResetTokens.get(email);
+        if (!tokenData || tokenData.token !== token) {
+          return res.status(200).json({ valid: false, message: "Invalid token" });
+        }
+
+        if (tokenData.expiry < new Date()) {
+          return res.status(200).json({ valid: false, message: "Token expired" });
+        }
+
+        return res.status(200).json({ valid: true });
+      } else {
+        // Validation for Department
+        const department = await storage.getDepartmentByEmail(email);
+        if (!department) {
+          return res.status(200).json({ valid: false, message: "Email not found" });
+        }
+
+        const isValid = await storage.validateResetToken(department.id, token);
+        // validateResetToken checks both equality and expiry
+
+        return res.json({ valid: isValid });
+      }
+    } catch (error) {
+      console.error("Token verification error:", error);
+      return res.status(500).json({ valid: false, message: "Server error" });
+    }
+  });
+
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     console.log('[POST /api/auth/register] Registration attempt with data:', {
@@ -2170,6 +2213,51 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error toggling verification:", error);
       res.status(500).json({ message: "Failed to toggle verification" });
+    }
+  });
+
+  // App Settings - GET (available to all, needed by both admin and department forms)
+  app.get("/api/admin/settings", async (_req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const result = await db.execute(sql`SELECT key, value FROM app_settings`);
+      const settings: Record<string, string> = {};
+      for (const row of result.rows) {
+        settings[row.key as string] = row.value as string;
+      }
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  // App Settings - PATCH (update individual setting)
+  app.patch("/api/admin/settings", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { key, value } = req.body;
+
+      if (!key || value === undefined) {
+        return res.status(400).json({ message: "key and value are required" });
+      }
+
+      await db.execute(sql`
+        UPDATE app_settings SET value = ${String(value)} WHERE key = ${key}
+      `);
+
+      // Return all settings
+      const result = await db.execute(sql`SELECT key, value FROM app_settings`);
+      const settings: Record<string, string> = {};
+      for (const row of result.rows) {
+        settings[row.key as string] = row.value as string;
+      }
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating setting:", error);
+      res.status(500).json({ message: "Failed to update setting" });
     }
   });
 

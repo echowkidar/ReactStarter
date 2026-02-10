@@ -55,6 +55,14 @@ export default function AdminEmployees() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
   const [selectedDesignation, setSelectedDesignation] = useState<string>("");
   const [payLevel, setPayLevel] = useState(selectedEmployee?.payLevel || "L-0");
+
+  // Fetch field visibility settings
+  const { data: fieldSettings } = useQuery<Record<string, string>>({
+    queryKey: ["/api/admin/settings"],
+  });
+  const showPan = fieldSettings?.show_pan_field !== "false";
+  const showBank = fieldSettings?.show_bank_field !== "false";
+  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
   const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState<string>("");
   const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState<string>("");
   const [uploads, setUploads] = useState<UploadState>({});
@@ -1049,42 +1057,47 @@ export default function AdminEmployees() {
                         </div>
                       </div>
 
-                      <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                        <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div>
-                            <Label htmlFor="panNumber">PAN Number</Label>
-                            <Input
-                              id="panNumber"
-                              name="panNumber"
-                              defaultValue={selectedEmployee?.panNumber}
-                              className="bg-white dark:bg-slate-800"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="bankAccount">Bank Account</Label>
-                            <Input
-                              id="bankAccount"
-                              name="bankAccount"
-                              defaultValue={selectedEmployee?.bankAccount}
-                              className="bg-white dark:bg-slate-800"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="aadharCard">Adhar Number</Label>
-                            <Input
-                              id="aadharCard"
-                              name="aadharCard"
-                              defaultValue={selectedEmployee?.aadharCard || ""}
-                              className="bg-white dark:bg-slate-800"
-                              required
-                              onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
-                            />
+                      {(showPan || showBank || showAadhar) && (
+                        <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                          <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            {showPan && (
+                              <div>
+                                <Label htmlFor="panNumber">PAN Number</Label>
+                                <Input
+                                  id="panNumber"
+                                  name="panNumber"
+                                  defaultValue={selectedEmployee?.panNumber}
+                                  className="bg-white dark:bg-slate-800"
+                                />
+                              </div>
+                            )}
+                            {showBank && (
+                              <div>
+                                <Label htmlFor="bankAccount">Bank Account</Label>
+                                <Input
+                                  id="bankAccount"
+                                  name="bankAccount"
+                                  defaultValue={selectedEmployee?.bankAccount}
+                                  className="bg-white dark:bg-slate-800"
+                                />
+                              </div>
+                            )}
+                            {showAadhar && (
+                              <div>
+                                <Label htmlFor="aadharCard">Adhar Number</Label>
+                                <Input
+                                  id="aadharCard"
+                                  name="aadharCard"
+                                  defaultValue={selectedEmployee?.aadharCard || ""}
+                                  className="bg-white dark:bg-slate-800"
+                                  onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
+                      )}
 
                       <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                         <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
@@ -1186,9 +1199,9 @@ export default function AdminEmployees() {
                       <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                         <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
                         <div className="grid grid-cols-1 gap-6">
-                          {renderUploadPreview('panCard', 'PAN Card')}
-                          {renderUploadPreview('bankProof', 'Bank Account Proof')}
-                          {renderUploadPreview('aadharCard', 'Adhar Number')}
+                          {showPan && renderUploadPreview('panCard', 'PAN Card')}
+                          {showBank && renderUploadPreview('bankProof', 'Bank Account Proof')}
+                          {showAadhar && renderUploadPreview('aadharCard', 'Adhar Number')}
                           {renderUploadPreview('officeMemo', 'Office Memo')}
                           {renderUploadPreview('joiningReport', 'Joining Report')}
                           {(employmentStatus === "Probation" || employmentStatus === "Temporary") &&

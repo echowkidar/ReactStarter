@@ -24,10 +24,9 @@ export default function ResetPassword() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccessful, setIsSuccessful] = useState(false);
-  const [token, setToken] = useState("");
-  const [email, setEmail] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isDirectAccess, setIsDirectAccess] = useState(true);
+  // New state for token validation
+  const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // Extract token and email from URL params and check if this is direct access
   useEffect(() => {
@@ -51,8 +50,39 @@ export default function ResetPassword() {
         title: "Invalid Access",
         description: "This page must be accessed through a reset link sent to your email."
       });
+      setIsValidToken(false);
+    } else {
+      // Verify token immediately
+      verifyToken(emailParam, tokenParam, isAdminParam);
     }
   }, [search, toast]);
+
+  const verifyToken = async (email: string, token: string, isAdmin: boolean) => {
+    setIsVerifying(true);
+    try {
+      const response = await fetch("/api/auth/verify-reset-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, token, isAdmin })
+      });
+
+      const data = await response.json();
+      setIsValidToken(data.valid);
+
+      if (!data.valid) {
+        toast({
+          variant: "destructive",
+          title: "Link Expired or Invalid",
+          description: "This password reset link is no longer valid or has expired. Please request a new one."
+        });
+      }
+    } catch (error) {
+      console.error("Token verification failed:", error);
+      setIsValidToken(false);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const form = useForm<z.infer<typeof resetPasswordSchema>>({
     resolver: zodResolver(resetPasswordSchema),
@@ -78,7 +108,7 @@ export default function ResetPassword() {
 
     try {
       const endpoint = isAdmin ? "/api/auth/admin/reset-password" : "/api/auth/reset-password";
-      
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -124,22 +154,27 @@ export default function ResetPassword() {
         <CardHeader className="text-center">
           <h1 className="text-2xl font-bold">{isAdmin ? "Admin Password Reset" : "Reset Password"}</h1>
           <p className="text-sm text-muted-foreground">
-            {!token || !email ? "Invalid Reset Link" : "Enter your new password"}
+            {isVerifying ? "Verifying link..." : (!isValidToken ? "Invalid Reset Link" : "Enter your new password")}
           </p>
         </CardHeader>
         <CardContent>
-          {!token || !email || isDirectAccess ? (
+          {isVerifying ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : !isValidToken ? (
             <div className="text-center py-4">
-              <p className="text-red-500 mb-4">Invalid or missing reset link parameters</p>
+              <p className="text-red-500 mb-4 font-medium">Link Expired or Invalid</p>
               <p className="text-sm text-muted-foreground mb-4">
-                This page can only be accessed through a valid reset link sent to your email.
+                This password reset link is invalid or has expired (valid for 1 hour).
+                Please request a new link.
               </p>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setLocation(isAdmin ? "/admin/forgot-password" : "/forgot-password")}
                 className="mt-2 w-full"
               >
-                Go to Forgot Password
+                Request New Link
               </Button>
             </div>
           ) : isSuccessful ? (

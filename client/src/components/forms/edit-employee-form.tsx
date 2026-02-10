@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,14 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
   const [selectedDesignation, setSelectedDesignation] = useState(employee.designation || "");
   const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState(employee.salary_asstt || "");
+
+  // Fetch field visibility settings
+  const { data: fieldSettings } = useQuery<Record<string, string>>({
+    queryKey: ["/api/admin/settings"],
+  });
+  const showPan = fieldSettings?.show_pan_field !== "false";
+  const showBank = fieldSettings?.show_bank_field !== "false";
+  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
 
   // Disable modal state
   const [showDisableModal, setShowDisableModal] = useState(false);
@@ -979,71 +988,83 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
               {/* Other document fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">PAN Number</label>
-                  <input
-                    {...register("panNumber")}
-                    className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  />
-                  {errors.panNumber && <p className="text-red-500 text-xs mt-1">{errors.panNumber.message}</p>}
-                </div>
+                {showPan && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">PAN Number</label>
+                      <input
+                        {...register("panNumber")}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                      {errors.panNumber && <p className="text-red-500 text-xs mt-1">{errors.panNumber.message}</p>}
+                    </div>
 
-                <div className="border-l pl-4">
-                  <FileUpload
-                    label="PAN Card"
-                    name="panCardDoc"
-                    value={fileUrls.panCardUrl}
-                    onChange={(file) => handleFileChange(file, "panCardDoc")}
-                    onRemove={() => handleRemoveFile("panCardDoc")}
-                    disabled={isSubmitting}
-                    onlyImages={true}
-                    errorMessage={fileErrors.panCardDoc}
-                  />
-                </div>
+                    <div className="border-l pl-4">
+                      <FileUpload
+                        label="PAN Card"
+                        name="panCardDoc"
+                        value={fileUrls.panCardUrl}
+                        onChange={(file) => handleFileChange(file, "panCardDoc")}
+                        onRemove={() => handleRemoveFile("panCardDoc")}
+                        disabled={isSubmitting}
+                        onlyImages={true}
+                        errorMessage={fileErrors.panCardDoc}
+                      />
+                    </div>
+                  </>
+                )}
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Bank Account</label>
-                  <input
-                    {...register("bankAccount")}
-                    className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  />
-                  {errors.bankAccount && <p className="text-red-500 text-xs mt-1">{errors.bankAccount.message}</p>}
-                </div>
+                {showBank && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Bank Account</label>
+                      <input
+                        {...register("bankAccount")}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                      {errors.bankAccount && <p className="text-red-500 text-xs mt-1">{errors.bankAccount.message}</p>}
+                    </div>
 
-                <div className="border-l pl-4">
-                  <FileUpload
-                    label="Bank Account Proof"
-                    name="bankAccountDoc"
-                    value={fileUrls.bankProofUrl}
-                    onChange={(file) => handleFileChange(file, "bankAccountDoc")}
-                    onRemove={() => handleRemoveFile("bankAccountDoc")}
-                    disabled={isSubmitting}
-                    onlyImages={true}
-                    errorMessage={fileErrors.bankAccountDoc}
-                  />
-                </div>
+                    <div className="border-l pl-4">
+                      <FileUpload
+                        label="Bank Account Proof"
+                        name="bankAccountDoc"
+                        value={fileUrls.bankProofUrl}
+                        onChange={(file) => handleFileChange(file, "bankAccountDoc")}
+                        onRemove={() => handleRemoveFile("bankAccountDoc")}
+                        disabled={isSubmitting}
+                        onlyImages={true}
+                        errorMessage={fileErrors.bankAccountDoc}
+                      />
+                    </div>
+                  </>
+                )}
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Aadhar Number</label>
-                  <input
-                    {...register("aadharCard")}
-                    className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  />
-                  {errors.aadharCard && <p className="text-red-500 text-xs mt-1">{errors.aadharCard.message}</p>}
-                </div>
+                {showAadhar && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Aadhar Number</label>
+                      <input
+                        {...register("aadharCard")}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                      {errors.aadharCard && <p className="text-red-500 text-xs mt-1">{errors.aadharCard.message}</p>}
+                    </div>
 
-                <div className="border-l pl-4">
-                  <FileUpload
-                    label="Aadhar Card"
-                    name="aadharCardDoc"
-                    value={fileUrls.aadharCardUrl}
-                    onChange={(file) => handleFileChange(file, "aadharCardDoc")}
-                    onRemove={() => handleRemoveFile("aadharCardDoc")}
-                    disabled={isSubmitting}
-                    onlyImages={true}
-                    errorMessage={fileErrors.aadharCardDoc}
-                  />
-                </div>
+                    <div className="border-l pl-4">
+                      <FileUpload
+                        label="Aadhar Card"
+                        name="aadharCardDoc"
+                        value={fileUrls.aadharCardUrl}
+                        onChange={(file) => handleFileChange(file, "aadharCardDoc")}
+                        onRemove={() => handleRemoveFile("aadharCardDoc")}
+                        disabled={isSubmitting}
+                        onlyImages={true}
+                        errorMessage={fileErrors.aadharCardDoc}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Office Memo No</label>

@@ -132,6 +132,23 @@ export async function runMigrations() {
       ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT false;
     `);
 
+    // Create app_settings table for form field visibility control
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+
+    // Insert default settings (don't overwrite if already exist)
+    await db.execute(sql`
+      INSERT INTO app_settings (key, value) VALUES
+        ('show_pan_field', 'true'),
+        ('show_bank_field', 'true'),
+        ('show_aadhar_field', 'true')
+      ON CONFLICT (key) DO NOTHING;
+    `);
+
     console.log("Database migrations completed successfully");
   } catch (error) {
     console.error("Error running migrations:", error);
