@@ -26,6 +26,7 @@ import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal
 import designationsData from "@/lib/designations.json";
 import registerNosData from "@/lib/register-nos.json";
 import salaryAssistantsData from "@/lib/salary-assistants.json";
+import { PAY_LEVELS } from "@/lib/pay-levels";
 
 // Prepare options for searchable selects
 const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
@@ -53,6 +54,7 @@ export default function AdminEmployees() {
   const [employmentStatus, setEmploymentStatus] = useState(selectedEmployee?.employmentStatus || "Permanent");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
   const [selectedDesignation, setSelectedDesignation] = useState<string>("");
+  const [payLevel, setPayLevel] = useState(selectedEmployee?.payLevel || "L-0");
   const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState<string>("");
   const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState<string>("");
   const [uploads, setUploads] = useState<UploadState>({});
@@ -336,11 +338,13 @@ export default function AdminEmployees() {
       }
       // Set designation, salary register number, and salary assistant
       setSelectedDesignation(selectedEmployee.designation || "");
+      setPayLevel(selectedEmployee.payLevel || "L-0");
       setSelectedSalaryRegisterNo(selectedEmployee.salaryRegisterNo || "");
       setSelectedSalaryAsstt(selectedEmployee.salary_asstt || "");
     } else if (!selectedEmployee) {
       setSelectedDepartmentId("");
       setSelectedDesignation("");
+      setPayLevel("L-0");
       setSelectedSalaryRegisterNo("");
       setSelectedSalaryAsstt("");
     }
@@ -981,7 +985,25 @@ export default function AdminEmployees() {
                             />
                             <input type="hidden" name="designation" value={selectedDesignation} />
                           </div>
-
+                          <div>
+                            <Label htmlFor="payLevel">Pay Level</Label>
+                            <Select
+                              value={payLevel}
+                              onValueChange={setPayLevel}
+                            >
+                              <SelectTrigger className="bg-white dark:bg-slate-800">
+                                <SelectValue placeholder="Select pay level" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {PAY_LEVELS.map((level) => (
+                                  <SelectItem key={level} value={level}>
+                                    {level}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <input type="hidden" name="payLevel" value={payLevel} />
+                          </div>
                           <div>
                             <Label htmlFor="employmentStatus">Employment Status</Label>
                             <Select

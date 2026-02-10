@@ -393,9 +393,8 @@ export default function ReportDetails() {
           setTimeout(() => {
             printWindow.focus();
             printWindow.print();
-            printWindow.onafterprint = function () {
-              printWindow.close();
-            };
+            // Close the print window after print/cancel - print() is synchronous and blocks until dialog closes
+            printWindow.close();
           }, 300);
         };
       }
@@ -630,17 +629,15 @@ export default function ReportDetails() {
             </Button>
           )}
           {report.status !== "draft" && (
-            <>
-              <Button variant="outline" onClick={handleDownload}>
-                <Download className="h-4 w-4 mr-2" />
-                Download Excel
-              </Button>
-              <Button variant="outline" onClick={handlePrint}>
-                <Printer className="h-4 w-4 mr-2" />
-                Print
-              </Button>
-            </>
+            <Button variant="outline" onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Excel
+            </Button>
           )}
+          <Button variant="outline" onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-2" />
+            {report.status === "draft" ? "Draft Report Print" : "Print"}
+          </Button>
           <Button variant="outline" onClick={() => setLocation("/dashboard/attendance")}>
             <X className="h-4 w-4 mr-2" />
             Close
@@ -712,40 +709,44 @@ export default function ReportDetails() {
                     const epidB = b.employee?.epid || '';
                     return epidA.localeCompare(epidB);
                   })
-                  .flatMap((entry, entryIndex) => {
+                  .map((entry, entryIndex, sortedArray) => {
                     try {
                       const periods = typeof entry.periods === 'string'
                         ? JSON.parse(entry.periods)
                         : entry.periods;
 
+                      const periodCount = periods?.length || 1;
+
+                      // Calculate serial number based on unique employees (not flattened periods)
+                      const serialNumber = entryIndex + 1;
+
                       return periods.map((period: any, periodIndex: number) => {
-                        // Calculate serial number based on flattened entries array
-                        const serialNumber =
-                          (report.entries
-                            ? report.entries
-                              .slice(0, entryIndex)
-                              .reduce((count, prevEntry) => {
-                                const prevPeriods = typeof prevEntry.periods === 'string'
-                                  ? JSON.parse(prevEntry.periods)
-                                  : prevEntry.periods || [];
-                                return count + (prevPeriods?.length || 0);
-                              }, 0)
-                            : 0) + periodIndex + 1;
+                        const isFirstPeriod = periodIndex === 0;
 
                         return (
                           <TableRow key={`${entry.id}-${periodIndex}`}>
-                            <TableCell className="whitespace-nowrap">{serialNumber}</TableCell>
-                            <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
-                            <TableCell>{entry.employee?.name}</TableCell>
-                            <TableCell>{entry.employee?.designation}</TableCell>
-                            <TableCell className="whitespace-nowrap">{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
-                            <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                            {isFirstPeriod && (
+                              <>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{serialNumber}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.epid}</TableCell>
+                                <TableCell rowSpan={periodCount}>{entry.employee?.name}</TableCell>
+                                <TableCell rowSpan={periodCount}>{entry.employee?.designation}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                              </>
+                            )}
                             <TableCell className="whitespace-nowrap">
-                              {isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
-                                ? "- "
-                                : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
+                              {entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER'
+                                ? `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`
+                                : isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
+                                  ? "- "
+                                  : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap">{period.days}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER'
+                                ? <span>{period.days} <span style={{ fontSize: '0.7em', color: '#ea580c' }}>(Periods)</span></span>
+                                : period.days}
+                            </TableCell>
                             <TableCell>{period.remarks || "-"}</TableCell>
                           </TableRow>
                         );

@@ -190,6 +190,41 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     },
   });
 
+  const isGuestTeacher = (empId: number) => {
+    const emp = employees.find((e: any) => e.id === empId);
+    return emp?.designation?.toUpperCase() === 'GUEST TEACHER';
+  };
+
+  // Check if two date ranges overlap (dates in DD-MM-YY format)
+  const doPeriodsOverlap = (
+    from1: string, to1: string,
+    from2: string, to2: string
+  ): boolean => {
+    const start1 = parseDateFromDisplay(from1);
+    const end1 = parseDateFromDisplay(to1);
+    const start2 = parseDateFromDisplay(from2);
+    const end2 = parseDateFromDisplay(to2);
+    return start1 <= end2 && start2 <= end1;
+  };
+
+  // Check if a period overlaps with any existing period for an employee (excluding a specific index)
+  const hasOverlap = (
+    employeeId: number,
+    fromDate: string,
+    toDate: string,
+    excludeIndex?: number
+  ): boolean => {
+    const entries = form.getValues("entries") || [];
+    const entry = entries.find(e => e.employeeId === employeeId);
+    if (!entry) return false;
+    return entry.periods.some((p, idx) => {
+      if (idx === excludeIndex) return false;
+      return doPeriodsOverlap(fromDate, toDate, p.fromDate, p.toDate);
+    });
+  };
+
+
+
   const toggleEmployee = (employeeId: number) => {
     setIncludedEmployees(prev => {
       const next = new Set(prev);
@@ -202,14 +237,16 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         next.add(employeeId);
         // Initialize entry when adding employee
         const currentEntries = form.getValues("entries") || [];
+        const fromDateStr = formatDateForDisplay(defaultStartDate);
+        const toDateStr = formatDateForDisplay(defaultEndDate);
         form.setValue("entries", [
           ...currentEntries,
           {
             employeeId,
             periods: [{
-              fromDate: formatDateForDisplay(defaultStartDate),
-              toDate: formatDateForDisplay(defaultEndDate),
-              days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
+              fromDate: fromDateStr,
+              toDate: toDateStr,
+              days: isGuestTeacher(employeeId) ? 0 : calculateDays(fromDateStr, toDateStr),
               remarks: "",
             }],
           },
@@ -225,10 +262,14 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
     if (entryIndex === -1) return;
 
+    const fromDateStr = formatDateForDisplay(defaultStartDate);
+    const toDateStr = formatDateForDisplay(defaultEndDate);
+
+
     const newPeriod = {
-      fromDate: formatDateForDisplay(defaultStartDate),
-      toDate: formatDateForDisplay(defaultEndDate),
-      days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(defaultEndDate)),
+      fromDate: fromDateStr,
+      toDate: toDateStr,
+      days: isGuestTeacher(employeeId) ? 0 : calculateDays(fromDateStr, toDateStr),
       remarks: "",
     };
 
@@ -287,7 +328,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           periods: entry.periods.map(period => ({
             fromDate: period.fromDate,
             toDate: period.toDate,
-            days: calculateDays(period.fromDate, period.toDate),
+            days: isGuestTeacher(entry.employeeId) ? (period.days || 0) : calculateDays(period.fromDate, period.toDate),
             remarks: period.remarks || ''
           }))
         }))
@@ -344,12 +385,14 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             endDate.setDate(endDate.getDate() - 1);
           }
 
+          const fromStr = formatDateForDisplay(defaultStartDate);
+          const toStr = formatDateForDisplay(endDate);
           return {
             employeeId: employee.id,
             periods: [{
-              fromDate: formatDateForDisplay(defaultStartDate),
-              toDate: formatDateForDisplay(endDate),
-              days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(endDate)),
+              fromDate: fromStr,
+              toDate: toStr,
+              days: employee.designation?.toUpperCase() === 'GUEST TEACHER' ? 0 : calculateDays(fromStr, toStr),
               remarks: "",
             }],
           };
@@ -405,7 +448,49 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit((data) => {
+        // Check for overlapping periods before submitting
+        const overlapErrors: string[] = [];
+        for (const entry of data.entries) {
+          const emp = employees.find((e: any) => e.id === entry.employeeId);
+          const empName = emp?.name || `Employee #${entry.employeeId}`;
+          for (let i = 0; i < entry.periods.length; i++) {
+            for (let j = i + 1; j < entry.periods.length; j++) {
+              if (doPeriodsOverlap(
+                entry.periods[i].fromDate, entry.periods[i].toDate,
+                entry.periods[j].fromDate, entry.periods[j].toDate
+              )) {
+                overlapErrors.push(
+                  `${empName}: Period ${i + 1} (${entry.periods[i].fromDate} to ${entry.periods[i].toDate}) overlaps with Period ${j + 1} (${entry.periods[j].fromDate} to ${entry.periods[j].toDate})`
+                );
+              }
+            }
+          }
+        }
+        if (overlapErrors.length > 0) {
+          alert('Overlapping periods found! Please fix before submitting:\n\n' + overlapErrors.join('\n'));
+          return;
+        }
+
+        // Check GUEST TEACHER has non-zero days
+        const guestErrors: string[] = [];
+        for (const entry of data.entries) {
+          const emp = employees.find((e: any) => e.id === entry.employeeId);
+          if (emp?.designation?.toUpperCase() === 'GUEST TEACHER') {
+            for (let i = 0; i < entry.periods.length; i++) {
+              if (!entry.periods[i].days || entry.periods[i].days === 0) {
+                guestErrors.push(`${emp.name}: Period has 0. Please fill Total Periods or untick from list to exclude from the attendance report.`);
+              }
+            }
+          }
+        }
+        if (guestErrors.length > 0) {
+          alert('Guest Teacher total periods cannot be 0:\n\n' + guestErrors.join('\n'));
+          return;
+        }
+
+        onSubmit(data);
+      })} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
@@ -621,7 +706,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                 <TableHead className="w-[80px] px-1">Reg No.</TableHead>
                 <TableHead className="px-2" style={{ minWidth: '450px' }}>
                   <div className="text-left mb-2">Attendance Periods</div>
-                  <div className="grid grid-cols-[105px_105px_40px_1fr_30px] gap-1 text-xs font-normal">
+                  <div className="grid grid-cols-[105px_105px_60px_1fr_30px] gap-1 text-xs font-normal">
                     <div>From Date</div>
                     <div>To Date</div>
                     <div className="text-center">Days</div>
@@ -713,7 +798,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 </Badge>
                               </div>
                             )}
-                            <div className="grid grid-cols-[105px_105px_40px_1fr_30px] gap-1 items-center">
+                            <div className="grid grid-cols-[105px_105px_60px_1fr_30px] gap-1 items-center">
 
                               <div>
                                 <input
@@ -736,8 +821,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                       newEntries[entryIndex].periods[periodIndex] = {
                                         ...newEntries[entryIndex].periods[periodIndex],
                                         fromDate: newFromDate,
-                                        days: calculateDays(newFromDate, period.toDate)
+                                        days: isGuestTeacher(employee.id) ? newEntries[entryIndex].periods[periodIndex].days : calculateDays(newFromDate, period.toDate)
                                       };
+
 
                                       form.setValue("entries", newEntries, { shouldDirty: true });
                                     }
@@ -767,8 +853,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                       newEntries[entryIndex].periods[periodIndex] = {
                                         ...newEntries[entryIndex].periods[periodIndex],
                                         toDate: newToDate,
-                                        days: calculateDays(period.fromDate, newToDate)
+                                        days: isGuestTeacher(employee.id) ? newEntries[entryIndex].periods[periodIndex].days : calculateDays(period.fromDate, newToDate)
                                       };
+
 
                                       form.setValue("entries", newEntries, { shouldDirty: true });
                                     }
@@ -778,9 +865,40 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                               </div>
 
                               <div className="text-center">
-                                <div className="p-1 bg-blue-50 dark:bg-blue-900/30 border rounded-md text-center text-sm">
-                                  {period.days}
-                                </div>
+                                {isGuestTeacher(employee.id) ? (
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[9px] text-orange-600 font-medium leading-tight">Fill Total Periods</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="365"
+                                      className="w-full p-1 text-sm border border-orange-300 rounded-md text-center bg-orange-50 dark:bg-orange-900/30"
+                                      value={period.days || ''}
+                                      placeholder="0"
+                                      onChange={(e) => {
+                                        const entries = form.getValues("entries");
+                                        const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                        if (entryIndex !== -1) {
+                                          const newEntries = [...entries];
+                                          newEntries[entryIndex] = {
+                                            ...newEntries[entryIndex],
+                                            periods: [...newEntries[entryIndex].periods]
+                                          };
+                                          newEntries[entryIndex].periods[periodIndex] = {
+                                            ...newEntries[entryIndex].periods[periodIndex],
+                                            days: parseInt(e.target.value) || 0
+                                          };
+                                          form.setValue("entries", newEntries, { shouldDirty: true });
+                                        }
+                                      }}
+                                      disabled={isLoading || !includedEmployees.has(employee.id)}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="p-1 bg-blue-50 dark:bg-blue-900/30 border rounded-md text-center text-sm">
+                                    {period.days}
+                                  </div>
+                                )}
                               </div>
 
                               <div>

@@ -68,15 +68,15 @@ export default function ReportDetails() {
   const handlePrint = () => {
     setTimeout(() => {
       const printContent = document.querySelector('.print-content');
-      
+
       if (printContent) {
         const printWindow = window.open('', '_blank');
-        
+
         if (!printWindow) {
           alert('Please allow popups for this website to use the print feature.');
           return;
         }
-        
+
         // Get the current page's styling
         const styles = Array.from(document.styleSheets)
           .map(styleSheet => {
@@ -90,11 +90,11 @@ export default function ReportDetails() {
             }
           })
           .join('\n');
-        
+
         // Extract custom print styles from the current page
         const printStyleElement = document.querySelector('style[media="print"]');
         const printStyles = printStyleElement ? printStyleElement.textContent : '';
-        
+
         // Write the content to the new window with proper styling
         printWindow.document.write(`
           <html>
@@ -211,48 +211,46 @@ export default function ReportDetails() {
             </body>
           </html>
         `);
-        
+
         printWindow.document.close();
-        
+
         // Wait for content to load before printing
-        printWindow.onload = function() {
+        printWindow.onload = function () {
           // Apply additional class transformations for print window
           const cards = printWindow.document.querySelectorAll('[class*="card"]');
           cards.forEach(card => {
             card.classList.add('card');
           });
-          
+
           const cardHeaders = printWindow.document.querySelectorAll('[class*="cardHeader"]');
           cardHeaders.forEach(header => {
             header.classList.add('card-header');
           });
-          
+
           const cardContents = printWindow.document.querySelectorAll('[class*="cardContent"]');
           cardContents.forEach(content => {
             content.classList.add('card-content');
           });
-          
+
           const cardTitles = printWindow.document.querySelectorAll('[class*="cardTitle"]');
           cardTitles.forEach(title => {
             title.classList.add('card-title');
           });
-          
+
           const infoItems = printWindow.document.querySelectorAll('.text-sm.font-medium');
           infoItems.forEach(item => {
             item.classList.add('info-label');
           });
-          
+
           const certificationSection = printWindow.document.querySelector('.mt-8');
           if (certificationSection) {
             certificationSection.classList.add('certification');
           }
-          
+
           setTimeout(() => {
             printWindow.focus();
             printWindow.print();
-            printWindow.onafterprint = function() {
-              printWindow.close();
-            };
+            printWindow.close();
           }, 300);
         };
       }
@@ -306,12 +304,12 @@ export default function ReportDetails() {
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
     const colWidths = [
-      { wch: 15 }, 
-      { wch: 20 }, 
-      { wch: 20 }, 
-      { wch: 25 }, 
-      { wch: 10 }, 
-      { wch: 30 }  
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 10 },
+      { wch: 30 }
     ];
     ws['!cols'] = colWidths;
 
@@ -466,21 +464,21 @@ export default function ReportDetails() {
                 <InfoItem label="Department" value={report.department?.name} />
                 <InfoItem label="Month/Year" value={formatPeriod(report.year, report.month)} />
                 <InfoItem label="Transaction ID" value={report.transactionId || '-'} />
-                <InfoItem 
-                  label="Status" 
+                <InfoItem
+                  label="Status"
                   value={
                     <Badge variant={report.status === "submitted" ? "default" : "secondary"}>
                       {report.status}
                     </Badge>
-                  } 
+                  }
                 />
                 {report.despatchNo && (
                   <InfoItem label="Despatch No" value={report.despatchNo} />
                 )}
                 {report.despatchDate && (
-                  <InfoItem 
-                    label="Despatch Date" 
-                    value={format(new Date(report.despatchDate), "dd MMM yyyy")} 
+                  <InfoItem
+                    label="Despatch Date"
+                    value={format(new Date(report.despatchDate), "dd MMM yyyy")}
                   />
                 )}
               </div>
@@ -508,24 +506,37 @@ export default function ReportDetails() {
                 <TableBody>
                   {report.entries?.map((entry) => {
                     try {
-                      const periods = typeof entry.periods === 'string' 
-                        ? JSON.parse(entry.periods) 
+                      const periods = typeof entry.periods === 'string'
+                        ? JSON.parse(entry.periods)
                         : entry.periods;
 
-                      return periods.map((period: any, periodIndex: number) => (
-                        <TableRow key={`${entry.id}-${periodIndex}`}>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.epid}</TableCell>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.name}</TableCell>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.designation}</TableCell>
-                          <TableCell className="whitespace-nowrap">{entry.employee?.employmentStatus || "-"}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.employee?.salaryRegisterNo || "-"}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{period.days}</TableCell>
-                          <TableCell>{period.remarks || "-"}</TableCell>
-                        </TableRow>
-                      ));
+                      const periodCount = periods?.length || 1;
+
+                      return periods.map((period: any, periodIndex: number) => {
+                        const isFirstPeriod = periodIndex === 0;
+                        return (
+                          <TableRow key={`${entry.id}-${periodIndex}`}>
+                            {isFirstPeriod && (
+                              <>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.epid}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.name}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.designation}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.employmentStatus || "-"}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                              </>
+                            )}
+                            <TableCell className="whitespace-nowrap">
+                              {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER'
+                                ? <span>{period.days} <span style={{ fontSize: '0.7em', color: '#ea580c' }}>(Periods)</span></span>
+                                : period.days}
+                            </TableCell>
+                            <TableCell>{period.remarks || "-"}</TableCell>
+                          </TableRow>
+                        );
+                      });
                     } catch (error) {
                       console.error('Error parsing periods:', error);
                       return null;
@@ -538,9 +549,9 @@ export default function ReportDetails() {
 
           <div className="mt-8 space-y-4 text-right">
             <p>Certified that the above attendance report is correct.</p>
-            
+
             <div className="space-y-1">
-            <div style={{ height: '3em' }}></div>
+              <div style={{ height: '3em' }}></div>
               <p>{report.department?.hodTitle}</p>
               <p>{report.department?.hodName}</p>
               <p>{report.department?.name}</p>
