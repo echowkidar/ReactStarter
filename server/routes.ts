@@ -2147,6 +2147,32 @@ export async function registerRoutes(app: Express) {
 
 
 
+  // Toggle verification status for attendance entry
+  app.patch("/api/attendance/entries/:entryId/toggle-verify", async (req, res) => {
+    try {
+      const entryId = Number(req.params.entryId);
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      // Toggle verified status
+      const result = await db.execute(sql`
+        UPDATE attendance_entries 
+        SET verified = NOT verified 
+        WHERE id = ${entryId}
+        RETURNING *
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Entry not found" });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error toggling verification:", error);
+      res.status(500).json({ message: "Failed to toggle verification" });
+    }
+  });
+
   // Admin routes
   app.get("/api/admin/attendance", async (req, res) => {
     try {

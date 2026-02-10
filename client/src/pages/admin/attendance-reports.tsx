@@ -16,12 +16,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText } from "lucide-react";
+import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
 
 type AttendanceEntry = {
   id: number;
@@ -32,12 +31,13 @@ type AttendanceEntry = {
   toDate: string;
   periods: string;
   remarks: string;
+  verified?: boolean;
   employee?: {
     id: number;
     departmentId: number;
     name: string;
-    employeeId?: string; // This would be EPID
-    epid?: string;       // Handle both field names
+    employeeId?: string;
+    epid?: string;
     designation: string;
     salaryRegisterNo: string;
     salary_asstt?: string;
@@ -74,6 +74,36 @@ export default function AttendanceReports() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
+  // Toggle verification mutation with optimistic update
+  const toggleVerify = useMutation({
+    mutationFn: async (entryId: number) => {
+      await apiRequest('PATCH', `/api/attendance/entries/${entryId}/toggle-verify`);
+    },
+    onMutate: async (entryId: number) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/admin/attendance"] });
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(["/api/admin/attendance"]);
+      // Optimistically update the cache
+      queryClient.setQueryData(["/api/admin/attendance"], (old: any) => {
+        if (!old) return old;
+        return old.map((report: any) => ({
+          ...report,
+          entries: report.entries?.map((entry: any) =>
+            entry.id === entryId ? { ...entry, verified: !entry.verified } : entry
+          ),
+        }));
+      });
+      return { previousData };
+    },
+    onError: (_err, _entryId, context) => {
+      // Rollback on error
+      if (context?.previousData) {
+        queryClient.setQueryData(["/api/admin/attendance"], context.previousData);
+      }
+    },
+  });
+
   useEffect(() => {
     // Check if user is salary admin
     const adminType = localStorage.getItem("adminType");
@@ -85,8 +115,7 @@ export default function AttendanceReports() {
     queryKey: ["/api/admin/attendance"],
     select: (data) => data.filter(report =>
       report.status === "sent" ||
-      report.status === "cancel_requested" ||
-      report.status === "cancelled"
+      report.status === "cancel_requested"
     ),
   });
 
@@ -136,6 +165,8 @@ export default function AttendanceReports() {
       reportId: number;
       departmentId: number;
       fileUrl?: string;
+      entryId: number;
+      verified: boolean;
     }> = [];
 
     reports.forEach(report => {
@@ -178,6 +209,8 @@ export default function AttendanceReports() {
                   reportId: report.id,
                   departmentId: report.departmentId,
                   fileUrl: report.fileUrl || undefined,
+                  entryId: entry.id,
+                  verified: entry.verified || false,
                 });
               });
             } catch (error) {
@@ -584,16 +617,6 @@ export default function AttendanceReports() {
               </div>
             )}
 
-            {/* Cancelled Reports Notice */}
-            {reports.filter(r => r.status === "cancelled").length > 0 && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <span className="text-red-800 flex items-center gap-2">
-                  <XCircle className="h-4 w-4" />
-                  {reports.filter(r => r.status === "cancelled").length} cancelled report(s) in this view
-                </span>
-              </div>
-            )}
-
             <div className="flex flex-col md:flex-row gap-4 mb-6">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -772,6 +795,19 @@ export default function AttendanceReports() {
                                 <FileText className="h-4 w-4 text-blue-600" />
                               </Button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => toggleVerify.mutate(entry.entryId)}
+                              className={`h-6 w-6 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${entry.verified
+                                ? 'bg-green-500 border-green-500'
+                                : 'border-gray-300 hover:border-green-400'
+                                }`}
+                              title={entry.verified ? 'Verified ✓' : 'Mark as Verified'}
+                            >
+                              {entry.verified && (
+                                <Check className="h-4 w-4 text-white" />
+                              )}
+                            </button>
                           </div>
                         </TableCell>
                       </TableRow>

@@ -94,6 +94,7 @@ export const attendanceEntries = pgTable("attendance_entries", {
   toDate: text("to_date").notNull(),
   periods: text("periods").notNull(),
   remarks: text("remarks"),
+  verified: boolean("verified").notNull().default(false),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
