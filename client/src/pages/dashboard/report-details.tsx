@@ -704,6 +704,13 @@ export default function ReportDetails() {
                       return getPayLevelOrder(payLevelB) - getPayLevelOrder(payLevelA);
                     }
 
+                    // [NEW] Sort by sortOrder (ascending)
+                    const sortOrderA = a.employee?.sortOrder || 0;
+                    const sortOrderB = b.employee?.sortOrder || 0;
+                    if (sortOrderA !== sortOrderB) {
+                      return sortOrderA - sortOrderB;
+                    }
+
                     // If pay levels are same, sort by EPID
                     const epidA = a.employee?.epid || '';
                     const epidB = b.employee?.epid || '';

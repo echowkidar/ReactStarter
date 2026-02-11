@@ -154,6 +154,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             return payLevelB - payLevelA; // Descending order (higher pay levels first)
           }
 
+          // [NEW] Sort by sortOrder (ascending)
+          if (a.sortOrder !== b.sortOrder) {
+            return (a.sortOrder || 0) - (b.sortOrder || 0);
+          }
+
           // If pay levels are the same, sort by EPID in ascending order
           if (!a.epid) return 1;
           if (!b.epid) return -1;

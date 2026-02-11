@@ -289,6 +289,17 @@ export class DbStorage implements IStorage {
     return updatedEmployee;
   }
 
+  async reorderEmployees(updates: { id: number; sortOrder: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        await tx
+          .update(employees)
+          .set({ sortOrder: update.sortOrder })
+          .where(eq(employees.id, update.id));
+      }
+    });
+  }
+
   async getAllEmployees(): Promise<Employee[]> {
     try {
       console.log('[DbStorage] Fetching all employees');

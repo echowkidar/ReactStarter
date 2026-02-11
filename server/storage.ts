@@ -58,6 +58,7 @@ export interface IStorage {
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
   updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee>;
+  reorderEmployees(updates: { id: number; sortOrder: number }[]): Promise<void>;
   // Attendance operations
   createAttendanceReport(report: InsertAttendanceReport): Promise<AttendanceReport>;
   getAttendanceReport(id: number): Promise<AttendanceReport | undefined>;
@@ -212,7 +213,18 @@ export class MemStorage implements IStorage {
       aadharCardUrl: employee.aadharCardUrl || null,
       officeMemoUrl: employee.officeMemoUrl || null,
       joiningReportUrl: employee.joiningReportUrl || null,
-      termExpiry: employee.termExpiry || null
+      termExpiry: employee.termExpiry || null,
+      sortOrder: employee.sortOrder || 0,
+      payLevel: employee.payLevel || "L-0",
+      transferStatus: employee.transferStatus || null,
+      isActive: employee.isActive || "active",
+      salary_asstt: employee.salary_asstt || null,
+      termExtensionUrl: employee.termExtensionUrl || null,
+      remarks: employee.remarks || null,
+      disabledBy: employee.disabledBy || null,
+      disableReason: employee.disableReason || null,
+      disabledAt: employee.disabledAt || null,
+      disableWefDate: employee.disableWefDate || null
     };
 
     // Log the employee being created
@@ -236,6 +248,35 @@ export class MemStorage implements IStorage {
       this.employees.delete(id);
       console.log(`Employee ${id} and associated files deleted successfully`);
     }
+  }
+
+  async getDepartmentByEmail(email: string): Promise<Department | undefined> {
+    return Array.from(this.departments.values()).find(d => d.email === email);
+  }
+
+  async createDepartment(insertDepartment: InsertDepartment): Promise<Department> {
+    const id = this.currentId.department++;
+    const department: Department = {
+      ...insertDepartment,
+      id,
+      attendancePermitted: insertDepartment.attendancePermitted ?? true
+    };
+    this.departments.set(id, department);
+    return department;
+  }
+
+  async deleteFile(filePath: string): Promise<void> {
+    deleteFileIfExists(filePath);
+  }
+
+  async reorderEmployees(updates: { id: number; sortOrder: number }[]): Promise<void> {
+    updates.forEach(update => {
+      const employee = this.employees.get(update.id);
+      if (employee) {
+        employee.sortOrder = update.sortOrder;
+        this.employees.set(update.id, employee);
+      }
+    });
   }
 
   async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> {

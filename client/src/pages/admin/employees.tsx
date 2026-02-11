@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown, History, AlertCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown, History, AlertCircle, ArrowUp, ArrowDown } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
@@ -19,14 +19,14 @@ import * as XLSX from "xlsx";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
 import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
 import { compressImageToWebP } from "@/lib/image-utils";
-import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 
+import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
+import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 
 // Import master data for designations and register numbers
 import designationsData from "@/lib/designations.json";
 import registerNosData from "@/lib/register-nos.json";
 import salaryAssistantsData from "@/lib/salary-assistants.json";
-import { PAY_LEVELS } from "@/lib/pay-levels";
 
 // Prepare options for searchable selects
 const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
@@ -319,6 +319,19 @@ export default function AdminEmployees() {
 
         const comparison = aString < bString ? -1 : aString > bString ? 1 : 0;
         return sortConfig.direction === "asc" ? comparison : -comparison;
+      });
+    } else {
+      // Default sorting: Pay Level (desc) -> Sort Order (asc) -> EPID (asc)
+      result.sort((a, b) => {
+        const payA = getPayLevelOrder(a.payLevel || "L-0");
+        const payB = getPayLevelOrder(b.payLevel || "L-0");
+        if (payA !== payB) return payB - payA; // Higher pay level first
+
+        // Same pay level: use sortOrder (Custom manual sort)
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+
+        // Fallback: EPID
+        return (a.epid || "").localeCompare(b.epid || "");
       });
     }
 
@@ -794,12 +807,128 @@ export default function AdminEmployees() {
     }
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: async (updates: { id: number; sortOrder: number }[]) => {
+      await apiRequest('PATCH', '/api/admin/employees/reorder', { updates });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
+      // Don't show toast for reorder to keep it snappy, or show a subtle one
+    },
+    onError: (error) => {
+      toast({ variant: "destructive", title: "Error", description: "Failed to reorder employees" });
+    }
+  });
+
+  const handleMove = (index: number, direction: 'up' | 'down') => {
+    // If there is an active text filter or non-default sort, warn user or disable
+    if (sortConfig.key) return; // Only allow reorder on default sort
+
+    const absoluteIndex = (currentPage - 1) * pageSize + index;
+    const targetIndex = direction === 'up' ? absoluteIndex - 1 : absoluteIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= filteredEmployees.length) return;
+
+    const currentEmp = filteredEmployees[absoluteIndex];
+    const targetEmp = filteredEmployees[targetIndex];
+
+    // Verify they belong to same Pay Level and Department
+    // Note: Reordering usually only makes sense within the same visual group.
+    // We enforce same Pay Level. Department check is optional but recommended if list is mixed.
+    if (currentEmp.payLevel !== targetEmp.payLevel) return;
+
+    // Calculate new sort orders
+    // If they have same sortOrder (e.g. both 0), we need to split them
+    let newCurrentOrder = targetEmp.sortOrder;
+    let newTargetOrder = currentEmp.sortOrder;
+
+    if (currentEmp.sortOrder === targetEmp.sortOrder) {
+      // If equal, we need to artificially create a gap.
+      // Since list is currently sorted by EPID (fallback),
+      // If moving UP, we want current < target.
+      // Assign current = 0, target = 1?
+      // But what about others?
+      // Safer way: Swap their values if distinct. If equal, try to infer.
+      // Actually, if they are equal, the ONE appearing first (targetEmp if direction is up)
+      // is visually 'before'. We want to swap that.
+      // So we set currentEmp.sortOrder to something 'lower' than targetEmp?
+
+      // Let's rely on simple swapping if values exist, or assigning based on index if 0.
+      // But assigning based on index is risky.
+
+      // Simple logic:
+      // If direction is UP, we want current < target.
+      // If they are equal, set current = target - 1. But updates must serve both.
+
+      // Since we are likely dealing with 0s mostly:
+      // Set currentEmp.sortOrder = -1 (if 0) or swap.
+      // This is tricky without reindexing everyone.
+
+      // ALTERNATIVE: Just swap their current visual indices mapping? No, backend needs numbers.
+
+      // Let's use a simple swap-and-increment strategy:
+      // Always send updates for BOTH.
+      // If equal, set current = 0, target = 1 (if moving down) or current=0, target=1 (if moving up? wait)
+
+      // If I move UP: I want Current to be BEFORE Target.
+      // So Current.SortOrder < Target.SortOrder.
+      // If they were equal 0: Set Current = 0, Target = 1.
+      // (Wait, if they were equal, and sorted by EPID, and I move Up... wait, if sorted by EPID, 
+      // the one above has smaller EPID? OR larger?
+      // Default sort: PayLevel(desc) -> SortOrder(asc) -> EPID(asc).
+      // If I am below (index 1) and want to move up (index 0).
+      // Means my EPID > Target EPID.
+      // I want to override this. So I need SortOrder < Target SortOrder.
+      // If Target is 0, I need -1.
+
+      newCurrentOrder = targetEmp.sortOrder - 1;
+      newTargetOrder = targetEmp.sortOrder; // Keep target same, move current down? No.
+
+      // To avoid negative numbers indefinitely (though integer allows it), 
+      // maybe we swap and add delta?
+
+      // Let's try:
+      // Update both to be distinct.
+      // current: targetEmp.sortOrder
+      // target: currentEmp.sortOrder
+      // IF equal:
+      //   UP: current = target - 1, target = target.
+      //   DOWN: current = target + 1, target = target.
+    }
+
+    // Refined Logic for UP/DOWN with equal/unequal values:
+    const updates = [];
+
+    if (currentEmp.sortOrder === targetEmp.sortOrder) {
+      if (direction === 'up') {
+        // Want current < target
+        newCurrentOrder = targetEmp.sortOrder - 1;
+        newTargetOrder = targetEmp.sortOrder;
+      } else {
+        // Want current > target
+        newCurrentOrder = targetEmp.sortOrder + 1;
+        newTargetOrder = targetEmp.sortOrder;
+      }
+    } else {
+      // Just swap logic? 
+      // If values are 1 and 2. Swap -> 2 and 1. Correct.
+      newCurrentOrder = targetEmp.sortOrder;
+      newTargetOrder = currentEmp.sortOrder;
+    }
+
+    updates.push({ id: currentEmp.id, sortOrder: newCurrentOrder });
+    updates.push({ id: targetEmp.id, sortOrder: newTargetOrder });
+
+    reorderMutation.mutate(updates);
+  };
+
   // Function to handle page change
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
     }
   };
+
 
   const handleDownloadExcel = () => {
     try {
@@ -1393,6 +1522,9 @@ export default function AdminEmployees() {
                         </span>
                       )}
                     </TableHead>
+                    <TableHead>
+                      Pay Level
+                    </TableHead>
                     <TableHead
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort("salary_asstt")}
@@ -1456,8 +1588,14 @@ export default function AdminEmployees() {
                     <TableRow key={employee.id}>
                       <TableCell>{employee.epid}</TableCell>
                       <TableCell>{employee.name}</TableCell>
+                      <TableCell>{employee.name}</TableCell>
                       <TableCell>{employee.departmentName}</TableCell>
                       <TableCell>{employee.designation}</TableCell>
+                      <TableCell>
+                        <span className="font-medium bg-secondary/20 px-2 py-1 rounded">
+                          {employee.payLevel}
+                        </span>
+                      </TableCell>
                       <TableCell>{employee.salary_asstt || "-"}</TableCell>
                       <TableCell>{employee.salaryRegisterNo || "-"}</TableCell>
                       <TableCell>{employee.employmentStatus}</TableCell>
@@ -1479,6 +1617,34 @@ export default function AdminEmployees() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
+                        {!sortConfig.key && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleMove(paginatedEmployees.indexOf(employee), 'up')}
+                              disabled={
+                                paginatedEmployees.indexOf(employee) === 0 && currentPage === 1 ||
+                                (paginatedEmployees.indexOf(employee) > 0 && paginatedEmployees[paginatedEmployees.indexOf(employee) - 1].payLevel !== employee.payLevel)
+                              }
+                              title="Move Up (Same Pay Level)"
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleMove(paginatedEmployees.indexOf(employee), 'down')}
+                              disabled={
+                                (paginatedEmployees.indexOf(employee) === paginatedEmployees.length - 1 && currentPage === totalPages) ||
+                                (paginatedEmployees.indexOf(employee) < paginatedEmployees.length - 1 && paginatedEmployees[paginatedEmployees.indexOf(employee) + 1].payLevel !== employee.payLevel)
+                              }
+                              title="Move Down (Same Pay Level)"
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"

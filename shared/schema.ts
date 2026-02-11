@@ -57,6 +57,8 @@ export const employees = pgTable("employees", {
   remarks: text("remarks"),                      // General remarks about employee
   // Transfer status
   transferStatus: text("transfer_status"),       // pending, null
+  // Custom sort order for employees with same pay level
+  sortOrder: integer("sort_order").notNull().default(0),
 });
 
 export const departmentNames = pgTable("department_names", {

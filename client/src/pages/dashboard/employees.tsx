@@ -10,11 +10,12 @@ import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
 import EmployeeForm from "@/components/forms/employee-form";
-import { Plus, Eye, Pencil, Search, X, ArrowRightLeft, History } from "lucide-react";
+import { Plus, Eye, Pencil, Search, X, ArrowRightLeft, History, ArrowUp, ArrowDown } from "lucide-react";
 import { Employee } from "@shared/schema";
 import { format } from "date-fns";
 import { EditEmployeeForm } from "@/components/forms/edit-employee-form";
 import { Input } from "@/components/ui/input";
+import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 
 const EmployeeDetails = ({ employee }: { employee: Employee }) => {
@@ -211,10 +212,19 @@ export default function Employees() {
     enabled: !!department?.id
   });
 
-  // Sort employees by EPID in ascending order
-  const sortedEmployees = [...(employees || [])].sort((a, b) =>
-    a.epid.localeCompare(b.epid, undefined, { numeric: true })
-  );
+  // Sort employees by Pay Level (desc) -> Sort Order (asc) -> EPID (asc)
+  const sortedEmployees = [...(employees || [])].sort((a, b) => {
+    // Pay Level
+    const payA = getPayLevelOrder(a.payLevel || "L-0");
+    const payB = getPayLevelOrder(b.payLevel || "L-0");
+    if (payA !== payB) return payB - payA; // Higher pay level first
+
+    // Same pay level: use sortOrder (Custom manual sort)
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+
+    // Fallback: EPID
+    return a.epid.localeCompare(b.epid, undefined, { numeric: true });
+  });
 
   // Filter employees based on search query
   const filteredEmployees = searchQuery.trim()
@@ -224,6 +234,61 @@ export default function Employees() {
       employee.designation.toLowerCase().includes(searchQuery.toLowerCase())
     )
     : sortedEmployees;
+
+  // Reorder Mutation
+  const reorderMutation = useMutation({
+    mutationFn: async (updates: { id: number; sortOrder: number }[]) => {
+      await apiRequest('PATCH', '/api/admin/employees/reorder', { updates });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/employees`] });
+    },
+    onError: (error) => {
+      toast({ variant: "destructive", title: "Error", description: "Failed to reorder employees" });
+    }
+  });
+
+  const handleMove = (index: number, direction: 'up' | 'down') => {
+    // Determine boundaries based on filtered list (assuming filtered list is what user sees)
+    // Note: Reordering works best when showing all employees of a department (no text filter)
+    if (searchQuery.trim()) {
+      toast({ title: "Note", description: "Clear search to reorder employees" });
+      return;
+    }
+
+    const currentEmp = filteredEmployees[index];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+    if (targetIndex < 0 || targetIndex >= filteredEmployees.length) return;
+
+    const targetEmp = filteredEmployees[targetIndex];
+
+    // Verify same Pay Level
+    if (currentEmp.payLevel !== targetEmp.payLevel) return;
+
+    let newCurrentOrder = targetEmp.sortOrder;
+    let newTargetOrder = currentEmp.sortOrder;
+
+    if (currentEmp.sortOrder === targetEmp.sortOrder) {
+      if (direction === 'up') {
+        newCurrentOrder = targetEmp.sortOrder - 1;
+        newTargetOrder = targetEmp.sortOrder;
+      } else {
+        newCurrentOrder = targetEmp.sortOrder + 1;
+        newTargetOrder = targetEmp.sortOrder;
+      }
+    } else {
+      newCurrentOrder = targetEmp.sortOrder;
+      newTargetOrder = currentEmp.sortOrder;
+    }
+
+    const updates = [
+      { id: currentEmp.id, sortOrder: newCurrentOrder },
+      { id: targetEmp.id, sortOrder: newTargetOrder }
+    ];
+
+    reorderMutation.mutate(updates);
+  };
 
   const addEmployee = useMutation({
     mutationFn: async (data: any) => {
@@ -399,6 +464,7 @@ export default function Employees() {
                   <TableHead>Name</TableHead>
                   <TableHead>Designation</TableHead>
                   <TableHead>Employment Status</TableHead>
+                  <TableHead>Pay Level</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Term Expiry</TableHead>
                   <TableHead>Actions</TableHead>
@@ -411,6 +477,11 @@ export default function Employees() {
                     <TableCell>{employee.name}</TableCell>
                     <TableCell>{employee.designation}</TableCell>
                     <TableCell>{employee.employmentStatus}</TableCell>
+                    <TableCell>
+                      <span className="font-medium bg-secondary/20 px-2 py-1 rounded">
+                        {employee.payLevel}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee.isActive === "active"
@@ -439,6 +510,37 @@ export default function Employees() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        {/* Reorder Arrows */}
+                        <div className="flex flex-col mr-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleMove(filteredEmployees.indexOf(employee), 'up')}
+                            disabled={
+                              !!searchQuery.trim() ||
+                              filteredEmployees.indexOf(employee) === 0 ||
+                              (filteredEmployees.indexOf(employee) > 0 && filteredEmployees[filteredEmployees.indexOf(employee) - 1].payLevel !== employee.payLevel)
+                            }
+                            title="Move Up"
+                          >
+                            <ArrowUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleMove(filteredEmployees.indexOf(employee), 'down')}
+                            disabled={
+                              !!searchQuery.trim() ||
+                              filteredEmployees.indexOf(employee) === filteredEmployees.length - 1 ||
+                              (filteredEmployees.indexOf(employee) < filteredEmployees.length - 1 && filteredEmployees[filteredEmployees.indexOf(employee) + 1].payLevel !== employee.payLevel)
+                            }
+                            title="Move Down"
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                          </Button>
+                        </div>
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button

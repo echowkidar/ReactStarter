@@ -2521,6 +2521,22 @@ export async function registerRoutes(app: Express) {
   });
 
   // Create employee (admin)
+  // Reorder employees
+  app.patch("/api/admin/employees/reorder", async (req, res) => {
+    try {
+      const { updates } = req.body;
+      if (!Array.isArray(updates)) {
+        return res.status(400).json({ message: "Invalid updates format" });
+      }
+
+      await storage.reorderEmployees(updates);
+      res.json({ message: "Employees reordered successfully" });
+    } catch (error) {
+      console.error("Error reordering employees:", error);
+      res.status(500).json({ message: "Failed to reorder employees" });
+    }
+  });
+
   app.post("/api/admin/employees", upload.fields(documentFields), async (req, res) => {
     try {
       console.log("Admin - Received raw employee data:", req.body);
