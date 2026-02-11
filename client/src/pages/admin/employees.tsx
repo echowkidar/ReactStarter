@@ -1522,9 +1522,7 @@ export default function AdminEmployees() {
                         </span>
                       )}
                     </TableHead>
-                    <TableHead>
-                      Pay Level
-                    </TableHead>
+
                     <TableHead
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort("salary_asstt")}
@@ -1588,14 +1586,10 @@ export default function AdminEmployees() {
                     <TableRow key={employee.id}>
                       <TableCell>{employee.epid}</TableCell>
                       <TableCell>{employee.name}</TableCell>
-                      <TableCell>{employee.name}</TableCell>
+
                       <TableCell>{employee.departmentName}</TableCell>
                       <TableCell>{employee.designation}</TableCell>
-                      <TableCell>
-                        <span className="font-medium bg-secondary/20 px-2 py-1 rounded">
-                          {employee.payLevel}
-                        </span>
-                      </TableCell>
+
                       <TableCell>{employee.salary_asstt || "-"}</TableCell>
                       <TableCell>{employee.salaryRegisterNo || "-"}</TableCell>
                       <TableCell>{employee.employmentStatus}</TableCell>
