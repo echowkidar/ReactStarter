@@ -1605,7 +1605,14 @@ export default function AdminEmployees() {
                         {(employee.employmentStatus === "Probation" ||
                           employee.employmentStatus === "Temporary") &&
                           employee.termExpiry ? (
-                          format(new Date(employee.termExpiry), "dd MMM yyyy")
+                          (() => {
+                            try {
+                              const date = new Date(employee.termExpiry);
+                              return isNaN(date.getTime()) ? "-" : format(date, "dd MMM yyyy");
+                            } catch (e) {
+                              return "-";
+                            }
+                          })()
                         ) : (
                           "-"
                         )}

@@ -104,6 +104,14 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  // Default to current month
+  const [monthFilter, setMonthFilter] = useState<string>(`${new Date().getFullYear()}-${new Date().getMonth()}`);
+  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "receiptNo", direction: "desc" });
+  const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+  const [canManageEmployees, setCanManageEmployees] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
   // Send heartbeat for admin user tracking
   const adminName = localStorage.getItem("adminUsername") || "Admin";
   const adminEmail = localStorage.getItem("adminEmail") || "";
@@ -113,10 +121,23 @@ export default function AdminDashboard() {
     email: adminEmail
   });
 
+  // Parse month filter for API query
+  const [filterYear, filterMonth] = (monthFilter || `${new Date().getFullYear()}-${new Date().getMonth()}`).split('-').map(Number);
+
+  // API expects 1-based month
+  const apiMonth = filterMonth + 1;
+
   const { data: reports, isLoading } = useQuery<ReportWithDepartment[]>({
-    queryKey: ["/api/admin/attendance"],
+    queryKey: ["/api/admin/attendance", apiMonth, filterYear],
+    queryFn: async () => {
+      // Add query params if filter is set
+      const url = `/api/admin/attendance?month=${apiMonth}&year=${filterYear}`;
+      const response = await apiRequest("GET", url);
+      return response.json();
+    }
   });
 
+  // Fetch departments with permit status (Super Admin only)
   // Fetch departments with permit status (Super Admin only)
   interface DepartmentWithPermit {
     id: number;
@@ -236,13 +257,7 @@ export default function AdminDashboard() {
   const [reportToDelete, setReportToDelete] = useState<ReportWithDepartment | null>(null);
   const [deleteStage, setDeleteStage] = useState<1 | 2>(1);
 
-  // Default to current month
-  const [monthFilter, setMonthFilter] = useState<string>(`${new Date().getFullYear()}-${new Date().getMonth()}`);
-  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "receiptNo", direction: "desc" });
-  const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
-  const [canManageEmployees, setCanManageEmployees] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
 
   // Accept cancellation mutation
   const acceptCancellation = useMutation({
@@ -308,7 +323,7 @@ export default function AdminDashboard() {
     },
     onSuccess: (_, enabled) => {
       queryClient.invalidateQueries({ queryKey: ["/api/departments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/departments?registeredOnly=true"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/departments?showAll=true"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
       toast({
         title: enabled ? "Attendance Enabled" : "Attendance Disabled",
@@ -604,7 +619,7 @@ export default function AdminDashboard() {
     });
 
     return filtered;
-  }, [reports, searchTerm, statusFilter, monthFilter, departmentFilter, sortConfig]);
+  }, [reports, searchTerm, statusFilter, monthFilter, departmentFilter, sortConfig, departments]);
 
   const handleLogout = () => {
     // Send logout signal to remove from active users
@@ -1231,7 +1246,7 @@ export default function AdminDashboard() {
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
-              <SelectItem value="not_received">Not Received</SelectItem>
+              <SelectItem value="not_received">Not Processed</SelectItem>
             </SelectContent>
           </Select>
           <MultiSelect
@@ -1298,7 +1313,7 @@ export default function AdminDashboard() {
                 </TableHead>
                 <TableHead>Transaction ID</TableHead>
                 <TableHead>Despatch No.</TableHead>
-                <TableHead>Despatch Date</TableHead>
+                <TableHead>Department Name</TableHead>
                 <TableHead
                   className="cursor-pointer"
                   onClick={() => handleSort("status")}
@@ -1314,139 +1329,148 @@ export default function AdminDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAndSortedReports.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell>{report.receiptNo || "-"}</TableCell>
-                  <TableCell>{formatDate(report.receiptDate)}</TableCell>
-                  <TableCell>
-                    {new Date(report.year, report.month - 1).toLocaleDateString(
-                      "en-US",
-                      {
-                        year: "numeric",
-                        month: "long",
-                      }
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {report.department?.name || "N/A"}
-                  </TableCell>
-                  <TableCell>
-                    {report.status === "draft"
-                      ? "*****"
-                      : report.transactionId || "Not generated"}
-                  </TableCell>
-                  <TableCell>{report.despatchNo || "-"}</TableCell>
-                  <TableCell>{formatDate(report.despatchDate)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        report.status === "submitted" || report.status === "sent" ? "default" :
-                          report.status === "cancelled" || report.status === "not_received" ? "destructive" :
-                            report.status === "recall_requested" ? "outline" :
-                              "secondary"
-                      }
-                      className={report.status === "recall_requested" ? "text-yellow-600 border-yellow-300" : ""}
-                    >
-                      {report.status === "not_received" ? "Not Received" :
-                        report.status === "recall_requested" ? "Recall Requested" :
-                          report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {report.fileUrl && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedReport(report.id);
-                            setShowPdfPreview(true);
-                          }}
-                          className="flex items-center gap-2"
-                        >
-                          <Download className="h-4 w-4" />
-                          View PDF
-                        </Button>
-                      )}
-                      {/* View Details button - hidden for cancelled reports */}
-                      {report.status !== "cancelled" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setLocation(`/admin/reports/${report.id}`)}
-                          className="flex items-center gap-2"
-                        >
-                          <Eye className="h-4 w-4" />
-                          View Details
-                        </Button>
-                      )}
-                      {/* Accept Cancellation button for cancel_requested status */}
-                      {report.status === "cancel_requested" && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => acceptCancellation.mutate(report.id)}
-                          disabled={acceptCancellation.isPending}
-                        >
-                          {acceptCancellation.isPending ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                          )}
-                          Accept Cancel
-                        </Button>
-                      )}
-                      {/* Revert to Draft button (Recall or manual revert) - Manual revert Super Admin only, Recall approval all admins */}
-                      {((report.status === "submitted" && isSuperAdmin) || report.status === "recall_requested") && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={report.status === "recall_requested" ? "text-yellow-600 border-yellow-300 hover:bg-yellow-50" : ""}
-                          onClick={() => revertToDraft.mutate(report.id)}
-                          disabled={revertToDraft.isPending}
-                          title={report.status === "recall_requested" ? "Approve Recall Request" : "Revert to Draft"}
-                        >
-                          {revertToDraft.isPending ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <RotateCcw className="h-4 w-4 mr-1" />
-                          )}
-                          {report.status === "recall_requested" ? "Approve Recall" : "Revert Draft"}
-                        </Button>
-                      )}
-                      {/* Status indicator for cancelled reports */}
-                      {report.status === "cancelled" && (
-                        <span className="text-green-600 text-sm font-medium flex items-center gap-1">
-                          <CheckCircle className="h-4 w-4" />
-                          Cancelled
-                        </span>
-                      )}
+              {filteredAndSortedReports.map((report) => {
+                // Find department to get employeeCount (works for both regular and virtual reports)
+                const dept = departments.find(d => d.id === report.departmentId);
+                const employeeCount = dept?.employeeCount || 0;
 
-                    </div>
-                    {/* Delete Action - restricted to super admin */}
-                    {adminType === "super" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-1"
-                        onClick={() => {
-                          setReportToDelete(report);
-                          setDeleteStage(1);
-                        }}
-                        title="Delete Report"
+                return (
+                  <TableRow key={report.id}>
+                    <TableCell>{report.receiptNo || "-"}</TableCell>
+                    <TableCell>{report.receiptDate ? formatDate(report.receiptDate) : "-"}</TableCell>
+                    <TableCell>
+                      {new Date(report.year, report.month - 1).toLocaleDateString(
+                        "en-US",
+                        {
+                          year: "numeric",
+                          month: "long",
+                        }
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{report.department?.name || dept?.name || "N/A"}</span>
+                        <span className="text-xs text-muted-foreground">{employeeCount} Employees</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {report.status === "draft"
+                        ? "*****"
+                        : report.transactionId || "Not generated"}
+                    </TableCell>
+                    <TableCell>{report.despatchNo || "-"}</TableCell>
+                    <TableCell>{report.despatchDate ? formatDate(report.despatchDate) : "-"}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          report.status === "submitted" || report.status === "sent" ? "default" :
+                            report.status === "cancelled" || report.status === "not_received" ? "destructive" :
+                              report.status === "recall_requested" ? "outline" :
+                                "secondary"
+                        }
+                        className={report.status === "recall_requested" ? "text-yellow-600 border-yellow-300" : ""}
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                        {report.status === "not_received" ? "Not Processed" :
+                          report.status === "recall_requested" ? "Recall Requested" :
+                            report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {report.fileUrl && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedReport(report.id);
+                              setShowPdfPreview(true);
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Download className="h-4 w-4" />
+                            View PDF
+                          </Button>
+                        )}
+                        {/* View Details button - hidden for cancelled reports */}
+                        {report.status !== "cancelled" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                            className="flex items-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Details
+                          </Button>
+                        )}
+                        {/* Accept Cancellation button for cancel_requested status */}
+                        {report.status === "cancel_requested" && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => acceptCancellation.mutate(report.id)}
+                            disabled={acceptCancellation.isPending}
+                          >
+                            {acceptCancellation.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                            )}
+                            Accept Cancel
+                          </Button>
+                        )}
+                        {/* Revert to Draft button (Recall or manual revert) - Manual revert Super Admin only, Recall approval all admins */}
+                        {((report.status === "submitted" && isSuperAdmin) || report.status === "recall_requested") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={report.status === "recall_requested" ? "text-yellow-600 border-yellow-300 hover:bg-yellow-50" : ""}
+                            onClick={() => revertToDraft.mutate(report.id)}
+                            disabled={revertToDraft.isPending}
+                            title={report.status === "recall_requested" ? "Approve Recall Request" : "Revert to Draft"}
+                          >
+                            {revertToDraft.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                            )}
+                            {report.status === "recall_requested" ? "Approve Recall" : "Revert Draft"}
+                          </Button>
+                        )}
+                        {/* Status indicator for cancelled reports */}
+                        {report.status === "cancelled" && (
+                          <span className="text-green-600 text-sm font-medium flex items-center gap-1">
+                            <CheckCircle className="h-4 w-4" />
+                            Cancelled
+                          </span>
+                        )}
+
+                      </div>
+                      {/* Delete Action - restricted to super admin */}
+                      {adminType === "super" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-1"
+                          onClick={() => {
+                            setReportToDelete(report);
+                            setDeleteStage(1);
+                          }}
+                          title="Delete Report"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
 
 
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
-        </div>
+        </div >
         <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
           <DialogContent className="max-w-4xl">
             <DialogHeader>
@@ -1492,7 +1516,7 @@ export default function AdminDashboard() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+      </div >
     </div >
   );
 }

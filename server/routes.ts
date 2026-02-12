@@ -2264,8 +2264,33 @@ export async function registerRoutes(app: Express) {
   // Admin routes
   app.get("/api/admin/attendance", async (req, res) => {
     try {
+      const { month, year } = req.query;
+
+      console.log(`[GET /api/admin/attendance] Fetching reports requesting month=${month}, year=${year}`);
+
       const reports = await storage.getAllAttendanceReports();
-      const reportsWithDetailsPromises = reports.map(async (report) => {
+
+      // OPTIMIZATION: Filter reports BEFORE fetching heavy details
+      let filteredReports = reports;
+
+      if (month && year) {
+        const monthNum = parseInt(month as string);
+        const yearNum = parseInt(year as string);
+
+        if (!isNaN(monthNum) && !isNaN(yearNum)) {
+          filteredReports = reports.filter(r => r.month === monthNum && r.year === yearNum);
+          console.log(`[GET /api/admin/attendance] Filtered from ${reports.length} to ${filteredReports.length} reports`);
+        }
+      }
+
+      // Sort by receipt date desc (newest first)
+      filteredReports.sort((a, b) => {
+        const dateA = new Date(a.receiptDate || 0).getTime();
+        const dateB = new Date(b.receiptDate || 0).getTime();
+        return dateB - dateA;
+      });
+
+      const reportsWithDetailsPromises = filteredReports.map(async (report) => {
         const department = await storage.getDepartment(report.departmentId);
 
         // Provide explicit type for entriesWithDetails

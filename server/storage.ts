@@ -92,6 +92,8 @@ export class MemStorage implements IStorage {
   private admins: Map<number, Admin>;
   private currentId: { [key: string]: number };
   private lastReceiptNo: number;
+  // Index for O(1) lookups
+  private entriesByReportId: Map<number, Set<number>>;
 
   constructor() {
     this.departments = new Map();
@@ -109,6 +111,7 @@ export class MemStorage implements IStorage {
     };
     this.lastReceiptNo = 0;
     this.admins = new Map();
+    this.entriesByReportId = new Map();
   }
 
   async getAdminByEmail(email: string): Promise<Admin | undefined> {
@@ -193,9 +196,12 @@ export class MemStorage implements IStorage {
     const id = this.currentId.employee++;
 
     // Convert joiningDate to string format as per schema
-    const joiningDateStr = employee.joiningDate instanceof Date
-      ? employee.joiningDate.toISOString().split('T')[0]
-      : employee.joiningDate;
+    let joiningDateStr: string;
+    if (employee.joiningDate instanceof Date) {
+      joiningDateStr = employee.joiningDate.toISOString().split('T')[0];
+    } else {
+      joiningDateStr = String(employee.joiningDate);
+    }
 
     const newEmployee: Employee = {
       ...employee,
@@ -259,7 +265,8 @@ export class MemStorage implements IStorage {
     const department: Department = {
       ...insertDepartment,
       id,
-      attendancePermitted: insertDepartment.attendancePermitted ?? true
+      attendancePermitted: insertDepartment.attendancePermitted ?? true,
+      lastLogin: null
     };
     this.departments.set(id, department);
     return department;
@@ -307,11 +314,13 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       status: report.status || "draft",
       transactionId: uuid().slice(0, 8).toUpperCase(),
-      receiptNo: null,
+      receiptNo: null as any,
       receiptDate: null,
       despatchNo: null,
       despatchDate: null,
-      fileUrl: null
+      fileUrl: null,
+      cancelRequestedAt: null,
+      cancelledAt: null
     };
     this.attendanceReports.set(id, newReport);
     return newReport;
@@ -348,11 +357,21 @@ export class MemStorage implements IStorage {
   }
 
   async deleteAttendanceReport(id: number): Promise<void> {
-    // Delete associated entries first
-    const entries = await this.getAttendanceEntriesByReport(id);
-    entries.forEach(entry => {
-      this.attendanceEntries.delete(entry.id);
-    });
+    // Delete associated entries first using the index (O(1) lookup of set)
+    const entryIds = this.entriesByReportId.get(id);
+    if (entryIds) {
+      entryIds.forEach(entryId => {
+        this.attendanceEntries.delete(entryId);
+      });
+      // Clear the index
+      this.entriesByReportId.delete(id);
+    } else {
+      // Fallback if index missing (shouldn't happen with new entries)
+      const entries = await this.getAttendanceEntriesByReport(id);
+      entries.forEach(entry => {
+        this.attendanceEntries.delete(entry.id);
+      });
+    }
 
     // Then delete the report
     this.attendanceReports.delete(id);
@@ -366,17 +385,34 @@ export class MemStorage implements IStorage {
       remarks: entry.remarks || null,
       fromDate: entry.fromDate || "",
       toDate: entry.toDate || "",
-      periods: entry.periods
+      periods: entry.periods,
+      verified: false
     };
 
     // Log the entry being created
     console.log('Creating attendance entry:', newEntry);
 
     this.attendanceEntries.set(id, newEntry);
+
+    // Update index
+    if (!this.entriesByReportId.has(entry.reportId)) {
+      this.entriesByReportId.set(entry.reportId, new Set());
+    }
+    this.entriesByReportId.get(entry.reportId)?.add(id);
+
     return newEntry;
   }
 
   async getAttendanceEntriesByReport(reportId: number): Promise<AttendanceEntry[]> {
+    const entryIds = this.entriesByReportId.get(reportId);
+    if (entryIds) {
+      // O(M) where M is number of entries in the report
+      return Array.from(entryIds)
+        .map(id => this.attendanceEntries.get(id))
+        .filter((e): e is AttendanceEntry => e !== undefined);
+    }
+
+    // Fallback for old data or safety
     return Array.from(this.attendanceEntries.values()).filter(
       e => e.reportId === reportId
     );
