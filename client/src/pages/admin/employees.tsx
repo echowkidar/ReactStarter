@@ -936,20 +936,25 @@ export default function AdminEmployees() {
       const wb = XLSX.utils.book_new();
 
       // Format employee data for Excel
-      const employeeData = filteredEmployees.map(emp => ({
-        'EPID': emp.epid || '',
-        'Name': emp.name || '',
-        'Department': emp.departmentName || '',
-        'Designation': emp.designation || '',
-        'Dealing Assistant': emp.salary_asstt || '',
-        'Reg.No.': emp.salaryRegisterNo || '',
-        'Status': emp.employmentStatus || '',
-        'Joining Date': emp.joiningDate || '',
-        'Office Memo No': emp.officeMemoNo || '',
-        'Bank Account': emp.bankAccount || '',
-        'PAN Number': emp.panNumber || '',
-        'Aadhar Number': emp.aadharCard || ''
-      }));
+      const employeeData = filteredEmployees.map(emp => {
+        const data: Record<string, any> = {
+          'EPID': emp.epid || '',
+          'Name': emp.name || '',
+          'Department': emp.departmentName || '',
+          'Designation': emp.designation || '',
+          'Dealing Assistant': emp.salary_asstt || '',
+          'Reg.No.': emp.salaryRegisterNo || '',
+          'Status': emp.employmentStatus || '',
+          'Joining Date': emp.joiningDate || '',
+          'Office Memo No': emp.officeMemoNo || ''
+        };
+
+        if (showBank) data['Bank Account'] = emp.bankAccount || '';
+        if (showPan) data['PAN Number'] = emp.panNumber || '';
+        if (showAadhar) data['Aadhar Number'] = emp.aadharCard || '';
+
+        return data;
+      });
 
       // Convert to worksheet
       const ws = XLSX.utils.json_to_sheet(employeeData);
@@ -964,11 +969,12 @@ export default function AdminEmployees() {
         { wch: 15 }, // Reg.No.
         { wch: 15 }, // Status
         { wch: 15 }, // Joining Date
-        { wch: 20 }, // Office Memo No
-        { wch: 20 }, // Bank Account
-        { wch: 15 }, // PAN Number
-        { wch: 15 }  // Aadhar Number
+        { wch: 20 }  // Office Memo No
       ];
+
+      if (showBank) colWidths.push({ wch: 20 }); // Bank Account
+      if (showPan) colWidths.push({ wch: 15 }); // PAN Number
+      if (showAadhar) colWidths.push({ wch: 15 }); // Aadhar Number
       ws['!cols'] = colWidths;
 
       // Add the worksheet to the workbook
@@ -1362,14 +1368,16 @@ export default function AdminEmployees() {
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
-              <Button
-                variant="outline"
-                onClick={handleDownloadExcel}
-                className="flex items-center gap-2"
-              >
-                <FileDown className="w-4 h-4" />
-                Download Excel
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadExcel}
+                  className="flex items-center gap-2"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Download Excel
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>

@@ -590,6 +590,32 @@ export async function registerRoutes(app: Express) {
   });
   // ============ End Visitor Analytics Endpoints ============
 
+  // ============ n8n Webhook Proxy ============
+  app.post("/api/chat-webhook", async (req, res) => {
+    const n8nUrl = process.env.N8N_WEBHOOK_URL;
+
+    if (!n8nUrl) {
+      console.error("N8N_WEBHOOK_URL not configured");
+      return res.status(500).json({ message: "Chat service not configured" });
+    }
+
+    try {
+      const response = await fetch(n8nUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(req.body),
+      });
+
+      const data = await response.json();
+      return res.json(data);
+    } catch (error) {
+      console.error("Error proxying chat request:", error);
+      return res.status(500).json({ message: "Failed to process chat request" });
+    }
+  });
+
   // Password reset routes
   app.post("/api/auth/forgot-password", async (req, res) => {
     const { email } = req.body;
@@ -1173,12 +1199,33 @@ export async function registerRoutes(app: Express) {
       console.log('Found department:', department);
 
       const employees = await storage.getEmployeesByDepartment(departmentId);
-      console.log('Found employees:', employees.length ? employees : 'No employees found');
+      console.log('Found employees:', employees.length ? employees.length : 'No employees found');
 
-      // Transform the response to match the expected format
+      // Fetch app settings to check field visibility
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const settingsResult = await db.execute(sql`SELECT key, value FROM app_settings`);
+      const settings: Record<string, string> = {};
+      for (const row of settingsResult.rows) {
+        settings[row.key as string] = row.value as string;
+      }
+
+      const showPan = settings.show_pan_field !== "false";
+      const showBank = settings.show_bank_field !== "false";
+      const showAadhar = settings.show_aadhar_field !== "false";
+
+      // Transform the response to match the expected format and filter sensitive fields
       const transformedEmployees = employees.map(emp => ({
         ...emp,
-        departmentName: department.name
+        departmentName: department.name,
+        // Filter sensitive fields if hidden in settings
+        panNumber: showPan ? emp.panNumber : "",
+        bankAccount: showBank ? emp.bankAccount : "",
+        aadharCard: showAadhar ? emp.aadharCard : "",
+        // Also mask the document URLs for hidden fields to be safe
+        panCardUrl: showPan ? emp.panCardUrl : null,
+        bankProofUrl: showBank ? emp.bankProofUrl : null,
+        aadharCardUrl: showAadhar ? emp.aadharCardUrl : null
       }));
 
       res.json(transformedEmployees);
@@ -2261,7 +2308,18 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Admin routes
+  // Get available attendance months for filter
+  app.get("/api/admin/attendance/months", async (req, res) => {
+    try {
+      const months = await storage.getAvailableAttendanceMonths();
+      res.json(months);
+    } catch (error) {
+      console.error("Error fetching available attendance months:", error);
+      res.status(500).json({ message: "Failed to fetch available months" });
+    }
+  });
+
+  // Admin reports route
   app.get("/api/admin/attendance", async (req, res) => {
     try {
       const { month, year } = req.query;
@@ -2515,15 +2573,36 @@ export async function registerRoutes(app: Express) {
     try {
       console.log('[GET /api/admin/employees] Fetching all employees');
       const employees = await storage.getAllEmployees();
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
 
       // Get all departments to add department names
       const departments = await storage.getAllDepartments();
       const departmentMap = new Map(departments.map(d => [d.id, d]));
 
-      // Add department names to employees
+      // Fetch app settings to check field visibility
+      const settingsResult = await db.execute(sql`SELECT key, value FROM app_settings`);
+      const settings: Record<string, string> = {};
+      for (const row of settingsResult.rows) {
+        settings[row.key as string] = row.value as string;
+      }
+
+      const showPan = settings.show_pan_field !== "false";
+      const showBank = settings.show_bank_field !== "false";
+      const showAadhar = settings.show_aadhar_field !== "false";
+
+      // Add department names to employees and filter sensitive fields
       const employeesWithDepartments = employees.map(emp => ({
         ...emp,
-        departmentName: departmentMap.get(emp.departmentId)?.name || 'Unknown Department'
+        departmentName: departmentMap.get(emp.departmentId)?.name || 'Unknown Department',
+        // Filter sensitive fields if hidden in settings
+        panNumber: showPan ? emp.panNumber : "",
+        bankAccount: showBank ? emp.bankAccount : "",
+        aadharCard: showAadhar ? emp.aadharCard : "",
+        // Also mask the document URLs for hidden fields to be safe
+        panCardUrl: showPan ? emp.panCardUrl : null,
+        bankProofUrl: showBank ? emp.bankProofUrl : null,
+        aadharCardUrl: showAadhar ? emp.aadharCardUrl : null
       }));
 
       console.log(`[GET /api/admin/employees] Returning ${employeesWithDepartments.length} employees`);
@@ -3715,7 +3794,46 @@ export async function registerRoutes(app: Express) {
       const excludeDeptId = deptId || 0;
 
       const results = await storage.searchEmployeesGlobal(query, excludeDeptId);
-      res.json(results);
+
+      // Fetch app settings to check field visibility
+      try {
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        const settingsResult = await db.execute(sql`SELECT key, value FROM app_settings`);
+        const settings: Record<string, string> = {};
+        for (const row of settingsResult.rows) {
+          settings[row.key as string] = row.value as string;
+        }
+
+        const showPan = settings.show_pan_field !== "false";
+        const showBank = settings.show_bank_field !== "false";
+        const showAadhar = settings.show_aadhar_field !== "false";
+
+        // Filter sensitive fields
+        const filteredResults = results.map(emp => ({
+          ...emp,
+          panNumber: showPan ? emp.panNumber : "",
+          bankAccount: showBank ? emp.bankAccount : "",
+          aadharCard: showAadhar ? emp.aadharCard : "",
+          panCardUrl: showPan ? emp.panCardUrl : null,
+          bankProofUrl: showBank ? emp.bankProofUrl : null,
+          aadharCardUrl: showAadhar ? emp.aadharCardUrl : null
+        }));
+
+        res.json(filteredResults);
+      } catch (err) {
+        console.error("Error filtering search results:", err);
+        // Fallback to sending results if settings fail, or send empty? 
+        // Safer to return results as is if DB fails, or empty. 
+        // Let's return results with fields masked to be safe on error
+        const safeResults = results.map(emp => ({
+          ...emp,
+          panNumber: "",
+          bankAccount: "",
+          aadharCard: ""
+        }));
+        res.json(safeResults);
+      }
     } catch (error) {
       console.error("Error in global search:", error);
       res.status(500).json({ message: "Search failed" });

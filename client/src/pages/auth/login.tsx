@@ -28,7 +28,7 @@ const N8nChatScript = () => {
     script.innerHTML = `
       import { createChat } from "https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js";
       createChat({ 
-        webhookUrl: "https://agent.echowkidar.in/webhook/336cd62e-fd49-462a-bc21-83dae5195819/chat",
+        webhookUrl: window.location.origin + '/api/chat-webhook',
         initialMessages: [
           'Hi there! ',
           'I am AMU AI. How can I assist you today?'

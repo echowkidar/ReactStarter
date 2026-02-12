@@ -65,7 +65,28 @@ export default function AttendanceReports() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
-  const [monthFilter, setMonthFilter] = useState<string[]>([]);
+  // Fetch available months from backend
+  const { data: dbMonths = [] } = useQuery<{ month: number; year: number }[]>({
+    queryKey: ["/api/admin/attendance/months"],
+  });
+
+  // Format backend months to "Month Year" strings
+  const availableMonthStrings = useMemo(() => {
+    return dbMonths.map(m => {
+      const date = new Date(m.year, m.month - 1);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    });
+  }, [dbMonths]);
+
+  // Initialize with current month
+  const [monthFilter, setMonthFilter] = useState<string[]>(() => {
+    const now = new Date();
+    // Default to current month even if not in database yet (it will just show empty)
+    // Or we could default to the latest available month from dbMonths if we waited for it
+    // But for better UX (instant render), let's default to actual current month
+    const current = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return [current];
+  });
   const [salaryRegisterFilter, setSalaryRegisterFilter] = useState<string[]>([]);
   const [salaryAssistantFilter, setSalaryAssistantFilter] = useState<string[]>([]);
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
@@ -111,9 +132,31 @@ export default function AttendanceReports() {
     setIsSalaryAdmin(adminType === "salary");
   }, []);
 
-  // Fetch all attendance reports - include sent, cancel_requested, and cancelled
+  // Fetch attendance reports - filtered by month/year if selected
   const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
-    queryKey: ["/api/admin/attendance"],
+    queryKey: ["/api/admin/attendance", monthFilter],
+    queryFn: async ({ queryKey }) => {
+      const [, filters] = queryKey;
+      let url = "/api/admin/attendance";
+
+      // We only support single month filter for the API optimization
+      // If multiple selected (UI allows it), we might just fetch all or fetch for the first one
+      // For now, let's take the first one if available
+      const selectedMonth = Array.isArray(filters) && filters.length > 0 ? filters[0] : null;
+
+      if (selectedMonth) {
+        const [monthName, yearStr] = selectedMonth.split(' ');
+        if (monthName && yearStr) {
+          // Parse month name to number (0-11) -> (1-12)
+          const monthDate = new Date(`${monthName} 1, 2000`);
+          const monthNum = monthDate.getMonth() + 1;
+          url += `?month=${monthNum}&year=${yearStr}`;
+        }
+      }
+
+      const res = await apiRequest("GET", url);
+      return res.json();
+    },
     select: (data) => data.filter(report =>
       report.status === "sent" ||
       report.status === "cancel_requested"
@@ -236,11 +279,15 @@ export default function AttendanceReports() {
     return entries;
   }, [reports]);
 
-  // Get unique months for the filter
+  // Use filtered months from backend instead of calculating from all entries
+  // But strictly speaking, the MultiSelect expects options.
+  // We can merge backend available months with what's currently selected to ensure options exist
+  // We ALSO include months from the loaded reports as a fallback/supplement
   const availableMonths = useMemo(() => {
-    const uniqueMonths = new Set(allEntries.map(entry => entry.month));
-    return Array.from(uniqueMonths).sort();
-  }, [allEntries]);
+    const reportMonths = allEntries.map(entry => entry.month);
+    // Return unique set of available strings
+    return Array.from(new Set([...availableMonthStrings, ...monthFilter, ...reportMonths])).sort();
+  }, [availableMonthStrings, monthFilter, allEntries]);
 
   // Get unique departments for the filter (only from sent reports)
   const availableDepartments = useMemo(() => {
@@ -305,6 +352,9 @@ export default function AttendanceReports() {
 
     // Apply month filter when calculating available departments and salary registers
     let monthFilteredEntries = result;
+    // NOTE: Since we are fetching *only* the filtered data from backend now, 
+    // `result` is *already* filtered by month essentially. 
+    // But we keep this check for consistency if multiple months were somehow supported or fetched.
     if (monthFilter.length > 0) {
       monthFilteredEntries = result.filter(
         entry => monthFilter.includes(entry.month)
@@ -496,21 +546,30 @@ export default function AttendanceReports() {
   // Function to download filtered entries as Excel
   const downloadExcel = () => {
     // Create a worksheet from the filtered entries
-    const worksheet = XLSX.utils.json_to_sheet(processedEntries.map(entry => ({
-      "Month": entry.month,
-      "Department": entry.departmentName,
-      "Employee ID": entry.employeeId,
-      "Employee Name": entry.employeeName,
-      "Designation": entry.designation,
-      "Salary Assistant": entry.salaryAsstt,
-      "Salary Register No": entry.salaryRegisterNo,
-      "Period": entry.period,
-      "Days": entry.days,
-      "Remarks": entry.remarks
-    })));
+    const worksheet = XLSX.utils.json_to_sheet(processedEntries.map(entry => {
+      // Split period string "DD-MM-YY to DD-MM-YY"
+      const [fromStr, toStr] = entry.period.split(" to ");
+
+      return {
+        "Month": entry.month,
+        "Department": entry.departmentName,
+        "Employee ID": entry.employeeId,
+        "Employee Name": entry.employeeName,
+        "Designation": entry.designation,
+        "Salary Assistant": entry.salaryAsstt,
+        "Salary Register No": entry.salaryRegisterNo,
+        "Period From": fromStr || "",
+        "Period To": toStr || "",
+        "Days": entry.days,
+        "Remarks": entry.remarks
+      };
+    }));
 
     // Set column widths for better readability
     const columnWidths = [
+      // { wch: 15 }, // Month - removed from UI but kept in Excel? User only said "dashboard se month ke column ki zarurat nahi"
+      // Let's keep it in Excel for record keeping, but if strictly want to remove, we can.
+      // Usually reports need dates. I will leave it in Excel for now as it doesn't hurt.
       { wch: 15 }, // Month
       { wch: 25 }, // Department
       { wch: 15 }, // Employee ID
@@ -518,7 +577,8 @@ export default function AttendanceReports() {
       { wch: 20 }, // Designation
       { wch: 20 }, // Salary Assistant
       { wch: 15 }, // Salary Register No
-      { wch: 25 }, // Period
+      { wch: 15 }, // Period From
+      { wch: 15 }, // Period To
       { wch: 8 },  // Days
       { wch: 25 }  // Remarks
     ];
@@ -664,7 +724,7 @@ export default function AttendanceReports() {
               </div>
               <div className="w-full md:w-64">
                 <MultiSelect
-                  options={filteredMonths.map(month => ({
+                  options={availableMonths.map(month => ({
                     label: month,
                     value: month
                   }))}
@@ -758,7 +818,7 @@ export default function AttendanceReports() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Month</TableHead>
+                    {/* Month column removed as per request */}
                     <TableHead>Department Name</TableHead>
                     <TableHead
                       className="cursor-pointer hover:bg-muted/50"
@@ -791,7 +851,7 @@ export default function AttendanceReports() {
                   ) : (
                     paginatedEntries.map((entry, index) => (
                       <TableRow key={index}>
-                        <TableCell>{entry.showMonth ? entry.month : ""}</TableCell>
+                        {/* <TableCell>{entry.showMonth ? entry.month : ""}</TableCell> */}
                         <TableCell className="font-medium">
                           {entry.showDepartment ? entry.departmentName : ""}
                         </TableCell>

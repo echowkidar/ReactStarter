@@ -382,6 +382,32 @@ export class DbStorage implements IStorage {
     return await db.query.attendanceReports.findMany();
   }
 
+  async getAvailableAttendanceMonths(): Promise<{ month: number; year: number }[]> {
+    try {
+      // Get unique month/year combinations from attendance reports using raw SQL
+      // This ensures we avoid any potential ORM issues with distinct + order by
+      const result = await db.execute(sql`
+        SELECT DISTINCT month, year 
+        FROM attendance_reports 
+        ORDER BY year DESC, month DESC
+      `);
+
+      console.log(`[DbStorage] getAvailableAttendanceMonths found ${result.rows.length} records`);
+      if (result.rows.length > 0) {
+        console.log(`[DbStorage] Sample month/year:`, result.rows[0]);
+      }
+
+      // Map the rows to the expected format (ensure numbers)
+      return result.rows.map(row => ({
+        month: Number(row.month),
+        year: Number(row.year)
+      }));
+    } catch (error) {
+      console.error("[DbStorage] Error in getAvailableAttendanceMonths:", error);
+      return [];
+    }
+  }
+
   async updateAttendanceReport(id: number, updates: Partial<AttendanceReport>): Promise<AttendanceReport> {
     // If status is being updated to "sent", check if we need to add receipt details
     if (updates.status === "sent") {
