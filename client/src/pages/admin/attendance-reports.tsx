@@ -18,6 +18,7 @@ import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
 import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
+import { ArrowUpDown } from "lucide-react";
 import * as XLSX from "xlsx";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -139,6 +140,17 @@ export default function AttendanceReports() {
       });
     },
   });
+
+  // Sorting state for Employee ID
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   // Add this debug log to see the entire reports data
   console.log("Reports data:", JSON.stringify(reports, null, 2));
@@ -402,6 +414,26 @@ export default function AttendanceReports() {
   const processedEntries = useMemo(() => {
     // Sort entries by department first to group them together
     const sorted = [...filteredEntries].sort((a, b) => {
+      // If sorting by Employee ID is active
+      if (sortConfig && sortConfig.key === 'employeeId') {
+        const empIdA = a.employeeId || "";
+        const empIdB = b.employeeId || "";
+
+        // Try numeric comparison first if both are numbers
+        const numA = parseInt(empIdA);
+        const numB = parseInt(empIdB);
+
+        let comparison = 0;
+        if (!isNaN(numA) && !isNaN(numB)) {
+          comparison = numA - numB;
+        } else {
+          comparison = empIdA.localeCompare(empIdB);
+        }
+
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      }
+
+      // Default sorting: Department -> Month -> Employee Name
       // First sort by department name
       const deptCompare = a.departmentName.localeCompare(b.departmentName);
       if (deptCompare !== 0) return deptCompare;
@@ -437,7 +469,7 @@ export default function AttendanceReports() {
         showMonth: isFirstMonthEntry
       };
     });
-  }, [filteredEntries]);
+  }, [filteredEntries, sortConfig]);
 
   // Paginate processed entries
   const paginatedEntries = useMemo(() => {
@@ -728,7 +760,15 @@ export default function AttendanceReports() {
                   <TableRow>
                     <TableHead>Month</TableHead>
                     <TableHead>Department Name</TableHead>
-                    <TableHead>Employee ID</TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('employeeId')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Employee ID
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
                     <TableHead>Employee Name</TableHead>
                     <TableHead>Designation</TableHead>
                     <TableHead>Salary Assistant</TableHead>

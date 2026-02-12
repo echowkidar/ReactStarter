@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Route, Redirect } from "wouter";
 import { getCurrentDepartment } from "@/lib/auth"; // Adjust path if necessary
+import { useAutoLogout } from "@/hooks/useAutoLogout";
 
 interface ProtectedRouteProps {
   path: string;
@@ -12,7 +13,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   path,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  
+
   useEffect(() => {
     // Check authentication status
     const department = getCurrentDepartment();
@@ -32,10 +33,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     <Route
       path={path}
       component={(props: any) =>
-        isAuthenticated ? <Component {...props} /> : <Redirect to="/" />
+        isAuthenticated ? (
+          <>
+            <AutoLogoutWrapper />
+            <Component {...props} />
+          </>
+        ) : (
+          <Redirect to="/" />
+        )
       }
     />
   );
+};
+
+// Wrapper completely isolates the hook
+const AutoLogoutWrapper = () => {
+  useAutoLogout();
+  return null;
 };
 
 export default ProtectedRoute; 

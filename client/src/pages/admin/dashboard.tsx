@@ -25,7 +25,7 @@ import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Label } from 'recharts';
 
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -440,7 +440,7 @@ export default function AdminDashboard() {
 
     // Sent (Received): Must have Receipt No AND NOT Cancelled
     const sentReports = currentReports.filter(r =>
-      (Number(r.receiptNo) > 0 || (typeof r.receiptNo === 'string' && r.receiptNo.length > 0)) &&
+      r.receiptNo && r.receiptNo > 0 &&
       r.status !== 'cancelled'
     );
     // Unique departments that have sent
@@ -448,7 +448,19 @@ export default function AdminDashboard() {
     // Intersection with RELEVANT departments (in case a dept with 0 employees sent one?)
     const sentCount = relevantDepts.filter(d => sentDeptIds.has(d.id)).length;
 
-    const notSentCount = totalRelevant - sentCount;
+    // Processed: Submitted or Draft, but NOT in Sent (Received) list
+    const processedReports = currentReports.filter(r =>
+      (r.status === 'submitted' || r.status === 'draft')
+    );
+    const processedDeptIds = new Set(processedReports.map(r => r.departmentId));
+
+    // Departments that are Processed but NOT Sent (Received)
+    const processedCount = relevantDepts.filter(d =>
+      !sentDeptIds.has(d.id) && processedDeptIds.has(d.id)
+    ).length;
+
+    // Not Processed: Total - (Received + Processed)
+    const notProcessedCount = totalRelevant - sentCount - processedCount;
 
     // Breakdown
     const breakdown = {
@@ -462,7 +474,7 @@ export default function AdminDashboard() {
       recall: currentReports.filter(r => r.status === 'recall_requested').length,
     };
 
-    return { totalRelevant, sentCount, notSentCount, breakdown, requests };
+    return { totalRelevant, sentCount, processedCount, notProcessedCount, breakdown, requests };
   }, [departments, reports]);
 
   const filteredAndSortedReports = useMemo(() => {
@@ -794,22 +806,68 @@ export default function AdminDashboard() {
         {/* Dashboard Stats - 3x1 Grid Layout (Modified) */}
         {/* Row 1: Attendance Report Status + Status Breakdown + Transfer Requests */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <div className="bg-white p-4 rounded-lg border shadow-sm">
+          <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col justify-between h-full">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Attendance Report Status (Current Month)</h3>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-6">
-                <div>
+            <div className="flex items-center justify-between flex-1">
+              <div className="flex items-center gap-8 pl-4">
+                <div className="text-center">
                   <p className="text-3xl font-bold text-green-600">{stats.sentCount}</p>
                   <p className="text-[11px] uppercase tracking-wider text-green-700 font-semibold">Received</p>
                 </div>
-                <div>
-                  <p className="text-3xl font-bold text-red-500">{stats.notSentCount}</p>
-                  <p className="text-[11px] uppercase tracking-wider text-red-600 font-semibold">Not Received</p>
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-amber-600">{stats.processedCount}</p>
+                  <p className="text-[11px] uppercase tracking-wider text-amber-700 font-semibold">Processed</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-red-500">{stats.notProcessedCount}</p>
+                  <p className="text-[11px] uppercase tracking-wider text-red-600 font-semibold">Not Processed</p>
                 </div>
               </div>
-              <div className="ml-auto bg-gray-50 p-3 rounded-md text-right">
-                <p className="text-[10px] uppercase tracking-wider text-gray-500">Total Departments</p>
-                <p className="text-sm font-semibold">{stats.totalRelevant}</p>
+
+              <div className="h-[120px] w-[120px] relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Received', value: stats.sentCount, color: '#16a34a' },
+                        { name: 'Processed', value: stats.processedCount, color: '#d97706' },
+                        { name: 'Not Processed', value: stats.notProcessedCount, color: '#ef4444' }
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={55}
+                      paddingAngle={2}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {
+                        [
+                          { name: 'Received', value: stats.sentCount, color: '#16a34a' },
+                          { name: 'Processed', value: stats.processedCount, color: '#d97706' },
+                          { name: 'Not Processed', value: stats.notProcessedCount, color: '#ef4444' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))
+                      }
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number, name: string) => [value, name]}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Custom center label for (Received + Processed) / Total */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-lg font-bold text-gray-900 leading-none">
+                      {stats.sentCount + stats.processedCount}
+                    </span>
+                    <span className="text-xs text-gray-500 font-medium leading-none mt-1">
+                      / {stats.totalRelevant}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
