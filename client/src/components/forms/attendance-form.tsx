@@ -114,6 +114,7 @@ interface AttendanceFormProps {
       }>;
     }>;
   };
+  isSupplementary?: boolean;
 }
 
 // Add the formatTermExpiry function
@@ -133,13 +134,69 @@ const formatTermExpiry = (dateStr: string | null | undefined): string => {
   }
 };
 
-export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData }: AttendanceFormProps) {
+export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary }: AttendanceFormProps) {
   const department = getCurrentDepartment();
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
   const [includeExcluded, setIncludeExcluded] = useState(false); // Mode: With Break
   const [includeExcludedFull, setIncludeExcludedFull] = useState(false); // Mode: Full Month
+  const [reportedEmployeeIds, setReportedEmployeeIds] = useState<Set<number>>(new Set());
 
-  const { data: employees = [], isLoading: loadingEmployees } = useQuery({
+  // Watch month/year to update reported employees list
+  const selectedMonth = parseInt(initialData?.month || String(new Date().getMonth() + 1));
+  const selectedYear = parseInt(initialData?.year || String(currentYear));
+
+  // Calculate first and last day of selected month
+  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
+
+  // Create form first so we can watch values
+  const form = useForm<AttendanceFormData>({
+    resolver: zodResolver(attendanceSchema),
+    defaultValues: initialData || {
+      month: String(selectedMonth),
+      year: String(selectedYear),
+      entries: [{
+        employeeId: 0,
+        periods: [{
+          fromDate: formatDateForDisplay(new Date(selectedYear, selectedMonth - 1, 1)),
+          toDate: formatDateForDisplay(new Date(selectedYear, selectedMonth, 0)),
+          days: calculateDays(
+            formatDateForDisplay(new Date(selectedYear, selectedMonth - 1, 1)),
+            formatDateForDisplay(new Date(selectedYear, selectedMonth, 0))
+          ),
+          remarks: ""
+        }],
+      }],
+    },
+  });
+
+  const watchMonth = form.watch("month");
+  const watchYear = form.watch("year");
+
+  // Fetch employees who are already in a report for this month/year (if supplementary)
+  useEffect(() => {
+    const fetchReportedEmployees = async () => {
+      if (!isSupplementary || !department?.id) {
+        setReportedEmployeeIds(new Set());
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/departments/${department.id}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}`);
+        if (res.ok) {
+          const ids = await res.json();
+          console.log("Employees already reported:", ids);
+          setReportedEmployeeIds(new Set(ids));
+        }
+      } catch (e) {
+        console.error("Error fetching reported employees:", e);
+      }
+    };
+
+    fetchReportedEmployees();
+  }, [isSupplementary, department?.id, watchMonth, watchYear]);
+
+  const { data: rawEmployees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [`/api/departments/${department?.id}/employees`],
     select: (data: any) => {
       // Filter only active employees and sort by Pay Level (descending) then EPID (ascending)
@@ -167,33 +224,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     },
   });
 
-  const selectedMonth = parseInt(initialData?.month || String(new Date().getMonth() + 1));
-  const selectedYear = parseInt(initialData?.year || String(currentYear));
-
-  // Calculate first and last day of selected month
-  const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
-  const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
-
-
-  const form = useForm<AttendanceFormData>({
-    resolver: zodResolver(attendanceSchema),
-    defaultValues: initialData || {
-      month: String(selectedMonth),
-      year: String(selectedYear),
-      entries: [{
-        employeeId: 0,
-        periods: [{
-          fromDate: formatDateForDisplay(defaultStartDate),
-          toDate: formatDateForDisplay(defaultEndDate),
-          days: calculateDays(
-            formatDateForDisplay(defaultStartDate),
-            formatDateForDisplay(defaultEndDate)
-          ),
-          remarks: ""
-        }],
-      }],
-    },
-  });
+  // Filter employees based on supplementary mode
+  const employees = React.useMemo(() => {
+    if (!isSupplementary) return rawEmployees;
+    return rawEmployees.filter((e: any) => !reportedEmployeeIds.has(e.id));
+  }, [rawEmployees, isSupplementary, reportedEmployeeIds]);
 
   const isGuestTeacher = (empId: number) => {
     const emp = employees.find((e: any) => e.id === empId);

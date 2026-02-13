@@ -10,6 +10,7 @@ export const departments = pgTable("departments", {
   email: text("email").notNull(),
   password: text("password").notNull(),
   attendancePermitted: boolean("attendance_permitted").notNull().default(true),
+  allowSupplementaryReport: boolean("allow_supplementary_report").notNull().default(false),
   lastLogin: timestamp("last_login"),
 });
 

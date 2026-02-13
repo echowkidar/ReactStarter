@@ -1091,7 +1091,7 @@ export default function Attendance() {
 
 
   // Check if department is permitted to create reports
-  const { data: attendanceStatus } = useQuery<{ permitted: boolean; daysRemaining: number; isPastDeadline: boolean }>({
+  const { data: attendanceStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean }>({
     queryKey: [`/api/departments/${department?.id}/attendance-status`],
     enabled: !!department?.id,
   });
@@ -1103,14 +1103,16 @@ export default function Attendance() {
   const existingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled');
 
   // Logic for canCreateReport:
-  // 1. If department is explicitly permitted by admin (permitted === true): ignore deadline, only check existing report
+  // 1. If department is explicitly permitted by admin (permitted === true): ignore deadline
   // 2. If department is NOT permitted (permitted === false): ALWAYS disable (regardless of deadline)
   // 3. If permitted is undefined (loading/error): respect deadline as fallback
+  // 
+  // ADDITIONALLY: If existingReport exists, check allowSupplementaryReport
   const canCreateReport = attendanceStatus?.permitted === true
-    ? !existingReport  // Permitted: ignore deadline, only check for existing report
+    ? (!existingReport || attendanceStatus?.allowSupplementaryReport) // Permitted: ignore deadline, check if report exists OR supp allowed
     : attendanceStatus?.permitted === false
       ? false  // Explicitly NOT permitted: always disable
-      : (!isPastDeadline && !existingReport);  // Undefined/loading: respect deadline
+      : (!isPastDeadline && (!existingReport || attendanceStatus?.allowSupplementaryReport));  // Undefined/loading: respect deadline, check existing report OR supp allowed
 
   // Override canRequestCancellation: allow if permitted OR before 23rd
   // Note: canRequestCancellation was initially defined above as today.getDate() <= 23
@@ -1176,6 +1178,16 @@ export default function Attendance() {
             </div>
           )}
 
+          {/* Supplementary Report Allowed Banner */}
+          {attendanceStatus?.allowSupplementaryReport && existingReport && (
+            <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-purple-800 flex items-center gap-2">
+              <span className="text-xl">✨</span>
+              <span className="font-medium">
+                You have been granted one-time permission to create a supplementary attendance report for this month.
+              </span>
+            </div>
+          )}
+
 
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Attendance Reports</h1>
@@ -1189,11 +1201,11 @@ export default function Attendance() {
                       ? (existingReport
                         ? (existingReport.status === 'draft' ? "Draft report already exists. Please delete it to create new."
                           : existingReport.status === 'submitted' || existingReport.status === 'recall_requested' ? "Report submitted. Use 'Recall' to modify."
-                            : "Report sent. Request cancellation to recreate.")
+                            : attendanceStatus?.allowSupplementaryReport ? "Create Supplementary Report" : "Report sent. Request cancellation to recreate or ask Admin for supplementary permission.")
                         : (isPastDeadline && attendanceStatus?.permitted !== true)
                           ? "Deadline passed"
                           : "Attendance submission disabled")
-                      : "Create new report"
+                      : (existingReport ? "Create Supplementary Report" : "Create new report")
                   }
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1223,6 +1235,7 @@ export default function Attendance() {
                     }}
                     isLoading={createReport.isPending || editReport.isPending}
                     initialData={editingReportData}
+                    isSupplementary={!!(existingReport && attendanceStatus?.allowSupplementaryReport)}
                   />
                 </div>
               </DialogContent>

@@ -48,6 +48,7 @@ export interface IStorage {
   getDepartmentByEmail(email: string): Promise<Department | undefined>;
   createDepartment(department: InsertDepartment): Promise<Department>;
   updateDepartment(id: number, updates: Partial<Department>): Promise<Department>;
+  updateDepartmentSupplementaryPermission(departmentId: number, allowed: boolean): Promise<Department | undefined>;
   deleteDepartment(id: number): Promise<void>;
   getAllDepartments(): Promise<Department[]>;
   // Employee operations
@@ -142,6 +143,15 @@ export class MemStorage implements IStorage {
     const dept = this.departments.get(departmentId);
     if (dept) {
       dept.attendancePermitted = permitted;
+      this.departments.set(departmentId, dept);
+    }
+    return dept;
+  }
+
+  async updateDepartmentSupplementaryPermission(departmentId: number, allowed: boolean): Promise<Department | undefined> {
+    const dept = this.departments.get(departmentId);
+    if (dept) {
+      dept.allowSupplementaryReport = allowed;
       this.departments.set(departmentId, dept);
     }
     return dept;
@@ -266,6 +276,7 @@ export class MemStorage implements IStorage {
       ...insertDepartment,
       id,
       attendancePermitted: insertDepartment.attendancePermitted ?? true,
+      allowSupplementaryReport: false,
       lastLogin: null
     };
     this.departments.set(id, department);

@@ -162,6 +162,29 @@ export default function AdminUsers() {
     },
   });
 
+  // Supplementary report permit toggle mutation
+  const toggleSupplementaryPermit = useMutation({
+    mutationFn: async ({ deptId, allowed }: { deptId: number; allowed: boolean }) => {
+      await apiRequest("PATCH", `/api/departments/${deptId}/supplementary-permit`, { allowed });
+    },
+    onSuccess: (_, { allowed }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/departments?registeredOnly=true"] });
+      toast({
+        title: allowed ? "Supplementary Report Allowed" : "Supplementary Report Disabled",
+        description: allowed
+          ? "This department can create ONE additional report for the current month"
+          : "Supplementary report creation disabled",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update supplementary permission",
+      });
+    },
+  });
+
   // Setup form for creating/editing users (assuming 'form' is defined elsewhere or needs setup)
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
@@ -497,6 +520,7 @@ export default function AdminUsers() {
                       <TableHead>Role</TableHead>
                       <TableHead>Department</TableHead>
                       <TableHead>Last Login</TableHead>
+                      <TableHead>Permissions</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -546,24 +570,47 @@ export default function AdminUsers() {
                               {user.role === 'department' ? formatLastLogin(lastLogin) : <span className="text-muted-foreground text-xs">-</span>}
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-col gap-2">
                                 {user.departmentId && (() => {
                                   const isPermitted = dept ? dept.attendancePermitted !== false : true;
+                                  const isSupplementaryAllowed = dept ? dept.allowSupplementaryReport === true : false;
+
                                   return (
-                                    <div className="mr-2 flex items-center" title={isPermitted ? "Attendance Allowed" : "Attendance Blocked"}>
-                                      <Switch
-                                        checked={isPermitted}
-                                        onCheckedChange={(checked) =>
-                                          toggleDeptPermit.mutate({
-                                            deptId: user.departmentId!,
-                                            permitted: checked
-                                          })
-                                        }
-                                        disabled={toggleDeptPermit.isPending}
-                                      />
-                                    </div>
+                                    <>
+                                      <div className="flex items-center justify-between gap-2" title="Attendance Submission">
+                                        <span className="text-xs text-muted-foreground w-20">Attendance:</span>
+                                        <Switch
+                                          checked={isPermitted}
+                                          onCheckedChange={(checked) =>
+                                            toggleDeptPermit.mutate({
+                                              deptId: user.departmentId!,
+                                              permitted: checked
+                                            })
+                                          }
+                                          disabled={toggleDeptPermit.isPending}
+                                        />
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2" title="Allow Supplementary Report (One-time)">
+                                        <span className="text-xs text-muted-foreground w-20">Supp. Report:</span>
+                                        <Switch
+                                          checked={isSupplementaryAllowed}
+                                          onCheckedChange={(checked) =>
+                                            toggleSupplementaryPermit.mutate({
+                                              deptId: user.departmentId!,
+                                              allowed: checked
+                                            })
+                                          }
+                                          disabled={toggleSupplementaryPermit.isPending}
+                                          className="data-[state=checked]:bg-yellow-500"
+                                        />
+                                      </div>
+                                    </>
                                   );
                                 })()}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
                                 <Button
                                   variant="outline"
                                   size="sm"

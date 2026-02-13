@@ -1118,6 +1118,7 @@ export async function registerRoutes(app: Express) {
           name: dept.name,
           code: null,
           attendancePermitted: dept.attendancePermitted,
+          allowSupplementaryReport: dept.allowSupplementaryReport,
           employeeCount: employeeCounts.get(dept.id) || 0,
           lastLogin: dept.lastLogin || null
         }));
@@ -2135,15 +2136,85 @@ export async function registerRoutes(app: Express) {
     res.json(reports);
   });
 
+  // Get list of employee IDs that are already in a report for a specific month/year
+  app.get("/api/departments/:departmentId/attendance/reported-employees", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      const month = Number(req.query.month);
+      const year = Number(req.query.year);
+
+      if (isNaN(departmentId) || isNaN(month) || isNaN(year)) {
+        return res.status(400).json({ error: "Invalid parameters" });
+      }
+
+      // Get all reports for this department
+      const reports = await storage.getAttendanceReportsByDepartment(departmentId);
+
+      // Filter for reports of this month/year that are NOT cancelled
+      const relevantReports = reports.filter(
+        (r) => r.month === month && r.year === year && r.status !== 'cancelled'
+      );
+
+      const reportedEmployeeIds = new Set<number>();
+
+      for (const report of relevantReports) {
+        const entries = await storage.getAttendanceEntriesByReport(report.id);
+        entries.forEach((e: any) => reportedEmployeeIds.add(e.employeeId));
+      }
+
+      res.json(Array.from(reportedEmployeeIds));
+    } catch (error) {
+      console.error("Error fetching reported employees:", error);
+      res.status(500).json({ message: "Failed to fetch reported employees" });
+    }
+  });
+
   app.post("/api/departments/:departmentId/attendance", async (req, res) => {
     try {
+      const departmentId = Number(req.params.departmentId);
       const reportData = insertAttendanceReportSchema.parse({
         ...req.body,
-        departmentId: Number(req.params.departmentId)
+        departmentId
       });
+
+      // Check if report already exists for this month/year
+      const existingReports = await storage.getAttendanceReportsByDepartment(departmentId);
+      const existingReport = existingReports.find(
+        (r) => r.month === reportData.month && r.year === reportData.year && r.status !== 'cancelled'
+      );
+
+      const department = await storage.getDepartment(departmentId);
+
+      if (existingReport) {
+        // Check if supplementary report is allowed
+        if (department?.allowSupplementaryReport) {
+          console.log(`Creating supplementary report for department ${departmentId}`);
+
+          // CRITICAL: Reset the flag to false immediately so they can't create another one
+          const { db } = await import("./db");
+          const { sql } = await import("drizzle-orm");
+          await db.execute(sql`
+             UPDATE departments 
+             SET allow_supplementary_report = false
+             WHERE id = ${departmentId}
+           `);
+
+          // If we are using MemStorage, update it there too
+          if (department) {
+            department.allowSupplementaryReport = false;
+          }
+
+        } else {
+          return res.status(400).json({
+            message: "A report for this month already exists. Please request cancellation/recall or ask Admin for supplementary report permission."
+          });
+        }
+      }
+
       const report = await storage.createAttendanceReport(reportData);
       res.status(201).json(report);
     } catch (error) {
+      console.error("Error creating attendance report:", error);
       res.status(400).json({ message: "Invalid report data" });
     }
   });
@@ -3092,6 +3163,28 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Toggle supplementary report permission
+  app.patch("/api/departments/:id/supplementary-permit", async (req, res) => {
+    try {
+      const deptId = Number(req.params.id);
+      const { allowed } = req.body;
+
+      if (typeof allowed !== 'boolean') {
+        return res.status(400).json({ message: "allowed must be a boolean" });
+      }
+
+      // Update the supplementary permission
+      // We use the storage method which handles both DB update and cache/state sync
+      await storage.updateDepartmentSupplementaryPermission(deptId, allowed);
+
+      console.log(`Department ${deptId} supplementary report permission: ${allowed ? 'ALLOWED' : 'DENIED'}`);
+      res.json({ success: true, allowed });
+    } catch (error) {
+      console.error("Error updating supplementary permission:", error);
+      res.status(500).json({ message: "Failed to update supplementary permission" });
+    }
+  });
+
   // Get attendance permission status for current department
   app.get("/api/departments/:id/attendance-status", async (req, res) => {
     try {
@@ -3109,8 +3202,11 @@ export async function registerRoutes(app: Express) {
       const daysRemaining = deadlineDay - currentDay;
       const isPastDeadline = currentDay > deadlineDay;
 
+      console.log(`[Debug] Dept ${deptId} Status - Permitted: ${department.attendancePermitted}, SuppAllowed: ${department.allowSupplementaryReport}`);
+
       res.json({
         permitted: department.attendancePermitted,
+        allowSupplementaryReport: department.allowSupplementaryReport,
         deadlineDay,
         daysRemaining: isPastDeadline ? 0 : daysRemaining,
         isPastDeadline

@@ -585,6 +585,14 @@ export class DbStorage implements IStorage {
     return updated;
   }
 
+  async updateDepartmentSupplementaryPermission(departmentId: number, allowed: boolean): Promise<Department | undefined> {
+    const [updated] = await db.update(departments)
+      .set({ allowSupplementaryReport: allowed })
+      .where(eq(departments.id, departmentId))
+      .returning();
+    return updated;
+  }
+
   async deleteFile(filePath: string): Promise<void> {
     console.log(`[Debug] deleteFile called with: '${filePath}'`);
 
