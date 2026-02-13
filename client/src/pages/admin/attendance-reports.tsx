@@ -103,11 +103,11 @@ export default function AttendanceReports() {
     },
     onMutate: async (entryId: number) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["/api/admin/attendance"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/admin/attendance", monthFilter] });
       // Snapshot the previous value
-      const previousData = queryClient.getQueryData(["/api/admin/attendance"]);
+      const previousData = queryClient.getQueryData(["/api/admin/attendance", monthFilter]);
       // Optimistically update the cache
-      queryClient.setQueryData(["/api/admin/attendance"], (old: any) => {
+      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
         if (!old) return old;
         return old.map((report: any) => ({
           ...report,
@@ -121,9 +121,13 @@ export default function AttendanceReports() {
     onError: (_err, _entryId, context) => {
       // Rollback on error
       if (context?.previousData) {
-        queryClient.setQueryData(["/api/admin/attendance"], context.previousData);
+        queryClient.setQueryData(["/api/admin/attendance", monthFilter], context.previousData);
       }
     },
+    onSettled: () => {
+      // Always refetch after error or success to ensure data consistency
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+    }
   });
 
   useEffect(() => {
@@ -235,17 +239,12 @@ export default function AttendanceReports() {
 
         report.entries.forEach(entry => {
           if (entry.employee) {
-            console.log("Employee data in attendance report:", entry.employee);
-            console.log("Employee data keys:", Object.keys(entry.employee));
-
             // First try direct access, then fall back to empty string
             const salaryAssttValue = entry.employee.salary_asstt !== undefined ?
               String(entry.employee.salary_asstt) :
               (typeof entry.employee === 'object' && 'salary_asstt' in entry.employee) ?
                 String(entry.employee.salary_asstt) :
                 "";
-
-            console.log("Employee salary_asstt value:", salaryAssttValue);
 
             try {
               const periods = JSON.parse(entry.periods);
@@ -342,67 +341,61 @@ export default function AttendanceReports() {
       );
     }
 
-    // Apply department filter when calculating available months and salary registers
-    let departmentFilteredEntries = result;
-    if (departmentFilter.length > 0) {
-      departmentFilteredEntries = result.filter(
-        entry => departmentFilter.includes(entry.departmentId.toString())
-      );
-    }
+    // --- Helper to filter by everything EXCEPT the target criteria ---
 
-    // Apply month filter when calculating available departments and salary registers
-    let monthFilteredEntries = result;
-    // NOTE: Since we are fetching *only* the filtered data from backend now, 
-    // `result` is *already* filtered by month essentially. 
-    // But we keep this check for consistency if multiple months were somehow supported or fetched.
+    // Get available departments: apply Month + Register + Assistant filters
+    let filteredForDepartments = result;
     if (monthFilter.length > 0) {
-      monthFilteredEntries = result.filter(
-        entry => monthFilter.includes(entry.month)
-      );
+      filteredForDepartments = filteredForDepartments.filter(entry => monthFilter.includes(entry.month));
     }
-
-    // Apply salary register filter when calculating available departments and months
-    let salaryRegisterFilteredEntries = result;
     if (salaryRegisterFilter.length > 0) {
-      salaryRegisterFilteredEntries = result.filter(
-        entry => salaryRegisterFilter.includes(entry.salaryRegisterNo)
-      );
+      filteredForDepartments = filteredForDepartments.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
     }
-
-    // Apply salary assistant filter when calculating available departments, months, and registers
-    let salaryAssistantFilteredEntries = result;
     if (salaryAssistantFilter.length > 0) {
-      salaryAssistantFilteredEntries = result.filter(
-        entry => salaryAssistantFilter.includes(entry.salaryAsstt)
-      );
+      filteredForDepartments = filteredForDepartments.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
     }
-
-    // Get available departments based on other filters
-    const filteredForDepartments =
-      monthFilter.length > 0 ? monthFilteredEntries :
-        salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
-          salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
     const deptIds = new Set(filteredForDepartments.map(entry => entry.departmentId.toString()));
 
-    // Get available months based on other filters
-    const filteredForMonths =
-      departmentFilter.length > 0 ? departmentFilteredEntries :
-        salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries :
-          salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+
+    // Get available months: apply Dept + Register + Assistant filters
+    let filteredForMonths = result;
+    if (departmentFilter.length > 0) {
+      filteredForMonths = filteredForMonths.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
+    }
+    if (salaryRegisterFilter.length > 0) {
+      filteredForMonths = filteredForMonths.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
+    }
+    if (salaryAssistantFilter.length > 0) {
+      filteredForMonths = filteredForMonths.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
+    }
     const months = new Set(filteredForMonths.map(entry => entry.month));
 
-    // Get available salary registers based on other filters
-    const filteredForSalaryRegisters =
-      departmentFilter.length > 0 ? departmentFilteredEntries :
-        monthFilter.length > 0 ? monthFilteredEntries :
-          salaryAssistantFilter.length > 0 ? salaryAssistantFilteredEntries : result;
+
+    // Get available salary registers: apply Dept + Month + Assistant filters
+    let filteredForSalaryRegisters = result;
+    if (departmentFilter.length > 0) {
+      filteredForSalaryRegisters = filteredForSalaryRegisters.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
+    }
+    if (monthFilter.length > 0) {
+      filteredForSalaryRegisters = filteredForSalaryRegisters.filter(entry => monthFilter.includes(entry.month));
+    }
+    if (salaryAssistantFilter.length > 0) {
+      filteredForSalaryRegisters = filteredForSalaryRegisters.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
+    }
     const salaryRegisters = new Set(filteredForSalaryRegisters.map(entry => entry.salaryRegisterNo));
 
-    // Get available salary assistants based on other filters
-    const filteredForSalaryAssistants =
-      departmentFilter.length > 0 ? departmentFilteredEntries :
-        monthFilter.length > 0 ? monthFilteredEntries :
-          salaryRegisterFilter.length > 0 ? salaryRegisterFilteredEntries : result;
+
+    // Get available salary assistants: apply Dept + Month + Register filters
+    let filteredForSalaryAssistants = result;
+    if (departmentFilter.length > 0) {
+      filteredForSalaryAssistants = filteredForSalaryAssistants.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
+    }
+    if (monthFilter.length > 0) {
+      filteredForSalaryAssistants = filteredForSalaryAssistants.filter(entry => monthFilter.includes(entry.month));
+    }
+    if (salaryRegisterFilter.length > 0) {
+      filteredForSalaryAssistants = filteredForSalaryAssistants.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
+    }
     const salaryAssistants = new Set(
       filteredForSalaryAssistants
         .map(entry => entry.salaryAsstt)
