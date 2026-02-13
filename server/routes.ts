@@ -3202,8 +3202,6 @@ export async function registerRoutes(app: Express) {
       const daysRemaining = deadlineDay - currentDay;
       const isPastDeadline = currentDay > deadlineDay;
 
-      console.log(`[Debug] Dept ${deptId} Status - Permitted: ${department.attendancePermitted}, SuppAllowed: ${department.allowSupplementaryReport}`);
-
       res.json({
         permitted: department.attendancePermitted,
         allowSupplementaryReport: department.allowSupplementaryReport,
