@@ -34,7 +34,6 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
 
           if (!response.ok) {
             // Session invalid - password changed, force logout
-            console.log("Session expired - password changed, logging out");
             localStorage.removeItem("admin");
             localStorage.removeItem("adminType");
             localStorage.removeItem("adminSessionToken");

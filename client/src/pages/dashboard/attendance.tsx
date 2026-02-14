@@ -96,7 +96,6 @@ const PDFDialogContent = ({
         const response = await fetch(`/api/attendance/${report.id}`);
         if (response.ok) {
           const updatedReport = await response.json();
-          console.log("Fetched updated report:", updatedReport);
           setRefreshedReport(updatedReport);
         }
       } catch (error) {
@@ -115,7 +114,6 @@ const PDFDialogContent = ({
 
   const getProperFileUrl = (url: string | undefined): string[] => {
     if (!url) return [];
-    console.log("Original file URL:", url);
     const possibleUrls = [];
     const fileName = url.split('/').pop();
     if (url.startsWith('/')) {
@@ -145,7 +143,6 @@ const PDFDialogContent = ({
       possibleUrls.push(`${window.location.origin}/uploads/*_${reportId}.${fileExt}`);
       possibleUrls.push(`${window.location.origin}/uploads/*${reportId}*.${fileExt}`);
     }
-    console.log("Trying these URLs:", possibleUrls);
     return possibleUrls;
   };
 
@@ -168,13 +165,10 @@ const PDFDialogContent = ({
         const possibleUrls = getProperFileUrl(currentReport.fileUrl);
         for (const url of possibleUrls) {
           try {
-            console.log(`Checking URL: ${url}`);
             const response = await fetch(url, { method: 'HEAD', cache: 'no-cache', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'Expires': '0' } });
-            console.log(`Response for ${url}:`, response.status);
             if (response.ok) {
               setFileExists(true);
               setWorkingFileUrl(url);
-              console.log("Found working URL:", url);
               return;
             }
           } catch (urlError) {
@@ -187,11 +181,9 @@ const PDFDialogContent = ({
           if (response.ok && response.headers.get('content-type')?.includes('pdf')) {
             setFileExists(true);
             setWorkingFileUrl(url);
-            console.log("Found working URL via GET:", url);
             return;
           }
           const blob = await response.blob();
-          console.log("Response blob:", blob.type, blob.size);
           if (blob.type === 'application/pdf' || blob.size > 1000) {
             setFileExists(true);
             setWorkingFileUrl(url);
@@ -326,7 +318,6 @@ const PDFDialogContent = ({
         const response = await fetch('/api/list-files?dir=uploads');
         if (response.ok) {
           const files = await response.json();
-          console.log("Files in uploads directory:", files);
 
           const reportId = currentReport.id;
           const possibleFiles = files.filter((file: string) => {
@@ -335,14 +326,12 @@ const PDFDialogContent = ({
           });
 
           if (possibleFiles.length > 0) {
-            console.log("Possible matching files:", possibleFiles);
             const mostLikelyFile = possibleFiles[0];
             const fileUrl = `/uploads/${mostLikelyFile}`;
             setWorkingFileUrl(fileUrl);
             setFileExists(true);
           }
         } else {
-          console.log("Could not list files in uploads directory");
         }
       } catch (error) {
         console.error("Error listing files:", error);
@@ -710,7 +699,6 @@ export default function Attendance() {
     despatchDetails?: DespatchDetails,
   ) => {
     try {
-      console.log("Starting PDF upload for report", reportId);
 
       // Based on server code examination, the server uses multer with the following format:
       // file.fieldname + '-' + Date.now() + '-' + Math.round(Math.random() * 1E9) + original extension
@@ -720,8 +708,6 @@ export default function Attendance() {
       const formData = new FormData();
       formData.append("file", file);
 
-      console.log("Uploading PDF file using native FormData");
-      console.log("Original file name:", file.name);
 
       const uploadResponse = await fetch(`/api/upload`, {
         method: "POST",
@@ -737,7 +723,6 @@ export default function Attendance() {
 
       // Parse the upload response to get the file URL
       const uploadData = await uploadResponse.json();
-      console.log("Complete upload response:", uploadData);
 
       // Extract the server-generated filename from the response
       // The server might return either { fileUrl: "/uploads/filename" } or { imageUrl: "/uploads/filename" }
@@ -745,10 +730,8 @@ export default function Attendance() {
 
       if (uploadData?.fileUrl) {
         fileUrlToSave = uploadData.fileUrl;
-        console.log("Found fileUrl in response:", fileUrlToSave);
       } else if (uploadData?.imageUrl) {
         fileUrlToSave = uploadData.imageUrl;
-        console.log("Found imageUrl in response:", fileUrlToSave);
       } else {
         // Try a few common fields from server response
         const possibleFields = ['url', 'path', 'file', 'filePath', 'location'];
@@ -756,7 +739,6 @@ export default function Attendance() {
         for (const field of possibleFields) {
           if (uploadData && uploadData[field]) {
             fileUrlToSave = uploadData[field];
-            console.log(`Found alternative field "${field}" in response:`, fileUrlToSave);
             break;
           }
         }
@@ -764,7 +746,6 @@ export default function Attendance() {
         // If we still don't have a URL, check if uploadData itself is a string URL
         if (!fileUrlToSave && typeof uploadData === 'string' && (uploadData.startsWith('/') || uploadData.startsWith('http'))) {
           fileUrlToSave = uploadData;
-          console.log("Response appears to be a direct URL string:", fileUrlToSave);
         }
 
         // Last resort: Log the issue if no URL is found. An error will be thrown later if fileUrlToSave is still empty.
@@ -777,7 +758,6 @@ export default function Attendance() {
         throw new Error("Server did not return a recognizable file URL");
       }
 
-      console.log("Final URL to use:", fileUrlToSave);
 
       // Verify the file is accessible at the exact URL the server provided
       try {
@@ -786,19 +766,16 @@ export default function Attendance() {
           cache: 'no-cache'
         });
 
-        console.log("File verification response:", verifyResponse.status);
 
         if (!verifyResponse.ok) {
           console.warn("Warning: Could not verify file at the server URL. Status:", verifyResponse.status);
         } else {
-          console.log("Successfully verified file exists at server URL");
         }
       } catch (error) {
         console.error("Error verifying file existence:", error);
       }
 
       // Step 2: Now update the attendance report with our consistent filename URL
-      console.log("Updating attendance report with consistent URL:", fileUrlToSave);
 
       // Update the updatePayload to use this URL
       const updatePayload = {
@@ -809,7 +786,6 @@ export default function Attendance() {
         receiptDate: new Date(),
       };
 
-      console.log("Update payload:", JSON.stringify(updatePayload));
 
       const updateResponse = await fetch(`/api/attendance/${reportId}`, {
         method: "PATCH",
@@ -827,7 +803,6 @@ export default function Attendance() {
       }
 
       const updateData = await updateResponse.json();
-      console.log("Report updated successfully:", updateData);
 
       // Update local state
       setUploadedPdfUrl(fileUrlToSave);
@@ -978,7 +953,6 @@ export default function Attendance() {
 
   const editReport = useMutation({
     mutationFn: async ({ reportId, data }: { reportId: number; data: any }) => {
-      console.log(`[editReport] Starting update for report ${reportId}`);
 
       // 1. Update report metadata (month, year)
       await apiRequest("PATCH", `/api/attendance/${reportId}`, {
@@ -987,11 +961,9 @@ export default function Attendance() {
       });
 
       // 2. Clear existing entries completely
-      console.log(`[editReport] Clearing entries for report ${reportId}`);
       await apiRequest("POST", `/api/attendance/${reportId}/clear-entries`);
 
       // 3. Re-create entries
-      console.log(`[editReport] Re-creating ${data.entries.length} entries`);
       for (const entry of data.entries) {
         if (!entry.periods || entry.periods.length === 0) continue;
 
@@ -1007,7 +979,6 @@ export default function Attendance() {
           periods,
         });
       }
-      console.log(`[editReport] Update complete`);
     },
     onSuccess: (_, variables) => {
       // Invalidate the general list
@@ -1048,10 +1019,8 @@ export default function Attendance() {
   const handleEditClick = async (report: AttendanceReport) => {
     try {
       // Fetch entries for this report
-      console.log("Fetching entries for report", report.id);
       const res = await apiRequest("GET", `/api/attendance/${report.id}/entries`);
       const entries = await res.json();
-      console.log("Entries fetched:", entries);
 
       // Parse JSON periods if they are strings (schema says periods is text/JSON)
       const parsedEntries = entries.map((entry: any) => ({

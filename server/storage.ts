@@ -35,7 +35,6 @@ function deleteFileIfExists(filePath: string) {
   if (fs.existsSync(absolutePath)) {
     try {
       fs.unlinkSync(absolutePath);
-      console.log(`Deleted file: ${absolutePath}`);
     } catch (error) {
       console.error(`Error deleting file ${absolutePath}:`, error);
     }
@@ -173,7 +172,6 @@ export class MemStorage implements IStorage {
     if (department) {
       // Remove from storage
       this.departments.delete(id);
-      console.log(`Department ${id} deleted successfully`);
     }
   }
 
@@ -244,7 +242,6 @@ export class MemStorage implements IStorage {
     };
 
     // Log the employee being created
-    console.log('Creating employee in storage:', newEmployee);
 
     this.employees.set(id, newEmployee);
     return newEmployee;
@@ -262,7 +259,6 @@ export class MemStorage implements IStorage {
 
       // Remove from storage
       this.employees.delete(id);
-      console.log(`Employee ${id} and associated files deleted successfully`);
     }
   }
 
@@ -401,7 +397,6 @@ export class MemStorage implements IStorage {
     };
 
     // Log the entry being created
-    console.log('Creating attendance entry:', newEntry);
 
     this.attendanceEntries.set(id, newEntry);
 

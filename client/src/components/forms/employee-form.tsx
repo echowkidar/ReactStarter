@@ -131,8 +131,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       const result = await compressImageToWebP(file);
 
       // Log the conversion to verify WebP format
-      console.log(`Converted ${file.name} to WebP: ${result.fileName}`);
-      console.log(`Blob type: ${result.blob.type}`);
 
       // Set the field value with the WebP image URL
       form.setValue(fieldName as any, result.url);

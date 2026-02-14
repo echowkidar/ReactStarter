@@ -269,9 +269,6 @@ export default function Documents() {
         reader.readAsDataURL(compressedFile);
 
         // Log compression results
-        console.log(`Original size: ${(file.size / 1024).toFixed(2)} KB`);
-        console.log(`Compressed size: ${(compressedFile.size / 1024).toFixed(2)} KB`);
-        console.log(`Compression ratio: ${((1 - compressedFile.size / file.size) * 100).toFixed(2)}%`);
 
       } catch (error) {
         console.error("Image compression failed:", error);

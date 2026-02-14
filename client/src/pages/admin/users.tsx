@@ -219,7 +219,6 @@ export default function AdminUsers() {
         const matchingDept = departments.find(deptInfo => deptInfo.name === user.departmentName);
         if (matchingDept) {
           targetDepartmentId = matchingDept.id; // Use the ID from department_names (fetched list)
-          console.log(`Editing user ${user.name}, found matching department: ID ${targetDepartmentId}, Name: ${matchingDept.name}`);
         } else {
           console.warn(`Could not find matching department ID for user ${user.name} with department name "${user.departmentName}". Check consistency.`);
           // Keep targetDepartmentId as null, dropdown will show placeholder
@@ -262,7 +261,6 @@ export default function AdminUsers() {
   // Handle user form submission
   const onSubmitUser = async (data: UserFormValues) => {
     try {
-      console.log("Submitting user form with data:", data);
 
       if (data.role === "department") {
         if (!data.departmentId) {
@@ -276,7 +274,6 @@ export default function AdminUsers() {
           toast({ title: "Error", description: "Selected department not found. Please refresh and try again.", variant: "destructive" });
           return;
         }
-        console.log("Validated selected department:", selectedDept);
       }
 
       if (data.role !== "department") {
@@ -287,7 +284,6 @@ export default function AdminUsers() {
       const apiUrl = selectedUser ? `/api/admin/users/${selectedUser.id}` : "/api/admin/users";
       const method = selectedUser ? "PUT" : "POST";
 
-      console.log(`${method} ${apiUrl}`, data);
       response = await fetch(apiUrl, {
         method: method,
         headers: { "Content-Type": "application/json" },
@@ -297,7 +293,6 @@ export default function AdminUsers() {
       let responseData;
       try {
         responseData = await response.json();
-        console.log("API response:", response.status, responseData);
       } catch (e) {
         console.error("Failed to parse response as JSON:", e);
         responseData = { message: response.statusText };
@@ -326,7 +321,6 @@ export default function AdminUsers() {
         ...data,
         dealingAssistantCode: data.dealingAssistantCode?.trim() || null,
       };
-      console.log("Submitting new department name form:", payload); // Log the payload
       departmentForm.clearErrors(); // Clear previous errors
 
       const response = await fetch("/api/admin/department-names", {
@@ -336,7 +330,6 @@ export default function AdminUsers() {
       });
 
       const responseData = await response.json();
-      console.log("API response:", response.status, responseData);
 
       if (!response.ok) {
         // Display specific error message from backend if available
@@ -365,7 +358,6 @@ export default function AdminUsers() {
     if (!selectedUser) return;
 
     try {
-      console.log("Deleting user:", selectedUser);
 
       const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
         method: "DELETE",
@@ -378,7 +370,6 @@ export default function AdminUsers() {
         responseData = null;
       }
 
-      console.log("Delete response:", responseData);
 
       if (!response.ok) {
         throw new Error(responseData?.message || responseData?.details || "Failed to delete user");

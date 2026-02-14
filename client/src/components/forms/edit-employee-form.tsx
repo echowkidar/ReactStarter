@@ -164,7 +164,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       const compressedFile = new File([result.blob], result.fileName, { type: 'image/webp' });
 
       // Log the conversion to verify WebP format
-      console.log(`Compressed ${file.name} (${Math.round(file.size / 1024)}KB) to ${result.fileName} (${Math.round(result.blob.size / 1024)}KB)`);
 
       // Store the COMPRESSED file for upload
       setSelectedFiles(prev => ({
@@ -197,7 +196,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
   // File removal handler
   const handleRemoveFile = async (fileType: string) => {
-    console.log(`File being removed: ${fileType}`);
 
     // Get the file URL field name based on the file type
     let urlField: keyof typeof fileUrls;
@@ -214,18 +212,15 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
     // Directly check if in admin or department mode
     const isAdmin = window.location.pathname.includes('/admin');
-    console.log("File deletion:", isAdmin ? "Admin mode" : "Department mode");
 
     // If file URL exists and is a SERVER URL (not base64 data URL), also remove from server
     // Base64 URLs start with "data:" and are not yet uploaded to server
     if (currentFileUrl && !currentFileUrl.startsWith('data:')) {
       try {
-        console.log(`Attempting to remove file from server: ${currentFileUrl}`);
 
 
         // Add the complete endpoint URL here
         const apiUrl = `/api/upload`;
-        console.log(`API endpoint: ${apiUrl}`);
 
         const response = await fetch(apiUrl, {
           method: 'DELETE',
@@ -237,8 +232,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
 
         // Log server response
-        console.log(`Status code: ${response.status}`);
-        console.log(`Status text: ${response.statusText}`);
 
         // If response is not OK, log the error response text
         if (!response.ok) {
@@ -251,13 +244,11 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           const result = await response.json();
-          console.log('File removed successfully:', result);
           toast({
             title: "Success",
             description: "File removed successfully",
           });
         } else {
-          console.log('File removed, but no JSON response');
           toast({
             title: "Success",
             description: "File removed successfully",
@@ -272,7 +263,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         });
 
         // Clear file URL in form despite the error
-        console.log('File URL being cleared in form');
       }
     }
 
@@ -408,7 +398,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
   const onSubmit = async (data: any) => {
     try {
-      console.log("Form submission started with data:", data);
       setIsSubmitting(true);
 
       // Get department info for department-specific API
@@ -417,20 +406,12 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
       // Determine if we're in admin or department context
       const isAdmin = window.location.pathname.includes('/admin');
-      console.log("Context:", isAdmin ? "Admin" : "Department", "Department ID:", departmentId);
 
       // अब रेफरेंस और स्टेट से फाइल्स का उपयोग करें
       const files = selectedFiles;
 
       // Log file details for debugging
-      console.log("Selected files:", Object.fromEntries(
-        Object.entries(files).map(([key, file]) => [
-          key,
-          file ? { name: file.name, type: file.type, size: file.size } : null
-        ])
-      ));
 
-      console.log("File URLs to preserve or clear:", fileUrls);
 
       const hasFiles = !!(
         files.panCardDoc ||
@@ -441,11 +422,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         files.termExtensionDoc
       );
 
-      console.log("Has files:", hasFiles);
 
       // If we have files, we need to handle them specially
       if (hasFiles) {
-        console.log("Processing files for upload...");
 
         // This is how Admin side does it - first upload each file, then update employee
         // We'll do the same for Department side
@@ -459,97 +438,79 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         let termExtensionUrlPromise = null;
 
         if (files.panCardDoc) {
-          console.log("Uploading PAN Card:", files.panCardDoc.name);
           const panCardFormData = new FormData();
           panCardFormData.append('file', files.panCardDoc);
           panCardUrlPromise = fetch('/api/upload', {
             method: 'POST',
             body: panCardFormData
           }).then(res => {
-            console.log("PAN Card upload response status:", res.status);
             return res.json();
           }).then(result => {
-            console.log("PAN Card upload result:", result);
             return result.imageUrl;
           });
         }
 
         if (files.bankAccountDoc) {
-          console.log("Uploading Bank Account proof:", files.bankAccountDoc.name);
           const bankFormData = new FormData();
           bankFormData.append('file', files.bankAccountDoc);
           bankProofUrlPromise = fetch('/api/upload', {
             method: 'POST',
             body: bankFormData
           }).then(res => {
-            console.log("Bank proof upload response status:", res.status);
             return res.json();
           }).then(result => {
-            console.log("Bank proof upload result:", result);
             return result.imageUrl;
           });
         }
 
         if (files.aadharCardDoc) {
-          console.log("Uploading Aadhar Card:", files.aadharCardDoc.name);
           const aadharFormData = new FormData();
           aadharFormData.append('file', files.aadharCardDoc);
           aadharCardUrlPromise = fetch('/api/upload', {
             method: 'POST',
             body: aadharFormData
           }).then(res => {
-            console.log("Aadhar Card upload response status:", res.status);
             return res.json();
           }).then(result => {
-            console.log("Aadhar Card upload result:", result);
             return result.imageUrl;
           });
         }
 
         if (files.officeMemoDoc) {
-          console.log("Uploading Office Memo:", files.officeMemoDoc.name);
           const memoFormData = new FormData();
           memoFormData.append('file', files.officeMemoDoc);
           officeMemoUrlPromise = fetch('/api/upload', {
             method: 'POST',
             body: memoFormData
           }).then(res => {
-            console.log("Office Memo upload response status:", res.status);
             return res.json();
           }).then(result => {
-            console.log("Office Memo upload result:", result);
             return result.imageUrl;
           });
         }
 
         if (files.joiningReportDoc) {
-          console.log("Uploading Joining Report:", files.joiningReportDoc.name);
           const reportFormData = new FormData();
           reportFormData.append('file', files.joiningReportDoc);
           joiningReportUrlPromise = fetch('/api/upload', {
             method: 'POST',
             body: reportFormData
           }).then(res => {
-            console.log("Joining Report upload response status:", res.status);
             return res.json();
           }).then(result => {
-            console.log("Joining Report upload result:", result);
             return result.imageUrl;
           });
         }
 
         if (files.termExtensionDoc) {
-          console.log("Uploading Term Extension Office Memo:", files.termExtensionDoc.name);
           const termExtensionFormData = new FormData();
           termExtensionFormData.append('file', files.termExtensionDoc);
           termExtensionUrlPromise = fetch('/api/upload', {
             method: 'POST',
             body: termExtensionFormData
           }).then(res => {
-            console.log("Term Extension Office Memo upload response status:", res.status);
             return res.json();
           }).then(result => {
-            console.log("Term Extension Office Memo upload result:", result);
             return result.imageUrl;
           });
         }
@@ -564,7 +525,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           termExtensionUrlPromise || Promise.resolve(employee.termExtensionUrl || "")
         ]);
 
-        console.log("File uploads complete. Results:", results);
 
         // Now prepare the update data with the file URLs
         const updateData = {
@@ -604,8 +564,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           ? `/api/employees/${employee.id}`
           : `/api/departments/${departmentId}/employees/${employee.id}`;
 
-        console.log(`Making JSON PATCH request to ${apiEndpoint} with data:`, updateData);
-        console.log('[EditEmployee] DEBUG: isAdmin=', isAdmin, 'Token=', localStorage.getItem('adminSessionToken') ? 'Present' : 'Missing/Null');
 
         // Update the employee with the file URLs
         const response = await fetch(apiEndpoint, {
@@ -623,7 +581,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         }
 
         const updatedEmployee = await response.json();
-        console.log("Employee updated successfully with files:", updatedEmployee);
       } else {
         // No files - just update the employee data
         const updateData = {
@@ -663,8 +620,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           ? `/api/employees/${employee.id}`
           : `/api/departments/${departmentId}/employees/${employee.id}`;
 
-        console.log(`Making JSON PATCH request to ${apiEndpoint} with data:`, updateData);
-        console.log('[EditEmployee] DEBUG: isAdmin=', isAdmin, 'Token=', localStorage.getItem('adminSessionToken') ? 'Present' : 'Missing/Null');
 
         const response = await fetch(apiEndpoint, {
           method: 'PATCH',
@@ -681,7 +636,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         }
 
         const updatedEmployee = await response.json();
-        console.log("Employee updated successfully:", updatedEmployee);
       }
 
       toast({
@@ -690,11 +644,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       });
 
       if (onSuccess) {
-        console.log("Calling onSuccess callback");
         onSuccess();
       }
 
-      console.log("Closing dialog");
       onClose();
     } catch (error) {
       console.error("Error updating employee:", error);

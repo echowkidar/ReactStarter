@@ -162,7 +162,6 @@ export default function AdminEmployees() {
           throw new Error("Failed to fetch departments");
         }
         const data = await response.json();
-        console.log("Successfully fetched departments:", data);
         return data;
       } catch (error) {
         console.error("Error in department fetch:", error);
@@ -352,7 +351,6 @@ export default function AdminEmployees() {
       const initialDeptId = selectedEmployee.departmentId?.toString() || "";
       if (departments.some(dept => dept.id.toString() === initialDeptId)) {
         setSelectedDepartmentId(initialDeptId);
-        console.log(`Initial department set for employee ${selectedEmployee.id}: ${initialDeptId}`);
       } else {
         console.warn(`Employee's department ID (${initialDeptId}) not found in registered departments list. Resetting selection.`);
         setSelectedDepartmentId("");
@@ -399,9 +397,6 @@ export default function AdminEmployees() {
       setUploads(existingUploads);
 
       // Debug the department ID
-      console.log("Selected employee department ID:", selectedEmployee.departmentId);
-      console.log("Department IDs in dropdown:", departments.map(d => d.id));
-      console.log("Department ID match exists:", departments.some(d => d.id === selectedEmployee.departmentId));
     } else {
       setUploads({});
     }
@@ -455,7 +450,6 @@ export default function AdminEmployees() {
       // Create a File object from the compressed blob
       const compressedFile = new File([result.blob], result.fileName, { type: 'image/webp' });
 
-      console.log(`Compressed ${file.name} (${Math.round(file.size / 1024)}KB) to ${result.fileName} (${Math.round(result.blob.size / 1024)}KB)`);
 
       setUploads(prev => ({
         ...prev,
@@ -482,10 +476,8 @@ export default function AdminEmployees() {
     // If URL exists (meaning the file was uploaded previously), remove it from server
     if (upload?.preview && !upload.preview.startsWith('data:')) {
       try {
-        console.log(`Attempting to remove file from server: ${upload.preview}`);
 
         const apiUrl = `/api/upload`;
-        console.log(`API endpoint: ${apiUrl}`);
 
         const response = await fetch(apiUrl, {
           method: 'DELETE',
@@ -498,8 +490,6 @@ export default function AdminEmployees() {
 
 
         // Log server response
-        console.log(`Server response status: ${response.status}`);
-        console.log(`Server response status text: ${response.statusText}`);
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -511,13 +501,11 @@ export default function AdminEmployees() {
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           const result = await response.json();
-          console.log('File removed successfully:', result);
           toast({
             title: "Success",
             description: "File removed successfully",
           });
         } else {
-          console.log('File removed, but no JSON response');
           toast({
             title: "Success",
             description: "File removed successfully",
@@ -586,7 +574,6 @@ export default function AdminEmployees() {
         }
       }
 
-      console.log("Submitting form with departmentId:", departmentId);
 
       if (selectedEmployee) {
         await apiRequest('PATCH', `/api/employees/${selectedEmployee.id}`, formData, false);
@@ -650,8 +637,6 @@ export default function AdminEmployees() {
     data.aadharCard = aadharInputValue;
 
     // Log the form data for debugging
-    console.log("Form data being submitted:", data);
-    console.log("Department ID being submitted:", selectedDepartmentId);
 
     // Use the selectedDepartmentId from state instead of form data
     const departmentId = selectedDepartmentId ? parseInt(selectedDepartmentId, 10) : NaN;
@@ -695,10 +680,6 @@ export default function AdminEmployees() {
       }
     }
 
-    console.log("Form data being submitted with files", {
-      departmentId: data.departmentId,
-      selectedDepartmentId
-    });
 
     try {
       if (selectedEmployee) {
@@ -1309,7 +1290,6 @@ export default function AdminEmployees() {
                               }))}
                               value={selectedDepartmentId}
                               onValueChange={(value) => {
-                                console.log("Department selected:", value);
                                 setSelectedDepartmentId(value);
                               }}
                               placeholder={isDepartmentsLoading ? "Loading departments..." : "Select department..."}
@@ -1669,12 +1649,7 @@ export default function AdminEmployees() {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
-                            console.log("Selected employee for edit:", employee);
                             // Output the employee properties for debugging
-                            console.log("Employee properties:", Object.keys(employee));
-                            console.log("Employee aadharCard:", employee.aadharCard);
-                            console.log("Employee departmentId:", employee.departmentId);
-                            console.log("Employee departmentName:", employee.departmentName);
 
                             setSelectedEmployee(employee);
                             setEmploymentStatus(employee.employmentStatus);

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { v4 as uuid } from 'uuid';
 
-const HEARTBEAT_INTERVAL = 30 * 1000; // 30 seconds
+const HEARTBEAT_INTERVAL = 60 * 1000; // 60 seconds
 
 // Generate or retrieve persistent session ID
 function getSessionId(): string {

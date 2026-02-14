@@ -78,7 +78,6 @@ export default function AdminForgotPassword() {
         });
         
         // Display the reset URL but don't auto-redirect
-        console.log('Reset URL (use this link to reset password):', data.resetUrl);
       }
     } catch (error) {
       toast({

@@ -49,7 +49,6 @@ const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
   // Allow development bypass tokens from localhost
   if (token === 'development-bypass' || token === 'error-bypass') {
-    console.log('Turnstile: Development bypass token accepted');
     return true;
   }
 
@@ -280,7 +279,6 @@ export async function registerRoutes(app: Express) {
       )
     `);
 
-    console.log("Notices, visitors, active_user_snapshots, and login_attempts tables initialized successfully.");
   } catch (error) {
     console.error("Error initializing tables:", error);
   }
@@ -383,7 +381,6 @@ export async function registerRoutes(app: Express) {
 
   // Clear entries route (Placed early to avoid shadowing)
   app.post("/api/attendance/:reportId/clear-entries", async (req, res) => {
-    console.log(`[POST] Request to clear entries for report ${req.params.reportId}`);
     try {
       await storage.deleteEntriesForReport(Number(req.params.reportId));
       res.json({ message: "Entries cleared successfully" });
@@ -640,7 +637,6 @@ export async function registerRoutes(app: Express) {
         : 'http://localhost:5001';
 
       const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-      console.log('[DEBUG] Generated Customer Reset URL:', resetUrl); // Debug log
 
       // Send email with reset link
       const emailResult = await sendPasswordResetEmail(email, resetUrl, false);
@@ -733,7 +729,6 @@ export async function registerRoutes(app: Express) {
         : 'http://localhost:5001';
 
       const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-      console.log('[DEBUG] Generated Admin Reset URL:', resetUrl); // Debug log
 
       // Send email with reset link
       const emailResult = await sendPasswordResetEmail(email, resetUrl, true);
@@ -846,16 +841,11 @@ export async function registerRoutes(app: Express) {
 
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
-    console.log('[POST /api/auth/register] Registration attempt with data:', {
-      ...req.body,
-      password: '[REDACTED]'
-    });
 
     try {
       const { id: departmentNameId, name, hodTitle, hodName, email, password } = req.body;
 
       if (!name || !hodTitle || !hodName || !email || !password) {
-        console.log('[POST /api/auth/register] Missing required fields');
         return res.status(400).json({
           message: "Missing required fields",
           required: ["name", "hodTitle", "hodName", "email", "password"]
@@ -863,22 +853,18 @@ export async function registerRoutes(app: Express) {
       }
 
       // First check if email is already registered
-      console.log('[POST /api/auth/register] Checking if email exists:', email);
       const existingDepartment = await storage.getDepartmentByEmail(email);
       if (existingDepartment) {
-        console.log('[POST /api/auth/register] Email already registered:', email);
         return res.status(400).json({ message: "Email already registered" });
       }
 
       // Check if department with same name exists (case insensitive)
-      console.log('[POST /api/auth/register] Checking if department name exists:', name);
       const departments = await storage.getAllDepartments();
       const existingDeptByName = departments.find(
         dept => dept.name.toLowerCase() === name.toLowerCase()
       );
 
       if (existingDeptByName) {
-        console.log('[POST /api/auth/register] Updating existing department:', existingDeptByName.id);
         // Update the existing department with new credentials
         const updatedDepartment = await storage.updateDepartment(existingDeptByName.id, {
           hodTitle,
@@ -886,12 +872,10 @@ export async function registerRoutes(app: Express) {
           email,
           password
         });
-        console.log('[POST /api/auth/register] Department updated successfully');
         return res.status(200).json(updatedDepartment);
       }
 
       // Create new department
-      console.log('[POST /api/auth/register] Creating new department');
       const department = await storage.createDepartment({
         name,
         hodTitle,
@@ -900,11 +884,6 @@ export async function registerRoutes(app: Express) {
         password
       });
 
-      console.log('[POST /api/auth/register] Department registered successfully:', {
-        id: department.id,
-        name: department.name,
-        email: department.email
-      });
 
       res.status(201).json(department);
     } catch (error) {
@@ -922,7 +901,6 @@ export async function registerRoutes(app: Express) {
     try {
       const { email, password, turnstileToken } = req.body;
       const clientIp = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
-      console.log('Login attempt for:', email);
 
       // Check if account is locked
       const lockStatus = await isAccountLocked(email);
@@ -1012,21 +990,17 @@ export async function registerRoutes(app: Express) {
 
   // Ensure uploads directory exists with proper permissions
   const uploadDir = path.join(__dirname, '../uploads');
-  console.log("Upload directory path:", uploadDir);
 
   try {
     if (!fs.existsSync(uploadDir)) {
-      console.log("Creating uploads directory since it doesn't exist");
       fs.mkdirSync(uploadDir, { recursive: true, mode: 0o755 });
     } else {
-      console.log("Uploads directory already exists");
       // Check if directory is writable
       try {
         // Try to write a test file to verify permissions
         const testFile = path.join(uploadDir, '_test_write.txt');
         fs.writeFileSync(testFile, 'test');
         fs.unlinkSync(testFile);
-        console.log("Upload directory is writable");
       } catch (err) {
         console.error("Upload directory exists but is not writable:", err);
       }
@@ -1038,13 +1012,11 @@ export async function registerRoutes(app: Express) {
   // Configure multer for file uploads
   const fileStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-      console.log(`Storing file ${file.originalname} in ${uploadDir}`);
       cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
       const safeFileName = file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname);
-      console.log(`Generated filename for ${file.originalname}: ${safeFileName}`);
       cb(null, safeFileName);
     }
   });
@@ -1054,11 +1026,8 @@ export async function registerRoutes(app: Express) {
     fileFilter: (req, file, cb) => {
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'image/webp'];
 
-      console.log(`Validating file: ${file.originalname}, mimetype: ${file.mimetype}`);
-      console.log(`Request path: ${req.path}`);
 
       if (allowedTypes.includes(file.mimetype)) {
-        console.log(`File accepted: ${file.originalname} (${file.mimetype})`);
         cb(null, true);
       } else {
         console.error(`File rejected: ${file.originalname} (${file.mimetype}) - Invalid mimetype`);
@@ -1072,7 +1041,6 @@ export async function registerRoutes(app: Express) {
 
   // Serve uploaded files statically with appropriate MIME types
   app.use('/uploads', (req, res, next) => {
-    console.log(`Static file request: ${req.url}`);
     next();
   }, express.static(uploadDir));
 
@@ -1099,17 +1067,11 @@ export async function registerRoutes(app: Express) {
 
   // Get available departments (for registration dropdown)
   app.get("/api/departments", async (req, res) => {
-    console.log(`[GET /api/departments] Called with params:`, {
-      showAll: req.query.showAll,
-      showRegistered: req.query.showRegistered,
-      registeredOnly: req.query.registeredOnly
-    });
 
     try {
       let departmentList: Array<{ id: number; name: string; code?: string | null; attendancePermitted?: boolean; employeeCount?: number; lastLogin?: Date | string | null }> = [];
 
       if (req.query.registeredOnly === 'true') {
-        console.log('[GET /api/departments] Fetching only registered departments (from departments table)');
         const registeredDepartments = await storage.getAllDepartments();
         const employeeCounts = await storage.getEmployeeCountsByDepartment();
 
@@ -1122,12 +1084,9 @@ export async function registerRoutes(app: Express) {
           employeeCount: employeeCounts.get(dept.id) || 0,
           lastLogin: dept.lastLogin || null
         }));
-        console.log(`[GET /api/departments] Fetched ${departmentList.length} registered departments`);
       } else {
-        console.log('[GET /api/departments] Fetching all department names (from department_names table)');
         // Simply fetch all departments from department_names table
         const allDepartmentNames = await storage.getAllDepartmentNames();
-        console.log(`[GET /api/departments] Fetched ${allDepartmentNames.length} departments from names table`);
         departmentList = allDepartmentNames.map(deptName => ({
           id: deptName.id,
           name: deptName.name,
@@ -1137,13 +1096,6 @@ export async function registerRoutes(app: Express) {
 
       // Log sample of results
       if (departmentList.length > 0) {
-        console.log(`[GET /api/departments] Sample of results:`,
-          departmentList.slice(0, 3).map(d => ({
-            id: d.id,
-            name: d.name,
-            code: d.code
-          }))
-        );
       }
 
       res.json(departmentList);
@@ -1189,18 +1141,14 @@ export async function registerRoutes(app: Express) {
   app.get("/api/departments/:departmentId/employees", async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
-      console.log('Fetching employees for department:', departmentId);
 
       // Verify department exists
       const department = await storage.getDepartment(departmentId);
       if (!department) {
-        console.log('Department not found:', departmentId);
         return res.status(404).json({ message: "Department not found" });
       }
-      console.log('Found department:', department);
 
       const employees = await storage.getEmployeesByDepartment(departmentId);
-      console.log('Found employees:', employees.length ? employees.length : 'No employees found');
 
       // Fetch app settings to check field visibility
       const { db } = await import("./db");
@@ -1240,16 +1188,12 @@ export async function registerRoutes(app: Express) {
   app.post("/api/departments/:departmentId/employees", upload.fields(documentFields), async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
-      console.log("Department - Received raw employee data:", req.body);
 
       // Debug uploaded files in development mode
       if (process.env.NODE_ENV !== 'production') {
-        console.log("Files received:", req.files ? Object.keys(req.files).length : 'No files');
         if (req.files) {
           Object.entries(req.files as { [fieldname: string]: Express.Multer.File[] }).forEach(([key, files]) => {
-            console.log(`- ${key}: ${files.length} file(s)`);
             files.forEach(file => {
-              console.log(`  * ${file.fieldname}: ${file.originalname} (${file.mimetype}, ${file.size} bytes) saved as ${file.filename}`);
             });
           });
         }
@@ -1271,18 +1215,9 @@ export async function registerRoutes(app: Express) {
 
       // Log URLs in development mode
       if (process.env.NODE_ENV !== 'production') {
-        console.log("Document URLs being saved:");
-        console.log("- panCardUrl:", employeeData.panCardUrl);
-        console.log("- bankProofUrl:", employeeData.bankProofUrl);
-        console.log("- aadharCardUrl:", employeeData.aadharCardUrl);
-        console.log("- officeMemoUrl:", employeeData.officeMemoUrl);
-        console.log("- joiningReportUrl:", employeeData.joiningReportUrl);
-        console.log("- termExtensionUrl:", employeeData.termExtensionUrl);
       }
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
-      console.log("Department - Parsed employee data:", parsedData);
-      console.log("Creating employee in storage:", parsedData);
 
       const employee = await storage.createEmployee(parsedData);
       res.status(201).json(employee);
@@ -1338,16 +1273,12 @@ export async function registerRoutes(app: Express) {
       // Try to identify admin from x-session-token header (sent by client)
       const sessionToken = req.headers['x-session-token'];
 
-      console.log('--- AUTH DEBUG ---');
-      console.log('Header x-session-token:', sessionToken ? 'Present' : 'Missing');
       if (typeof sessionToken === 'string') {
-        console.log('Token Length:', sessionToken.length);
       }
 
       if (!user && typeof sessionToken === 'string' && sessionToken) {
         try {
           const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
-          console.log('Decoded Token Part:', decoded.split(':')[0]);
 
           // Format is email:password (simple basic auth style used in this app)
           const parts = decoded.split(':');
@@ -1357,27 +1288,21 @@ export async function registerRoutes(app: Express) {
 
             const admin = await storage.getAdminByEmail(email);
             if (admin) {
-              console.log('Admin Found:', admin.email, 'Role:', admin.role);
               if (admin.password === password) {
                 user = {
                   email: admin.email,
                   role: admin.role, // Should be 'super_admin' or 'salary_admin'
                   name: admin.name
                 };
-                console.log('Admin Authenticated Successfully. Computed Role:', user.role);
               } else {
-                console.log('Password Mismatch');
               }
             } else {
-              console.log('Admin Not Found in DB');
             }
           }
         } catch (e) {
           console.error('Token parsing failed', e);
         }
       }
-      console.log('Final Computed User Role:', user?.role);
-      console.log('------------------');
 
       // Log changes only if NOT Super Admin (as requested)
       // Check for both 'super' and 'super_admin' (correct DB value)
@@ -1419,23 +1344,18 @@ export async function registerRoutes(app: Express) {
       // Get department info for audit logging
       const department = await storage.getDepartment(departmentId);
 
-      console.log(`Department employee update - request received for employee ${employeeId} in department ${departmentId}`);
 
       // Log files received (if any)
       if (req.files && Object.keys(req.files).length > 0) {
-        console.log("Department employee update - files received:", Object.keys(req.files));
         const filesInfo = Object.entries(req.files as { [fieldname: string]: Express.Multer.File[] })
           .map(([key, files]) => {
             return `${key}: ${files.map(f => `${f.filename} (${f.size} bytes, ${f.mimetype})`).join(', ')}`;
           });
-        console.log("Files details:");
         filesInfo.forEach(info => console.log(`- ${info}`));
       } else {
-        console.log("Department employee update - no files received");
       }
 
       // Log body data
-      console.log("Department employee update - body fields:", Object.keys(req.body));
 
       // Handle uploaded files exactly like admin route
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -1464,7 +1384,6 @@ export async function registerRoutes(app: Express) {
         updates.disabledBy = department?.email || 'unknown';
       }
 
-      console.log("Department employee update - processed updates:", JSON.stringify(updates, null, 2));
 
       // Log changes before update (for audit trail)
       await storage.logEmployeeChanges(
@@ -1477,7 +1396,6 @@ export async function registerRoutes(app: Express) {
       );
 
       const updatedEmployee = await storage.updateEmployee(employeeId, updates);
-      console.log("Successfully updated employee:", JSON.stringify(updatedEmployee, null, 2));
       res.json(updatedEmployee);
     } catch (error) {
       console.error('Error updating employee from department:', error);
@@ -1503,7 +1421,6 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      console.log(`Upload API - File received: ${req.file.originalname}, size: ${req.file.size}, type: ${req.file.mimetype}`);
 
       const baseUrl = process.env.NODE_ENV === 'production'
         ? 'https://salarysection.com'
@@ -1516,7 +1433,6 @@ export async function registerRoutes(app: Express) {
       if (req.file.mimetype === 'application/pdf') {
         const filePath = path.join(uploadDir, req.file.filename);
         const originalSize = fs.statSync(filePath).size;
-        console.log(`PDF compression - Original size: ${Math.round(originalSize / 1024)} KB`);
 
         const compressedFilename = req.file.filename.replace(/\.pdf$/i, '-compressed.pdf');
         const compressedFilePath = path.join(uploadDir, compressedFilename);
@@ -1533,7 +1449,6 @@ export async function registerRoutes(app: Express) {
             ? `gswin64c -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${compressedFilePath}" "${filePath}"`
             : `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${compressedFilePath}" "${filePath}"`;
 
-          console.log('Running Ghostscript compression...');
           execSync(gsCommand, { timeout: 60000 }); // 60 second timeout
 
           // Check if compressed file was created and is smaller
@@ -1541,23 +1456,18 @@ export async function registerRoutes(app: Express) {
             const compressedSize = fs.statSync(compressedFilePath).size;
             const reductionPercent = Math.round((1 - compressedSize / originalSize) * 100);
 
-            console.log(`PDF compression - Compressed size: ${Math.round(compressedSize / 1024)} KB`);
-            console.log(`PDF compression - Size reduction: ${reductionPercent}%`);
 
             if (compressedSize < originalSize * 0.95) { // Only use if at least 5% smaller
               // Delete original and use compressed
               fs.unlinkSync(filePath);
               finalFilename = compressedFilename;
               finalFileUrl = `${baseUrl}/uploads/${compressedFilename}`;
-              console.log(`PDF compressed successfully using Ghostscript: ${compressedFilename}`);
             } else {
               // Compressed file is not significantly smaller, delete it
               fs.unlinkSync(compressedFilePath);
-              console.log('Ghostscript compression did not significantly reduce size, keeping original');
             }
           }
         } catch (gsError: any) {
-          console.log('Ghostscript not available or failed, trying pdf-lib fallback...');
 
           // Fallback to pdf-lib basic compression
           try {
@@ -1583,15 +1493,12 @@ export async function registerRoutes(app: Express) {
 
             const compressedSize = compressedPdfBytes.length;
             const reductionPercent = Math.round((1 - compressedSize / originalSize) * 100);
-            console.log(`PDF compression (pdf-lib) - Compressed size: ${Math.round(compressedSize / 1024)} KB`);
-            console.log(`PDF compression (pdf-lib) - Size reduction: ${reductionPercent}%`);
 
             if (compressedSize < originalSize) {
               fs.writeFileSync(compressedFilePath, compressedPdfBytes);
               fs.unlinkSync(filePath);
               finalFilename = compressedFilename;
               finalFileUrl = `${baseUrl}/uploads/${compressedFilename}`;
-              console.log(`PDF compressed using pdf-lib: ${compressedFilename}`);
             }
           } catch (pdfLibError) {
             console.error('pdf-lib compression also failed, keeping original:', pdfLibError);
@@ -1599,7 +1506,6 @@ export async function registerRoutes(app: Express) {
         }
       }
 
-      console.log(`Upload API - Final file URL: ${finalFileUrl}`);
       res.json({ imageUrl: finalFileUrl, fileUrl: finalFileUrl });
     } catch (error) {
       console.error('Error uploading file:', error);
@@ -1610,16 +1516,13 @@ export async function registerRoutes(app: Express) {
   // Add endpoint to delete a file
   app.delete("/api/upload", async (req, res) => {
     try {
-      console.log("Delete file API called with body:", req.body);
 
       const { imageUrl } = req.body;
 
       if (!imageUrl) {
-        console.log("No file URL provided in request body");
         return res.status(400).json({ message: "No file URL provided" });
       }
 
-      console.log(`Delete file API called for: ${imageUrl}`);
 
       // Extract the filename from the URL
       // Expected format: /uploads/filename.ext
@@ -1627,17 +1530,14 @@ export async function registerRoutes(app: Express) {
       const filename = urlParts[urlParts.length - 1];
 
       if (!filename) {
-        console.log("Invalid file URL format, couldn't extract filename");
         return res.status(400).json({ message: "Invalid file URL format" });
       }
 
       // Get the absolute path to the uploads directory
       const uploadDir = path.join(__dirname, '../uploads');
-      console.log(`Upload directory absolute path: ${uploadDir}`);
 
       // Build the absolute file path
       const filePath = path.join(uploadDir, filename);
-      console.log(`Full absolute file path: ${filePath}`);
 
       // Double check that the file path is within the uploads directory
       if (!filePath.startsWith(uploadDir)) {
@@ -1645,16 +1545,13 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid file path" });
       }
 
-      console.log(`Checking if file exists at: ${filePath}`);
 
       // Check if file exists
       if (!fs.existsSync(filePath)) {
-        console.log(`File does not exist: ${filePath}`);
         // Still return success if file doesn't exist, as the end result is the same (no file)
         return res.status(200).json({ message: "File already removed or does not exist" });
       }
 
-      console.log(`File exists, attempting to delete file at: ${filePath}`);
 
       try {
         // Delete the file
@@ -1667,7 +1564,6 @@ export async function registerRoutes(app: Express) {
           return res.status(500).json({ message: "Failed to delete file: File still exists after deletion attempt" });
         }
 
-        console.log(`File successfully deleted: ${filePath}`);
 
         // Ensure we're sending a proper JSON response
         res.setHeader('Content-Type', 'application/json');
@@ -1732,7 +1628,6 @@ export async function registerRoutes(app: Express) {
         !dept.email.includes('@placeholder.com') // Additional check for placeholder domain
       );
 
-      console.log(`Found ${departments.length} total departments, ${validDepartments.length} have valid emails`);
 
       const departmentUsers = validDepartments.map((dept, index) => {
         // REMOVED: Logic to resolve names starting with "Department ID -"
@@ -1764,13 +1659,6 @@ export async function registerRoutes(app: Express) {
     try {
       const { name, email, password, role, departmentId } = req.body;
 
-      console.log("POST /api/admin/users - Creating user with data:", {
-        name,
-        email,
-        role,
-        departmentId: departmentId,
-        departmentIdType: typeof departmentId
-      });
 
       // Validate required fields
       if (!name || !email || !password || !role) {
@@ -1794,7 +1682,6 @@ export async function registerRoutes(app: Express) {
           return res.status(400).json({ message: "Invalid department ID format" });
         }
 
-        console.log(`Fetching details for department name ID: ${selectedDeptNameId}`);
         // Fetch details from department_names table using the ID from the dropdown
         const deptNameDetails = await storage.getDepartmentName(selectedDeptNameId);
 
@@ -1802,7 +1689,6 @@ export async function registerRoutes(app: Express) {
           return res.status(404).json({ message: `Department details not found for ID ${selectedDeptNameId}. Cannot create user.` });
         }
 
-        console.log(`Found details: ${deptNameDetails.name} (Code: ${deptNameDetails.code})`);
 
         // Check if a department with this NAME is already registered in the 'departments' table
         // TODO: Make this lookup case-insensitive and trim whitespace if possible in storage layer
@@ -1811,13 +1697,11 @@ export async function registerRoutes(app: Express) {
         if (existingRegisteredDept) {
           // If it exists and has a valid email (not placeholder), prevent creating another user for it.
           if (existingRegisteredDept.email && !existingRegisteredDept.email.includes('unused_dept_') && !existingRegisteredDept.email.includes('@placeholder.com')) {
-            console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) is already registered with user ${existingRegisteredDept.email}.`);
             return res.status(409).json({ // 409 Conflict
               message: `Cannot create user: Department "${deptNameDetails.name}" is already associated with an active user (${existingRegisteredDept.email}).`
             });
           } else {
             // If it exists but has a placeholder email, update it (assign the new user)
-            console.log(`Department "${deptNameDetails.name}" (ID: ${existingRegisteredDept.id}) exists but has no active user or a placeholder email. Updating it.`);
             try {
               const updatedDepartment = await storage.updateDepartment(existingRegisteredDept.id, {
                 hodName: name,
@@ -1844,7 +1728,6 @@ export async function registerRoutes(app: Express) {
           }
         } else {
           // Department name not found in 'departments' table by name. Proceed to create new entry.
-          console.log(`Department "${deptNameDetails.name}" not found by name in 'departments' table. Creating new entry.`);
           try {
             // Create the new department entry
             const newDepartment = await storage.createDepartment({
@@ -1854,7 +1737,6 @@ export async function registerRoutes(app: Express) {
               email: email,
               password: password // Consider hashing
             });
-            console.log(`Created new registered department: ID=${newDepartment.id}, Name=${newDepartment.name}`);
 
             // Recalculate UI ID (Fragile)
             const allDepts = await storage.getAllDepartments(); // Refetch might be needed
@@ -1915,9 +1797,6 @@ export async function registerRoutes(app: Express) {
       const userId = parseInt(req.params.id);
       const { name, email, password, role, departmentId } = req.body;
 
-      console.log("PUT /api/admin/users/:id - Updating user:", {
-        userId, name, email, role, departmentId
-      });
 
       // Handle hardcoded users (superadmin, salary) - cannot be updated via API
       if (userId <= 2) {
@@ -1939,7 +1818,6 @@ export async function registerRoutes(app: Express) {
         return res.status(404).json({ message: `User with UI ID ${userId} not found (no corresponding department).` });
       }
 
-      console.log(`Found current department for UI user ID ${userId}: Dept ID ${currentDepartment.id} (${currentDepartment.name})`);
 
       // Get the target department name from department_names
       const targetDeptNameId = Number(departmentId);
@@ -1961,7 +1839,6 @@ export async function registerRoutes(app: Express) {
       }
 
       // Update the current department with new details
-      console.log(`Updating department ${currentDepartment.id} with new name "${targetDeptNameDetails.name}" and user details`);
       await storage.updateDepartment(currentDepartment.id, {
         name: targetDeptNameDetails.name, // Update the department name
         hodName: name,
@@ -1988,11 +1865,9 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/admin/users/:id", async (req, res) => {
     try {
       const userId = parseInt(req.params.id); // Fragile UI ID
-      console.log(`Attempting to delete user with UI ID: ${userId}`);
 
       // Prevent deleting hardcoded users
       if (userId <= 2) {
-        console.log(`Cannot delete system user with ID: ${userId}`);
         return res.status(403).json({ message: "Cannot delete system users" });
       }
 
@@ -2010,7 +1885,6 @@ export async function registerRoutes(app: Express) {
 
       if (!departmentToDelete) {
         // No need for extra null check here
-        console.log(`No department found for user ID: ${userId}`);
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -2018,12 +1892,10 @@ export async function registerRoutes(app: Express) {
       const deptId = departmentToDelete.id;
       const deptName = departmentToDelete.name;
 
-      console.log(`Found department to delete: ${deptId} (${deptName})`);
 
       // Check for associated employees before deleting
       const employees = await storage.getEmployeesByDepartment(deptId);
       if (employees.length > 0) {
-        console.log(`Cannot delete department ${deptId} - it has ${employees.length} employees. Clearing user info instead.`);
         // Instead of deleting, clear the user-specific info (email, HOD, password)
         try {
           const placeholderEmail = `unused_dept_${deptId}_${Date.now()}@placeholder.com`;
@@ -2045,7 +1917,6 @@ export async function registerRoutes(app: Express) {
       } else {
         // No employees, safe to delete the department record
         await storage.deleteDepartment(deptId);
-        console.log(`Department ${deptId} deleted successfully.`);
         return res.json({
           message: "User deleted successfully",
           userId: userId,
@@ -2069,11 +1940,6 @@ export async function registerRoutes(app: Express) {
       // Destructure the new optional field from the body
       const { dept_name, dept_code, dealingAssistantCode } = req.body;
 
-      console.log("POST /api/admin/department-names - Creating department name:", {
-        dept_name,
-        dept_code,
-        dealingAssistantCode
-      });
 
       if (!dept_name || !dept_code) {
         return res.status(400).json({ message: "Department name and code are required" });
@@ -2107,7 +1973,6 @@ export async function registerRoutes(app: Express) {
       // Pass the correctly structured object
       const newDepartmentName = await storage.createDepartmentName(newDepartmentData);
 
-      console.log("Department name created successfully:", newDepartmentName);
       res.status(201).json(newDepartmentName);
     } catch (error) {
       console.error("Error creating department name:", error);
@@ -2188,7 +2053,6 @@ export async function registerRoutes(app: Express) {
       if (existingReport) {
         // Check if supplementary report is allowed
         if (department?.allowSupplementaryReport) {
-          console.log(`Creating supplementary report for department ${departmentId}`);
 
           // CRITICAL: Reset the flag to false immediately so they can't create another one
           const { db } = await import("./db");
@@ -2272,9 +2136,6 @@ export async function registerRoutes(app: Express) {
       const lastPeriod = periods[periods.length - 1];
 
       // Log the received data for debugging
-      console.log('Received periods:', periods);
-      console.log('First period:', firstPeriod);
-      console.log('Last period:', lastPeriod);
 
       const entryData = insertAttendanceEntrySchema.parse({
         reportId: reportId,
@@ -2390,16 +2251,14 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Admin reports route
+  // Admin reports route — OPTIMIZED: batch-load departments & employees
   app.get("/api/admin/attendance", async (req, res) => {
     try {
       const { month, year } = req.query;
 
-      console.log(`[GET /api/admin/attendance] Fetching reports requesting month=${month}, year=${year}`);
-
       const reports = await storage.getAllAttendanceReports();
 
-      // OPTIMIZATION: Filter reports BEFORE fetching heavy details
+      // Filter reports by month/year BEFORE doing any heavy work
       let filteredReports = reports;
 
       if (month && year) {
@@ -2408,7 +2267,6 @@ export async function registerRoutes(app: Express) {
 
         if (!isNaN(monthNum) && !isNaN(yearNum)) {
           filteredReports = reports.filter(r => r.month === monthNum && r.year === yearNum);
-          console.log(`[GET /api/admin/attendance] Filtered from ${reports.length} to ${filteredReports.length} reports`);
         }
       }
 
@@ -2419,34 +2277,51 @@ export async function registerRoutes(app: Express) {
         return dateB - dateA;
       });
 
-      const reportsWithDetailsPromises = filteredReports.map(async (report) => {
-        const department = await storage.getDepartment(report.departmentId);
+      // BATCH LOAD: Fetch all departments and employees in bulk (2 queries instead of thousands)
+      const [allDepartments, allEmployees] = await Promise.all([
+        storage.getAllDepartments(),
+        storage.getAllEmployees(),
+      ]);
 
-        // Provide explicit type for entriesWithDetails
+      // Build lookup maps for O(1) access
+      const departmentMap = new Map(allDepartments.map(d => [d.id, d]));
+      const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
+
+      // Fetch entries for all "sent" reports in parallel (1 query per report, not per entry)
+      const sentReports = filteredReports.filter(r => r.status === "sent");
+      const entriesByReport = new Map<number, AttendanceEntry[]>();
+
+      if (sentReports.length > 0) {
+        const entriesArrays = await Promise.all(
+          sentReports.map(r => storage.getAttendanceEntriesByReport(r.id))
+        );
+        sentReports.forEach((r, idx) => {
+          entriesByReport.set(r.id, entriesArrays[idx]);
+        });
+      }
+
+      // Assemble response using maps (no extra DB queries)
+      const reportsWithDetails = filteredReports.map(report => {
+        const department = departmentMap.get(report.departmentId);
+
         let entriesWithDetails: (AttendanceEntry & { employee?: Employee | undefined })[] = [];
         if (report.status === "sent") {
-          const entries = await storage.getAttendanceEntriesByReport(report.id);
-          entriesWithDetails = await Promise.all(
-            entries.map(async (entry) => {
-              const employee = await storage.getEmployee(entry.employeeId);
-              return {
-                ...entry,
-                employee // employee is already Employee | undefined
-              };
-            })
-          );
+          const entries = entriesByReport.get(report.id) || [];
+          entriesWithDetails = entries.map(entry => ({
+            ...entry,
+            employee: employeeMap.get(entry.employeeId),
+          }));
         }
 
         return {
           ...report,
-          department, // department is already Department | undefined
-          entries: entriesWithDetails, // Use explicitly typed array
+          department,
+          entries: entriesWithDetails,
           receiptNo: report.receiptNo,
           receiptDate: report.receiptDate,
         };
       });
 
-      const reportsWithDetails = await Promise.all(reportsWithDetailsPromises);
       res.json(reportsWithDetails);
     } catch (error) {
       console.error('Error fetching attendance reports with details:', error);
@@ -2492,7 +2367,6 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/attendance/:id", async (req, res) => {
     try {
       const id = Number(req.params.id);
-      console.log(`[DELETE /api/attendance/${id}] Request received`);
 
       const report = await storage.getAttendanceReport(id);
       if (!report) {
@@ -2501,12 +2375,9 @@ export async function registerRoutes(app: Express) {
 
       await storage.deleteAttendanceReport(id);
 
-      console.log(`[DELETE] Report ${id} fileUrl: '${report.fileUrl}'`);
       if (report.fileUrl) {
-        console.log(`[DELETE] Calling deleteFile for report ${id}`);
         await storage.deleteFile(report.fileUrl);
       } else {
-        console.log(`[DELETE] No file to delete for report ${id}`);
       }
 
       res.json({ message: "Report deleted successfully" });
@@ -2537,7 +2408,6 @@ export async function registerRoutes(app: Express) {
         cancelRequestedAt: new Date()
       });
 
-      console.log(`Cancellation requested for report ${reportId}`);
       res.json(updatedReport);
     } catch (error) {
       console.error('Error requesting cancellation:', error);
@@ -2566,7 +2436,6 @@ export async function registerRoutes(app: Express) {
         cancelRequestedAt: new Date() // Reusing field for timestamp
       });
 
-      console.log(`Recall requested for report ${reportId}`);
       res.json(updatedReport);
     } catch (error) {
       console.error('Error requesting recall:', error);
@@ -2597,7 +2466,6 @@ export async function registerRoutes(app: Express) {
         cancelRequestedAt: null // Clear the request timestamp
       });
 
-      console.log(`Report ${reportId} reverted to draft`);
       res.json(updatedReport);
     } catch (error) {
       console.error('Error reverting to draft:', error);
@@ -2630,7 +2498,6 @@ export async function registerRoutes(app: Express) {
         cancelledAt: new Date()
       });
 
-      console.log(`Cancellation accepted for report ${reportId}. Entries deleted, PDF preserved.`);
       res.json(updatedReport);
     } catch (error) {
       console.error('Error accepting cancellation:', error);
@@ -2642,7 +2509,6 @@ export async function registerRoutes(app: Express) {
   // Get all employees (admin)
   app.get("/api/admin/employees", async (req, res) => {
     try {
-      console.log('[GET /api/admin/employees] Fetching all employees');
       const employees = await storage.getAllEmployees();
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
@@ -2676,7 +2542,6 @@ export async function registerRoutes(app: Express) {
         aadharCardUrl: showAadhar ? emp.aadharCardUrl : null
       }));
 
-      console.log(`[GET /api/admin/employees] Returning ${employeesWithDepartments.length} employees`);
       res.json(employeesWithDepartments);
     } catch (error) {
       console.error('[GET /api/admin/employees] Error:', error);
@@ -2687,7 +2552,6 @@ export async function registerRoutes(app: Express) {
   app.get("/api/departments/registered", async (req, res) => {
     try {
       const registeredDepartments = await storage.getAllDepartments();
-      console.log(`Fetched ${registeredDepartments.length} registered departments`);
       res.json(registeredDepartments);
     } catch (error) {
       console.error("Error fetching registered departments:", error);
@@ -2714,11 +2578,9 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/admin/employees", upload.fields(documentFields), async (req, res) => {
     try {
-      console.log("Admin - Received raw employee data:", req.body);
 
       // Parse departmentId from the request
       const departmentId = Number(req.body.departmentId);
-      console.log(`Processing department ID: ${departmentId}`);
 
       // Check if department ID exists in departments table
       let departmentExists = false;
@@ -2728,15 +2590,12 @@ export async function registerRoutes(app: Express) {
         const department = await storage.getDepartment(departmentId);
         if (department) {
           departmentExists = true;
-          console.log(`Department ${departmentId} exists in departments table: ${department.name}`);
         } else {
-          console.log(`Department ${departmentId} does not exist in departments table`);
 
           // Try to find the department in department_names table
           const departmentNameRecord = await storage.getDepartmentName(departmentId);
 
           if (departmentNameRecord) {
-            console.log(`Found department in department_names: ${departmentId} - ${departmentNameRecord.name}`);
 
             // Create a placeholder entry in departments table
             try {
@@ -2748,7 +2607,6 @@ export async function registerRoutes(app: Express) {
                 password: "placeholder_password"
               });
 
-              console.log(`Created placeholder department: ID=${placeholderDepartment.id}, Name=${placeholderDepartment.name}`);
 
               // Use the newly created department ID instead of the original one
               actualDepartmentId = placeholderDepartment.id;
@@ -2761,7 +2619,6 @@ export async function registerRoutes(app: Express) {
               });
             }
           } else {
-            console.log(`Department ${departmentId} not found in department_names table either`);
             return res.status(400).json({
               message: "Invalid department ID",
               details: `Department ID ${departmentId} not found in department_names table`
@@ -2805,13 +2662,10 @@ export async function registerRoutes(app: Express) {
         termExtensionUrl: files?.termExtensionDoc ? `/uploads/${files.termExtensionDoc[0].filename}` : req.body.termExtensionUrl || null,
       };
 
-      console.log(`Final employee data using department ID: ${actualDepartmentId}`);
       const parsedData = insertEmployeeSchema.parse(employeeData);
-      console.log("Admin - Parsed employee data:", parsedData);
 
       try {
         const employee = await storage.createEmployee(parsedData);
-        console.log(`Employee created successfully with ID: ${employee.id}`);
         res.status(201).json(employee);
       } catch (createEmployeeError) {
         console.error("Error creating employee:", createEmployeeError);
@@ -2898,10 +2752,8 @@ export async function registerRoutes(app: Express) {
       // Accept only specific image types
       const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
 
-      console.log(`Document upload validation: ${file.originalname}, mimetype: ${file.mimetype}`);
 
       if (allowedTypes.includes(file.mimetype)) {
-        console.log(`Document file accepted: ${file.originalname} (${file.mimetype})`);
         cb(null, true);
       } else {
         console.error(`Document file rejected: ${file.originalname} (${file.mimetype}) - Invalid mimetype`);
@@ -3007,7 +2859,6 @@ export async function registerRoutes(app: Express) {
           .jpeg({ quality: 70 })
           .toFile(compressedFilePath);
 
-        console.log(`Image compressed and saved: ${compressedFilePath}`);
 
         // Create file URL using the compressed file
         const baseUrl = process.env.NODE_ENV === 'production'
@@ -3052,14 +2903,12 @@ export async function registerRoutes(app: Express) {
 
       // Delete the physical file from uploads folder
       if (document.imageUrl) {
-        console.log(`[DELETE Document] Deleting file for document ${id}: ${document.imageUrl}`);
         await storage.deleteFile(document.imageUrl);
       }
 
       // Delete from database
       await storage.deleteDocument(id);
 
-      console.log(`[DELETE Document] Successfully deleted document ${id}`);
       res.json({ message: "Document deleted successfully" });
     } catch (error) {
       console.error("Error deleting document:", error);
@@ -3107,7 +2956,6 @@ export async function registerRoutes(app: Express) {
           // Delete very old files (orphaned files)
           if (now - fileCreationTime > THIRTY_DAYS) {
             fs.unlinkSync(filePath);
-            console.log(`Cleaned up old file (30+ days): ${file}`);
           }
         } catch (err) {
           console.error(`Error checking file ${file}:`, err);
@@ -3136,7 +2984,6 @@ export async function registerRoutes(app: Express) {
 
       // Update all departments
       await storage.updateAllDepartmentsAttendancePermission(enabled);
-      console.log(`Global attendance permission toggled: ${enabled ? 'ON' : 'OFF'}`);
       res.json({ success: true, enabled });
     } catch (error) {
       console.error("Error toggling global attendance:", error);
@@ -3155,7 +3002,6 @@ export async function registerRoutes(app: Express) {
       }
 
       const updated = await storage.updateDepartmentAttendancePermission(deptId, permitted);
-      console.log(`Department ${deptId} attendance permission: ${permitted ? 'PERMITTED' : 'REVOKED'}`);
       res.json(updated);
     } catch (error) {
       console.error("Error updating department permission:", error);
@@ -3177,7 +3023,6 @@ export async function registerRoutes(app: Express) {
       // We use the storage method which handles both DB update and cache/state sync
       await storage.updateDepartmentSupplementaryPermission(deptId, allowed);
 
-      console.log(`Department ${deptId} supplementary report permission: ${allowed ? 'ALLOWED' : 'DENIED'}`);
       res.json({ success: true, allowed });
     } catch (error) {
       console.error("Error updating supplementary permission:", error);
@@ -3310,7 +3155,6 @@ export async function registerRoutes(app: Express) {
             : `http://localhost:${process.env.PORT || 5001}`;
 
           imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
-          console.log(`[Ticket] Image saved: ${imageUrl}`);
         } catch (imgError) {
           console.error("Error processing screenshot:", imgError);
         }
@@ -3432,7 +3276,6 @@ export async function registerRoutes(app: Express) {
             // Delete original and use compressed
             fs.unlinkSync(originalPath);
             imageUrl = `${baseUrl}/uploads/${compressedFilename}`;
-            console.log(`Notice image compressed: ${compressedFilename}`);
           } catch (compressError) {
             console.error("Image compression failed, using original:", compressError);
             imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
@@ -3513,7 +3356,6 @@ export async function registerRoutes(app: Express) {
 
           if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
-            console.log(`Deleted notice image: ${filename}`);
           }
         } catch (fileError) {
           console.error("Error deleting notice image file:", fileError);

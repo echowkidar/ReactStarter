@@ -693,7 +693,6 @@ export default function ReportDetails() {
             </TableHeader>
             <TableBody>
               {(() => {
-                console.log("Rendering ReportDetails. Entries count:", report.entries?.length);
                 return [...(report.entries || [])]
                   .sort((a, b) => {
                     // Sort by pay level first (higher levels first)

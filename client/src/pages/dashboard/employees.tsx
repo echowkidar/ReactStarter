@@ -305,7 +305,6 @@ export default function Employees() {
         const formData = new FormData();
 
         // Log the form data for debugging
-        console.log("Form data before processing:", data);
 
         // Handle file uploads - improved method
         const fileFields = {
@@ -323,11 +322,9 @@ export default function Employees() {
             try {
               // If it's a data URL, convert it to a blob
               if (value.startsWith('data:')) {
-                console.log(`Processing ${key} from data URL`);
                 const response = await fetch(value);
                 const blob = await response.blob();
                 const filename = `${key}-${Date.now()}.jpg`;
-                console.log(`Created blob for ${key}, size: ${blob.size}`);
 
                 // Create a File object from the blob
                 const file = new File([blob], filename, { type: blob.type });
@@ -335,11 +332,9 @@ export default function Employees() {
               }
               // If it's a blob URL, fetch the blob and create a file
               else if (value.startsWith('blob:')) {
-                console.log(`Processing ${key} from blob URL: ${value}`);
                 const response = await fetch(value);
                 const blob = await response.blob();
                 const filename = `${key}-${Date.now()}.jpg`;
-                console.log(`Created blob for ${key}, size: ${blob.size}, type: ${blob.type}`);
 
                 // Create a File object from the blob
                 const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
@@ -360,9 +355,7 @@ export default function Employees() {
         });
 
         // Log FormData entries for debugging
-        console.log("FormData contents:");
         Array.from(formData.entries()).forEach(pair => {
-          console.log(`${pair[0]}: ${pair[1] instanceof File ? `File: ${pair[1].name}, ${pair[1].size} bytes` : pair[1]}`);
         });
 
         // Make the API request with the FormData

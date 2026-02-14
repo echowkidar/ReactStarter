@@ -180,7 +180,7 @@ export default function AdminDashboard() {
       const response = await apiRequest("GET", "/api/admin/active-users");
       return response.json();
     },
-    refetchInterval: 60000, // Refresh every minute to match graph
+    refetchInterval: 120000, // Refresh every 2 minutes
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     staleTime: 0,
@@ -194,7 +194,7 @@ export default function AdminDashboard() {
       const response = await apiRequest("GET", `/api/admin/active-users/history?period=${activeUsersPeriod}`);
       return response.json();
     },
-    refetchInterval: 60000, // Refresh graph data every minute
+    refetchInterval: 120000, // Refresh graph data every 2 minutes
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     staleTime: 0,
@@ -217,7 +217,7 @@ export default function AdminDashboard() {
       const response = await apiRequest("GET", "/api/admin/visitor-stats");
       return response.json();
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 120000, // Refresh every 2 minutes
   });
 
   // Fetch transfer stats
@@ -231,7 +231,7 @@ export default function AdminDashboard() {
       const response = await apiRequest("GET", "/api/admin/transfer-stats");
       return response.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 120000, // Refresh every 2 minutes
   });
 
   // Calculate status for UI
@@ -443,12 +443,7 @@ export default function AdminDashboard() {
     const relevantDepts = departments.filter(d => (Number(d.employeeCount) || 0) > 0);
     const totalRelevant = relevantDepts.length;
 
-    // Debug log
-    console.log('Dashboard Stats Debug:', {
-      totalDepts: departments.length,
-      relevantDepts: totalRelevant,
-      sampleDept: departments.slice(0, 1).map(d => ({ name: d.name, count: d.employeeCount }))
-    });
+
 
     // Filter reports for current month
     const currentReports = reports?.filter(r => r.year === currentYear && r.month === currentMonth) || [];

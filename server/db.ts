@@ -4,7 +4,6 @@ import * as schema from "@shared/schema";
 import 'dotenv/config';
 import { Socket } from 'net';
 
-console.log('Initializing database connection...');
 
 // Check for database URL with helpful error message
 if (!process.env.DATABASE_URL) {
@@ -22,7 +21,6 @@ if (!process.env.DATABASE_URL) {
 const dbUrlForLogging = process.env.DATABASE_URL ? 
   `${process.env.DATABASE_URL.split('@')[1]?.split('/')[0] || 'unknown-host'}` : 
   'not-set';
-console.log(`Using database host: ${dbUrlForLogging}`);
 
 // Create a connection pool
 const { Pool } = pg;
@@ -50,7 +48,6 @@ export async function testDbConnection() {
   try {
     client = await pool.connect();
     await client.query('SELECT 1');
-    console.log('Database connection successful');
     return true;
   } catch (error) {
     console.error('Database connection test failed:', error);

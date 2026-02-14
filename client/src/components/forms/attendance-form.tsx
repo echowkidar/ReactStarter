@@ -33,7 +33,7 @@ const formatDateForDisplay = (date: Date): string => {
 
 // Utility function to convert DD-MM-YY to YYYY-MM-DD for input type="date"
 const formatDateForInput = (dateStr: string): string => {
-  console.log("formatDateForInput input:", dateStr);
+
   if (!dateStr || typeof dateStr !== 'string' || !dateStr.includes('-')) {
     console.error("Invalid date string:", dateStr);
     return "";
@@ -42,7 +42,6 @@ const formatDateForInput = (dateStr: string): string => {
   try {
     const [day, month, year] = dateStr.split('-').map(Number);
     const result = `20${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    console.log("formatDateForInput output:", result);
     return result;
   } catch (error) {
     console.error("Error formatting date for input:", error, dateStr);
@@ -52,11 +51,10 @@ const formatDateForInput = (dateStr: string): string => {
 
 // Utility function to convert YYYY-MM-DD to DD-MM-YY
 const formatDateFromInput = (dateStr: string): string => {
-  console.log("formatDateFromInput input:", dateStr);
+
   try {
     const date = new Date(dateStr);
     const result = formatDateForDisplay(date);
-    console.log("formatDateFromInput output:", result);
     return result;
   } catch (error) {
     console.error("Error formatting date from input:", error, dateStr);
@@ -185,7 +183,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         const res = await fetch(`/api/departments/${department.id}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}`);
         if (res.ok) {
           const ids = await res.json();
-          console.log("Employees already reported:", ids);
+
           setReportedEmployeeIds(new Set(ids));
         }
       } catch (e) {

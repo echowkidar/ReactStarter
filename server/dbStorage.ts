@@ -199,13 +199,10 @@ export class DbStorage implements IStorage {
 
   async getEmployeesByDepartment(departmentId: number): Promise<Employee[]> {
     try {
-      console.log(`[DbStorage] Fetching employees for department ${departmentId}`);
       const result = await db.query.employees.findMany({
         where: eq(employees.departmentId, departmentId)
       });
-      console.log(`[DbStorage] Found ${result.length} employees`);
       if (result.length > 0) {
-        console.log('[DbStorage] Sample employee:', result[0]);
       }
       return result;
     } catch (error) {
@@ -271,13 +268,10 @@ export class DbStorage implements IStorage {
   async deleteEmployee(id: number): Promise<void> {
     // Use a transaction to ensure both deletions succeed or fail together
     await db.transaction(async (tx) => {
-      console.log(`[DbStorage] Deleting attendance entries for employee ${id}`);
       await tx.delete(attendanceEntries).where(eq(attendanceEntries.employeeId, id));
 
-      console.log(`[DbStorage] Deleting employee ${id}`);
       await tx.delete(employees).where(eq(employees.id, id));
     });
-    console.log(`[DbStorage] Successfully deleted employee ${id} and related attendance entries`);
   }
 
   async updateEmployee(id: number, updates: Partial<Employee>): Promise<Employee> {
@@ -302,12 +296,7 @@ export class DbStorage implements IStorage {
 
   async getAllEmployees(): Promise<Employee[]> {
     try {
-      console.log('[DbStorage] Fetching all employees');
       const result = await db.query.employees.findMany();
-      console.log(`[DbStorage] Found ${result.length} total employees`);
-      if (result.length > 0) {
-        console.log('[DbStorage] Sample employee:', result[0]);
-      }
       return result;
     } catch (error) {
       console.error('[DbStorage] Error fetching all employees:', error);
@@ -392,9 +381,7 @@ export class DbStorage implements IStorage {
         ORDER BY year DESC, month DESC
       `);
 
-      console.log(`[DbStorage] getAvailableAttendanceMonths found ${result.rows.length} records`);
       if (result.rows.length > 0) {
-        console.log(`[DbStorage] Sample month/year:`, result.rows[0]);
       }
 
       // Map the rows to the expected format (ensure numbers)
@@ -450,13 +437,10 @@ export class DbStorage implements IStorage {
   async deleteAttendanceReport(id: number): Promise<void> {
     // Use a transaction to ensure both deletions succeed or fail together
     await db.transaction(async (tx) => {
-      console.log(`[DbStorage] Deleting attendance entries for report ${id}`);
       await tx.delete(attendanceEntries).where(eq(attendanceEntries.reportId, id));
 
-      console.log(`[DbStorage] Deleting attendance report ${id}`);
       await tx.delete(attendanceReports).where(eq(attendanceReports.id, id));
     });
-    console.log(`[DbStorage] Successfully deleted report ${id} and related entries`);
   }
 
   async createAttendanceEntry(entry: InsertAttendanceEntry): Promise<AttendanceEntry> {
@@ -594,13 +578,11 @@ export class DbStorage implements IStorage {
   }
 
   async deleteFile(filePath: string): Promise<void> {
-    console.log(`[Debug] deleteFile called with: '${filePath}'`);
 
     if (!filePath) return;
 
     // Use relaxed check to handle leading slashes or missing slashes
     if (!filePath.includes('uploads')) {
-      console.log('[DbStorage] Invalid file path (does not contain "uploads"):', filePath);
       return;
     }
 
@@ -608,7 +590,6 @@ export class DbStorage implements IStorage {
       // Fix for __dirname in ES modules
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = path.dirname(__filename);
-      console.log(`[Debug] __dirname: ${__dirname}`);
 
       let cleanPath = filePath;
       // Handle full URLs (e.g. http://localhost:5001/uploads/file.png)
@@ -616,33 +597,25 @@ export class DbStorage implements IStorage {
         try {
           const url = new URL(filePath);
           cleanPath = url.pathname; // Should be /uploads/file.png
-          console.log(`[Debug] Extracted pathname from URL: ${cleanPath}`);
         } catch (e) {
-          console.log(`[Debug] Failed to parse URL: ${filePath}, using as is.`);
         }
       }
 
       // Normalize filePath: strip all leading slashes/backslashes to get clean relative path
       // e.g. "/uploads/file.png" -> "uploads/file.png"
       const relativePath = cleanPath.replace(/^[\/\\]+/, '');
-      console.log(`[Debug] Normalized relativePath: ${relativePath}`);
 
       // Construct absolute path. Assuming __dirname is '.../server', so '..' is root.
       const absolutePath = path.join(__dirname, '..', relativePath);
-      console.log(`[Debug] Absolute path: ${absolutePath}`);
 
       if (fs.existsSync(absolutePath)) {
         fs.unlinkSync(absolutePath);
-        console.log(`[DbStorage] SUCCESS: Deleted file: ${absolutePath}`);
       } else {
-        console.log(`[DbStorage] FAILURE: File not found at path: ${absolutePath}`);
         // Debug: list project root uploads folder
         const uploadsDir = path.join(__dirname, '..', 'uploads');
         if (fs.existsSync(uploadsDir)) {
           const files = fs.readdirSync(uploadsDir);
-          console.log(`[Debug] Contents of ${uploadsDir}:`, files);
         } else {
-          console.log(`[Debug] Uploads dir does not exist at ${uploadsDir}`);
         }
       }
     } catch (error) {

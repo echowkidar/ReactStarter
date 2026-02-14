@@ -199,9 +199,6 @@ export default function AttendanceReports() {
     setSortConfig({ key, direction });
   };
 
-  // Add this debug log to see the entire reports data
-  console.log("Reports data:", JSON.stringify(reports, null, 2));
-
   // Fetch all departments for the filter
   const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/departments"],

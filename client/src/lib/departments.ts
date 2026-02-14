@@ -24,7 +24,6 @@ export const departmentTitles = [
 export async function fetchDepartmentsForRegistration(showAll = false): Promise<DepartmentRegistrationInfo[]> {
   try {
     const url = `/api/departments?showAll=${showAll}`;
-    console.log(`[fetchDepartmentsForRegistration] Fetching from URL: ${url}`);
     
     const response = await apiRequest("GET", url);
     if (!response.ok) {
@@ -38,7 +37,6 @@ export async function fetchDepartmentsForRegistration(showAll = false): Promise<
     }
 
     const departments: DepartmentRegistrationInfo[] = await response.json();
-    console.log(`[fetchDepartmentsForRegistration] Success! Received ${departments.length} departments:`, departments);
     return departments;
 
   } catch (error) {
@@ -51,13 +49,11 @@ export async function fetchDepartmentsForRegistration(showAll = false): Promise<
 export async function fetchAllDepartmentBaseNames(): Promise<DepartmentName[]> {
   try {
     const url = `/api/department-names`;
-    console.log(`Fetching all base department names with URL: ${url}`);
     const response = await apiRequest("GET", url);
     if (!response.ok) {
       throw new Error(`API request failed with status ${response.status}`);
     }
     const departments: DepartmentName[] = await response.json();
-    console.log(`Received ${departments.length} base department names from API`);
     return departments;
   } catch (error) {
     console.error("Error fetching all base department names:", error);
