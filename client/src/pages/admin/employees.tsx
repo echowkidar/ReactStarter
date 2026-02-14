@@ -701,7 +701,7 @@ export default function AdminEmployees() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save employee data. Please check the form and try again."
+        description: error instanceof Error ? error.message : "Failed to save employee data. Please check the form and try again."
       });
     }
   };

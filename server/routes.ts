@@ -1298,10 +1298,34 @@ export async function registerRoutes(app: Express) {
       };
 
       // Guard: Block department change if employee has attendance in current month
-      if (updates.departmentId && Number(updates.departmentId) !== currentEmployee.departmentId) {
-        const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, employeeId);
-        if (attendanceCheck.hasAttendance) {
-          return res.status(400).json({ message: attendanceCheck.message });
+      // The form may send departments.id (edit-employee-form) or department_names.id (admin employees page)
+      if (updates.departmentId) {
+        const sentDeptId = Number(updates.departmentId);
+
+        // If sent value equals current departments.id, department is NOT changing
+        if (sentDeptId !== currentEmployee.departmentId) {
+          // Could be a department_names.id — check if it resolves to the same department
+          const currentDept = await storage.getDepartment(currentEmployee.departmentId);
+          const deptNameResult = await db.execute(sql`
+            SELECT dept_name FROM department_names WHERE id = ${sentDeptId} LIMIT 1
+          `);
+
+          let isDepartmentActuallyChanging = true;
+
+          // If the sent ID is a department_names entry, compare names
+          if (deptNameResult.rows.length > 0 && currentDept) {
+            const sentDeptName = (deptNameResult.rows[0] as any).dept_name;
+            if (sentDeptName === currentDept.name) {
+              isDepartmentActuallyChanging = false; // Same department, different ID system
+            }
+          }
+
+          if (isDepartmentActuallyChanging) {
+            const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, employeeId);
+            if (attendanceCheck.hasAttendance) {
+              return res.status(400).json({ message: attendanceCheck.message });
+            }
+          }
         }
       }
 
