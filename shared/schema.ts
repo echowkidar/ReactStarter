@@ -92,6 +92,7 @@ export const attendanceEntries = pgTable("attendance_entries", {
   id: serial("id").primaryKey(),
   reportId: integer("report_id").notNull(),
   employeeId: integer("employee_id").notNull(),
+  departmentId: integer("department_id"),
   days: integer("days").notNull(),
   fromDate: text("from_date").notNull(),
   toDate: text("to_date").notNull(),

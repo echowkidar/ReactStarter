@@ -18,6 +18,41 @@ import {
   InsertDepartmentName
 } from "../shared/schema";
 import fs from "fs";
+import { sql } from "drizzle-orm";
+import { db } from "./db";
+
+// Helper: Check if employee has attendance entries in current month (blocks transfer)
+async function checkEmployeeAttendanceForCurrentMonth(
+  storage: DbStorage, employeeId: number
+): Promise<{ hasAttendance: boolean; message?: string }> {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  const result = await db.execute(sql`
+    SELECT ae.id, ar.department_id, ar.month, ar.year, ar.status, d.name as department_name
+    FROM attendance_entries ae
+    JOIN attendance_reports ar ON ae.report_id = ar.id
+    LEFT JOIN departments d ON ar.department_id = d.id
+    WHERE ae.employee_id = ${employeeId}
+      AND ar.month = ${currentMonth}
+      AND ar.year = ${currentYear}
+      AND ar.status != 'cancelled'
+    LIMIT 1
+  `);
+
+  if (result.rows.length > 0) {
+    const row = result.rows[0] as any;
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    return {
+      hasAttendance: true,
+      message: `Cannot transfer: This employee has attendance entries for ${monthNames[currentMonth]} ${currentYear} in department "${row.department_name || 'Unknown'}" (Report Status: ${row.status}). Please remove the attendance entry first before transferring.`
+    };
+  }
+
+  return { hasAttendance: false };
+}
 import { v4 as uuid } from "uuid";
 import { setupTestEmailAccount, sendPasswordResetEmail } from "./emailService";
 
@@ -1262,6 +1297,14 @@ export async function registerRoutes(app: Express) {
         ...(files?.termExtensionDoc && { termExtensionUrl: `/uploads/${files.termExtensionDoc[0].filename}` })
       };
 
+      // Guard: Block department change if employee has attendance in current month
+      if (updates.departmentId && Number(updates.departmentId) !== currentEmployee.departmentId) {
+        const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, employeeId);
+        if (attendanceCheck.hasAttendance) {
+          return res.status(400).json({ message: attendanceCheck.message });
+        }
+      }
+
       const employee = await storage.updateEmployee(employeeId, updates);
 
       // Log changes
@@ -2137,9 +2180,13 @@ export async function registerRoutes(app: Express) {
 
       // Log the received data for debugging
 
+      // Get report to store departmentId on entry
+      const report = await storage.getAttendanceReport(reportId);
+
       const entryData = insertAttendanceEntrySchema.parse({
         reportId: reportId,
         employeeId: Number(employeeId),
+        departmentId: report?.departmentId || null,
         days: totalDays,
         fromDate: firstPeriod?.fromDate || "",
         toDate: lastPeriod?.toDate || "",
@@ -3396,6 +3443,12 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Employee already has a pending transfer request" });
       }
 
+      // Guard: Block transfer if employee has attendance in current month
+      const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, employeeId);
+      if (attendanceCheck.hasAttendance) {
+        return res.status(400).json({ message: attendanceCheck.message });
+      }
+
       // Get department info for HOD signature
       const fromDepartment = await storage.getDepartment(departmentId);
       const hodSignature = `HOD, ${fromDepartment?.name || 'Unknown Department'}`;
@@ -3524,6 +3577,12 @@ export async function registerRoutes(app: Express) {
 
       if (request.status !== 'pending') {
         return res.status(400).json({ message: "Transfer request is no longer pending" });
+      }
+
+      // Guard: Block transfer acceptance if employee has attendance in current month
+      const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, request.employeeId);
+      if (attendanceCheck.hasAttendance) {
+        return res.status(400).json({ message: attendanceCheck.message });
       }
 
       // Get department info
@@ -3897,6 +3956,12 @@ export async function registerRoutes(app: Express) {
 
       if (request.status !== 'release_requested') {
         return res.status(400).json({ message: "Request is not in 'release_requested' state" });
+      }
+
+      // Guard: Block release approval if employee has attendance in current month
+      const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, request.employeeId);
+      if (attendanceCheck.hasAttendance) {
+        return res.status(400).json({ message: attendanceCheck.message });
       }
 
       // Execute Transfer

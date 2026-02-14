@@ -149,6 +149,19 @@ export async function runMigrations() {
       ON CONFLICT (key) DO NOTHING;
     `);
 
+    // Add department_id column to attendance_entries table
+    await db.execute(sql`
+      ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS department_id INTEGER;
+    `);
+
+    // Backfill department_id from attendance_reports for existing entries
+    await db.execute(sql`
+      UPDATE attendance_entries ae
+      SET department_id = ar.department_id
+      FROM attendance_reports ar
+      WHERE ae.report_id = ar.id AND ae.department_id IS NULL;
+    `);
+
     console.log("Database migrations completed successfully");
   } catch (error) {
     console.error("Error running migrations:", error);
