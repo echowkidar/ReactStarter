@@ -23,6 +23,7 @@ import AdminDocuments from "@/pages/admin/documents";
 import AdminTickets from "@/pages/admin/tickets";
 import AdminNotices from "@/pages/admin/notices";
 import TransferRequests from "@/pages/admin/transfer-requests";
+import MissingEmployees from "@/pages/admin/missing-employees";
 import AdminSettings from "@/pages/admin/settings";
 import Tickets from "@/pages/dashboard/tickets";
 import GlobalSearch from "@/pages/dashboard/global-search";
@@ -53,6 +54,7 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/users" component={AdminUsers} />
       <ProtectedAdminRoute path="/admin/reports/:id" component={AdminReportDetails} />
       <ProtectedAdminRoute path="/admin/attendance-reports" component={AttendanceReports} />
+      <ProtectedAdminRoute path="/admin/missing-employees" component={MissingEmployees} />
       <ProtectedAdminRoute path="/admin/documents" component={AdminDocuments} />
       <ProtectedAdminRoute path="/admin/tickets" component={AdminTickets} />
       <ProtectedAdminRoute path="/admin/notices" component={AdminNotices} />

@@ -2400,6 +2400,172 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Department employee stats for admin dashboard — per department breakdown
+  app.get("/api/admin/department-employee-stats", async (req, res) => {
+    try {
+      const month = parseInt(req.query.month as string);
+      const year = parseInt(req.query.year as string);
+
+      if (isNaN(month) || isNaN(year)) {
+        return res.status(400).json({ message: "month and year are required" });
+      }
+
+      const allDepartments = await storage.getAllDepartments();
+
+      // Count active vs disabled employees per department
+      const employeeResult = await db.execute(sql`
+        SELECT department_id, is_active, COUNT(*)::int as count
+        FROM employees
+        GROUP BY department_id, is_active
+      `);
+
+      // Find employees with attendance in submitted/sent reports for this month
+      const reportedResult = await db.execute(sql`
+        SELECT DISTINCT ae.employee_id, ar.department_id
+        FROM attendance_entries ae
+        JOIN attendance_reports ar ON ae.report_id = ar.id
+        WHERE ar.month = ${month} AND ar.year = ${year}
+          AND ar.status IN ('submitted', 'sent')
+      `);
+
+      // Build lookup maps
+      const activeCountMap = new Map<number, number>();
+      const disabledCountMap = new Map<number, number>();
+      for (const row of employeeResult.rows as any[]) {
+        if (row.is_active === 'active') {
+          activeCountMap.set(row.department_id, row.count);
+        } else {
+          disabledCountMap.set(row.department_id, (disabledCountMap.get(row.department_id) || 0) + row.count);
+        }
+      }
+
+      const reportedByDept = new Map<number, Set<number>>();
+      for (const row of reportedResult.rows as any[]) {
+        if (!reportedByDept.has(row.department_id)) {
+          reportedByDept.set(row.department_id, new Set());
+        }
+        reportedByDept.get(row.department_id)!.add(row.employee_id);
+      }
+
+      const stats = allDepartments.map(dept => {
+        const totalActive = activeCountMap.get(dept.id) || 0;
+        const reported = reportedByDept.get(dept.id)?.size || 0;
+        const missing = Math.max(0, totalActive - reported);
+        const disabled = disabledCountMap.get(dept.id) || 0;
+        return { departmentId: dept.id, totalActive, reported, missing, disabled };
+      });
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching department employee stats:", error);
+      res.status(500).json({ message: "Failed to fetch department employee stats" });
+    }
+  });
+
+  // All missing employees across all departments for download
+  app.get("/api/admin/all-missing-employees", async (req, res) => {
+    try {
+      const month = parseInt(req.query.month as string);
+      const year = parseInt(req.query.year as string);
+
+      if (isNaN(month) || isNaN(year)) {
+        return res.status(400).json({ message: "month and year are required" });
+      }
+
+      const result = await db.execute(sql`
+        SELECT e.id, e.epid, e.name, e.designation, e.employment_status, 
+               e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active,
+               d.name as department_name
+        FROM employees e
+        JOIN departments d ON d.id = e.department_id
+        WHERE e.is_active = 'active'
+          AND e.id NOT IN (
+            SELECT DISTINCT ae.employee_id FROM attendance_entries ae
+            JOIN attendance_reports ar ON ae.report_id = ar.id
+            WHERE ar.month = ${month} AND ar.year = ${year}
+              AND ar.status IN ('submitted', 'sent')
+          )
+        ORDER BY d.name, e.epid
+      `);
+
+      res.json(result.rows);
+    } catch (error) {
+      console.error("Error fetching all missing employees:", error);
+      res.status(500).json({ message: "Failed to fetch all missing employees" });
+    }
+  });
+
+  // Department employees list for popup — filtered by category
+  app.get("/api/admin/department-employees", async (req, res) => {
+    try {
+      const departmentId = parseInt(req.query.departmentId as string);
+      const category = req.query.category as string;
+      const month = parseInt(req.query.month as string);
+      const year = parseInt(req.query.year as string);
+
+      if (isNaN(departmentId) || !category) {
+        return res.status(400).json({ message: "departmentId and category are required" });
+      }
+
+      let employees: any[] = [];
+
+      if (category === 'active') {
+        const result = await db.execute(sql`
+          SELECT id, epid, name, designation, employment_status, term_expiry, 
+                 salary_asstt, salary_register_no, is_active
+          FROM employees WHERE department_id = ${departmentId} AND is_active = 'active'
+          ORDER BY epid
+        `);
+        employees = result.rows;
+      } else if (category === 'reported' && !isNaN(month) && !isNaN(year)) {
+        const result = await db.execute(sql`
+          SELECT e.id, e.epid, e.name, e.designation, e.employment_status, 
+                 e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active,
+                 COALESCE(SUM(ae.days), 0)::int as days_count
+          FROM employees e
+          JOIN attendance_entries ae ON ae.employee_id = e.id
+          JOIN attendance_reports ar ON ae.report_id = ar.id
+          WHERE ar.department_id = ${departmentId}
+            AND ar.month = ${month} AND ar.year = ${year}
+            AND ar.status IN ('submitted', 'sent')
+          GROUP BY e.id, e.epid, e.name, e.designation, e.employment_status, 
+                   e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active
+          ORDER BY e.epid
+        `);
+        employees = result.rows;
+      } else if (category === 'missing' && !isNaN(month) && !isNaN(year)) {
+        const result = await db.execute(sql`
+          SELECT e.id, e.epid, e.name, e.designation, e.employment_status, 
+                 e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active
+          FROM employees e
+          WHERE e.department_id = ${departmentId} AND e.is_active = 'active'
+            AND e.id NOT IN (
+              SELECT DISTINCT ae.employee_id FROM attendance_entries ae
+              JOIN attendance_reports ar ON ae.report_id = ar.id
+              WHERE ar.department_id = ${departmentId}
+                AND ar.month = ${month} AND ar.year = ${year}
+                AND ar.status IN ('submitted', 'sent')
+            )
+          ORDER BY e.epid
+        `);
+        employees = result.rows;
+      } else if (category === 'disabled') {
+        const result = await db.execute(sql`
+          SELECT id, epid, name, designation, employment_status, term_expiry, 
+                 salary_asstt, salary_register_no, is_active
+          FROM employees WHERE department_id = ${departmentId} AND is_active != 'active'
+          ORDER BY epid
+        `);
+        employees = result.rows;
+      }
+
+      res.json(employees);
+    } catch (error) {
+      console.error("Error fetching department employees:", error);
+      res.status(500).json({ message: "Failed to fetch department employees" });
+    }
+  });
+
   // Add receipt details to single report endpoint
   app.get("/api/admin/attendance/:id", async (req, res) => {
     try {

@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -37,6 +38,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type ReportWithDepartment = AttendanceReport & {
   department?: Department;
@@ -134,7 +141,8 @@ export default function AdminDashboard() {
       const url = `/api/admin/attendance?month=${apiMonth}&year=${filterYear}`;
       const response = await apiRequest("GET", url);
       return response.json();
-    }
+    },
+    refetchInterval: 120000,
   });
 
   // Fetch departments with permit status (Super Admin only)
@@ -153,6 +161,7 @@ export default function AdminDashboard() {
       attendancePermitted: d.attendancePermitted !== false,
       employeeCount: d.employeeCount || 0
     })),
+    refetchInterval: 120000,
   });
 
   // Fetch ticket stats
@@ -167,6 +176,7 @@ export default function AdminDashboard() {
       const response = await apiRequest("GET", "/api/tickets/stats");
       return response.json();
     },
+    refetchInterval: 120000,
   });
 
   // Fetch active users count (refresh every 10 seconds)
@@ -234,6 +244,28 @@ export default function AdminDashboard() {
     refetchInterval: 120000, // Refresh every 2 minutes
   });
 
+  // Fetch department employee stats for current month
+  interface DeptEmployeeStats {
+    departmentId: number;
+    totalActive: number;
+    reported: number;
+    missing: number;
+    disabled: number;
+  }
+  const { data: deptStats = [] } = useQuery<DeptEmployeeStats[]>({
+    queryKey: ["/api/admin/department-employee-stats", apiMonth, filterYear],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/admin/department-employee-stats?month=${apiMonth}&year=${filterYear}`);
+      return response.json();
+    },
+    refetchInterval: 120000,
+  });
+  const deptStatsMap = useMemo(() => {
+    const map = new Map<number, DeptEmployeeStats>();
+    deptStats.forEach(s => map.set(s.departmentId, s));
+    return map;
+  }, [deptStats]);
+
   // Calculate status for UI
   const totalDepts = departments.length;
   const enabledDepts = departments.filter(d => d.attendancePermitted);
@@ -256,6 +288,65 @@ export default function AdminDashboard() {
   // Delete feature state
   const [reportToDelete, setReportToDelete] = useState<ReportWithDepartment | null>(null);
   const [deleteStage, setDeleteStage] = useState<1 | 2>(1);
+
+  // Department stats expand/popup state
+  const [expandedDeptId, setExpandedDeptId] = useState<number | null>(null);
+  const [employeePopup, setEmployeePopup] = useState<{
+    open: boolean;
+    departmentId: number;
+    departmentName: string;
+    category: string;
+    categoryLabel: string;
+  } | null>(null);
+  const [popupSearch, setPopupSearch] = useState("");
+  const [popupShowConfirmed, setPopupShowConfirmed] = useState(false);
+
+  // localStorage for confirmed missing employees (shared with missing-employees page)
+  const missingStorageKey = `missing_confirmed_${filterYear}_${apiMonth}`;
+  const [missingConfirmedIds, setMissingConfirmedIds] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(`missing_confirmed_${new Date().getFullYear()}_${new Date().getMonth() + 1}`);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
+  const toggleMissingConfirm = (empId: number) => {
+    setMissingConfirmedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(empId)) next.delete(empId); else next.add(empId);
+      localStorage.setItem(missingStorageKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  // Lazy-fetch employee list for popup
+  const { data: popupEmployees = [], isLoading: popupLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/department-employees", employeePopup?.departmentId, employeePopup?.category, apiMonth, filterYear],
+    queryFn: async () => {
+      if (!employeePopup) return [];
+      const response = await apiRequest("GET",
+        `/api/admin/department-employees?departmentId=${employeePopup.departmentId}&category=${employeePopup.category}&month=${apiMonth}&year=${filterYear}`);
+      return response.json();
+    },
+    enabled: !!employeePopup?.open,
+  });
+
+  // Filter popup employees by search and confirmed status (for missing category)
+  const filteredPopupEmployees = useMemo(() => {
+    let result = popupEmployees;
+    if (employeePopup?.category === 'missing' && !popupShowConfirmed) {
+      result = result.filter((e: any) => !missingConfirmedIds.has(e.id));
+    }
+    if (popupSearch) {
+      const s = popupSearch.toLowerCase();
+      result = result.filter((e: any) =>
+        e.name?.toLowerCase().includes(s) ||
+        e.epid?.toLowerCase().includes(s) ||
+        e.designation?.toLowerCase().includes(s) ||
+        e.salary_register_no?.toLowerCase().includes(s)
+      );
+    }
+    return result;
+  }, [popupEmployees, popupSearch, employeePopup?.category, missingConfirmedIds, popupShowConfirmed]);
 
 
 
@@ -738,15 +829,64 @@ export default function AdminDashboard() {
                 <span className="hidden sm:inline">User Management</span>
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadExcel}
-              className="flex items-center gap-1"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden md:inline">Download Excel</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="hidden md:inline">Download Excel</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleDownloadExcel}>
+                  📋 Attendance Reports
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={async () => {
+                  try {
+                    const response = await apiRequest('GET', `/api/admin/all-missing-employees?month=${apiMonth}&year=${filterYear}`);
+                    const employees = await response.json();
+                    if (!employees || employees.length === 0) {
+                      toast({ title: 'No data', description: 'No missing employees found for current month', variant: 'destructive' });
+                      return;
+                    }
+                    const headers = ['Department', 'EPID', 'Name', 'Designation', 'Status', 'Term Expiry', 'Salary Asst.', 'Reg. No.'];
+                    const rows = employees.map((emp: any) => [
+                      emp.department_name || '',
+                      emp.epid || '',
+                      emp.name || '',
+                      emp.designation || '',
+                      emp.employment_status || '',
+                      emp.term_expiry || '',
+                      emp.salary_asstt || '',
+                      emp.salary_register_no || ''
+                    ]);
+                    const csvContent = [
+                      headers.join(','),
+                      ...rows.map((row: string[]) => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                    ].join('\n');
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', url);
+                    const monthName = new Date(filterYear, filterMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    link.setAttribute('download', `Missing_Employees_${monthName}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    toast({ title: 'Downloaded', description: `Exported ${employees.length} missing employees to CSV` });
+                  } catch (error) {
+                    console.error('Error downloading missing employees:', error);
+                    toast({ title: 'Error', description: 'Failed to download missing employees', variant: 'destructive' });
+                  }
+                }}>
+                  ⚠️ Missing Employees ({new Date(filterYear, filterMonth).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="outline"
               size="sm"
@@ -1343,10 +1483,80 @@ export default function AdminDashboard() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{report.department?.name || dept?.name || "N/A"}</span>
-                        <span className="text-xs text-muted-foreground">{employeeCount} Employees</span>
-                      </div>
+                      {(() => {
+                        const deptName = report.department?.name || dept?.name || "N/A";
+                        const deptId = report.departmentId;
+                        const st = deptStatsMap.get(deptId);
+                        const isExpanded = expandedDeptId === report.id;
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium">{deptName}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className="text-xs font-semibold text-green-600 cursor-pointer hover:underline"
+                                title="Employees in submitted/sent attendance"
+                                onClick={() => setEmployeePopup({
+                                  open: true,
+                                  departmentId: deptId,
+                                  departmentName: deptName,
+                                  category: 'reported',
+                                  categoryLabel: 'Attendance Reported'
+                                })}
+                              >
+                                {st?.reported ?? '—'} Reported
+                              </span>
+                              <button
+                                className="text-xs text-muted-foreground hover:text-foreground transition-transform"
+                                style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                                onClick={() => setExpandedDeptId(isExpanded ? null : report.id)}
+                                title="Show more stats"
+                              >
+                                ▶
+                              </button>
+                            </div>
+                            {isExpanded && st && (
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 animate-in slide-in-from-top-1 duration-200">
+                                <span
+                                  className="text-[11px] text-blue-600 cursor-pointer hover:underline"
+                                  onClick={() => setEmployeePopup({
+                                    open: true,
+                                    departmentId: deptId,
+                                    departmentName: deptName,
+                                    category: 'active',
+                                    categoryLabel: 'Active Employees'
+                                  })}
+                                >
+                                  🟢 {st.totalActive} Active
+                                </span>
+                                <span
+                                  className="text-[11px] text-orange-600 cursor-pointer hover:underline"
+                                  onClick={() => setEmployeePopup({
+                                    open: true,
+                                    departmentId: deptId,
+                                    departmentName: deptName,
+                                    category: 'missing',
+                                    categoryLabel: 'Missing Attendance'
+                                  })}
+                                >
+                                  ⚠️ {st.missing} Missing
+                                </span>
+                                <span
+                                  className="text-[11px] text-red-600 cursor-pointer hover:underline"
+                                  onClick={() => setEmployeePopup({
+                                    open: true,
+                                    departmentId: deptId,
+                                    departmentName: deptName,
+                                    category: 'disabled',
+                                    categoryLabel: 'Disabled Employees'
+                                  })}
+                                >
+                                  🔴 {st.disabled} Disabled
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       {report.status === "draft"
@@ -1509,6 +1719,145 @@ export default function AdminDashboard() {
                 </Button>
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+        {/* Employee List Popup */}
+        <Dialog open={!!employeePopup?.open} onOpenChange={(open) => { if (!open) { setEmployeePopup(null); setPopupSearch(''); setPopupShowConfirmed(false); } }}>
+          <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-lg">
+                {employeePopup?.departmentName}
+              </DialogTitle>
+              <DialogDescription>
+                {employeePopup?.categoryLabel} — {new Date(filterYear, filterMonth).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
+              </DialogDescription>
+            </DialogHeader>
+            {popupLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : popupEmployees.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No employees found in this category.</div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Input
+                      placeholder="Search name, EPID, designation..."
+                      value={popupSearch}
+                      onChange={(e) => setPopupSearch(e.target.value)}
+                      className="max-w-[250px] h-8 text-sm"
+                    />
+                    {employeePopup?.category === 'missing' && (
+                      <div className="flex items-center gap-1.5">
+                        <Checkbox
+                          id="popupShowConfirmed"
+                          checked={popupShowConfirmed}
+                          onCheckedChange={(c) => setPopupShowConfirmed(c === true)}
+                        />
+                        <label htmlFor="popupShowConfirmed" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                          Show confirmed ({missingConfirmedIds.size})
+                        </label>
+                      </div>
+                    )}
+                    <div className="text-sm text-muted-foreground whitespace-nowrap">{filteredPopupEmployees.length} employee(s)</div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                    onClick={() => {
+                      const isReported = employeePopup?.category === 'reported';
+                      const headers = ['EPID', 'Name', 'Designation', 'Status', 'Term Expiry', 'Salary Asst.', 'Reg. No.'];
+                      if (isReported) headers.push('Days');
+
+                      const rows = filteredPopupEmployees.map((emp: any) => {
+                        const row = [
+                          emp.epid || '',
+                          emp.name || '',
+                          emp.designation || '',
+                          emp.employment_status || '',
+                          emp.term_expiry || '',
+                          emp.salary_asstt || '',
+                          emp.salary_register_no || ''
+                        ];
+                        if (isReported) row.push(String(emp.days_count || 0));
+                        return row;
+                      });
+
+                      const csvContent = [
+                        headers.join(','),
+                        ...rows.map((row: string[]) => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                      ].join('\n');
+
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', `${employeePopup?.departmentName}_${employeePopup?.category}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(url);
+
+                      toast({ title: 'Downloaded', description: `Exported ${filteredPopupEmployees.length} employees to CSV` });
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {employeePopup?.category === 'missing' && <TableHead className="w-[40px]"></TableHead>}
+                        <TableHead className="w-[70px]">EPID</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Designation</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Term Expiry</TableHead>
+                        <TableHead>Salary Asst.</TableHead>
+                        <TableHead>Reg. No.</TableHead>
+                        {employeePopup?.category === 'reported' && <TableHead className="w-[60px]">Days</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredPopupEmployees.map((emp: any) => {
+                        const isConfirmed = missingConfirmedIds.has(emp.id);
+                        return (
+                          <TableRow key={emp.id} className={employeePopup?.category === 'missing' && isConfirmed ? 'opacity-50 bg-muted/30' : ''}>
+                            {employeePopup?.category === 'missing' && (
+                              <TableCell>
+                                <Checkbox
+                                  checked={isConfirmed}
+                                  onCheckedChange={() => toggleMissingConfirm(emp.id)}
+                                  title={isConfirmed ? 'Unmark' : 'Confirm — hide from list'}
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell className="font-mono text-sm">{emp.epid || '—'}</TableCell>
+                            <TableCell className="font-medium">{emp.name}</TableCell>
+                            <TableCell className="text-sm">{emp.designation || '—'}</TableCell>
+                            <TableCell>
+                              <Badge variant={emp.employment_status === 'Permanent' ? 'default' : 'secondary'} className="text-xs">
+                                {emp.employment_status || '—'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">{emp.term_expiry || '—'}</TableCell>
+                            <TableCell className="text-sm">{emp.salary_asstt || '—'}</TableCell>
+                            <TableCell className="text-sm">{emp.salary_register_no || '—'}</TableCell>
+                            {employeePopup?.category === 'reported' && (
+                              <TableCell className="text-sm font-semibold text-center">{emp.days_count || 0}</TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       </div >
