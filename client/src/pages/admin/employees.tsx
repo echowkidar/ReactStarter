@@ -68,7 +68,9 @@ export default function AdminEmployees() {
   const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState<string>("");
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return localStorage.getItem("adminType") === "super";
+  });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // DUPLICATE EPID CHECK
@@ -116,7 +118,37 @@ export default function AdminEmployees() {
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
-  const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string[]>([]);
+  const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string[]>(() => {
+    // Initialize from localStorage to prevent flash of all data for restricted admins
+    try {
+      const adminType = localStorage.getItem("adminType");
+      const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+      const userCode = adminData.userCode;
+
+      if (adminType === "salary" && userCode && userCode !== "ALL") {
+        return [userCode];
+      }
+    } catch (e) {
+      console.error("Error parsing admin data for filter init", e);
+    }
+    return [];
+  });
+
+  // DEBUG LOGGING
+  useEffect(() => {
+    try {
+      const adminType = localStorage.getItem("adminType");
+      const adminDataStr = localStorage.getItem("admin");
+      const adminData = JSON.parse(adminDataStr || "{}");
+      console.log("[DEBUG] Employees Mount:", {
+        adminType,
+        userCode: adminData.userCode,
+        isAdminState: isAdmin,
+        dealingAssistantFilterState: dealingAssistantFilter,
+        adminDataStr
+      });
+    } catch (e) { console.error("[DEBUG] Error logging", e); }
+  }, [isAdmin, dealingAssistantFilter]);
   const [regNoFilter, setRegNoFilter] = useState<string[]>([]);
 
   // Sorting state
@@ -328,6 +360,11 @@ export default function AdminEmployees() {
     // Apply dealing assistant filter
     if (dealingAssistantFilter.length > 0) {
       result = result.filter(emp => dealingAssistantFilter.includes(emp.salary_asstt || ""));
+    } else if (!isAdmin) {
+      // CRITICAL SECURITY FIX: If not a super admin and no filter is set, show NOTHING.
+      // This prevents "Salary Admins" from seeing all data if the filter fails to load or is empty.
+      // Ideally, the filter should be initialized from localStorage, but this is a fail-safe.
+      return [];
     }
 
     // Apply reg no filter
