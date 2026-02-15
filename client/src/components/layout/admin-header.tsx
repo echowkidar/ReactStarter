@@ -6,11 +6,11 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ className }: AdminHeaderProps) {
   const adminInfo = JSON.parse(localStorage.getItem("admin") || "{}");
-  
+
   // Display name based on email
   const getDisplayName = (email: string) => {
     if (!email) return "";
-    
+
     if (email === "admin@amu.ac.in") {
       return "Super Administrator";
     } else if (email === "salary@amu.ac.in") {
@@ -20,7 +20,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
       return email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1);
     }
   };
-  
+
   // Determine icon, colors and style based on email
   const getAdminStyles = (email: string) => {
     if (email === "admin@amu.ac.in") {
@@ -42,14 +42,14 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
         icon: User,
         textColor: "text-blue-600",
         bgColor: "bg-blue-50",
-        roleText: adminInfo.role === "superadmin" ? "Super Admin" : "Salary Admin"
+        roleText: (adminInfo.role === "superadmin" || adminInfo.role === "super" || adminInfo.role === "super_admin") ? "Super Admin" : "Salary Admin"
       };
     }
   };
-  
+
   const styles = getAdminStyles(adminInfo.email);
   const AdminIcon = styles.icon;
-  
+
   return (
     <header className={`flex items-center justify-between p-4 border-b ${className}`}>
       <div className="flex items-center space-x-4">

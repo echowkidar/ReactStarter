@@ -100,6 +100,23 @@ export class DbStorage implements IStorage {
     return admin;
   }
 
+  async getAllAdmins(): Promise<Admin[]> {
+    return await db.query.admins.findMany();
+  }
+
+  async updateAdmin(id: number, updates: Partial<Admin>): Promise<Admin> {
+    const [updatedAdmin] = await db
+      .update(admins)
+      .set(updates)
+      .where(eq(admins.id, id))
+      .returning();
+    return updatedAdmin;
+  }
+
+  async deleteAdmin(id: number): Promise<void> {
+    await db.delete(admins).where(eq(admins.id, id));
+  }
+
   async createDepartment(department: InsertDepartment): Promise<Department> {
     // Use a transaction to reset the sequence before inserting
     return await db.transaction(async (tx) => {

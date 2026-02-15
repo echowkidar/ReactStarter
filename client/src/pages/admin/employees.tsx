@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown, History, AlertCircle, ArrowUp, ArrowDown } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -176,7 +177,39 @@ export default function AdminEmployees() {
   useEffect(() => {
     const adminType = localStorage.getItem("adminType");
     setIsAdmin(adminType === "super");
+
+    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+    const userCode = adminData.userCode;
+
+    if (adminType === "salary") {
+      if (userCode && userCode !== "ALL") {
+        setDealingAssistantFilter([userCode]);
+      }
+    }
   }, []);
+
+  // Fetch reported employees for current month to restrict deactivation
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const isDayPast25 = now.getDate() > 25;
+
+  const { data: reportedEmployeeIds = [] } = useQuery<number[]>({
+    queryKey: ['/api/admin/attendance/reported-employees', currentMonth, currentYear],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/admin/attendance/reported-employees?month=${currentMonth}&year=${currentYear}`);
+      const data = await res.json();
+      console.log("DEBUG Admin List Fetched Reported:", data);
+      return data;
+    }
+  });
+
+  console.log("DEBUG Admin List Restriction:", {
+    currentMonth,
+    currentYear,
+    isDayPast25,
+    reportedCount: reportedEmployeeIds.length
+  });
 
   // Get unique dealing assistants for filter
   const uniqueDealingAssistants = useMemo(() => {
@@ -801,6 +834,26 @@ export default function AdminEmployees() {
     }
   });
 
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: string }) => {
+      await apiRequest('PATCH', `/api/employees/${id}`, { isActive });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/employees'] });
+      toast({
+        title: "Success",
+        description: "Employee status updated successfully"
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update employee status"
+      });
+    }
+  });
+
   const handleMove = (index: number, direction: 'up' | 'down') => {
     // If there is an active text filter or non-default sort, warn user or disable
     if (sortConfig.key) return; // Only allow reorder on default sort
@@ -1151,9 +1204,31 @@ export default function AdminEmployees() {
                               id="isActive"
                               name="isActive"
                               defaultChecked={selectedEmployee?.isActive === "active" || !selectedEmployee}
-                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={(() => {
+                                const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
+                                // Restriction: Cannot disable if reported AND date <= 25
+                                return selectedEmployee?.isActive === "active" && isReported && !isDayPast25;
+                              })()}
                             />
-                            <Label htmlFor="isActive" className="text-sm font-medium">
+                            <Label
+                              htmlFor="isActive"
+                              className={`text-sm font-medium ${(() => {
+                                const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
+                                return selectedEmployee?.isActive === "active" && isReported && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
+                              })()}`}
+                              onClick={(e) => {
+                                const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
+                                if (selectedEmployee?.isActive === "active" && isReported && !isDayPast25) {
+                                  e.preventDefault();
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Cannot Disable Employee",
+                                    description: "Admins can only disable reported employees after the 25th of the month."
+                                  });
+                                }
+                              }}
+                            >
                               Employee is Active
                             </Label>
                           </div>
@@ -1403,6 +1478,11 @@ export default function AdminEmployees() {
                   }}
                   placeholder="Filter by dealing assistant"
                   className="min-w-[180px]"
+                  disabled={!isAdmin && (() => {
+                    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                    const userCode = adminData.userCode;
+                    return userCode && userCode !== "ALL";
+                  })()}
                 />
               </div>
               <div className="w-full md:w-64">
@@ -1582,12 +1662,53 @@ export default function AdminEmployees() {
                       <TableCell>{employee.salaryRegisterNo || "-"}</TableCell>
                       <TableCell>{employee.employmentStatus}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee.isActive === "active"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                          }`}>
-                          {employee.isActive === "active" ? "Active" : "Disabled"}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`status-${employee.id}`}
+                            checked={employee.isActive === "active"}
+                            disabled={(() => {
+                              const isReported = reportedEmployeeIds.includes(employee.id);
+                              // Restriction: Cannot disable if reported AND (not admin OR date <= 25)
+                              // Actually, isAdmin is true here (it's admin page).
+                              // So restriction: isReported AND !isDayPast25.
+                              // BUT, wait, only restricted from CHANGING TO INACTIVE.
+                              // If already inactive, maybe can activate? User only said "disable".
+                              // "admin dashboard se employee ko disable kiya ja sakta hai" (can be disabled).
+                              // So verified restriction is for DISABLING.
+                              // If currently active, and checked=true.
+                              // If I click, I am trying to make it inactive (disable).
+                              // So disable the checkbox if:
+                              // 1. Employee is Active (checked)
+                              // 2. Employee is Reported
+                              // 3. Date <= 25
+                              return employee.isActive === "active" && isReported && !isDayPast25;
+                            })()}
+                            onCheckedChange={(checked) => {
+                              toggleStatusMutation.mutate({
+                                id: employee.id,
+                                isActive: checked ? "active" : "inactive"
+                              });
+                            }}
+                          />
+                          <Label
+                            htmlFor={`status-${employee.id}`}
+                            className={`text-sm cursor-pointer ${employee.isActive === "active" ? "text-green-600" : "text-muted-foreground"} ${employee.isActive === "active" && reportedEmployeeIds.includes(employee.id) && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
+                            onClick={(e) => {
+                              const isReported = reportedEmployeeIds.includes(employee.id);
+                              if (employee.isActive === "active" && isReported && !isDayPast25) {
+                                e.preventDefault();
+                                toast({
+                                  variant: "destructive",
+                                  title: "Cannot Disable Employee",
+                                  description: "Admins can only disable reported employees after the 25th of the month."
+                                });
+                              }
+                            }}
+                          >
+                            {employee.isActive === "active" ? "Active" : "Inactive"}
+                          </Label>
+                        </div>
                       </TableCell>
                       <TableCell>
                         {(employee.employmentStatus === "Probation" ||

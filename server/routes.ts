@@ -368,7 +368,7 @@ export async function registerRoutes(app: Express) {
       await clearLoginAttempts(email);
 
       // Map DB role to frontend adminType
-      const adminType = admin.role === 'salary_admin' ? 'salary' : 'super';
+      const adminType = (admin.role === 'salary_admin' || admin.role === 'salary') ? 'salary' : 'super';
 
       // Create session token
       const sessionToken = Buffer.from(`${admin.email}:${admin.password}`).toString('base64');
@@ -377,6 +377,7 @@ export async function registerRoutes(app: Express) {
         role: "admin",
         adminType: adminType,
         adminName: admin.name || "Admin",
+        userCode: admin.userCode,
         sessionToken: sessionToken,
         message: "Admin logged in successfully"
       });
@@ -1659,60 +1660,51 @@ export async function registerRoutes(app: Express) {
   // User management endpoints
 
   // Get all users
+  // Constants for ID management
+  const DEPARTMENT_ID_OFFSET = 10000;
+
+  // Get all users
   app.get("/api/admin/users", async (req, res) => {
     try {
-      // For the MVP, we'll use a simplified approach
-      // In production, these would be stored in the database
+      // Fetch admins and departments from DB
+      const [admins, departments] = await Promise.all([
+        storage.getAllAdmins(),
+        storage.getAllDepartments()
+      ]);
 
-      // Hardcoded super admin and salary admin
-      const hardcodedUsers = [
-        {
-          id: 1,
-          name: "Super Administrator",
-          email: "admin@amu.ac.in",
-          role: "superadmin",
-          departmentId: null,
-          departmentName: null
-        },
-        {
-          id: 2,
-          name: "Salary Officer",
-          email: "salary@amu.ac.in",
-          role: "salary",
-          departmentId: null,
-          departmentName: null
-        }
-      ];
+      // Map admins to User format
+      const adminUsers = admins.map(admin => ({
+        id: admin.id,
+        name: admin.name || "Admin",
+        email: admin.email,
+        role: admin.role,
+        userCode: admin.userCode,
+        departmentId: null,
+        departmentName: null
+      }));
 
-      // Get department admins from the departments table
-      const departments = await storage.getAllDepartments();
-
-      // Only include departments with valid emails (non-empty and NOT placeholder emails)
+      // Only include departments with valid emails
       const validDepartments = departments.filter(dept =>
         dept.email &&
         dept.email.trim() !== '' &&
-        !dept.email.includes('unused_dept_') && // Filter out placeholder emails for deleted users
-        !dept.email.includes('@placeholder.com') // Additional check for placeholder domain
+        !dept.email.includes('unused_dept_') &&
+        !dept.email.includes('@placeholder.com')
       );
 
-
-      const departmentUsers = validDepartments.map((dept, index) => {
-        // REMOVED: Logic to resolve names starting with "Department ID -"
-        // The name should be correct in the database now.
-        let departmentName = dept.name;
-
+      // Map departments to User format with ID offset
+      const departmentUsers = validDepartments.map(dept => {
         return {
-          id: index + 3, // Start IDs after hardcoded users
+          id: dept.id + DEPARTMENT_ID_OFFSET,
           name: dept.hodName,
           email: dept.email,
           role: "department",
           departmentId: dept.id,
-          departmentName: departmentName // Use the name directly from the department record
+          departmentName: dept.name
         };
       });
 
       // Combine all users
-      const allUsers = [...hardcodedUsers, ...departmentUsers];
+      const allUsers = [...adminUsers, ...departmentUsers];
 
       res.json(allUsers);
     } catch (error) {
@@ -1724,7 +1716,7 @@ export async function registerRoutes(app: Express) {
   // Create a new user
   app.post("/api/admin/users", async (req, res) => {
     try {
-      const { name, email, password, role, departmentId } = req.body;
+      const { name, email, password, role, departmentId, userCode } = req.body;
 
 
       // Validate required fields
@@ -1735,7 +1727,13 @@ export async function registerRoutes(app: Express) {
       // Check if email already exists in departments
       const existingDeptByEmail = await storage.getDepartmentByEmail(email);
       if (existingDeptByEmail) {
-        return res.status(400).json({ message: "Email already in use" });
+        return res.status(400).json({ message: "Email already in use by a department" });
+      }
+
+      // Check if email already exists in admins
+      const existingAdminByEmail = await storage.getAdminByEmail(email);
+      if (existingAdminByEmail) {
+        return res.status(400).json({ message: "Email already in use by an admin" });
       }
 
       // For department role, associate with an existing department
@@ -1775,13 +1773,9 @@ export async function registerRoutes(app: Express) {
                 email: email,
                 password: password // Consider hashing
               });
-              // Recalculate UI ID (Fragile) - Reuse existing calculation
-              const allDepts = await storage.getAllDepartments();
-              const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
-              const userIndex = validDepts.findIndex(d => d.id === updatedDepartment.id);
-              const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
+
               return res.status(200).json({ // 200 OK for update
-                id: uiId,
+                id: updatedDepartment.id + DEPARTMENT_ID_OFFSET,
                 name: name,
                 email: email,
                 role: "department",
@@ -1805,14 +1799,8 @@ export async function registerRoutes(app: Express) {
               password: password // Consider hashing
             });
 
-            // Recalculate UI ID (Fragile)
-            const allDepts = await storage.getAllDepartments(); // Refetch might be needed
-            const validDepts = allDepts.filter(d => d.email && !d.email.includes('unused_dept_') && !d.email.includes('@placeholder.com'));
-            const userIndex = validDepts.findIndex(d => d.id === newDepartment.id);
-            const uiId = (userIndex !== -1) ? userIndex + 3 : Date.now(); // Fallback UI ID
-
             return res.status(201).json({
-              id: uiId,
+              id: newDepartment.id + DEPARTMENT_ID_OFFSET,
               name: name,
               email: email,
               role: "department",
@@ -1844,9 +1832,34 @@ export async function registerRoutes(app: Express) {
         }
       }
 
-      // Handle other roles (superadmin, salary) - For MVP, these are not stored/created via API
+      // Handle other roles (superadmin, salary)
       if (role === "superadmin" || role === "salary") {
-        return res.status(400).json({ message: `Cannot create '${role}' user via API in this version.` });
+        let finalUserCode = null;
+
+        if (role === "salary") {
+          if (!userCode || !/^[A-Z]{3}$/.test(userCode)) {
+            return res.status(400).json({ message: "Salary Admin requires a 3-letter uppercase User Code." });
+          }
+          finalUserCode = userCode;
+        }
+
+        const newAdmin = await storage.createAdmin({
+          name,
+          email,
+          password,
+          role,
+          userCode: finalUserCode
+        });
+
+        return res.status(201).json({
+          id: newAdmin.id,
+          name: newAdmin.name,
+          email: newAdmin.email,
+          role: newAdmin.role,
+          userCode: newAdmin.userCode,
+          departmentId: null,
+          departmentName: null
+        });
       }
 
       // Fallback for unhandled roles or errors
@@ -1862,29 +1875,38 @@ export async function registerRoutes(app: Express) {
   app.put("/api/admin/users/:id", async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
-      const { name, email, password, role, departmentId } = req.body;
+      const { name, email, password, role, departmentId, userCode } = req.body;
 
+      if (userId < DEPARTMENT_ID_OFFSET) {
+        // Admin update
+        const updates: any = { name, email, role };
+        if (password && password.trim() !== '') updates.password = password;
+        if (role === 'salary' && userCode) {
+          if (!/^[A-Z]{3}$/.test(userCode)) {
+            return res.status(400).json({ message: "Salary Admin requires a 3-letter uppercase User Code." });
+          }
+          updates.userCode = userCode;
+        }
 
-      // Handle hardcoded users (superadmin, salary) - cannot be updated via API
-      if (userId <= 2) {
-        return res.json({ message: "System users cannot be modified via API." });
+        const updatedAdmin = await storage.updateAdmin(userId, updates);
+        return res.json({
+          id: updatedAdmin.id,
+          name: updatedAdmin.name,
+          email: updatedAdmin.email,
+          role: updatedAdmin.role,
+          userCode: updatedAdmin.userCode,
+          departmentId: null,
+          departmentName: null
+        });
       }
 
-      // Find the current department for this user
-      const allDepts = await storage.getAllDepartments();
-      const validDepartments = allDepts.filter(dept =>
-        dept.email && !dept.email.includes('unused_dept_') && !dept.email.includes('@placeholder.com')
-      );
-
-      const currentDepartment = validDepartments.find((dept, index) => {
-        const calculatedUserId = index + 3;
-        return calculatedUserId === userId;
-      });
+      // Department update
+      const deptId = userId - DEPARTMENT_ID_OFFSET;
+      const currentDepartment = await storage.getDepartment(deptId);
 
       if (!currentDepartment) {
-        return res.status(404).json({ message: `User with UI ID ${userId} not found (no corresponding department).` });
+        return res.status(404).json({ message: `User with ID ${userId} not found.` });
       }
-
 
       // Get the target department name from department_names
       const targetDeptNameId = Number(departmentId);
@@ -1931,34 +1953,23 @@ export async function registerRoutes(app: Express) {
   // Delete a user
   app.delete("/api/admin/users/:id", async (req, res) => {
     try {
-      const userId = parseInt(req.params.id); // Fragile UI ID
+      const userId = parseInt(req.params.id);
 
-      // Prevent deleting hardcoded users
-      if (userId <= 2) {
-        return res.status(403).json({ message: "Cannot delete system users" });
+      if (userId < DEPARTMENT_ID_OFFSET) {
+        // Determine if safe to delete (e.g. don't delete self/superadmin??)
+        // For now, allow deletion of admins from DB.
+        await storage.deleteAdmin(userId);
+        return res.json({ message: "Admin user deleted successfully", userId });
       }
 
-      // Find the department matching this UI user ID using .find()
-      const allDepts = await storage.getAllDepartments();
-
-      const validDepartments = allDepts.filter(dept =>
-        dept.email && !dept.email.includes('unused_dept_') && !dept.email.includes('@placeholder.com')
-      );
-
-      const departmentToDelete = validDepartments.find((dept, index) => {
-        const calculatedUserId = index + 3;
-        return calculatedUserId === userId;
-      });
+      const deptId = userId - DEPARTMENT_ID_OFFSET;
+      const departmentToDelete = await storage.getDepartment(deptId);
 
       if (!departmentToDelete) {
-        // No need for extra null check here
         return res.status(404).json({ message: "User not found" });
       }
 
-      // departmentToDelete is guaranteed to be a Department object here
-      const deptId = departmentToDelete.id;
       const deptName = departmentToDelete.name;
-
 
       // Check for associated employees before deleting
       const employees = await storage.getEmployeesByDepartment(deptId);
@@ -1991,8 +2002,6 @@ export async function registerRoutes(app: Express) {
           departmentName: deptName // Return the name before deletion
         });
       }
-
-      // REMOVED: Old logic trying to resolve names with getDepartmentNameFromNegativeId
 
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -2069,6 +2078,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get list of employee IDs that are already in a report for a specific month/year
+  // Get list of employee IDs that are already in a report for a specific month/year
   app.get("/api/departments/:departmentId/attendance/reported-employees", async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
@@ -2079,25 +2089,31 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Invalid parameters" });
       }
 
-      // Get all reports for this department
-      const reports = await storage.getAttendanceReportsByDepartment(departmentId);
+      console.log(`[FullDebug] Fetching department reported employees: Dept=${departmentId}, ${month}/${year}`);
 
-      // Filter for reports of this month/year that are NOT cancelled
-      const relevantReports = reports.filter(
-        (r) => r.month === month && r.year === year && r.status !== 'cancelled'
-      );
+      // Dynamic import to match other routes logic
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
 
-      const reportedEmployeeIds = new Set<number>();
+      const result = await db.execute(sql`
+        SELECT DISTINCT ae.employee_id
+        FROM attendance_entries ae
+        JOIN attendance_reports ar ON ae.report_id = ar.id
+        WHERE ar.department_id = ${departmentId}
+          AND ar.month = ${month} AND ar.year = ${year}
+          AND ar.status IN ('submitted', 'sent')
+      `);
 
-      for (const report of relevantReports) {
-        const entries = await storage.getAttendanceEntriesByReport(report.id);
-        entries.forEach((e: any) => reportedEmployeeIds.add(e.employeeId));
-      }
+      console.log(`[FullDebug] Dept Query Success. Rows: ${result.rows.length}`);
+      const ids = result.rows.map((row: any) => row.employee_id);
+      res.json(ids);
 
-      res.json(Array.from(reportedEmployeeIds));
-    } catch (error) {
-      console.error("Error fetching reported employees:", error);
-      res.status(500).json({ message: "Failed to fetch reported employees" });
+    } catch (error: any) {
+      console.error("[FullDebug] Dept Route Error:", error);
+      res.status(500).json({
+        message: "Failed to fetch reported employees",
+        error: error.message
+      });
     }
   });
 
@@ -2492,6 +2508,50 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching all missing employees:", error);
       res.status(500).json({ message: "Failed to fetch all missing employees" });
+    }
+  });
+
+  // Get ALL reported employee IDs for a specific month/year (Admin check)
+  app.get("/api/admin/attendance/reported-employees", async (req, res) => {
+    try {
+      const month = parseInt(req.query.month as string);
+      const year = parseInt(req.query.year as string);
+
+      if (isNaN(month) || isNaN(year)) {
+        console.log("[FullDebug] Missing parameters:", req.query);
+        return res.status(400).json({ message: "month and year are required" });
+      }
+
+      console.log(`[FullDebug] fetching reported employees for ${month}/${year}`);
+
+      // Dynamic import to avoid top-level dependency issues if any
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      if (!db) {
+        throw new Error("Database instance not found");
+      }
+
+      console.log("[FullDebug] Executing Query...");
+      const result = await db.execute(sql`
+        SELECT DISTINCT ae.employee_id
+        FROM attendance_entries ae
+        JOIN attendance_reports ar ON ae.report_id = ar.id
+        WHERE ar.month = ${month} AND ar.year = ${year}
+          AND ar.status IN ('submitted', 'sent')
+      `);
+
+      console.log(`[FullDebug] Query Success. Rows: ${result.rows.length}`);
+
+      const ids = result.rows.map((row: any) => row.employee_id);
+      res.json(ids);
+    } catch (error: any) {
+      console.error("[FullDebug] Route Error:", error);
+      res.status(500).json({
+        message: "Failed to fetch reported employees",
+        error: error.message,
+        stack: error.stack
+      });
     }
   });
 

@@ -81,6 +81,10 @@ export interface IStorage {
   // Admin operations
   getAdminByEmail(email: string): Promise<Admin | undefined>;
   createAdmin(admin: InsertAdmin): Promise<Admin>;
+  getAllAdmins(): Promise<Admin[]>;
+  updateAdmin(id: number, updates: Partial<Admin>): Promise<Admin>;
+  deleteAdmin(id: number): Promise<void>;
+  getReportedEmployeeIds(month: number, year: number): Promise<number[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -124,10 +128,27 @@ export class MemStorage implements IStorage {
       ...insertAdmin,
       id,
       name: insertAdmin.name || null,
+      userCode: insertAdmin.userCode || null,
       createdAt: new Date(),
     };
     this.admins.set(id, admin);
     return admin;
+  }
+
+  async getAllAdmins(): Promise<Admin[]> {
+    return Array.from(this.admins.values());
+  }
+
+  async updateAdmin(id: number, updates: Partial<Admin>): Promise<Admin> {
+    const admin = this.admins.get(id);
+    if (!admin) throw new Error("Admin not found");
+    const updatedAdmin = { ...admin, ...updates };
+    this.admins.set(id, updatedAdmin);
+    return updatedAdmin;
+  }
+
+  async deleteAdmin(id: number): Promise<void> {
+    this.admins.delete(id);
   }
 
   async getDepartment(id: number): Promise<Department | undefined> {
@@ -331,6 +352,17 @@ export class MemStorage implements IStorage {
     };
     this.attendanceReports.set(id, newReport);
     return newReport;
+  }
+
+  async getReportedEmployeeIds(month: number, year: number): Promise<number[]> {
+    const ids = new Set<number>();
+    for (const report of this.attendanceReports.values()) {
+      if (report.month === month && report.year === year && (report.status === 'submitted' || report.status === 'sent')) {
+        const entries = await this.getAttendanceEntriesByReport(report.id);
+        entries.forEach(e => ids.add(e.employeeId));
+      }
+    }
+    return Array.from(ids);
   }
 
   async getAttendanceReport(id: number): Promise<AttendanceReport | undefined> {

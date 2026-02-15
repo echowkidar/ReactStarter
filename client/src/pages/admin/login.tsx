@@ -99,7 +99,8 @@ export default function AdminLogin() {
       localStorage.setItem("admin", JSON.stringify({
         email: data.email,
         name: responseData.adminName || "Admin",
-        role: responseData.adminType === "salary" ? "salary" : "superadmin"
+        role: responseData.adminType === "salary" ? "salary" : "superadmin",
+        userCode: responseData.userCode
       }));
 
       toast({

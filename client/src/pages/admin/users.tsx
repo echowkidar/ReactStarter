@@ -61,6 +61,7 @@ interface User {
   role: "superadmin" | "salary" | "department";
   departmentId?: number | null;
   departmentName?: string | null;
+  userCode?: string | null;
 }
 
 // Form schema for creating/editing users
@@ -71,7 +72,17 @@ const userFormSchema = z.object({
     .or(z.literal('')) // Allow empty string for editing
     .transform(val => val === '' ? undefined : val), // Convert empty string to undefined
   role: z.enum(["superadmin", "salary", "department"]),
+  userCode: z.string().optional().nullable(),
   departmentId: z.number({ coerce: true }).optional().nullable(),
+}).refine((data) => {
+  if (data.role === "salary") {
+    // Check if userCode is present and matches 3 uppercase letters
+    return !!data.userCode && /^[A-Z]{3}$/.test(data.userCode);
+  }
+  return true;
+}, {
+  message: "User Code must be exactly 3 uppercase letters",
+  path: ["userCode"],
 });
 
 // Form schema for creating department names
@@ -710,6 +721,33 @@ export default function AdminUsers() {
                     </FormItem>
                   )}
                 />
+
+                {form.watch("role") === "salary" && (
+                  <FormField
+                    control={form.control}
+                    name="userCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>User Code (3 Capital Letters)</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="ABC"
+                            {...field}
+                            value={field.value || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase().slice(0, 3);
+                              if (val === '' || /^[A-Z]+$/.test(val)) {
+                                field.onChange(val);
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 {form.watch("role") === "department" && (
                   <FormField
                     control={form.control}

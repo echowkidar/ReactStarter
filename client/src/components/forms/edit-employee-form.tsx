@@ -58,7 +58,47 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const [showTransferModal, setShowTransferModal] = useState(false);
   const department = getCurrentDepartment();
 
+  // Check if employee is in current month's attendance report
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+
+  const isAdmin = window.location.pathname.includes('/admin');
+
+  const { data: reportedEmployees = [] } = useQuery<number[]>({
+    queryKey: [`/api/departments/${employee.departmentId}/attendance/reported-employees`, currentMonth, currentYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/departments/${employee.departmentId}/attendance/reported-employees?month=${currentMonth}&year=${currentYear}`);
+      if (!res.ok) {
+        console.error("Failed to fetch reported employees for form");
+        return [];
+      }
+      return res.json();
+    },
+    enabled: !!employee.departmentId
+  });
+
+  const isReported = reportedEmployees.some(id => Number(id) === employee.id);
+  const isDayPast25 = now.getDate() > 25;
+
+  const isRestricted = isReported && (!isAdmin || !isDayPast25);
+
+  console.log("DEBUG EditForm Restriction:", {
+    employeeId: employee.id,
+    departmentId: employee.departmentId,
+    currentMonth,
+    currentYear,
+    reportedEmployees,
+    isReported,
+    isDayPast25,
+    isAdmin,
+    pathname: window.location.pathname,
+    isRestricted
+  });
+
   // File input references
+
   const panCardFileRef = useRef<HTMLInputElement>(null);
   const bankAccountFileRef = useRef<HTMLInputElement>(null);
   const aadharCardFileRef = useRef<HTMLInputElement>(null);
@@ -800,17 +840,32 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                       </div>
                       <span className="text-sm font-medium text-green-600">Active</span>
                     </label>
-                    <label className="flex items-center cursor-pointer">
+                    <label className={`flex items-center ${isRestricted ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                      onClick={(e) => {
+                        if (isRestricted) {
+                          e.preventDefault();
+                          toast({
+                            variant: "destructive",
+                            title: "Cannot Disable Employee",
+                            description: isAdmin
+                              ? "Admins can only disable reported employees after the 25th of the month."
+                              : "This employee is included in the current month's attendance report."
+                          });
+                        }
+                      }}
+                    >
                       <input
                         type="radio"
                         checked={watch("isActive") === "disabled"}
                         onChange={() => {
+                          if (isRestricted) return;
                           // Open the disable reason modal instead of directly setting disabled
                           if (employee.isActive !== "disabled") {
                             setShowDisableModal(true);
                           }
                         }}
                         className="sr-only"
+                        disabled={isRestricted}
                       />
                       <div className={`w-4 h-4 rounded-full border-2 mr-2 ${watch("isActive") === "disabled"
                         ? "bg-red-500 border-red-500"

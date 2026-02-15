@@ -63,6 +63,22 @@ export default function MissingEmployees() {
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 50;
 
+    const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+
+    useEffect(() => {
+        // Check if user is salary admin
+        const adminType = localStorage.getItem("adminType");
+        const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+        const userCode = adminData.userCode;
+
+        if (adminType === "salary") {
+            if (userCode && userCode !== "ALL") {
+                setIsSalaryAdmin(true);
+                setSalaryAssistantFilter([userCode]);
+            }
+        }
+    }, []);
+
     const { data: employees = [], isLoading } = useQuery<MissingEmployee[]>({
         queryKey: ["/api/admin/all-missing-employees", currentMonth, currentYear],
         queryFn: async () => {
@@ -229,6 +245,7 @@ export default function MissingEmployees() {
                                 onChange={setSalaryAssistantFilter}
                                 placeholder="Filter by salary assistant"
                                 className="w-[220px]"
+                                disabled={isSalaryAdmin}
                             />
                             <div className="flex items-center gap-2">
                                 <Checkbox

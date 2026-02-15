@@ -15,6 +15,7 @@ interface MultiSelectProps {
   onChange: (selectedValues: string[]) => void
   placeholder?: string
   className?: string
+  disabled?: boolean
 }
 
 export function MultiSelect({
@@ -23,6 +24,7 @@ export function MultiSelect({
   onChange,
   placeholder = "Select options",
   className,
+  disabled = false,
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -37,10 +39,11 @@ export function MultiSelect({
   }
 
   const handleRemove = (value: string) => {
+    if (disabled) return
     onChange(selected.filter((item) => item !== value))
   }
 
-  const selectedOptions = options.filter((option) => 
+  const selectedOptions = options.filter((option) =>
     selected.includes(option.value)
   )
 
@@ -50,7 +53,7 @@ export function MultiSelect({
 
   // Handle clicks outside to close dropdown
   const dropdownRef = React.useRef<HTMLDivElement>(null)
-  
+
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -61,7 +64,7 @@ export function MultiSelect({
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside)
     }
-    
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
@@ -69,20 +72,21 @@ export function MultiSelect({
 
   return (
     <div className={cn("relative", className)} ref={dropdownRef}>
-      <div 
+      <div
         className={cn(
           "flex min-h-10 w-full flex-wrap items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+          disabled && "opacity-50 cursor-not-allowed pointer-events-none",
           className
         )}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         {selectedOptions.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {selectedOptions.map((option) => (
               <Badge key={option.value} variant="secondary" className="flex items-center gap-1">
                 {option.label}
-                <X 
-                  className="h-3 w-3 cursor-pointer" 
+                <X
+                  className="h-3 w-3 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleRemove(option.value)
@@ -109,7 +113,7 @@ export function MultiSelect({
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-          
+
           {filteredOptions.length === 0 ? (
             <div className="py-2 px-2 text-sm text-muted-foreground text-center">
               No options found

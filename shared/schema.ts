@@ -229,6 +229,7 @@ export const admins = pgTable("admins", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(), // In production, hash this!
   role: text("role").notNull(), // 'super' or 'salary'
+  userCode: text("user_code"), // Added for salary admin, 3 uppercase letters
   name: text("name"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -236,6 +237,8 @@ export const admins = pgTable("admins", {
 export const insertAdminSchema = createInsertSchema(admins).omit({
   id: true,
   createdAt: true
+}).extend({
+  userCode: z.string().regex(/^[A-Z]{3}$/, "User code must be exactly 3 uppercase letters").optional().nullable(),
 });
 
 export type Admin = typeof admins.$inferSelect;

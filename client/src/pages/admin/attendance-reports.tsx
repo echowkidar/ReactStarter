@@ -133,7 +133,18 @@ export default function AttendanceReports() {
   useEffect(() => {
     // Check if user is salary admin
     const adminType = localStorage.getItem("adminType");
-    setIsSalaryAdmin(adminType === "salary");
+    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+    const userCode = adminData.userCode;
+
+    if (adminType === "salary") {
+      if (userCode && userCode !== "ALL") {
+        setIsSalaryAdmin(true);
+        setSalaryAssistantFilter([userCode]);
+      } else {
+        // If userCode is ALL, treat as super admin for filtering purposes (don't restrict)
+        setIsSalaryAdmin(false);
+      }
+    }
   }, []);
 
   // Fetch attendance reports - filtered by month/year if selected
@@ -763,6 +774,7 @@ export default function AttendanceReports() {
                   }}
                   placeholder="Filter by salary assistant"
                   className="min-w-[180px]"
+                  disabled={isSalaryAdmin}
                 />
               </div>
               <div className="w-full md:w-64">
