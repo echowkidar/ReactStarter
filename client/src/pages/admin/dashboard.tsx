@@ -26,7 +26,7 @@ import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Label } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Label, BarChart, Bar, Legend } from 'recharts';
 
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -349,7 +349,6 @@ export default function AdminDashboard() {
   }, [popupEmployees, popupSearch, employeePopup?.category, missingConfirmedIds, popupShowConfirmed]);
 
 
-
   // Accept cancellation mutation
   const acceptCancellation = useMutation({
     mutationFn: async (reportId: number) => {
@@ -461,7 +460,6 @@ export default function AdminDashboard() {
     setIsSalaryAdmin(adminType === "salary");
     setCanManageEmployees(adminType === "salary" || adminType === "super");
     setIsSuperAdmin(adminType === "super");
-
   }, []);
 
 
@@ -531,10 +529,18 @@ export default function AdminDashboard() {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1; // 1-indexed
 
-    const relevantDepts = departments.filter(d => (Number(d.employeeCount) || 0) > 0);
+    // Create a map of dept stats for easy lookup FIRST
+    const statsMap = new Map<number, DeptEmployeeStats>();
+    deptStats.forEach(s => statsMap.set(s.departmentId, s));
+
+    // Filter relevant departments based on ACTIVE employees
+    // We use deptStats.totalActive as the source of truth because d.employeeCount includes disabled employees
+    const relevantDepts = departments.filter(d => {
+      const st = statsMap.get(d.id);
+      // If we have stats, use the active count. If not, fallback to the static count (though stats should exist)
+      return st ? st.totalActive > 0 : (Number(d.employeeCount) || 0) > 0;
+    });
     const totalRelevant = relevantDepts.length;
-
-
 
     // Filter reports for current month
     const currentReports = reports?.filter(r => r.year === currentYear && r.month === currentMonth) || [];
@@ -546,14 +552,20 @@ export default function AdminDashboard() {
     );
     // Unique departments that have sent
     const sentDeptIds = new Set(sentReports.map(r => r.departmentId));
-    // Intersection with RELEVANT departments (in case a dept with 0 employees sent one?)
+    // Intersection with RELEVANT departments
     const sentCount = relevantDepts.filter(d => sentDeptIds.has(d.id)).length;
 
     // Processed: Submitted or Draft, but NOT in Sent (Received) list
     const processedReports = currentReports.filter(r =>
       (r.status === 'submitted' || r.status === 'draft')
     );
+    // Specifically split processed into Submitted and Draft for calculation logic
+    const submittedReports = currentReports.filter(r => r.status === 'submitted');
+    const draftReports = currentReports.filter(r => r.status === 'draft');
+
     const processedDeptIds = new Set(processedReports.map(r => r.departmentId));
+    const submittedDeptIds = new Set(submittedReports.map(r => r.departmentId));
+    const draftDeptIds = new Set(draftReports.map(r => r.departmentId));
 
     // Departments that are Processed but NOT Sent (Received)
     const processedCount = relevantDepts.filter(d =>
@@ -575,8 +587,56 @@ export default function AdminDashboard() {
       recall: currentReports.filter(r => r.status === 'recall_requested').length,
     };
 
-    return { totalRelevant, sentCount, processedCount, notProcessedCount, breakdown, requests };
-  }, [departments, reports]);
+    // Calculate Bar Chart Data
+    let totalReceived = 0;
+    let totalProcessed = 0;
+    let totalMissing = 0;
+    let totalEmployees = 0; // Will be sum of ACTIVE employees
+
+    relevantDepts.forEach(dept => {
+      const st = statsMap.get(dept.id);
+
+      // Use active count for total employees
+      const activeCount = st ? st.totalActive : (dept.employeeCount || 0);
+      totalEmployees += activeCount;
+
+      if (!st) {
+        // Fallback if no stats
+        totalMissing += activeCount;
+        return;
+      }
+
+      const isSent = sentDeptIds.has(dept.id);
+      const isSubmitted = submittedDeptIds.has(dept.id) && !isSent;
+      const isDraft = draftDeptIds.has(dept.id) && !isSent;
+
+      if (isSent) {
+        // Sent: Received = reported, Missing = missing
+        totalReceived += st.reported;
+        totalMissing += st.missing;
+      } else if (isSubmitted) {
+        // Submitted (Processed): Processed = reported, Missing = missing
+        totalProcessed += st.reported;
+        totalMissing += st.missing;
+      } else if (isDraft) {
+        // Draft (Processed): Treat ALL active employees as processed
+        totalProcessed += st.totalActive;
+        // Missing stays 0 for this dept
+      } else {
+        // Not Processed / Cancelled (Not Processed)
+        // Entire department is missing
+        totalMissing += st.totalActive;
+      }
+    });
+
+    const barData = [
+      { name: 'Received', value: totalReceived, color: '#16a34a' },
+      { name: 'Processed', value: totalProcessed, color: '#d97706' },
+      { name: 'Missing', value: totalMissing, color: '#ef4444' }
+    ];
+
+    return { totalRelevant, totalEmployees, sentCount, processedCount, notProcessedCount, breakdown, requests, barData };
+  }, [departments, reports, deptStats]);
 
   const filteredAndSortedReports = useMemo(() => {
     if (!reports) return [];
@@ -809,6 +869,11 @@ export default function AdminDashboard() {
             </Badge>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Global Attendance Indicator */}
+            <div
+              className={`w-3 h-3 rounded-full mr-2 shadow-sm border border-white ring-1 ring-gray-100 ${isAllEnabled ? 'bg-green-500' : 'bg-red-500'}`}
+              title={isAllEnabled ? "Attendance Enabled for All Departments" : "Attendance Restrictions Active"}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -955,115 +1020,165 @@ export default function AdminDashboard() {
         {/* Row 1: Attendance Report Status + Status Breakdown */}
         {/* Dashboard Stats - 3x1 Grid Layout (Modified) */}
         {/* Row 1: Attendance Report Status + Status Breakdown + Transfer Requests */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col justify-between h-full">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Attendance Report Status (Current Month)</h3>
-            <div className="flex items-center justify-between flex-1">
-              <div className="flex items-center gap-8 pl-4">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-green-600">{stats.sentCount}</p>
-                  <p className="text-[11px] uppercase tracking-wider text-green-700 font-semibold">Received</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-amber-600">{stats.processedCount}</p>
-                  <p className="text-[11px] uppercase tracking-wider text-amber-700 font-semibold">Processed</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-red-500">{stats.notProcessedCount}</p>
-                  <p className="text-[11px] uppercase tracking-wider text-red-600 font-semibold">Not Processed</p>
-                </div>
+        {/* Dashboard Stats - 3x1 Grid Layout (Modified) */}
+        {/* Row 1: Attendance Report Status + Status Breakdown + Transfer Requests */}
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 mb-4">
+          <div className="lg:col-span-4 bg-white rounded-lg border shadow-sm flex overflow-hidden h-[180px]">
+            {/* Departments Partition */}
+            <div className="flex-1 flex border-r border-gray-100">
+              {/* Vertical Label Strip */}
+              <div className="w-10 bg-gray-100 flex items-center justify-center shrink-0">
+                <span className="text-[9px] font-bold text-gray-400 uppercase rotate-180 text-center leading-tight tracking-wide" style={{ writingMode: 'vertical-lr' }}>
+                  DEPARTMENTS<br />STATUS
+                </span>
               </div>
 
-              <div className="h-[120px] w-[120px] relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Received', value: stats.sentCount, color: '#16a34a' },
-                        { name: 'Processed', value: stats.processedCount, color: '#d97706' },
-                        { name: 'Not Processed', value: stats.notProcessedCount, color: '#ef4444' }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={55}
-                      paddingAngle={2}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {
-                        [
+              {/* Content */}
+              <div className="flex-1 flex items-center justify-center px-1 gap-4">
+                {/* Vertical Stats */}
+                <div className="flex flex-col gap-1 items-center min-w-[60px]">
+                  <div className="text-center leading-tight">
+                    <div className="text-2xl font-bold text-green-600 leading-none">{stats.sentCount}</div>
+                    <div className="text-[9px] text-gray-500 font-medium">Received</div>
+                  </div>
+                  <div className="text-center leading-tight">
+                    <div className="text-2xl font-bold text-amber-600 leading-none">{stats.processedCount}</div>
+                    <div className="text-[9px] text-gray-500 font-medium">Processed</div>
+                  </div>
+                  <div className="text-center leading-tight">
+                    <div className="text-2xl font-bold text-red-500 leading-none">{stats.notProcessedCount}</div>
+                    <div className="text-[9px] text-gray-500 font-medium">Missing</div>
+                  </div>
+                </div>
+
+                {/* Donut Chart */}
+                <div className="h-[120px] w-[120px] relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
                           { name: 'Received', value: stats.sentCount, color: '#16a34a' },
                           { name: 'Processed', value: stats.processedCount, color: '#d97706' },
                           { name: 'Not Processed', value: stats.notProcessedCount, color: '#ef4444' }
-                        ].map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))
-                      }
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number, name: string) => [value, name]}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Custom center label for (Received + Processed) / Total */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="flex flex-col items-center justify-center">
-                    <span className="text-lg font-bold text-gray-900 leading-none">
-                      {stats.sentCount + stats.processedCount}
-                    </span>
-                    <span className="text-xs text-gray-500 font-medium leading-none mt-1">
-                      / {stats.totalRelevant}
-                    </span>
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={42}
+                        outerRadius={58}
+                        paddingAngle={2}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {
+                          [
+                            { name: 'Received', value: stats.sentCount, color: '#16a34a' },
+                            { name: 'Processed', value: stats.processedCount, color: '#d97706' },
+                            { name: 'Not Processed', value: stats.notProcessedCount, color: '#ef4444' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))
+                        }
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number, name: string) => [value, name]}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-2xl font-bold text-gray-900 leading-none">
+                        {stats.sentCount + stats.processedCount}
+                      </span>
+                      <span className="text-sm text-gray-500 font-medium leading-none mt-1">
+                        / {stats.totalRelevant}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white p-4 rounded-lg border shadow-sm">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Status Breakdown</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="p-2 bg-blue-50 rounded border border-blue-100">
-                <p className="text-xl font-bold text-blue-700">{stats.breakdown.submitted}</p>
-                <p className="text-[10px] uppercase tracking-wider text-blue-600 font-semibold">Submitted</p>
+            {/* Employees Partition */}
+            <div className="flex-1 flex bg-slate-50">
+              {/* Vertical Label Strip */}
+              <div className="w-10 bg-gray-100 flex items-center justify-center shrink-0">
+                <span className="text-[8px] font-bold text-gray-400 uppercase rotate-180 text-center leading-tight tracking-tight" style={{ writingMode: 'vertical-lr' }}>
+                  EMPLOYEES' ATTENDANCE<br />REPORTS STATUS
+                </span>
               </div>
-              <div className="p-2 bg-yellow-50 rounded border border-yellow-100">
-                <p className="text-xl font-bold text-yellow-700">{stats.breakdown.draft}</p>
-                <p className="text-[10px] uppercase tracking-wider text-yellow-600 font-semibold">Draft</p>
-              </div>
-              <div className="p-2 bg-red-50 rounded border border-red-100">
-                <p className="text-xl font-bold text-red-700">{stats.breakdown.cancelled}</p>
-                <p className="text-[10px] uppercase tracking-wider text-red-600 font-semibold">Cancelled</p>
+
+              {/* Content */}
+              <div className="flex-1 flex items-center p-2">
+                <div className="flex-1 h-full pt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.barData} barSize={12} barCategoryGap="5%">
+                      <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} interval={0} dy={5} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                        cursor={{ fill: 'transparent' }}
+                      />
+                      <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                        {
+                          stats.barData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))
+                        }
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="flex flex-col justify-center items-center w-20 border-l border-gray-100 ml-2 h-4/5">
+                  <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Total</span>
+                  <span className="text-xl font-bold text-gray-700">{stats.totalEmployees}</span>
+                  <div className="text-[8px] text-gray-400 text-center mt-1 leading-tight">Active<br />Staff</div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Transfer Requests Card - Moved to top row */}
-          <div className="bg-white p-4 rounded-lg border shadow-sm border-l-4 border-l-orange-500">
+          <div className="lg:col-span-3 bg-white p-3 rounded-lg border shadow-sm flex flex-col justify-center">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Status Breakdown</h3>
+            <div className="grid grid-cols-1 gap-2">
+              <div className="px-3 py-1.5 bg-blue-50 rounded border border-blue-100 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-blue-600 font-semibold">Submitted</span>
+                <span className="text-lg font-bold text-blue-700">{stats.breakdown.submitted}</span>
+              </div>
+              <div className="px-3 py-1.5 bg-yellow-50 rounded border border-yellow-100 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-yellow-600 font-semibold">Draft</span>
+                <span className="text-lg font-bold text-yellow-700">{stats.breakdown.draft}</span>
+              </div>
+              <div className="px-3 py-1.5 bg-red-50 rounded border border-red-100 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-red-600 font-semibold">Cancelled</span>
+                <span className="text-lg font-bold text-red-700">{stats.breakdown.cancelled}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Transfer Requests Card */}
+          <div className="lg:col-span-3 bg-white p-3 rounded-lg border shadow-sm border-l-4 border-l-orange-500 flex flex-col justify-center">
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Transfer Requests</h3>
-                <p className="text-xs text-muted-foreground">Manage employee transfers</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/transfer-requests")} className="h-6 w-6 p-0 rounded-full">
-                <ArrowRightLeft className="h-4 w-4" />
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/transfer-requests")} className="h-5 w-5 p-0 rounded-full">
+                <ArrowRightLeft className="h-3 w-3" />
               </Button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mt-3">
-              <div className="text-center p-2 bg-orange-50 rounded border border-orange-100">
-                <p className="text-xl font-bold text-orange-700">{transferStats.pendingTransfer}</p>
-                <p className="text-[9px] uppercase tracking-wider text-orange-600 font-semibold">Transfers</p>
+            <div className="grid grid-cols-1 gap-2">
+              <div className="px-3 py-1.5 bg-orange-50 rounded border border-orange-100 flex items-center justify-between">
+                <span className="text-[9px] uppercase tracking-wider text-orange-600 font-semibold">Transfers</span>
+                <span className="text-lg font-bold text-orange-700">{transferStats.pendingTransfer}</span>
               </div>
-              <div className="text-center p-2 bg-indigo-50 rounded border border-indigo-100">
-                <p className="text-xl font-bold text-indigo-700">{transferStats.pendingRelease}</p>
-                <p className="text-[9px] uppercase tracking-wider text-indigo-600 font-semibold">Releases</p>
+              <div className="px-3 py-1.5 bg-indigo-50 rounded border border-indigo-100 flex items-center justify-between">
+                <span className="text-[9px] uppercase tracking-wider text-indigo-600 font-semibold">Releases</span>
+                <span className="text-lg font-bold text-indigo-700">{transferStats.pendingRelease}</span>
               </div>
-              <div className="text-center p-2 bg-green-50 rounded border border-green-100">
-                <p className="text-xl font-bold text-green-700">{transferStats.resolved}</p>
-                <p className="text-[9px] uppercase tracking-wider text-green-600 font-semibold">Done (Mo)</p>
+              <div className="px-3 py-1.5 bg-green-50 rounded border border-green-100 flex items-center justify-between">
+                <span className="text-[9px] uppercase tracking-wider text-green-600 font-semibold">Done</span>
+                <span className="text-lg font-bold text-green-700">{transferStats.resolved}</span>
               </div>
             </div>
           </div>
@@ -1596,8 +1711,8 @@ export default function AdminDashboard() {
                             View PDF
                           </Button>
                         )}
-                        {/* View Details button - hidden for cancelled reports */}
-                        {report.status !== "cancelled" && (
+                        {/* View Details button - hidden for cancelled or not_received reports */}
+                        {report.status !== "cancelled" && report.status !== "not_received" && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -1652,8 +1767,8 @@ export default function AdminDashboard() {
                         )}
 
                       </div>
-                      {/* Delete Action - restricted to super admin */}
-                      {adminType === "super" && (
+                      {/* Delete Action - restricted to super admin and only for processed reports */}
+                      {adminType === "super" && report.status !== "not_received" && (
                         <Button
                           variant="ghost"
                           size="sm"

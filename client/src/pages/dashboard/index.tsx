@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertTriangle } from "lucide-react";
 
 interface TransferRequest {
   id: number;
@@ -179,6 +180,30 @@ export default function Dashboard() {
     closed: tickets.filter(t => t.status === 'Closed').length,
     total: tickets.length,
   };
+
+  // Check attendance status for deadline alert
+  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; isPastDeadline: boolean }>({
+    queryKey: [`/api/departments/${department?.id}/attendance-status`],
+    enabled: !!department?.id,
+  });
+
+  const [showDeadlineAlert, setShowDeadlineAlert] = useState(false);
+
+  useEffect(() => {
+    if (attendanceStatus && !loadingStatus) {
+      // Show alert ONLY if deadline passed AND NOT permitted (disabled by admin)
+      if (attendanceStatus.isPastDeadline && attendanceStatus.permitted === false) {
+        setShowDeadlineAlert(true);
+      } else {
+        setShowDeadlineAlert(false);
+      }
+    }
+  }, [attendanceStatus, loadingStatus]);
+
+  const currentDate = new Date();
+  const currentMonthName = currentDate.toLocaleString('default', { month: 'long' });
+  const currentYear = currentDate.getFullYear();
+
 
   if (loadingEmployees || loadingReports) return <Loading />;
 
@@ -501,6 +526,44 @@ export default function Dashboard() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Deadline Passed Alert Modal */}
+      <Dialog open={showDeadlineAlert} onOpenChange={setShowDeadlineAlert}>
+        <DialogContent className="max-w-md p-0 overflow-hidden border-0 shadow-lg">
+          <div className="bg-red-600 p-6 text-center text-white">
+            <div className="flex justify-center mb-4">
+              <AlertTriangle className="h-12 w-12 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold uppercase tracking-wide">DEADLINE PASSED</h2>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="text-center space-y-2">
+              <h3 className="font-bold text-lg text-gray-900">Aligarh Muslim University</h3>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Salary Section – Attendance Alert</p>
+
+              <p className="mx-auto text-gray-700">
+                Attendance submission deadline for <span className="font-bold">{currentMonthName} {currentYear}</span> was <span className="font-bold text-red-600">15 {currentMonthName}</span>. The deadline has now passed.
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 text-sm text-blue-800 mt-4">
+              <p>
+                Attendance portal will be reopened on <strong>20th of this month</strong> (or the next working day if 20th is a Sunday or Holiday) for a few hours. Departments who have not created their attendance can submit their attendance during this available time window.
+              </p>
+            </div>
+
+            <div className="flex justify-center mt-6">
+              <Button
+                className="bg-gray-800 hover:bg-gray-900 text-white w-full py-6 text-lg"
+                onClick={() => setShowDeadlineAlert(false)}
+              >
+                Continue to Dashboard
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div >
   );
 }
