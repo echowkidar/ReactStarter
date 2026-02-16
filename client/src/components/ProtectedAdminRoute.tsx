@@ -41,9 +41,22 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
             setIsAuthenticated(false);
             return;
           }
+
+          // Session valid - refresh admin details if returned (Fix for data loss on refresh)
+          const data = await response.json();
+          if (data.admin) {
+            localStorage.setItem("adminType", data.admin.role);
+            localStorage.setItem("admin", JSON.stringify({
+              email: data.admin.email,
+              name: data.admin.name,
+              role: data.admin.role === "salary" ? "salary" : "superadmin",
+              userCode: data.admin.userCode
+            }));
+          }
+
+          setIsAuthenticated(true);
         } catch (error) {
           console.error("Session verification failed:", error);
-          // On network error, allow session to continue
         }
       }
 

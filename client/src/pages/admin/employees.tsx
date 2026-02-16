@@ -134,21 +134,6 @@ export default function AdminEmployees() {
     return [];
   });
 
-  // DEBUG LOGGING
-  useEffect(() => {
-    try {
-      const adminType = localStorage.getItem("adminType");
-      const adminDataStr = localStorage.getItem("admin");
-      const adminData = JSON.parse(adminDataStr || "{}");
-      console.log("[DEBUG] Employees Mount:", {
-        adminType,
-        userCode: adminData.userCode,
-        isAdminState: isAdmin,
-        dealingAssistantFilterState: dealingAssistantFilter,
-        adminDataStr
-      });
-    } catch (e) { console.error("[DEBUG] Error logging", e); }
-  }, [isAdmin, dealingAssistantFilter]);
   const [regNoFilter, setRegNoFilter] = useState<string[]>([]);
 
   // Sorting state
@@ -361,10 +346,14 @@ export default function AdminEmployees() {
     if (dealingAssistantFilter.length > 0) {
       result = result.filter(emp => dealingAssistantFilter.includes(emp.salary_asstt || ""));
     } else if (!isAdmin) {
-      // CRITICAL SECURITY FIX: If not a super admin and no filter is set, show NOTHING.
-      // This prevents "Salary Admins" from seeing all data if the filter fails to load or is empty.
-      // Ideally, the filter should be initialized from localStorage, but this is a fail-safe.
-      return [];
+      // CRITICAL: Check for "ALL" access rights from localStorage if filter is empty
+      const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+      const hasAllAccess = adminData.userCode === "ALL";
+
+      if (!hasAllAccess) {
+        // CRITICAL SECURITY FIX: If not a super admin AND not "ALL" access, show NOTHING.
+        return [];
+      }
     }
 
     // Apply reg no filter

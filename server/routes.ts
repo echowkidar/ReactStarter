@@ -408,7 +408,18 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ valid: false, message: "Session expired - password changed" });
       }
 
-      return res.json({ valid: true });
+      // Map DB role to frontend adminType
+      const adminType = (admin.role === 'salary_admin' || admin.role === 'salary') ? 'salary' : 'super';
+
+      return res.json({
+        valid: true,
+        admin: {
+          email: admin.email,
+          name: admin.name || "Admin",
+          role: adminType,
+          userCode: admin.userCode
+        }
+      });
     } catch (error) {
       console.error("Session verification error:", error);
       return res.status(500).json({ valid: false, message: "Verification failed" });
@@ -428,6 +439,7 @@ export async function registerRoutes(app: Express) {
 
   // ============ Active Users Tracking Endpoints ============
   // Heartbeat - clients call this every 30 seconds to stay active
+
   app.post("/api/heartbeat", async (req, res) => {
     const { sessionId, type, name, email } = req.body;
 
@@ -740,11 +752,10 @@ export async function registerRoutes(app: Express) {
     const { email } = req.body;
 
     try {
-      // For demo purposes, we'll only handle the two hardcoded admin accounts
-      const ADMIN_EMAIL = "admin@amu.ac.in";
-      const SALARY_ADMIN_EMAIL = "salary@amu.ac.in";
+      // Query database for admin email
+      const admin = await storage.getAdminByEmail(email);
 
-      if (email !== ADMIN_EMAIL && email !== SALARY_ADMIN_EMAIL) {
+      if (!admin) {
         return res.status(404).json({ message: "Admin email not found" });
       }
 
