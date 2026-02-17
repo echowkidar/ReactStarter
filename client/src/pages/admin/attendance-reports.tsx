@@ -89,6 +89,8 @@ export default function AttendanceReports() {
   });
   const [salaryRegisterFilter, setSalaryRegisterFilter] = useState<string[]>([]);
   const [salaryAssistantFilter, setSalaryAssistantFilter] = useState<string[]>([]);
+  const [designationFilter, setDesignationFilter] = useState<string[]>([]);
+  const [analysisFilter, setAnalysisFilter] = useState<string[]>([]);
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
   const { toast } = useToast();
 
@@ -220,6 +222,8 @@ export default function AttendanceReports() {
   const allEntries = useMemo(() => {
     const entries: Array<{
       month: string;
+      monthNum: number;
+      yearNum: number;
       departmentName: string;
       employeeId: string;
       employeeName: string;
@@ -259,6 +263,8 @@ export default function AttendanceReports() {
               periods.forEach((period: any) => {
                 entries.push({
                   month: monthYear,
+                  monthNum: report.month,
+                  yearNum: report.year,
                   departmentName: report.department?.name || "Unknown",
                   employeeId: entry.employee?.epid || entry.employee?.employeeId || "",
                   employeeName: entry.employee?.name || "",
@@ -316,15 +322,15 @@ export default function AttendanceReports() {
     return Array.from(uniqueRegisters).sort();
   }, [allEntries]);
 
-  // Get unique salary assistants for the filter
-  const availableSalaryAssistants = useMemo(() => {
-    const uniqueAssistants = new Set<string>();
+  // Get unique designations for the filter
+  const availableDesignations = useMemo(() => {
+    const uniqueDesignations = new Set<string>();
     allEntries.forEach(entry => {
-      if (entry.salaryAsstt && entry.salaryAsstt.trim() !== '') {
-        uniqueAssistants.add(entry.salaryAsstt);
+      if (entry.designation && entry.designation.trim() !== '') {
+        uniqueDesignations.add(entry.designation);
       }
     });
-    return Array.from(uniqueAssistants).sort();
+    return Array.from(uniqueDesignations).sort();
   }, [allEntries]);
 
   // Calculate filtered departments, months, and salary registers based on current filters
@@ -332,7 +338,8 @@ export default function AttendanceReports() {
     filteredDepartments,
     filteredMonths,
     filteredSalaryRegisters,
-    filteredSalaryAssistants
+    filteredSalaryAssistants,
+    filteredDesignations
   } = useMemo(() => {
     // Start with a filtered set of entries based on search term
     let result = [...allEntries];
@@ -350,76 +357,39 @@ export default function AttendanceReports() {
     }
 
     // --- Helper to filter by everything EXCEPT the target criteria ---
+    const filterBy = (entries: typeof allEntries, excludeType: 'dept' | 'month' | 'register' | 'assistant' | 'designation') => {
+      let temp = entries;
+      if (excludeType !== 'dept' && departmentFilter.length > 0) temp = temp.filter(e => departmentFilter.includes(e.departmentId.toString()));
+      if (excludeType !== 'month' && monthFilter.length > 0) temp = temp.filter(e => monthFilter.includes(e.month));
+      if (excludeType !== 'register' && salaryRegisterFilter.length > 0) temp = temp.filter(e => salaryRegisterFilter.includes(e.salaryRegisterNo));
+      if (excludeType !== 'assistant' && salaryAssistantFilter.length > 0) temp = temp.filter(e => salaryAssistantFilter.includes(e.salaryAsstt));
+      if (excludeType !== 'designation' && designationFilter.length > 0) temp = temp.filter(e => designationFilter.includes(e.designation));
+      return temp;
+    };
 
-    // Get available departments: apply Month + Register + Assistant filters
-    let filteredForDepartments = result;
-    if (monthFilter.length > 0) {
-      filteredForDepartments = filteredForDepartments.filter(entry => monthFilter.includes(entry.month));
-    }
-    if (salaryRegisterFilter.length > 0) {
-      filteredForDepartments = filteredForDepartments.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
-    }
-    if (salaryAssistantFilter.length > 0) {
-      filteredForDepartments = filteredForDepartments.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
-    }
+    const filteredForDepartments = filterBy(result, 'dept');
     const deptIds = new Set(filteredForDepartments.map(entry => entry.departmentId.toString()));
 
-
-    // Get available months: apply Dept + Register + Assistant filters
-    let filteredForMonths = result;
-    if (departmentFilter.length > 0) {
-      filteredForMonths = filteredForMonths.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
-    }
-    if (salaryRegisterFilter.length > 0) {
-      filteredForMonths = filteredForMonths.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
-    }
-    if (salaryAssistantFilter.length > 0) {
-      filteredForMonths = filteredForMonths.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
-    }
+    const filteredForMonths = filterBy(result, 'month');
     const months = new Set(filteredForMonths.map(entry => entry.month));
 
+    const filteredForRegister = filterBy(result, 'register');
+    const registers = new Set(filteredForRegister.map(entry => entry.salaryRegisterNo));
 
-    // Get available salary registers: apply Dept + Month + Assistant filters
-    let filteredForSalaryRegisters = result;
-    if (departmentFilter.length > 0) {
-      filteredForSalaryRegisters = filteredForSalaryRegisters.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
-    }
-    if (monthFilter.length > 0) {
-      filteredForSalaryRegisters = filteredForSalaryRegisters.filter(entry => monthFilter.includes(entry.month));
-    }
-    if (salaryAssistantFilter.length > 0) {
-      filteredForSalaryRegisters = filteredForSalaryRegisters.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
-    }
-    const salaryRegisters = new Set(filteredForSalaryRegisters.map(entry => entry.salaryRegisterNo));
+    const filteredForAssistant = filterBy(result, 'assistant');
+    const assistants = new Set(filteredForAssistant.map(entry => entry.salaryAsstt).filter(v => v && v.trim() !== ''));
 
-
-    // Get available salary assistants: apply Dept + Month + Register filters
-    let filteredForSalaryAssistants = result;
-    if (departmentFilter.length > 0) {
-      filteredForSalaryAssistants = filteredForSalaryAssistants.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
-    }
-    if (monthFilter.length > 0) {
-      filteredForSalaryAssistants = filteredForSalaryAssistants.filter(entry => monthFilter.includes(entry.month));
-    }
-    if (salaryRegisterFilter.length > 0) {
-      filteredForSalaryAssistants = filteredForSalaryAssistants.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
-    }
-    const salaryAssistants = new Set(
-      filteredForSalaryAssistants
-        .map(entry => entry.salaryAsstt)
-        .filter(value => value && value.trim() !== '')
-    );
+    const filteredForDesignation = filterBy(result, 'designation');
+    const designations = new Set(filteredForDesignation.map(entry => entry.designation).filter(v => v && v.trim() !== ''));
 
     return {
-      filteredDepartments: availableDepartments.filter(dept =>
-        (monthFilter.length === 0 && salaryRegisterFilter.length === 0 && salaryAssistantFilter.length === 0) ||
-        deptIds.has(dept.id.toString())
-      ),
+      filteredDepartments: availableDepartments.filter(dept => deptIds.has(dept.id.toString())),
       filteredMonths: Array.from(months).sort(),
-      filteredSalaryRegisters: Array.from(salaryRegisters).sort(),
-      filteredSalaryAssistants: Array.from(salaryAssistants).sort()
+      filteredSalaryRegisters: Array.from(registers).sort(),
+      filteredSalaryAssistants: Array.from(assistants).sort(),
+      filteredDesignations: Array.from(designations).sort()
     };
-  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, availableDepartments]);
+  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, availableDepartments]);
 
   // Filter entries based on all criteria
   const filteredEntries = useMemo(() => {
@@ -438,28 +408,69 @@ export default function AttendanceReports() {
       );
     }
 
-    // Apply department filter
-    if (departmentFilter.length > 0) {
-      result = result.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
-    }
+    // Apply basic filters
+    if (departmentFilter.length > 0) result = result.filter(entry => departmentFilter.includes(entry.departmentId.toString()));
+    if (monthFilter.length > 0) result = result.filter(entry => monthFilter.includes(entry.month));
+    if (salaryRegisterFilter.length > 0) result = result.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
+    if (salaryAssistantFilter.length > 0) result = result.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
+    if (designationFilter.length > 0) result = result.filter(entry => designationFilter.includes(entry.designation));
 
-    // Apply month filter
-    if (monthFilter.length > 0) {
-      result = result.filter(entry => monthFilter.includes(entry.month));
-    }
+    // Apply Analysis Filters
+    if (analysisFilter.length > 0) {
+      // 1. Pre-calculate employee counts for "Multiple Entries"
+      const empCounts = new Map<string, number>();
+      if (analysisFilter.includes("multiple_entries")) {
+        result.forEach(e => {
+          empCounts.set(e.employeeId, (empCounts.get(e.employeeId) || 0) + 1);
+        });
+      }
 
-    // Apply salary register filter
-    if (salaryRegisterFilter.length > 0) {
-      result = result.filter(entry => salaryRegisterFilter.includes(entry.salaryRegisterNo));
-    }
+      // 2. Filter
+      result = result.filter(entry => {
+        let matchesAll = true;
 
-    // Apply salary assistant filter
-    if (salaryAssistantFilter.length > 0) {
-      result = result.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
+        if (analysisFilter.includes("multiple_entries")) {
+          if ((empCounts.get(entry.employeeId) || 0) <= 1) matchesAll = false;
+        }
+
+        if (matchesAll && (analysisFilter.includes("full_month") || analysisFilter.includes("partial_month"))) {
+          // Parse Period: "DD-MM-YY to DD-MM-YY"
+          const parts = entry.period.split(" to ");
+          if (parts.length === 2) {
+            const [startStr, endStr] = parts;
+            // Helper to parse YY date
+            const parseYY = (str: string) => {
+              const [d, m, y] = str.split('-').map(Number);
+              const fullYear = y < 100 ? 2000 + y : y; // Assume 20xx
+              return new Date(fullYear, m - 1, d);
+            };
+
+            const startDate = parseYY(startStr);
+            const endDate = parseYY(endStr);
+
+            // Calculate expected Full Month range based on entry.monthNum/yearNum
+            const daysInMonth = new Date(entry.yearNum, entry.monthNum, 0).getDate();
+            const expectedStart = new Date(entry.yearNum, entry.monthNum - 1, 1);
+            const expectedEnd = new Date(entry.yearNum, entry.monthNum - 1, daysInMonth);
+
+            const isFullMonth =
+              startDate.getTime() === expectedStart.getTime() &&
+              endDate.getTime() === expectedEnd.getTime();
+
+            if (analysisFilter.includes("full_month") && !isFullMonth) matchesAll = false;
+            if (analysisFilter.includes("partial_month") && isFullMonth) matchesAll = false; // "Partial/Excess" means NOT full month
+          } else {
+            // Invalid period format - treat as partial/irregular?
+            if (analysisFilter.includes("full_month")) matchesAll = false;
+          }
+        }
+
+        return matchesAll;
+      });
     }
 
     return result;
-  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter]);
+  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, analysisFilter]);
 
   // Process entries to show department name only once
   const processedEntries = useMemo(() => {
@@ -718,8 +729,8 @@ export default function AttendanceReports() {
               </div>
             )}
 
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
+            <div className="flex flex-col md:flex-row flex-wrap gap-4 mb-6">
+              <div className="relative flex-1 min-w-[300px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by department, employee, designation, or remarks..."
@@ -789,6 +800,37 @@ export default function AttendanceReports() {
                     setCurrentPage(1); // Reset to first page on filter change
                   }}
                   placeholder="Filter by salary register"
+                  className="min-w-[180px]"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <MultiSelect
+                  options={filteredDesignations.map(d => ({
+                    label: d,
+                    value: d
+                  }))}
+                  selected={designationFilter}
+                  onChange={(values) => {
+                    setDesignationFilter(values);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                  placeholder="Filter by designation"
+                  className="min-w-[180px]"
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <MultiSelect
+                  options={[
+                    { label: "Multiple Entries", value: "multiple_entries" },
+                    { label: "Full Month Period", value: "full_month" },
+                    { label: "Partial/Excess Period", value: "partial_month" },
+                  ]}
+                  selected={analysisFilter}
+                  onChange={(values) => {
+                    setAnalysisFilter(values);
+                    setCurrentPage(1); // Reset to first page on filter change
+                  }}
+                  placeholder="Entry Analysis"
                   className="min-w-[180px]"
                 />
               </div>
