@@ -56,6 +56,17 @@ export async function initApp() {
 
     const server = await registerRoutes(app);
 
+    // Register External API routes
+    const { registerExternalRoutes } = await import("./external-api");
+    registerExternalRoutes(app);
+
+    // Log if API Key is not set
+    if (!process.env.EXTERNAL_API_KEY) {
+      console.log("---------------------------------------------------");
+      console.log("NOTICE: EXTERNAL_API_KEY not set. Using default: 'amu-secret-dept-key-2026'");
+      console.log("---------------------------------------------------");
+    }
+
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
