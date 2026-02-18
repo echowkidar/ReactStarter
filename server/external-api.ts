@@ -12,7 +12,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
 // --- Middleware: Verify API Key ---
-const API_KEY = process.env.EXTERNAL_API_KEY || "amu-secret-dept-key-2026"; // Fallback for dev
+const API_KEY = process.env.EXTERNAL_API_KEY || "secret-key-2026"; // Fallback for dev
 
 export const requireApiKey = (req: Request, res: Response, next: NextFunction) => {
     const apiKey = req.headers['x-api-key'];
