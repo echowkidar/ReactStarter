@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
 const API_KEY = "amu-secret-dept-key-2026";
-const BASE_URL = "http://localhost:5001";
+const BASE_URL = "https://salarysection.com";
 
 async function testApi() {
     console.log("--- Testing External API ---");
