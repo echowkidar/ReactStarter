@@ -118,21 +118,7 @@ export default function AdminEmployees() {
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
-  const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string[]>(() => {
-    // Initialize from localStorage to prevent flash of all data for restricted admins
-    try {
-      const adminType = localStorage.getItem("adminType");
-      const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-      const userCode = adminData.userCode;
-
-      if (adminType === "salary" && userCode && userCode !== "ALL") {
-        return [userCode];
-      }
-    } catch (e) {
-      console.error("Error parsing admin data for filter init", e);
-    }
-    return [];
-  });
+  const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string[]>([]);
 
   const [regNoFilter, setRegNoFilter] = useState<string[]>([]);
 
@@ -194,15 +180,6 @@ export default function AdminEmployees() {
   useEffect(() => {
     const adminType = localStorage.getItem("adminType");
     setIsAdmin(adminType === "super");
-
-    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-    const userCode = adminData.userCode;
-
-    if (adminType === "salary") {
-      if (userCode && userCode !== "ALL") {
-        setDealingAssistantFilter([userCode]);
-      }
-    }
   }, []);
 
   // Fetch reported employees for current month to restrict deactivation
@@ -342,18 +319,8 @@ export default function AdminEmployees() {
       result = result.filter(emp => departmentFilter.includes(emp.departmentId?.toString() || ""));
     }
 
-    // Apply dealing assistant filter
     if (dealingAssistantFilter.length > 0) {
       result = result.filter(emp => dealingAssistantFilter.includes(emp.salary_asstt || ""));
-    } else if (!isAdmin) {
-      // CRITICAL: Check for "ALL" access rights from localStorage if filter is empty
-      const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-      const hasAllAccess = adminData.userCode === "ALL";
-
-      if (!hasAllAccess) {
-        // CRITICAL SECURITY FIX: If not a super admin AND not "ALL" access, show NOTHING.
-        return [];
-      }
     }
 
     // Apply reg no filter
@@ -1101,342 +1068,346 @@ export default function AdminEmployees() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Employee Management</CardTitle>
             <div className="flex items-center gap-4">
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button
-                    className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
-                    onClick={() => {
-                      setSelectedEmployee(null);
-                      setEmploymentStatus("Permanent");
-                      setSelectedDepartmentId("");
-                      setSelectedDesignation("");
-                      setSelectedSalaryRegisterNo("");
-                      setSelectedSalaryAsstt("");
-                      setSelectedSalaryAsstt("");
-                      setUploads({});
-                      setWatchedEpid("");
-                      setDuplicateEmployee(null);
-                    }}
-
-
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Employee
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto px-4">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-semibold">
-                      {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
-                    </DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="space-y-8">
-                      <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                        <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div>
-                            <Label htmlFor="epid">EPID {selectedEmployee?.epid && <span className="text-xs text-muted-foreground ml-2">(Cannot be changed)</span>}</Label>
-                            <Input
-                              id="epid"
-                              name="epid"
-                              defaultValue={selectedEmployee?.epid}
-                              className={`bg-white dark:bg-slate-800 ${selectedEmployee?.epid ? 'opacity-70 cursor-not-allowed' : ''}`}
-                              required
-                              maxLength={5}
-                              disabled={!!selectedEmployee?.epid}
-                              onChange={(e) => {
-                                // Only allow numeric input
-                                const value = e.target.value.replace(/\D/g, '').slice(0, 5);
-                                e.target.value = value;
-                                setWatchedEpid(value);
-                              }}
-                            />
-                            {duplicateEmployee && (
-                              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800 animate-in fade-in slide-in-from-top-1">
-                                <div className="font-semibold flex items-center gap-2">
-                                  <AlertCircle className="h-4 w-4" />
-                                  Employee Already Exists
-                                </div>
-                                <div className="mt-2 text-xs space-y-1 pl-6">
-                                  <p>Name: <span className="font-medium">{duplicateEmployee.name}</span></p>
-                                  <p>Department: <span className="font-medium">{duplicateEmployee.departmentName}</span></p>
-                                </div>
+              {(() => {
+                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                if (adminData.userCode === 'VEW') return null;
+                return (
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
+                        onClick={() => {
+                          setSelectedEmployee(null);
+                          setEmploymentStatus("Permanent");
+                          setSelectedDepartmentId("");
+                          setSelectedDesignation("");
+                          setSelectedSalaryRegisterNo("");
+                          setSelectedSalaryAsstt("");
+                          setSelectedSalaryAsstt("");
+                          setUploads({});
+                          setWatchedEpid("");
+                          setDuplicateEmployee(null);
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Employee
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto px-4">
+                      <DialogHeader>
+                        <DialogTitle className="text-xl font-semibold">
+                          {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="space-y-8">
+                          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold mb-6 text-primary">Basic Information</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                              <div>
+                                <Label htmlFor="epid">EPID {selectedEmployee?.epid && <span className="text-xs text-muted-foreground ml-2">(Cannot be changed)</span>}</Label>
+                                <Input
+                                  id="epid"
+                                  name="epid"
+                                  defaultValue={selectedEmployee?.epid}
+                                  className={`bg-white dark:bg-slate-800 ${selectedEmployee?.epid ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                  required
+                                  maxLength={5}
+                                  disabled={!!selectedEmployee?.epid}
+                                  onChange={(e) => {
+                                    // Only allow numeric input
+                                    const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+                                    e.target.value = value;
+                                    setWatchedEpid(value);
+                                  }}
+                                />
+                                {duplicateEmployee && (
+                                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800 animate-in fade-in slide-in-from-top-1">
+                                    <div className="font-semibold flex items-center gap-2">
+                                      <AlertCircle className="h-4 w-4" />
+                                      Employee Already Exists
+                                    </div>
+                                    <div className="mt-2 text-xs space-y-1 pl-6">
+                                      <p>Name: <span className="font-medium">{duplicateEmployee.name}</span></p>
+                                      <p>Department: <span className="font-medium">{duplicateEmployee.departmentName}</span></p>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            )}
+                              <div>
+                                <Label htmlFor="name">Name</Label>
+                                <Input
+                                  id="name"
+                                  name="name"
+                                  defaultValue={selectedEmployee?.name}
+                                  className="bg-white dark:bg-slate-800"
+                                  required
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="designation">Designation</Label>
+                                <SearchableSelect
+                                  options={designationOptions}
+                                  value={selectedDesignation}
+                                  onValueChange={setSelectedDesignation}
+                                  placeholder="Select designation..."
+                                  searchPlaceholder="Search designation..."
+                                  emptyMessage="No designation found."
+                                  className="bg-white dark:bg-slate-800"
+                                />
+                                <input type="hidden" name="designation" value={selectedDesignation} />
+                              </div>
+                              <div>
+                                <Label htmlFor="payLevel">Pay Level</Label>
+                                <Select
+                                  value={payLevel}
+                                  onValueChange={setPayLevel}
+                                >
+                                  <SelectTrigger className="bg-white dark:bg-slate-800">
+                                    <SelectValue placeholder="Select pay level" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {PAY_LEVELS.map((level) => (
+                                      <SelectItem key={level} value={level}>
+                                        {level}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <input type="hidden" name="payLevel" value={payLevel} />
+                              </div>
+                              <div>
+                                <Label htmlFor="employmentStatus">Employment Status</Label>
+                                <Select
+                                  name="employmentStatus"
+                                  value={employmentStatus}
+                                  onValueChange={setEmploymentStatus}
+                                >
+                                  <SelectTrigger className="bg-white dark:bg-slate-800">
+                                    <SelectValue placeholder="Select status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Permanent">Permanent</SelectItem>
+                                    <SelectItem value="Probation">Probation</SelectItem>
+                                    <SelectItem value="Temporary">Temporary</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id="isActive"
+                                  name="isActive"
+                                  defaultChecked={selectedEmployee?.isActive === "active" || !selectedEmployee}
+                                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={(() => {
+                                    const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
+                                    // Restriction: Cannot disable if reported AND date <= 25
+                                    return selectedEmployee?.isActive === "active" && isReported && !isDayPast25;
+                                  })()}
+                                />
+                                <Label
+                                  htmlFor="isActive"
+                                  className={`text-sm font-medium ${(() => {
+                                    const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
+                                    return selectedEmployee?.isActive === "active" && isReported && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
+                                  })()}`}
+                                  onClick={(e) => {
+                                    const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
+                                    if (selectedEmployee?.isActive === "active" && isReported && !isDayPast25) {
+                                      e.preventDefault();
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Cannot Disable Employee",
+                                        description: "Admins can only disable reported employees after the 25th of the month."
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Employee is Active
+                                </Label>
+                              </div>
+                              {(employmentStatus === "Probation" || employmentStatus === "Temporary") && (
+                                <div>
+                                  <Label htmlFor="termExpiry">Term Expiry Date</Label>
+                                  <Input
+                                    id="termExpiry"
+                                    name="termExpiry"
+                                    type="date"
+                                    defaultValue={selectedEmployee?.termExpiry || ""}
+                                    className="bg-white dark:bg-slate-800"
+                                    required
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <Label htmlFor="name">Name</Label>
-                            <Input
-                              id="name"
-                              name="name"
-                              defaultValue={selectedEmployee?.name}
-                              className="bg-white dark:bg-slate-800"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="designation">Designation</Label>
-                            <SearchableSelect
-                              options={designationOptions}
-                              value={selectedDesignation}
-                              onValueChange={setSelectedDesignation}
-                              placeholder="Select designation..."
-                              searchPlaceholder="Search designation..."
-                              emptyMessage="No designation found."
-                              className="bg-white dark:bg-slate-800"
-                            />
-                            <input type="hidden" name="designation" value={selectedDesignation} />
-                          </div>
-                          <div>
-                            <Label htmlFor="payLevel">Pay Level</Label>
-                            <Select
-                              value={payLevel}
-                              onValueChange={setPayLevel}
-                            >
-                              <SelectTrigger className="bg-white dark:bg-slate-800">
-                                <SelectValue placeholder="Select pay level" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {PAY_LEVELS.map((level) => (
-                                  <SelectItem key={level} value={level}>
-                                    {level}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <input type="hidden" name="payLevel" value={payLevel} />
-                          </div>
-                          <div>
-                            <Label htmlFor="employmentStatus">Employment Status</Label>
-                            <Select
-                              name="employmentStatus"
-                              value={employmentStatus}
-                              onValueChange={setEmploymentStatus}
-                            >
-                              <SelectTrigger className="bg-white dark:bg-slate-800">
-                                <SelectValue placeholder="Select status" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Permanent">Permanent</SelectItem>
-                                <SelectItem value="Probation">Probation</SelectItem>
-                                <SelectItem value="Temporary">Temporary</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="isActive"
-                              name="isActive"
-                              defaultChecked={selectedEmployee?.isActive === "active" || !selectedEmployee}
-                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                              disabled={(() => {
-                                const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
-                                // Restriction: Cannot disable if reported AND date <= 25
-                                return selectedEmployee?.isActive === "active" && isReported && !isDayPast25;
-                              })()}
-                            />
-                            <Label
-                              htmlFor="isActive"
-                              className={`text-sm font-medium ${(() => {
-                                const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
-                                return selectedEmployee?.isActive === "active" && isReported && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
-                              })()}`}
-                              onClick={(e) => {
-                                const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
-                                if (selectedEmployee?.isActive === "active" && isReported && !isDayPast25) {
-                                  e.preventDefault();
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Cannot Disable Employee",
-                                    description: "Admins can only disable reported employees after the 25th of the month."
-                                  });
-                                }
-                              }}
-                            >
-                              Employee is Active
-                            </Label>
-                          </div>
-                          {(employmentStatus === "Probation" || employmentStatus === "Temporary") && (
-                            <div>
-                              <Label htmlFor="termExpiry">Term Expiry Date</Label>
-                              <Input
-                                id="termExpiry"
-                                name="termExpiry"
-                                type="date"
-                                defaultValue={selectedEmployee?.termExpiry || ""}
-                                className="bg-white dark:bg-slate-800"
-                                required
-                              />
+
+                          {(showPan || showBank || showAadhar) && (
+                            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                              <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                {showPan && (
+                                  <div>
+                                    <Label htmlFor="panNumber">PAN Number</Label>
+                                    <Input
+                                      id="panNumber"
+                                      name="panNumber"
+                                      defaultValue={selectedEmployee?.panNumber}
+                                      className="bg-white dark:bg-slate-800"
+                                    />
+                                  </div>
+                                )}
+                                {showBank && (
+                                  <div>
+                                    <Label htmlFor="bankAccount">Bank Account</Label>
+                                    <Input
+                                      id="bankAccount"
+                                      name="bankAccount"
+                                      defaultValue={selectedEmployee?.bankAccount}
+                                      className="bg-white dark:bg-slate-800"
+                                    />
+                                  </div>
+                                )}
+                                {showAadhar && (
+                                  <div>
+                                    <Label htmlFor="aadharCard">Adhar Number</Label>
+                                    <Input
+                                      id="aadharCard"
+                                      name="aadharCard"
+                                      defaultValue={selectedEmployee?.aadharCard || ""}
+                                      className="bg-white dark:bg-slate-800"
+                                      onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           )}
-                        </div>
-                      </div>
 
-                      {(showPan || showBank || showAadhar) && (
-                        <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                          <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            {showPan && (
+                          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                               <div>
-                                <Label htmlFor="panNumber">PAN Number</Label>
+                                <Label htmlFor="officeMemoNo">Office Memo No.</Label>
                                 <Input
-                                  id="panNumber"
-                                  name="panNumber"
-                                  defaultValue={selectedEmployee?.panNumber}
+                                  id="officeMemoNo"
+                                  name="officeMemoNo"
+                                  defaultValue={selectedEmployee?.officeMemoNo}
                                   className="bg-white dark:bg-slate-800"
+                                  required
                                 />
                               </div>
-                            )}
-                            {showBank && (
                               <div>
-                                <Label htmlFor="bankAccount">Bank Account</Label>
+                                <Label htmlFor="joiningDate">Joining Date</Label>
                                 <Input
-                                  id="bankAccount"
-                                  name="bankAccount"
-                                  defaultValue={selectedEmployee?.bankAccount}
+                                  id="joiningDate"
+                                  name="joiningDate"
+                                  type="date"
+                                  defaultValue={selectedEmployee?.joiningDate}
                                   className="bg-white dark:bg-slate-800"
+                                  required
                                 />
                               </div>
-                            )}
-                            {showAadhar && (
                               <div>
-                                <Label htmlFor="aadharCard">Adhar Number</Label>
-                                <Input
-                                  id="aadharCard"
-                                  name="aadharCard"
-                                  defaultValue={selectedEmployee?.aadharCard || ""}
-                                  className="bg-white dark:bg-slate-800"
-                                  onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
-                                />
+                                <Label htmlFor="joiningShift">Joining Shift</Label>
+                                <Select
+                                  name="joiningShift"
+                                  defaultValue={selectedEmployee?.joiningShift || "FN"}
+                                >
+                                  <SelectTrigger className="bg-white dark:bg-slate-800">
+                                    <SelectValue placeholder="Select shift" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="FN">FN</SelectItem>
+                                    <SelectItem value="AN">AN</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
-                            )}
+                              <div>
+                                <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
+                                <SearchableSelect
+                                  options={registerNoOptions}
+                                  value={selectedSalaryRegisterNo}
+                                  onValueChange={setSelectedSalaryRegisterNo}
+                                  placeholder="Select register no..."
+                                  searchPlaceholder="Search register no..."
+                                  emptyMessage="No register number found."
+                                  className="bg-white dark:bg-slate-800"
+                                />
+                                <input type="hidden" name="salaryRegisterNo" value={selectedSalaryRegisterNo} />
+                              </div>
+
+                              <div>
+                                <Label htmlFor="salary_asstt">Salary Assistant</Label>
+                                <SearchableSelect
+                                  options={salaryAssistantOptions}
+                                  value={selectedSalaryAsstt}
+                                  onValueChange={setSelectedSalaryAsstt}
+                                  placeholder="Select salary assistant..."
+                                  searchPlaceholder="Search salary assistant..."
+                                  emptyMessage="No salary assistant found."
+                                  className="bg-white dark:bg-slate-800"
+                                />
+                                <input type="hidden" name="salary_asstt" value={selectedSalaryAsstt} />
+                              </div>
+                              <div>
+                                <Label htmlFor="departmentId">Department</Label>
+                                <SearchableSelect
+                                  options={departments.map(dept => ({
+                                    value: dept.id.toString(),
+                                    label: dept.name
+                                  }))}
+                                  value={selectedDepartmentId}
+                                  onValueChange={(value) => {
+                                    setSelectedDepartmentId(value);
+                                  }}
+                                  placeholder={isDepartmentsLoading ? "Loading departments..." : "Select department..."}
+                                  searchPlaceholder="Search department..."
+                                  emptyMessage="No department found."
+                                  className="bg-white dark:bg-slate-800"
+                                  disabled={isDepartmentsLoading}
+                                />
+                                <input type="hidden" name="departmentId" value={selectedDepartmentId} />
+                                {isDepartmentsLoading ? (
+                                  <p className="text-blue-500 text-xs mt-1">Loading departments...</p>
+                                ) : departments.length === 0 ? (
+                                  <p className="text-orange-500 text-xs mt-1">No departments available. Please add departments first.</p>
+                                ) : !selectedDepartmentId ? (
+                                  <p className="text-red-500 text-xs mt-1">Department is required</p>
+                                ) : null}
+                              </div>
+
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
+                            <div className="grid grid-cols-1 gap-6">
+                              {showPan && renderUploadPreview('panCard', 'PAN Card')}
+                              {showBank && renderUploadPreview('bankProof', 'Bank Account Proof')}
+                              {showAadhar && renderUploadPreview('aadharCard', 'Adhar Number')}
+                              {renderUploadPreview('officeMemo', 'Office Memo')}
+                              {renderUploadPreview('joiningReport', 'Joining Report')}
+                              {(employmentStatus === "Probation" || employmentStatus === "Temporary") &&
+                                renderUploadPreview('termExtension', 'Term Extension Office Memo')
+                              }
+                            </div>
                           </div>
                         </div>
-                      )}
 
-                      <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                        <h3 className="text-lg font-semibold mb-6 text-primary">Office Details</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div>
-                            <Label htmlFor="officeMemoNo">Office Memo No.</Label>
-                            <Input
-                              id="officeMemoNo"
-                              name="officeMemoNo"
-                              defaultValue={selectedEmployee?.officeMemoNo}
-                              className="bg-white dark:bg-slate-800"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="joiningDate">Joining Date</Label>
-                            <Input
-                              id="joiningDate"
-                              name="joiningDate"
-                              type="date"
-                              defaultValue={selectedEmployee?.joiningDate}
-                              className="bg-white dark:bg-slate-800"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="joiningShift">Joining Shift</Label>
-                            <Select
-                              name="joiningShift"
-                              defaultValue={selectedEmployee?.joiningShift || "FN"}
-                            >
-                              <SelectTrigger className="bg-white dark:bg-slate-800">
-                                <SelectValue placeholder="Select shift" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="FN">FN</SelectItem>
-                                <SelectItem value="AN">AN</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label htmlFor="salaryRegisterNo">Salary Register No.</Label>
-                            <SearchableSelect
-                              options={registerNoOptions}
-                              value={selectedSalaryRegisterNo}
-                              onValueChange={setSelectedSalaryRegisterNo}
-                              placeholder="Select register no..."
-                              searchPlaceholder="Search register no..."
-                              emptyMessage="No register number found."
-                              className="bg-white dark:bg-slate-800"
-                            />
-                            <input type="hidden" name="salaryRegisterNo" value={selectedSalaryRegisterNo} />
-                          </div>
-
-                          <div>
-                            <Label htmlFor="salary_asstt">Salary Assistant</Label>
-                            <SearchableSelect
-                              options={salaryAssistantOptions}
-                              value={selectedSalaryAsstt}
-                              onValueChange={setSelectedSalaryAsstt}
-                              placeholder="Select salary assistant..."
-                              searchPlaceholder="Search salary assistant..."
-                              emptyMessage="No salary assistant found."
-                              className="bg-white dark:bg-slate-800"
-                            />
-                            <input type="hidden" name="salary_asstt" value={selectedSalaryAsstt} />
-                          </div>
-                          <div>
-                            <Label htmlFor="departmentId">Department</Label>
-                            <SearchableSelect
-                              options={departments.map(dept => ({
-                                value: dept.id.toString(),
-                                label: dept.name
-                              }))}
-                              value={selectedDepartmentId}
-                              onValueChange={(value) => {
-                                setSelectedDepartmentId(value);
-                              }}
-                              placeholder={isDepartmentsLoading ? "Loading departments..." : "Select department..."}
-                              searchPlaceholder="Search department..."
-                              emptyMessage="No department found."
-                              className="bg-white dark:bg-slate-800"
-                              disabled={isDepartmentsLoading}
-                            />
-                            <input type="hidden" name="departmentId" value={selectedDepartmentId} />
-                            {isDepartmentsLoading ? (
-                              <p className="text-blue-500 text-xs mt-1">Loading departments...</p>
-                            ) : departments.length === 0 ? (
-                              <p className="text-orange-500 text-xs mt-1">No departments available. Please add departments first.</p>
-                            ) : !selectedDepartmentId ? (
-                              <p className="text-red-500 text-xs mt-1">Department is required</p>
-                            ) : null}
-                          </div>
-
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                        <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
-                        <div className="grid grid-cols-1 gap-6">
-                          {showPan && renderUploadPreview('panCard', 'PAN Card')}
-                          {showBank && renderUploadPreview('bankProof', 'Bank Account Proof')}
-                          {showAadhar && renderUploadPreview('aadharCard', 'Adhar Number')}
-                          {renderUploadPreview('officeMemo', 'Office Memo')}
-                          {renderUploadPreview('joiningReport', 'Joining Report')}
-                          {(employmentStatus === "Probation" || employmentStatus === "Temporary") &&
-                            renderUploadPreview('termExtension', 'Term Extension Office Memo')
-                          }
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
-                      disabled={saveMutation.isPending}
-                    >
-                      {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                        <Button
+                          type="submit"
+                          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
+                          disabled={saveMutation.isPending}
+                        >
+                          {saveMutation.isPending ? 'Saving...' : 'Save Employee'}
+                        </Button>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                );
+              })()}
               <Button
                 variant="outline"
                 onClick={handleBackToDashboard}
@@ -1504,11 +1475,7 @@ export default function AdminEmployees() {
                   }}
                   placeholder="Filter by dealing assistant"
                   className="min-w-[180px]"
-                  disabled={!isAdmin && (() => {
-                    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                    const userCode = adminData.userCode;
-                    return userCode && userCode !== "ALL";
-                  })()}
+                  disabled={false}
                 />
               </div>
               <div className="w-full md:w-64">
@@ -1693,6 +1660,21 @@ export default function AdminEmployees() {
                             id={`status-${employee.id}`}
                             checked={employee.isActive === "active"}
                             disabled={(() => {
+                              // Permission check
+                              // Permission check
+                              const adminType = localStorage.getItem("adminType");
+                              const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                              const userCode = adminData.userCode;
+
+                              if (userCode === 'VEW') return true;
+
+                              const canEdit =
+                                adminType === "super" ||
+                                (adminType === "salary" && userCode === "ALL") ||
+                                (adminType === "salary" && userCode === employee.salary_asstt);
+
+                              if (!canEdit) return true;
+
                               const isReported = reportedEmployeeIds.includes(employee.id);
                               // Restriction: Cannot disable if reported AND (not admin OR date <= 25)
                               // Actually, isAdmin is true here (it's admin page).
@@ -1721,6 +1703,36 @@ export default function AdminEmployees() {
                             className={`text-sm cursor-pointer ${employee.isActive === "active" ? "text-green-600" : "text-muted-foreground"} ${employee.isActive === "active" && reportedEmployeeIds.includes(employee.id) && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : ''
                               }`}
                             onClick={(e) => {
+                              // Permission check
+                              const adminType = localStorage.getItem("adminType");
+                              const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                              const userCode = adminData.userCode;
+
+                              if (userCode === 'VEW') {
+                                e.preventDefault();
+                                toast({
+                                  variant: "destructive",
+                                  title: "Access Denied",
+                                  description: "You do not have permission to change status."
+                                });
+                                return;
+                              }
+
+                              const canEdit =
+                                adminType === "super" ||
+                                (adminType === "salary" && userCode === "ALL") ||
+                                (adminType === "salary" && userCode === employee.salary_asstt);
+
+                              if (!canEdit) {
+                                e.preventDefault();
+                                toast({
+                                  variant: "destructive",
+                                  title: "Access Denied",
+                                  description: "You can only change status for your assigned employees."
+                                });
+                                return;
+                              }
+
                               const isReported = reportedEmployeeIds.includes(employee.id);
                               if (employee.isActive === "active" && isReported && !isDayPast25) {
                                 e.preventDefault();
@@ -1792,21 +1804,38 @@ export default function AdminEmployees() {
                         >
                           <History className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            // Output the employee properties for debugging
+                        {/* Edit Button - Restricted based on User Code */}
+                        {(() => {
+                          const adminType = localStorage.getItem("adminType");
+                          const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                          const userCode = adminData.userCode;
 
-                            setSelectedEmployee(employee);
-                            setEmploymentStatus(employee.employmentStatus);
+                          if (userCode === 'VEW') return null;
 
-                            // The department ID will be set by the useEffect when departments are available
-                            setIsDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                          const canEdit =
+                            adminType === "super" ||
+                            (adminType === "salary" && userCode === "ALL") ||
+                            (adminType === "salary" && userCode === employee.salary_asstt);
+
+                          if (!canEdit) return null;
+
+                          return (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSelectedEmployee(employee);
+                                setEmploymentStatus(employee.employmentStatus);
+
+                                // The department ID will be set by the useEffect when departments are available
+                                setIsDialogOpen(true);
+                              }}
+                              title="Edit Employee"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          );
+                        })()}
                         {isAdmin && (
                           <Button
                             variant="ghost"
@@ -1856,14 +1885,16 @@ export default function AdminEmployees() {
           </CardContent>
         </Card>
       </div>
-      {selectedEmployee && (
-        <EmployeeHistoryModal
-          isOpen={isHistoryOpen}
-          onClose={() => setIsHistoryOpen(false)}
-          employeeId={selectedEmployee.id}
-          employeeName={selectedEmployee.name}
-        />
-      )}
-    </div>
+      {
+        selectedEmployee && (
+          <EmployeeHistoryModal
+            isOpen={isHistoryOpen}
+            onClose={() => setIsHistoryOpen(false)}
+            employeeId={selectedEmployee.id}
+            employeeName={selectedEmployee.name}
+          />
+        )
+      }
+    </div >
   );
 }

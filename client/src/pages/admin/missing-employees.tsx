@@ -72,7 +72,7 @@ export default function MissingEmployees() {
         const userCode = adminData.userCode;
 
         if (adminType === "salary") {
-            if (userCode && userCode !== "ALL") {
+            if (userCode && userCode !== "ALL" && userCode !== "VEW") {
                 setIsSalaryAdmin(true);
                 setSalaryAssistantFilter([userCode]);
             }

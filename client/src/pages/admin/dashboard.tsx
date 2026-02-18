@@ -961,23 +961,43 @@ export default function AdminDashboard() {
               <FileImage className="h-4 w-4" />
               <span className="hidden md:inline">Documents</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/admin/tickets")}
-              className="flex items-center gap-1"
-            >
-              <Ticket className="h-4 w-4" />
-              <span className="hidden md:inline">Tickets</span>
-              {ticketStats.open > 0 && (
-                <Badge className="ml-1 bg-red-500 text-white text-xs">{ticketStats.open}</Badge>
-              )}
-            </Button>
+            {(() => {
+              const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+              if (adminData.userCode === 'VEW') return null;
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocation("/admin/tickets")}
+                  className="flex items-center gap-1"
+                >
+                  <Ticket className="h-4 w-4" />
+                  <span className="hidden md:inline">Tickets</span>
+                  {ticketStats.open > 0 && (
+                    <Badge className="ml-1 bg-red-500 text-white text-xs">{ticketStats.open}</Badge>
+                  )}
+                </Button>
+              );
+            })()}
             <Button
               variant="default"
               size="sm"
-              onClick={() => setLocation("/admin/notices")}
-              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700"
+              onClick={() => {
+                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                if (adminData.userCode === 'VEW') {
+                  toast({
+                    variant: "destructive",
+                    title: "Access Denied",
+                    description: "You do not have permission to manage notices.",
+                  });
+                  return;
+                }
+                setLocation("/admin/notices");
+              }}
+              className={`flex items-center gap-1 ${JSON.parse(localStorage.getItem("admin") || "{}").userCode === 'VEW'
+                ? 'bg-blue-400 hover:bg-blue-400 cursor-not-allowed opacity-80'
+                : 'bg-blue-600 hover:bg-blue-700'
+                }`}
             >
               <Megaphone className="h-4 w-4" />
               <span className="hidden sm:inline">Notice</span>
@@ -1378,9 +1398,15 @@ export default function AdminDashboard() {
           <div className="col-span-1 lg:col-span-2 bg-white p-2 rounded-lg border shadow-sm h-[160px] flex flex-col">
             <div className="flex justify-between items-center mb-1">
               <h3 className="text-[11px] font-semibold text-gray-700">Tickets/Actions</h3>
-              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-[9px] h-4 px-1">
-                View
-              </Button>
+              {(() => {
+                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                if (adminData.userCode === 'VEW') return null;
+                return (
+                  <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-[9px] h-4 px-1">
+                    View
+                  </Button>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-2 gap-1 flex-1 content-center">
@@ -1393,8 +1419,24 @@ export default function AdminDashboard() {
                 <p className="text-[7px] uppercase text-green-600 font-medium">Done</p>
               </div>
               <div className="text-center py-1 bg-orange-50 rounded border border-orange-100 col-span-2">
-                <p className="text-lg font-bold text-orange-700 leading-none">{stats.requests.cancellation + stats.requests.recall}</p>
-                <p className="text-[7px] uppercase text-orange-600 font-medium">Pending Requests</p>
+                {(() => {
+                  const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                  const isAuthorized = adminData.role === 'super_admin' || (adminData.role === 'salary_admin' && adminData.userCode === 'ALL');
+
+                  if (!isAuthorized) return (
+                    <>
+                      <p className="text-lg font-bold text-gray-400 leading-none">-</p>
+                      <p className="text-[7px] uppercase text-gray-400 font-medium">Pending Requests</p>
+                    </>
+                  );
+
+                  return (
+                    <>
+                      <p className="text-lg font-bold text-orange-700 leading-none">{stats.requests.cancellation + stats.requests.recall}</p>
+                      <p className="text-[7px] uppercase text-orange-600 font-medium">Pending Requests</p>
+                    </>
+                  );
+                })()}
               </div>
               <div className="hidden">
                 <p>{stats.requests.cancellation}</p>
@@ -1702,10 +1744,22 @@ export default function AdminDashboard() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
+                              const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                              if (adminData.userCode === 'VEW') {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Access Denied",
+                                  description: "You do not have permission to view documents."
+                                });
+                                return;
+                              }
                               setSelectedReport(report.id);
                               setShowPdfPreview(true);
                             }}
-                            className="flex items-center gap-2"
+                            className={`flex items-center gap-2 ${JSON.parse(localStorage.getItem("admin") || "{}").userCode === 'VEW'
+                              ? 'cursor-not-allowed opacity-50'
+                              : ''
+                              }`}
                           >
                             <Download className="h-4 w-4" />
                             View PDF
@@ -1724,40 +1778,52 @@ export default function AdminDashboard() {
                           </Button>
                         )}
                         {/* Accept Cancellation button for cancel_requested status */}
-                        {report.status === "cancel_requested" && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                            onClick={() => acceptCancellation.mutate(report.id)}
-                            disabled={acceptCancellation.isPending}
-                          >
-                            {acceptCancellation.isPending ? (
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            ) : (
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                            )}
-                            Accept Cancel
-                          </Button>
-                        )}
-                        {/* Revert to Draft button (Recall or manual revert) - Manual revert Super Admin only, Recall approval all admins */}
-                        {((report.status === "submitted" && isSuperAdmin) || report.status === "recall_requested") && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={report.status === "recall_requested" ? "text-yellow-600 border-yellow-300 hover:bg-yellow-50" : ""}
-                            onClick={() => revertToDraft.mutate(report.id)}
-                            disabled={revertToDraft.isPending}
-                            title={report.status === "recall_requested" ? "Approve Recall Request" : "Revert to Draft"}
-                          >
-                            {revertToDraft.isPending ? (
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            ) : (
-                              <RotateCcw className="h-4 w-4 mr-1" />
-                            )}
-                            {report.status === "recall_requested" ? "Approve Recall" : "Revert Draft"}
-                          </Button>
-                        )}
+                        {(() => {
+                          const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                          const canManageRequests = adminData.role === 'super_admin' || (adminData.role === 'salary_admin' && adminData.userCode === 'ALL');
+
+                          if (!canManageRequests) return null;
+
+                          return (
+                            <>
+                              {report.status === "cancel_requested" && (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => acceptCancellation.mutate(report.id)}
+                                  disabled={acceptCancellation.isPending}
+                                >
+                                  {acceptCancellation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                  )}
+                                  Accept Cancel
+                                </Button>
+                              )}
+                              {/* Revert to Draft button (Recall or manual revert) - Manual revert Super Admin only, Recall approval all admins */}
+                              {((report.status === "submitted" && isSuperAdmin) || report.status === "recall_requested") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className={report.status === "recall_requested" ? "text-yellow-600 border-yellow-300 hover:bg-yellow-50" : ""}
+                                  onClick={() => revertToDraft.mutate(report.id)}
+                                  disabled={revertToDraft.isPending}
+                                  title={report.status === "recall_requested" ? "Approve Recall Request" : "Revert to Draft"}
+                                >
+                                  {revertToDraft.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="h-4 w-4 mr-1" />
+                                  )}
+                                  {report.status === "recall_requested" ? "Approve Recall" : "Revert Draft"}
+                                </Button>
+                              )}
+                            </>
+                          );
+                        })()}
+
                         {/* Status indicator for cancelled reports */}
                         {report.status === "cancelled" && (
                           <span className="text-green-600 text-sm font-medium flex items-center gap-1">

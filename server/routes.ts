@@ -249,7 +249,46 @@ export async function registerRoutes(app: Express) {
 
   // NOTE: Admin seeding removed for security - passwords should not be in source code
   // Admins must be manually created in the database 'admins' table
-  // Required fields: email, password, role ('super_admin' or 'salary_admin'), name
+  // Function to verify admin session from header
+  const verifyAdminSession = async (req: Request, res: any, next: any) => {
+    const sessionToken = req.headers['x-session-token'];
+
+    if (!sessionToken || typeof sessionToken !== 'string') {
+      return res.status(401).json({ message: "Unauthorized: No session token" });
+    }
+
+    try {
+      const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
+      const parts = decoded.split(':');
+
+      if (parts.length < 2) {
+        return res.status(401).json({ message: "Unauthorized: Invalid token format" });
+      }
+
+      const email = parts[0];
+      const password = parts.slice(1).join(':');
+
+      const admin = await storage.getAdminByEmail(email);
+
+      if (!admin || admin.password !== password) {
+        return res.status(401).json({ message: "Unauthorized: Invalid credentials" });
+      }
+
+      // Attach admin info to request
+      (req as any).adminUser = admin;
+
+      // CRITICAL: Block write operations for 'VEW' user code
+      const writeMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+      if (admin.userCode === 'VEW' && writeMethods.includes(req.method)) {
+        return res.status(403).json({ message: "Forbidden: View-only access" });
+      }
+
+      next();
+    } catch (error) {
+      console.error("Auth error:", error);
+      return res.status(401).json({ message: "Unauthorized: Token validation failed" });
+    }
+  };
 
   // Initialize notices tables
   try {
@@ -1251,6 +1290,7 @@ export async function registerRoutes(app: Express) {
       const employeeData = {
         ...req.body,
         departmentId,
+        isActive: "active",
         // Preserve existing URLs if files aren't being updated
         panCardUrl: files?.panCardDoc ? `/uploads/${files.panCardDoc[0].filename}` : req.body.panCardUrl || null,
         bankProofUrl: files?.bankAccountDoc ? `/uploads/${files.bankAccountDoc[0].filename}` : req.body.bankProofUrl || null,
@@ -2073,7 +2113,7 @@ export async function registerRoutes(app: Express) {
   });
   // === End: New Endpoint ===
 
-  app.delete("/api/employees/:id", async (req, res) => {
+  app.delete("/api/employees/:id", verifyAdminSession, async (req, res) => {
     await storage.deleteEmployee(Number(req.params.id));
     res.status(204).send();
   });
@@ -2268,7 +2308,7 @@ export async function registerRoutes(app: Express) {
 
 
   // Toggle verification status for attendance entry
-  app.patch("/api/attendance/entries/:entryId/toggle-verify", async (req, res) => {
+  app.patch("/api/attendance/entries/:entryId/toggle-verify", verifyAdminSession, async (req, res) => {
     try {
       const entryId = Number(req.params.entryId);
       const { db } = await import("./db");
@@ -2782,7 +2822,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Accept cancellation (Admin side)
-  app.post("/api/attendance/:id/accept-cancel", async (req, res) => {
+  app.post("/api/attendance/:id/accept-cancel", verifyAdminSession, async (req, res) => {
     try {
       const reportId = Number(req.params.id);
       const report = await storage.getAttendanceReport(reportId);
@@ -2884,7 +2924,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/employees", upload.fields(documentFields), async (req, res) => {
+  app.post("/api/admin/employees", verifyAdminSession, upload.fields(documentFields), async (req, res) => {
     try {
 
       // Parse departmentId from the request
@@ -3530,7 +3570,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Delete ticket (admin only)
-  app.delete("/api/tickets/:id", async (req, res) => {
+  app.delete("/api/tickets/:id", verifyAdminSession, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 

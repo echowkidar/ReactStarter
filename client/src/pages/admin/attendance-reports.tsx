@@ -139,11 +139,11 @@ export default function AttendanceReports() {
     const userCode = adminData.userCode;
 
     if (adminType === "salary") {
-      if (userCode && userCode !== "ALL") {
+      if (userCode && userCode !== "ALL" && userCode !== "VEW") {
         setIsSalaryAdmin(true);
         setSalaryAssistantFilter([userCode]);
       } else {
-        // If userCode is ALL, treat as super admin for filtering purposes (don't restrict)
+        // If userCode is ALL or VEW, treat as super admin for filtering purposes (don't restrict)
         setIsSalaryAdmin(false);
       }
     }
@@ -930,8 +930,20 @@ export default function AttendanceReports() {
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-8 w-8"
+                                className={`h-8 w-8 ${JSON.parse(localStorage.getItem("admin") || "{}").userCode === 'VEW'
+                                  ? 'cursor-not-allowed opacity-50 bg-gray-50'
+                                  : ''
+                                  }`}
                                 onClick={() => {
+                                  const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                  if (adminData.userCode === 'VEW') {
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Access Denied",
+                                      description: "You do not have permission to view documents."
+                                    });
+                                    return;
+                                  }
                                   let url = entry.fileUrl!;
                                   // Normalize URL - handle old domain migration
                                   if (url.includes('amu.echowkidar.in')) {
@@ -949,12 +961,43 @@ export default function AttendanceReports() {
                             )}
                             <button
                               type="button"
-                              onClick={() => toggleVerify.mutate(entry.entryId)}
+                              onClick={() => {
+                                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                if (adminData.userCode === 'VEW') {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Access Denied",
+                                    description: "You do not have permission to verify entries."
+                                  });
+                                  return;
+                                }
+                                // Restricted for Salary Admin "ALL" as well
+                                if (adminData.role === 'salary' && adminData.userCode === 'ALL') {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Access Denied",
+                                    description: "Global Salary Admin cannot verify individual entries."
+                                  });
+                                  return;
+                                }
+                                toggleVerify.mutate(entry.entryId);
+                              }}
                               className={`h-6 w-6 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${entry.verified
                                 ? 'bg-green-500 border-green-500'
-                                : 'border-gray-300 hover:border-green-400'
+                                : (() => {
+                                  const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                  if (adminData.userCode === 'VEW' || (adminData.role === 'salary' && adminData.userCode === 'ALL')) {
+                                    return 'border-gray-200 cursor-not-allowed opacity-50';
+                                  }
+                                  return 'border-gray-300 hover:border-green-400';
+                                })()
                                 }`}
-                              title={entry.verified ? 'Verified ✓' : 'Mark as Verified'}
+                              title={(() => {
+                                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                if (adminData.userCode === 'VEW') return 'View Only';
+                                if (adminData.role === 'salary' && adminData.userCode === 'ALL') return 'View Only (Global Admin)';
+                                return entry.verified ? 'Verified ✓' : 'Mark as Verified';
+                              })()}
                             >
                               {entry.verified && (
                                 <Check className="h-4 w-4 text-white" />
