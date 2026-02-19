@@ -65,9 +65,14 @@ export function registerExternalRoutes(app: any) {
                     // letting them filter by status if needed, or returning all.
                 ));
 
+            const formattedData = data.map(record => ({
+                ...record,
+                periods: typeof record.periods === 'string' ? JSON.parse(record.periods) : record.periods
+            }));
+
             res.json({
                 meta: { month, year, count: data.length },
-                data
+                data: formattedData
             });
         } catch (error) {
             console.error("External API Error (Attendance):", error);
