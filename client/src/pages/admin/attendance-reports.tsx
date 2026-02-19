@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check } from "lucide-react";
+import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { ArrowUpDown } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -926,6 +926,17 @@ export default function AttendanceReports() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            {JSON.parse(localStorage.getItem("admin") || "{}").role !== 'salary' && (
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setLocation(`/admin/reports/${entry.reportId}/edit`)}
+                                title="Edit Report"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
                             {entry.fileUrl && (
                               <Button
                                 variant="outline"

@@ -1,0 +1,20 @@
+Starting debug script (run 2)...
+Starting debug script...
+
+--- Checking Employees ---
+Found Employee by EPID 15926:
+  - ID: 9222
+  - Name: RUSTAM AZAD
+  - DeptId: 322
+  - isActive: "active"
+  - transferStatus: "pending"
+  - employmentStatus: "Permanent"
+  - designation: "MTS-OFFICE ATTENDANT"
+Found Employee by EPID 33650:
+  - ID: 6750
+  - Name: SHEEBA KHAN
+  - DeptId: 322
+  - isActive: "active"
+  - transferStatus: "pending"
+  - employmentStatus: "Permanent"
+  - designation: "MTS-OFFICE ATTENDANT"

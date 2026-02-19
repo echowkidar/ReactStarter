@@ -15,10 +15,11 @@ import {
   insertDepartmentSchema,
   DepartmentName,
   InsertDepartment,
-  InsertDepartmentName
+  InsertDepartmentName,
+  attendanceEntries
 } from "../shared/schema";
 import fs from "fs";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { db } from "./db";
 
 // Helper: Check if employee has attendance entries in current month (blocks transfer)
@@ -2290,6 +2291,26 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error creating attendance entry:', error);
       res.status(400).json({ message: "Invalid entry data", error: String(error) });
+    }
+  });
+
+  app.delete("/api/attendance/:reportId/entries", async (req, res) => {
+    try {
+      const reportId = Number(req.params.reportId);
+      if (isNaN(reportId)) {
+        return res.status(400).json({ message: "Invalid report ID" });
+      }
+
+      await db.delete(attendanceEntries).where(eq(attendanceEntries.reportId, reportId));
+
+      // Also clear from MemStorage if used (for consistency)
+      // Note: We can't easily clear specific entries from MemStorage without an index or iteration
+      // leaving it to DB for now as that's the source of truth for persistent data
+
+      res.status(200).json({ message: "Entries cleared successfully" });
+    } catch (error) {
+      console.error("Error clearing attendance entries:", error);
+      res.status(500).json({ message: "Failed to clear entries" });
     }
   });
 

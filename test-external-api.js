@@ -9,7 +9,13 @@ async function testApi() {
     // 1. Test Attendance Endpoint
     try {
         console.log("\n1. Fetching Attendance Data (Feb 2026)...");
-        const response = await fetch(`${BASE_URL}/api/external/attendance?month=2&year=2026`, {
+        // Test with a filter to verify
+        const params = new URLSearchParams({
+            month: '2',
+            year: '2026',
+            departmentCode: 'REG' // Test filtering by REG department
+        });
+        const response = await fetch(`${BASE_URL}/api/external/attendance?${params}`, {
             headers: { 'x-api-key': API_KEY }
         });
 
@@ -19,8 +25,11 @@ async function testApi() {
             console.log(`   Count: ${data.meta.count}`);
             if (data.data.length > 0) {
                 console.log("   Sample Record:", JSON.stringify(data.data[0], null, 2));
+                // Verify filter worked
+                const allReg = data.data.every(d => d.departmentCode === 'REG');
+                console.log(`   Filter Check: All records are REG? ${allReg ? '✅ Yes' : '❌ No'}`);
             } else {
-                console.log("   No records found for this month.");
+                console.log("   No records found for this month/filter.");
             }
         } else {
             console.log("❌ Failed:", response.status, response.statusText);

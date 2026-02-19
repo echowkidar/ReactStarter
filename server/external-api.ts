@@ -37,6 +37,16 @@ export function registerExternalRoutes(app: any) {
             const month = req.query.month ? parseInt(req.query.month as string) : now.getMonth() + 1; // 0-indexed in JS
             const year = req.query.year ? parseInt(req.query.year as string) : now.getFullYear();
 
+            const filters: any[] = [
+                eq(attendanceReports.month, month),
+                eq(attendanceReports.year, year)
+            ];
+
+            if (req.query.employeeId) filters.push(eq(employees.epid, req.query.employeeId as string));
+            if (req.query.departmentCode) filters.push(eq(departmentNames.code, req.query.departmentCode as string));
+            if (req.query.dealingAssistant) filters.push(eq(departmentNames.dealingAssistantCode, req.query.dealingAssistant as string));
+            if (req.query.status) filters.push(eq(attendanceReports.status, req.query.status as string));
+
             const data = await db.select({
                 departmentName: departments.name,
                 departmentCode: departmentNames.code,
@@ -57,12 +67,7 @@ export function registerExternalRoutes(app: any) {
                 .innerJoin(departments, eq(employees.departmentId, departments.id))
                 .leftJoin(departmentNames, eq(departments.name, departmentNames.name)) // Join for code/d_ast
                 // Filter by verified reports or specific month
-                .where(and(
-                    eq(attendanceReports.month, month),
-                    eq(attendanceReports.year, year),
-                    // Optional: Only include submitted/received reports? user didn't specify, but usually final data needed.
-                    // letting them filter by status if needed, or returning all.
-                ));
+                .where(and(...filters));
 
             res.json({
                 meta: { month, year, count: data.length },

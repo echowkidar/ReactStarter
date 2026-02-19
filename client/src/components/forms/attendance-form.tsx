@@ -113,6 +113,7 @@ interface AttendanceFormProps {
     }>;
   };
   isSupplementary?: boolean;
+  departmentId?: number;
 }
 
 // Add the formatTermExpiry function
@@ -132,8 +133,10 @@ const formatTermExpiry = (dateStr: string | null | undefined): string => {
   }
 };
 
-export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary }: AttendanceFormProps) {
-  const department = getCurrentDepartment();
+export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary, departmentId: propDepartmentId }: AttendanceFormProps) {
+  const currentDept = getCurrentDepartment();
+  const departmentId = propDepartmentId || currentDept?.id;
+
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
   const [includeExcluded, setIncludeExcluded] = useState(false); // Mode: With Break
   const [includeExcludedFull, setIncludeExcludedFull] = useState(false); // Mode: Full Month
@@ -174,13 +177,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   // Fetch employees who are already in a report for this month/year (if supplementary)
   useEffect(() => {
     const fetchReportedEmployees = async () => {
-      if (!isSupplementary || !department?.id) {
+      if (!isSupplementary || !departmentId) {
         setReportedEmployeeIds(new Set());
         return;
       }
 
       try {
-        const res = await fetch(`/api/departments/${department.id}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}`);
+        const res = await fetch(`/api/departments/${departmentId}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}`);
         if (res.ok) {
           const ids = await res.json();
 
@@ -192,10 +195,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     };
 
     fetchReportedEmployees();
-  }, [isSupplementary, department?.id, watchMonth, watchYear]);
+  }, [isSupplementary, departmentId, watchMonth, watchYear]);
 
   const { data: rawEmployees = [], isLoading: loadingEmployees } = useQuery({
-    queryKey: [`/api/departments/${department?.id}/employees`],
+    queryKey: [`/api/departments/${departmentId}/employees`],
+    enabled: !!departmentId,
     select: (data: any) => {
       // Filter only active employees and sort by Pay Level (descending) then EPID (ascending)
       return [...data]
