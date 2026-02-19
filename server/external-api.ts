@@ -49,7 +49,6 @@ export function registerExternalRoutes(app: any) {
                 days: attendanceEntries.days,
                 fromDate: attendanceEntries.fromDate,
                 toDate: attendanceEntries.toDate,
-                periods: attendanceEntries.periods,
                 reportStatus: attendanceReports.status,
             })
                 .from(attendanceEntries)
@@ -65,14 +64,9 @@ export function registerExternalRoutes(app: any) {
                     // letting them filter by status if needed, or returning all.
                 ));
 
-            const formattedData = data.map(record => ({
-                ...record,
-                periods: typeof record.periods === 'string' ? JSON.parse(record.periods) : record.periods
-            }));
-
             res.json({
                 meta: { month, year, count: data.length },
-                data: formattedData
+                data
             });
         } catch (error) {
             console.error("External API Error (Attendance):", error);
