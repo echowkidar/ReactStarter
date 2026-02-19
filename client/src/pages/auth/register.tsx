@@ -6,7 +6,38 @@ import { useEffect } from "react";
 // n8n chat integration
 // Add n8n chat styles
 const N8nChatStyles = () => (
-  <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+  <>
+    <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+    <style>
+      {`
+        .chat-window-toggle svg {
+          display: none !important;
+        }
+        .chat-window-toggle {
+          background-image: url('/logo_favicon/amuai_logo.webp') !important;
+          background-size: cover !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+        }
+        .chat-header h1 {
+          display: flex !important;
+          align-items: center !important;
+          width: 100% !important;
+        }
+        .chat-header h1::after {
+          content: '';
+          display: inline-block;
+          width: 50px;
+          height: 50px;
+          margin-left: auto !important;
+          background-image: url('/logo_favicon/android-chrome-192x192.png');
+          background-size: contain;
+          background-repeat: no-repeat;
+          background-position: center;
+        }
+      `}
+    </style>
+  </>
 );
 
 // Add n8n chat script
