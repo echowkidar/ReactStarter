@@ -150,6 +150,7 @@ const PDFDialogContent = ({
   const [isCheckingFile, setIsCheckingFile] = React.useState<boolean>(true);
   const [workingFileUrl, setWorkingFileUrl] = React.useState<string>('');
   const [errorDetails, setErrorDetails] = React.useState<string>('');
+  const [verifyTransactionId, setVerifyTransactionId] = React.useState<string>('');
 
   React.useEffect(() => {
     const checkFileExists = async () => {
@@ -475,6 +476,19 @@ const PDFDialogContent = ({
         <form className="space-y-4">
           <div className="grid gap-4">
             <div className="space-y-2">
+              <label htmlFor="verifyTransactionId" className="text-sm font-medium text-amber-900 flex items-center gap-1">
+                Verify Transaction ID <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="verifyTransactionId"
+                placeholder="Enter ID printed on the paper report"
+                value={verifyTransactionId}
+                onChange={(e) => setVerifyTransactionId(e.target.value)}
+                className="font-mono uppercase"
+              />
+              <p className="text-xs text-muted-foreground">Please type the Transaction ID that is printed on the physical signed report.</p>
+            </div>
+            <div className="space-y-2">
               <label htmlFor="despatchNo" className="text-sm font-medium">
                 Despatch No
               </label>
@@ -542,6 +556,24 @@ const PDFDialogContent = ({
 
                     const despatchNo = despatchNoInput?.value || report.despatchNo || '';
                     const despatchDate = despatchDateInput?.value || (report.despatchDate ? new Date(report.despatchDate).toISOString().split('T')[0] : '');
+
+                    if (!verifyTransactionId.trim()) {
+                      toast({
+                        variant: "destructive",
+                        title: "Verification Required",
+                        description: "Please enter the Transaction ID printed on the physical copy.",
+                      });
+                      return;
+                    }
+
+                    if (verifyTransactionId.trim().toUpperCase() !== report.transactionId?.toUpperCase()) {
+                      toast({
+                        variant: "destructive",
+                        title: "ID Mismatch",
+                        description: "The Transaction ID you entered does not match this report.",
+                      });
+                      return;
+                    }
 
                     if (!fileToUpload || !despatchNo || !despatchDate) {
                       toast({
@@ -1256,7 +1288,18 @@ export default function Attendance() {
                       {formatPeriod(report.year, report.month)}
                     </TableCell>
                     <TableCell>
-                      {report.transactionId || "Not generated"}
+                      {report.transactionId ? (
+                        report.status === "sent" ? (
+                          report.transactionId
+                        ) : (
+                          <>
+                            <span className="print:hidden font-mono tracking-widest text-muted-foreground">***</span>
+                            <span className="hidden print:inline">{report.transactionId}</span>
+                          </>
+                        )
+                      ) : (
+                        "Not generated"
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -1336,33 +1379,82 @@ export default function Attendance() {
                                 </DialogFooter>
                               </DialogContent>
                             </Dialog>
-                            <Button
-                              size="sm"
-                              onClick={() => changeStatus.mutate(report)}
-                              disabled={changeStatus.isPending}
-                            >
-                              {changeStatus.isPending ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <FileCheck className="h-4 w-4 mr-2" />
-                              )}
-                              Finalize
-                            </Button>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  disabled={changeStatus.isPending}
+                                >
+                                  {changeStatus.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <FileCheck className="h-4 w-4 mr-2" />
+                                  )}
+                                  Finalize
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Finalize Attendance Report</DialogTitle>
+                                  <DialogDescription className="pt-3 text-sm text-foreground space-y-3">
+                                    <p>
+                                      <strong>Please note the next steps:</strong>
+                                    </p>
+                                    <p>
+                                      1. Now please print the submitted report, get it signed by the HOD, and write the dispatch number and date on the attendance report.
+                                    </p>
+                                    <p>
+                                      2. After that, return here to upload the signed report. As soon as you upload the signed report and fill in the dispatch details and click the submit button, the attendance report will be sent to the Salary Section.
+                                    </p>
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter className="mt-4">
+                                  <DialogClose asChild>
+                                    <Button variant="outline">Cancel</Button>
+                                  </DialogClose>
+                                  <DialogClose asChild>
+                                    <Button
+                                      onClick={() => changeStatus.mutate(report)}
+                                      disabled={changeStatus.isPending}
+                                    >
+                                      I Understand, Finalize Now
+                                    </Button>
+                                  </DialogClose>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
                           </>
                         )}
                         {report.status !== "draft" && (
                           <>
                             <Dialog>
                               <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" title={report.fileUrl || report.status === "sent" ? "View Signed Attendance Report" : "Upload Signed Attendance Report"}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  title={report.fileUrl || report.status === "sent" ? "View Signed Attendance Report" : "Upload Signed Attendance Report"}
+                                  className={!report.fileUrl && report.status === "submitted" ? "min-w-[195px] border-amber-500 text-amber-700 bg-amber-50 relative overflow-hidden" : ""}
+                                >
                                   {report.fileUrl || report.status === "sent" ? (
                                     <>
                                       <Eye className="h-4 w-4 mr-2" /> View Signed Report
                                     </>
                                   ) : (
-                                    <>
-                                      <Upload className="h-4 w-4 mr-2" /> Upload Signed Report
-                                    </>
+                                    report.status === "submitted" && !report.fileUrl ? (
+                                      <>
+                                        <span className="invisible flex items-center"><Upload className="h-4 w-4 mr-2" /> Upload Signed Report</span>
+                                        <span className="animate-fade-swap-a absolute inset-0 flex items-center justify-center">
+                                          <Upload className="h-4 w-4 mr-2" /> Upload Signed Report
+                                        </span>
+                                        <span className="animate-fade-swap-b inset-0 flex items-center justify-center text-amber-600 font-bold tracking-wider">
+                                          Waiting ....
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Upload className="h-4 w-4 mr-2" /> Upload Signed Report
+                                      </>
+                                    )
                                   )}
                                 </Button>
                               </DialogTrigger>

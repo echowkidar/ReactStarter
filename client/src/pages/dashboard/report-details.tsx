@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -322,10 +322,14 @@ export default function ReportDetails() {
                 
                 /* Force page breaks */
                 tr {
-                  page-break-inside: avoid;
+                  page-break-inside: avoid !important;
                 }
+                
+                /* Strategy: group the entire end section inside an unbreakable block if possible,
+                   but standard CSS provides page-break-inside avoid for the certification block. */
                 .certification-section {
-                  page-break-inside: avoid;
+                  page-break-inside: avoid !important;
+                  margin-top: 30px !important;
                 }
               </style>
             </head>
@@ -376,18 +380,29 @@ export default function ReportDetails() {
           linkElement.href = 'https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap';
           printWindow.document.head.appendChild(linkElement);
 
-          // Add transaction ID barcode to the print window
+          // Add transaction ID barcode or draft watermark to the print window
           const contentElement = printWindow.document.querySelector('.print-content');
           if (contentElement) {
-            const barcodeElement = printWindow.document.createElement('div');
-            barcodeElement.className = 'page-footer-barcode';
-            barcodeElement.innerHTML = `*${report.transactionId || "DRAFT"}*`;
-            printWindow.document.body.appendChild(barcodeElement);
+            if (report.status === 'draft') {
+              const draftWarningElement = printWindow.document.createElement('div');
+              draftWarningElement.className = 'transaction-id-text';
+              draftWarningElement.style.paddingBottom = '15mm';
+              draftWarningElement.style.fontSize = '12pt';
+              draftWarningElement.style.fontWeight = 'bold';
+              draftWarningElement.style.color = '#000';
+              draftWarningElement.innerHTML = 'Do not upload/send the draft attendance report as it is for your office use only.';
+              printWindow.document.body.appendChild(draftWarningElement);
+            } else {
+              const barcodeElement = printWindow.document.createElement('div');
+              barcodeElement.className = 'page-footer-barcode';
+              barcodeElement.innerHTML = `*${report.transactionId || "DRAFT"}*`;
+              printWindow.document.body.appendChild(barcodeElement);
 
-            const transactionTextElement = printWindow.document.createElement('div');
-            transactionTextElement.className = 'transaction-id-text';
-            transactionTextElement.innerHTML = report.transactionId || "DRAFT";
-            printWindow.document.body.appendChild(transactionTextElement);
+              const transactionTextElement = printWindow.document.createElement('div');
+              transactionTextElement.className = 'transaction-id-text';
+              transactionTextElement.innerHTML = report.transactionId || "DRAFT";
+              printWindow.document.body.appendChild(transactionTextElement);
+            }
           }
 
           setTimeout(() => {
@@ -648,17 +663,32 @@ export default function ReportDetails() {
       <div className="print-content space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Attendance Report</CardTitle>
+            <CardTitle>{report.status === 'draft' ? 'Draft Attendance Report' : 'Attendance Report'}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <InfoItem label="Department" value={report.department?.name} />
               <InfoItem label="Month/Year" value={formatPeriod(report.year, report.month)} />
-              <InfoItem label="Transaction ID" value={report.status === "draft" ? "*****" : (report.transactionId || "-")} />
+              <InfoItem
+                label="Transaction ID"
+                value={
+                  report.status === "draft" ? "*****" :
+                    report.status === "sent" ? (report.transactionId || "-") :
+                      (report.transactionId ? (
+                        <>
+                          <span className="print:hidden font-mono tracking-widest text-muted-foreground">***</span>
+                          <span className="hidden print:inline">{report.transactionId}</span>
+                        </>
+                      ) : "-")
+                }
+              />
               <InfoItem
                 label="Status"
                 value={
-                  <Badge variant={report.status === "submitted" ? "default" : "secondary"}>
+                  <Badge
+                    variant={report.status === "submitted" ? "outline" : "secondary"}
+                    className={report.status === "submitted" ? "border-green-600 text-green-700 bg-green-50 font-bold uppercase tracking-wider px-3" : ""}
+                  >
                     {report.status}
                   </Badge>
                 }
@@ -691,90 +721,111 @@ export default function ReportDetails() {
                 <TableHead>Remarks</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {(() => {
-                return [...(report.entries || [])]
-                  .sort((a, b) => {
-                    // Sort by pay level first (higher levels first)
-                    const payLevelA = a.employee?.payLevel || "L-0";
-                    const payLevelB = b.employee?.payLevel || "L-0";
+            {(() => {
+              const allRows: React.ReactNode[] = [];
+              [...(report.entries || [])]
+                .sort((a, b) => {
+                  const payLevelA = a.employee?.payLevel || "L-0";
+                  const payLevelB = b.employee?.payLevel || "L-0";
+                  if (payLevelA !== payLevelB) {
+                    return getPayLevelOrder(payLevelB) - getPayLevelOrder(payLevelA);
+                  }
+                  const sortOrderA = a.employee?.sortOrder || 0;
+                  const sortOrderB = b.employee?.sortOrder || 0;
+                  if (sortOrderA !== sortOrderB) {
+                    return sortOrderA - sortOrderB;
+                  }
+                  const epidA = a.employee?.epid || '';
+                  const epidB = b.employee?.epid || '';
+                  return epidA.localeCompare(epidB);
+                })
+                .forEach((entry, entryIndex) => {
+                  try {
+                    const periods = typeof entry.periods === 'string'
+                      ? JSON.parse(entry.periods)
+                      : entry.periods;
+                    const periodCount = periods?.length || 1;
+                    const serialNumber = entryIndex + 1;
 
-                    if (payLevelA !== payLevelB) {
-                      return getPayLevelOrder(payLevelB) - getPayLevelOrder(payLevelA);
-                    }
+                    periods.forEach((period: any, periodIndex: number) => {
+                      const isFirstPeriod = periodIndex === 0;
 
-                    // [NEW] Sort by sortOrder (ascending)
-                    const sortOrderA = a.employee?.sortOrder || 0;
-                    const sortOrderB = b.employee?.sortOrder || 0;
-                    if (sortOrderA !== sortOrderB) {
-                      return sortOrderA - sortOrderB;
-                    }
+                      allRows.push(
+                        <TableRow key={`${entry.id}-${periodIndex}`}>
+                          {isFirstPeriod && (
+                            <>
+                              <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{serialNumber}</TableCell>
+                              <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.epid}</TableCell>
+                              <TableCell rowSpan={periodCount}>{entry.employee?.name}</TableCell>
+                              <TableCell rowSpan={periodCount}>{entry.employee?.designation}</TableCell>
+                              <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
+                              <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>
+                            </>
+                          )}
+                          <TableCell className="whitespace-normal min-w-[120px]">
+                            {(entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER' || entry.employee?.designation?.toUpperCase() === 'GUEST FACULTY')
+                              ? (
+                                <div className="flex flex-col">
+                                  <span>{formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}</span>
+                                  {periodIndex === periodCount - 1 && (
+                                    <span className="text-[10px] font-bold mt-1 leading-tight">** Original Bill must be sent to Salary Section **</span>
+                                  )}
+                                </div>
+                              )
+                              : isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
+                                ? "- "
+                                : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {(entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER' || entry.employee?.designation?.toUpperCase() === 'GUEST FACULTY')
+                              ? <div className="flex flex-col items-center justify-center -mt-1"><span className="leading-tight">{period.days}</span><span className="font-bold text-[9px] text-[#ea580c] leading-tight mt-0.5">Periods</span></div>
+                              : period.days}
+                          </TableCell>
+                          <TableCell>{period.remarks || "-"}</TableCell>
+                        </TableRow>
+                      );
+                    });
+                  } catch (error) {
+                    console.error('Error parsing periods:', error);
+                  }
+                });
 
-                    // If pay levels are same, sort by EPID
-                    const epidA = a.employee?.epid || '';
-                    const epidB = b.employee?.epid || '';
-                    return epidA.localeCompare(epidB);
-                  })
-                  .map((entry, entryIndex, sortedArray) => {
-                    try {
-                      const periods = typeof entry.periods === 'string'
-                        ? JSON.parse(entry.periods)
-                        : entry.periods;
+              const signatureRow = (
+                <TableRow key="signature-row" className="hover:bg-transparent" style={{ pageBreakInside: 'avoid', border: 'none' }}>
+                  <TableCell colSpan={9} className="p-0" style={{ border: 'none' }}>
+                    <div className="mt-8 space-y-4 text-right certification-section page-break-inside-avoid">
+                      <p>Certified that the above attendance report is correct.</p>
+                      <div className="space-y-1">
+                        <div style={{ height: '3em' }}></div>
+                        <p>{report.department?.hodName}</p>
+                        <p>{report.department?.hodTitle}</p>
+                        <p>{report.department?.name}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
 
-                      const periodCount = periods?.length || 1;
+              if (allRows.length === 0) {
+                return <TableBody>{signatureRow}</TableBody>;
+              }
 
-                      // Calculate serial number based on unique employees (not flattened periods)
-                      const serialNumber = entryIndex + 1;
+              const initialRows = allRows.slice(0, -1);
+              const lastRow = allRows[allRows.length - 1];
 
-                      return periods.map((period: any, periodIndex: number) => {
-                        const isFirstPeriod = periodIndex === 0;
-
-                        return (
-                          <TableRow key={`${entry.id}-${periodIndex}`}>
-                            {isFirstPeriod && (
-                              <>
-                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{serialNumber}</TableCell>
-                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.epid}</TableCell>
-                                <TableCell rowSpan={periodCount}>{entry.employee?.name}</TableCell>
-                                <TableCell rowSpan={periodCount}>{entry.employee?.designation}</TableCell>
-                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
-                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>
-                              </>
-                            )}
-                            <TableCell className="whitespace-nowrap">
-                              {entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER'
-                                ? `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`
-                                : isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
-                                  ? "- "
-                                  : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER'
-                                ? <span>{period.days} <span style={{ fontSize: '0.7em', color: '#ea580c' }}>(Periods)</span></span>
-                                : period.days}
-                            </TableCell>
-                            <TableCell>{period.remarks || "-"}</TableCell>
-                          </TableRow>
-                        );
-                      });
-                    } catch (error) {
-                      console.error('Error parsing periods:', error);
-                      return null;
-                    }
-                  })
-              })()}
-            </TableBody>
+              return (
+                <>
+                  <TableBody>
+                    {initialRows}
+                  </TableBody>
+                  <TableBody className="border-t-0" style={{ pageBreakInside: 'avoid' }}>
+                    {lastRow}
+                    {signatureRow}
+                  </TableBody>
+                </>
+              );
+            })()}
           </Table>
-        </div>
-
-        <div className="mt-8 space-y-4 text-right certification-section">
-          <p>.Certified that the above attendance report is correct.</p>
-          <div className="space-y-1">
-            <div style={{ height: '3em' }}></div>
-            <p>{report.department?.hodTitle}</p>
-            <p>{report.department?.hodName}</p>
-            <p>{report.department?.name}</p>
-          </div>
         </div>
       </div>
 

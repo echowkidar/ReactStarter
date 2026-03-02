@@ -1421,18 +1421,31 @@ export default function AdminDashboard() {
               <div className="text-center py-1 bg-orange-50 rounded border border-orange-100 col-span-2">
                 {(() => {
                   const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                  const isAuthorized = adminData.role === 'super_admin' || (adminData.role === 'salary_admin' && adminData.userCode === 'ALL');
+                  const isSuperOrAll = adminData.role === 'superadmin' || (adminData.role === 'salary' && adminData.userCode === 'ALL');
+                  const isDealingAssistant = adminData.role === 'salary' && adminData.userCode !== 'ALL' && adminData.userCode !== 'VEW';
 
-                  if (!isAuthorized) return (
+                  if (!isSuperOrAll && !isDealingAssistant) return (
                     <>
                       <p className="text-lg font-bold text-gray-400 leading-none">-</p>
                       <p className="text-[7px] uppercase text-gray-400 font-medium">Pending Requests</p>
                     </>
                   );
 
+                  // Calculate pending requests meant for this user
+                  let pendingCount = 0;
+                  if (isSuperOrAll) {
+                    pendingCount = stats.requests.cancellation + stats.requests.recall;
+                  } else if (isDealingAssistant) {
+                    // Count only requests from departments assigned to this dealing assistant
+                    pendingCount = reports?.filter(r =>
+                      (r.status === 'cancel_requested' || r.status === 'recall_requested') &&
+                      (r.department as any)?.dealingAssistantCode === adminData.userCode
+                    ).length || 0;
+                  }
+
                   return (
                     <>
-                      <p className="text-lg font-bold text-orange-700 leading-none">{stats.requests.cancellation + stats.requests.recall}</p>
+                      <p className="text-lg font-bold text-orange-700 leading-none">{pendingCount}</p>
                       <p className="text-[7px] uppercase text-orange-600 font-medium">Pending Requests</p>
                     </>
                   );
@@ -1770,7 +1783,31 @@ export default function AdminDashboard() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setLocation(`/admin/reports/${report.id}`)}
+                            onClick={() => {
+                              const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                              const isSuperOrAll = adminData.role === 'superadmin' || (adminData.role === 'salary' && adminData.userCode === 'ALL');
+                              const isVEW = adminData.userCode === 'VEW';
+                              const isAssignedToMe = adminData.role === 'salary' && (report.department as any)?.dealingAssistantCode === adminData.userCode;
+
+                              if (isVEW) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Access Denied",
+                                  description: "You do not have permission to view report details."
+                                });
+                                return;
+                              }
+
+                              if (isSuperOrAll || isAssignedToMe) {
+                                setLocation(`/admin/reports/${report.id}`);
+                              } else {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Access Denied",
+                                  description: "You are not assigned to this department's reports."
+                                });
+                              }
+                            }}
                             className="flex items-center gap-2"
                           >
                             <Eye className="h-4 w-4" />
@@ -1780,7 +1817,15 @@ export default function AdminDashboard() {
                         {/* Accept Cancellation button for cancel_requested status */}
                         {(() => {
                           const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                          const canManageRequests = adminData.role === 'super_admin' || (adminData.role === 'salary_admin' && adminData.userCode === 'ALL');
+
+                          // Check if department is assigned to this specific dealing assistant
+                          const isAssignedToMe = adminData.role === 'salary' &&
+                            (report.department as any)?.dealingAssistantCode === adminData.userCode;
+
+                          // 'ALL' user code is equivalent to super_admin for these tasks
+                          const canManageRequests = adminData.role === 'superadmin' ||
+                            (adminData.role === 'salary' && adminData.userCode === 'ALL') ||
+                            isAssignedToMe;
 
                           if (!canManageRequests) return null;
 

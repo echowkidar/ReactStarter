@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -204,6 +204,18 @@ export default function ReportDetails() {
                   overflow: hidden;
                   text-overflow: ellipsis;
                 }
+                
+                /* Keep last row with certification section */
+                .print-content tbody tr:last-child {
+                  page-break-after: avoid !important;
+                  break-after: avoid !important;
+                }
+                
+                .certification-section {
+                  page-break-before: avoid !important;
+                  break-before: avoid !important;
+                  page-break-inside: avoid !important;
+                }
               </style>
             </head>
             <body>
@@ -245,6 +257,19 @@ export default function ReportDetails() {
           const certificationSection = printWindow.document.querySelector('.mt-8');
           if (certificationSection) {
             certificationSection.classList.add('certification');
+            certificationSection.classList.add('certification-section');
+          }
+
+          if (report.status === 'draft') {
+            const draftWarningElement = printWindow.document.createElement('div');
+            draftWarningElement.className = 'transaction-id-text';
+            draftWarningElement.style.paddingBottom = '15mm';
+            draftWarningElement.style.fontSize = '12pt';
+            draftWarningElement.style.fontWeight = 'bold';
+            draftWarningElement.style.color = '#000';
+            draftWarningElement.style.textAlign = 'center';
+            draftWarningElement.innerHTML = 'Do not upload/send the draft attendance report as it is for your office use only.';
+            printWindow.document.body.appendChild(draftWarningElement);
           }
 
           setTimeout(() => {
@@ -457,17 +482,32 @@ export default function ReportDetails() {
         <div className="print-content space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Attendance Report</CardTitle>
+              <CardTitle>{report.status === 'draft' ? 'Draft Attendance Report' : 'Attendance Report'}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <InfoItem label="Department" value={report.department?.name} />
                 <InfoItem label="Month/Year" value={formatPeriod(report.year, report.month)} />
-                <InfoItem label="Transaction ID" value={report.transactionId || '-'} />
+                <InfoItem
+                  label="Transaction ID"
+                  value={
+                    report.status === "draft" ? "*****" :
+                      report.status === "sent" ? (report.transactionId || "-") :
+                        (report.transactionId ? (
+                          <>
+                            <span className="print:hidden font-mono tracking-widest text-muted-foreground">***</span>
+                            <span className="hidden print:inline">{report.transactionId}</span>
+                          </>
+                        ) : "-")
+                  }
+                />
                 <InfoItem
                   label="Status"
                   value={
-                    <Badge variant={report.status === "submitted" ? "default" : "secondary"}>
+                    <Badge
+                      variant={report.status === "submitted" ? "outline" : "secondary"}
+                      className={report.status === "submitted" ? "border-green-600 text-green-700 bg-green-50 font-bold uppercase tracking-wider px-3" : ""}
+                    >
                       {report.status}
                     </Badge>
                   }
@@ -503,8 +543,9 @@ export default function ReportDetails() {
                     <TableHead className="whitespace-nowrap">Remarks</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {report.entries?.map((entry) => {
+                {(() => {
+                  const allRows: React.ReactNode[] = [];
+                  (report.entries || []).forEach((entry) => {
                     try {
                       const periods = typeof entry.periods === 'string'
                         ? JSON.parse(entry.periods)
@@ -512,9 +553,9 @@ export default function ReportDetails() {
 
                       const periodCount = periods?.length || 1;
 
-                      return periods.map((period: any, periodIndex: number) => {
+                      periods.forEach((period: any, periodIndex: number) => {
                         const isFirstPeriod = periodIndex === 0;
-                        return (
+                        allRows.push(
                           <TableRow key={`${entry.id}-${periodIndex}`}>
                             {isFirstPeriod && (
                               <>
@@ -525,12 +566,22 @@ export default function ReportDetails() {
                                 <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>
                               </>
                             )}
-                            <TableCell className="whitespace-nowrap">
-                              {formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}
+                            <TableCell className="whitespace-normal min-w-[120px]">
+                              {(entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER' || entry.employee?.designation?.toUpperCase() === 'GUEST FACULTY')
+                                ? (
+                                  <div className="flex flex-col">
+                                    <span>{formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}</span>
+                                    {periodIndex === periodCount - 1 && (
+                                      <span className="text-[10px] font-bold mt-1 leading-tight">** Original Bill must be sent to Salary Section **</span>
+                                    )}
+                                  </div>
+                                )
+                                : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`
+                              }
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
-                              {entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER'
-                                ? <span>{period.days} <span style={{ fontSize: '0.7em', color: '#ea580c' }}>(Periods)</span></span>
+                              {(entry.employee?.designation?.toUpperCase() === 'GUEST TEACHER' || entry.employee?.designation?.toUpperCase() === 'GUEST FACULTY')
+                                ? <div className="flex flex-col items-center justify-center -mt-1"><span className="leading-tight">{period.days}</span><span className="font-bold text-[9px] text-[#ea580c] leading-tight mt-0.5">Periods</span></div>
                                 : period.days}
                             </TableCell>
                             <TableCell>{period.remarks || "-"}</TableCell>
@@ -539,24 +590,47 @@ export default function ReportDetails() {
                       });
                     } catch (error) {
                       console.error('Error parsing periods:', error);
-                      return null;
                     }
-                  })}
-                </TableBody>
+                  });
+
+                  const signatureRow = (
+                    <TableRow key="signature-row" className="hover:bg-transparent" style={{ pageBreakInside: 'avoid', border: 'none' }}>
+                      <TableCell colSpan={9} className="p-0" style={{ border: 'none' }}>
+                        <div className="mt-8 space-y-4 text-right certification-section page-break-inside-avoid">
+                          <p>Certified that the above attendance report is correct.</p>
+                          <div className="space-y-1">
+                            <div style={{ height: '3em' }}></div>
+                            <p>{report.department?.hodName}</p>
+                            <p>{report.department?.hodTitle}</p>
+                            <p>{report.department?.name}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+
+                  if (allRows.length === 0) {
+                    return <TableBody>{signatureRow}</TableBody>;
+                  }
+
+                  const initialRows = allRows.slice(0, -1);
+                  const lastRow = allRows[allRows.length - 1];
+
+                  return (
+                    <>
+                      <TableBody>
+                        {initialRows}
+                      </TableBody>
+                      <TableBody className="border-t-0" style={{ pageBreakInside: 'avoid' }}>
+                        {lastRow}
+                        {signatureRow}
+                      </TableBody>
+                    </>
+                  );
+                })()}
               </Table>
             </CardContent>
           </Card>
-
-          <div className="mt-8 space-y-4 text-right">
-            <p>Certified that the above attendance report is correct.</p>
-
-            <div className="space-y-1">
-              <div style={{ height: '3em' }}></div>
-              <p>{report.department?.hodTitle}</p>
-              <p>{report.department?.hodName}</p>
-              <p>{report.department?.name}</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

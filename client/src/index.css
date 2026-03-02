@@ -12,6 +12,31 @@
   }
 }
 
+@layer utilities {
+  @keyframes fadeSwapA {
+    0%, 45% { opacity: 1; }
+    50%, 95% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  @keyframes fadeSwapB {
+    0%, 45% { opacity: 0; }
+    50%, 95% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .animate-fade-swap-a {
+    animation: fadeSwapA 3s infinite;
+  }
+  .animate-fade-swap-b {
+    animation: fadeSwapB 3s infinite;
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+}
+
 /* Print styles */
 @media print {
   @page {

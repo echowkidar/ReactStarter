@@ -2169,6 +2169,66 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Get list of all reported periods for all employees in a department to prevent overlaps
+  app.get("/api/departments/:departmentId/attendance/reported-periods", async (req, res) => {
+    try {
+      const departmentId = Number(req.params.departmentId);
+      if (isNaN(departmentId)) {
+        return res.status(400).json({ error: "Invalid parameters" });
+      }
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const result = await db.execute(sql`
+        SELECT ae.employee_id, ae.periods, ar.id as report_id
+        FROM attendance_entries ae
+        JOIN attendance_reports ar ON ae.report_id = ar.id
+        WHERE ar.department_id = ${departmentId}
+          AND ar.status IN ('submitted', 'sent')
+      `);
+
+      // Construct a dictionary: employeeId -> Array<{ fromDate, toDate, reportId }>
+      const reportedPeriods: Record<number, Array<{ fromDate: string, toDate: string, reportId: number }>> = {};
+
+      result.rows.forEach((row: any) => {
+        const empId = row.employee_id;
+        const reportId = row.report_id;
+        let periods = [];
+        try {
+          periods = typeof row.periods === 'string' ? JSON.parse(row.periods) : row.periods;
+        } catch (e) {
+          console.error("Failed to parse periods for entry", row);
+        }
+
+        if (!reportedPeriods[empId]) {
+          reportedPeriods[empId] = [];
+        }
+
+        if (Array.isArray(periods)) {
+          periods.forEach((p: any) => {
+            if (p.fromDate && p.toDate) {
+              reportedPeriods[empId].push({
+                fromDate: p.fromDate,
+                toDate: p.toDate,
+                reportId: reportId
+              });
+            }
+          });
+        }
+      });
+
+      res.json(reportedPeriods);
+
+    } catch (error: any) {
+      console.error("[FullDebug] Reported Periods Route Error:", error);
+      res.status(500).json({
+        message: "Failed to fetch reported periods",
+        error: error.message
+      });
+    }
+  });
+
   app.post("/api/departments/:departmentId/attendance", async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
@@ -2437,13 +2497,21 @@ export async function registerRoutes(app: Express) {
       });
 
       // BATCH LOAD: Fetch all departments and employees in bulk (2 queries instead of thousands)
-      const [allDepartments, allEmployees] = await Promise.all([
+      const [allDepartments, allEmployees, allDepartmentNames] = await Promise.all([
         storage.getAllDepartments(),
         storage.getAllEmployees(),
+        storage.getAllDepartmentNames()
       ]);
 
       // Build lookup maps for O(1) access
-      const departmentMap = new Map(allDepartments.map(d => [d.id, d]));
+      const departmentNameMap = new Map(allDepartmentNames.map(dn => [dn.name, dn]));
+
+      const departmentMap = new Map(allDepartments.map(d => {
+        // Find corresponding department name entry to get dealingAssistantCode
+        const dn = departmentNameMap.get(d.name);
+        return [d.id, { ...d, dealingAssistantCode: dn?.dealingAssistantCode }];
+      }));
+
       const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
 
       // Fetch entries for all "sent" reports in parallel (1 query per report, not per entry)

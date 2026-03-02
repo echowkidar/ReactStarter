@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, X, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -79,6 +80,24 @@ const parseDateFromDisplay = (dateStr: string): Date => {
   return new Date(2000 + year, month - 1, day);
 };
 
+const shiftPeriodMonth = (fromDateStr: string, direction: number, limitMonth: number, limitYear: number) => {
+  const [fDay, fMonth, fYear] = fromDateStr.split('-').map(Number);
+  const currentFDate = new Date(2000 + fYear, fMonth - 1, 1);
+
+  const targetDate = new Date(currentFDate.getFullYear(), currentFDate.getMonth() + direction, 1);
+
+  if (direction > 0) {
+    if (targetDate.getFullYear() > limitYear || (targetDate.getFullYear() === limitYear && targetDate.getMonth() + 1 > limitMonth)) {
+      return null;
+    }
+  }
+
+  return {
+    fromDate: formatDateForDisplay(new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)),
+    toDate: formatDateForDisplay(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0))
+  };
+};
+
 const attendanceSchema = z.object({
   month: z.string().min(1),
   year: z.string().min(1),
@@ -136,6 +155,60 @@ const formatTermExpiry = (dateStr: string | null | undefined): string => {
 export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary, departmentId: propDepartmentId }: AttendanceFormProps) {
   const currentDept = getCurrentDepartment();
   const departmentId = propDepartmentId || currentDept?.id;
+  const { toast } = useToast();
+
+  // Fetch all historically sent/submitted periods for overlapping check
+  const { data: reportedPeriods = {} } = useQuery<Record<number, Array<{ fromDate: string, toDate: string, reportId: number }>>>({
+    queryKey: [`/api/departments/${departmentId}/attendance/reported-periods`],
+    enabled: !!departmentId,
+  });
+
+  // Check if a period overlaps with any historically sent period for an employee
+  const checkReportedOverlap = (
+    employeeId: number,
+    fromDate: string,
+    toDate: string,
+    currentReportId?: string | null
+  ): { hasOverlap: boolean, message?: string } => {
+    if (!fromDate || !toDate) return { hasOverlap: false };
+    const empPeriods = reportedPeriods[employeeId] || [];
+
+    for (const rp of empPeriods) {
+      if (currentReportId && rp.reportId === Number(currentReportId)) {
+        continue;
+      }
+      if (doPeriodsOverlap(fromDate, toDate, rp.fromDate, rp.toDate)) {
+        return {
+          hasOverlap: true,
+          message: `Attendance for ${rp.fromDate} to ${rp.toDate} has already been sent.`
+        };
+      }
+    }
+    return { hasOverlap: false };
+  };
+
+  const handleFormSubmit = async (data: AttendanceFormData) => {
+    // Check for overlaps before submitting
+    for (const entry of data.entries) {
+      if (!includedEmployees.has(entry.employeeId)) continue;
+
+      for (const period of entry.periods) {
+        const overlap = checkReportedOverlap(entry.employeeId, period.fromDate, period.toDate, reportId);
+        if (overlap.hasOverlap) {
+          const empName = rawEmployees.find((e: any) => e.id === entry.employeeId)?.name || 'Employee';
+          toast({
+            title: "Overlapping Period Detected",
+            description: `${empName}: ${overlap.message}`,
+            variant: "destructive",
+          });
+          return; // Block submission
+        }
+      }
+    }
+
+    // No overlaps, proceed with original submission
+    await onSubmit(data);
+  };
 
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
   const [includeExcluded, setIncludeExcluded] = useState(false); // Mode: With Break
@@ -149,6 +222,18 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   // Calculate first and last day of selected month
   const defaultStartDate = new Date(selectedYear, selectedMonth - 1, 1);
   const defaultEndDate = new Date(selectedYear, selectedMonth, 0);
+
+  const maxDateForInput = `${defaultEndDate.getFullYear()}-${String(defaultEndDate.getMonth() + 1).padStart(2, '0')}-${String(defaultEndDate.getDate()).padStart(2, '0')}`;
+
+  // Calculate first and last day of previous month for guest teachers/faculty
+  let prevMonth = selectedMonth - 1;
+  let prevYear = selectedYear;
+  if (prevMonth === 0) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  const prevMonthStartDate = new Date(prevYear, prevMonth - 1, 1);
+  const prevMonthEndDate = new Date(prevYear, prevMonth, 0);
 
   // Create form first so we can watch values
   const form = useForm<AttendanceFormData>({
@@ -174,10 +259,10 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   const watchMonth = form.watch("month");
   const watchYear = form.watch("year");
 
-  // Fetch employees who are already in a report for this month/year (if supplementary)
+  // Fetch employees who are already in a report for this month/year
   useEffect(() => {
     const fetchReportedEmployees = async () => {
-      if (!isSupplementary || !departmentId) {
+      if (!departmentId) {
         setReportedEmployeeIds(new Set());
         return;
       }
@@ -226,15 +311,24 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     },
   });
 
-  // Filter employees based on supplementary mode
+  // Filter out employees who already have attendance sent/submitted for this month
   const employees = React.useMemo(() => {
-    if (!isSupplementary) return rawEmployees;
-    return rawEmployees.filter((e: any) => !reportedEmployeeIds.has(e.id));
-  }, [rawEmployees, isSupplementary, reportedEmployeeIds]);
+    const initiallySelectedIds = new Set((initialData?.entries || []).map((entry: any) => entry.employeeId));
+
+    return rawEmployees.filter((e: any) => {
+      // If the employee is part of the initial data (e.g. we are editing this draft), they SHOULD be visible
+      if (initiallySelectedIds.has(e.id)) {
+        return true;
+      }
+      // Otherwise, hide them if they are in another reported document
+      return !reportedEmployeeIds.has(e.id);
+    });
+  }, [rawEmployees, reportedEmployeeIds, initialData]);
 
   const isGuestTeacher = (empId: number) => {
     const emp = employees.find((e: any) => e.id === empId);
-    return emp?.designation?.toUpperCase() === 'GUEST TEACHER';
+    const designation = emp?.designation?.toUpperCase();
+    return designation === 'GUEST TEACHER' || designation === 'GUEST FACULTY';
   };
 
   // Check if two date ranges overlap (dates in DD-MM-YY format)
@@ -279,8 +373,10 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         next.add(employeeId);
         // Initialize entry when adding employee
         const currentEntries = form.getValues("entries") || [];
-        const fromDateStr = formatDateForDisplay(defaultStartDate);
-        const toDateStr = formatDateForDisplay(defaultEndDate);
+        const isGuest = isGuestTeacher(employeeId);
+        const fromDateStr = formatDateForDisplay(isGuest ? prevMonthStartDate : defaultStartDate);
+        const toDateStr = formatDateForDisplay(isGuest ? prevMonthEndDate : defaultEndDate);
+
         form.setValue("entries", [
           ...currentEntries,
           {
@@ -288,7 +384,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             periods: [{
               fromDate: fromDateStr,
               toDate: toDateStr,
-              days: isGuestTeacher(employeeId) ? 0 : calculateDays(fromDateStr, toDateStr),
+              days: isGuest ? 0 : calculateDays(fromDateStr, toDateStr),
               remarks: "",
             }],
           },
@@ -304,14 +400,15 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
     if (entryIndex === -1) return;
 
-    const fromDateStr = formatDateForDisplay(defaultStartDate);
-    const toDateStr = formatDateForDisplay(defaultEndDate);
+    const isGuest = isGuestTeacher(employeeId);
+    const fromDateStr = formatDateForDisplay(isGuest ? prevMonthStartDate : defaultStartDate);
+    const toDateStr = formatDateForDisplay(isGuest ? prevMonthEndDate : defaultEndDate);
 
 
     const newPeriod = {
       fromDate: fromDateStr,
       toDate: toDateStr,
-      days: isGuestTeacher(employeeId) ? 0 : calculateDays(fromDateStr, toDateStr),
+      days: isGuest ? 0 : calculateDays(fromDateStr, toDateStr),
       remarks: "",
     };
 
@@ -419,7 +516,10 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         .map((employee: any) => {
           // Check if excluded designation (Daily Wage)
           const isExcluded = excludedDesignations.includes(employee.designation?.toUpperCase());
-          let endDate = defaultEndDate;
+          const isGuest = employee.designation?.toUpperCase() === 'GUEST TEACHER' || employee.designation?.toUpperCase() === 'GUEST FACULTY';
+
+          let startDate = isGuest ? prevMonthStartDate : defaultStartDate;
+          let endDate = isGuest ? prevMonthEndDate : defaultEndDate;
 
           if (isExcluded) {
             // One day before month end for Daily Wagers
@@ -427,14 +527,14 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             endDate.setDate(endDate.getDate() - 1);
           }
 
-          const fromStr = formatDateForDisplay(defaultStartDate);
+          const fromStr = formatDateForDisplay(startDate);
           const toStr = formatDateForDisplay(endDate);
           return {
             employeeId: employee.id,
             periods: [{
               fromDate: fromStr,
               toDate: toStr,
-              days: employee.designation?.toUpperCase() === 'GUEST TEACHER' ? 0 : calculateDays(fromStr, toStr),
+              days: isGuest ? 0 : calculateDays(fromStr, toStr),
               remarks: "",
             }],
           };
@@ -514,11 +614,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           return;
         }
 
-        // Check GUEST TEACHER has non-zero days
+
+        // Check GUEST TEACHER/FACULTY has non-zero days
         const guestErrors: string[] = [];
         for (const entry of data.entries) {
           const emp = employees.find((e: any) => e.id === entry.employeeId);
-          if (emp?.designation?.toUpperCase() === 'GUEST TEACHER') {
+          const designation = emp?.designation?.toUpperCase();
+          if (designation === 'GUEST TEACHER' || designation === 'GUEST FACULTY') {
             for (let i = 0; i < entry.periods.length; i++) {
               if (!entry.periods[i].days || entry.periods[i].days === 0) {
                 guestErrors.push(`${emp.name}: Period has 0. Please fill Total Periods or untick from list to exclude from the attendance report.`);
@@ -527,11 +629,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           }
         }
         if (guestErrors.length > 0) {
-          alert('Guest Teacher total periods cannot be 0:\n\n' + guestErrors.join('\n'));
+          alert('Guest Teacher/Faculty total periods cannot be 0:\n\n' + guestErrors.join('\n'));
           return;
         }
 
-        onSubmit(data);
+        handleFormSubmit(data);
       })} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
@@ -725,19 +827,20 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
 
 
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-md border overflow-x-auto shadow-sm">
           <Table style={{ minWidth: '1100px' }}>
-            <TableHeader>
+            <TableHeader className="bg-gray-50">
               <TableRow>
-                <TableHead className="w-[40px] px-2">
-                  <div className="flex flex-col items-center">
+                <TableHead className="w-[40px] px-2 bg-green-50 border-r border-green-200">
+                  <div className="flex flex-col items-center justify-center py-1">
                     <Checkbox
                       checked={eligibleEmployees.length > 0 &&
                         eligibleEmployees.every((emp: any) => includedEmployees.has(emp.id))}
                       onCheckedChange={toggleAllEmployees}
                       disabled={isLoading}
+                      className="h-5 w-5 border-green-600 data-[state=checked]:bg-green-600"
                     />
-                    <span className="text-xs mt-1">All</span>
+                    <span className="text-xs mt-1 font-bold text-green-700">All</span>
                   </div>
                 </TableHead>
                 <TableHead className="w-[40px] px-1">S.No.</TableHead>
@@ -840,11 +943,45 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 </Badge>
                               </div>
                             )}
-                            <div className="grid grid-cols-[105px_105px_60px_1fr_30px] gap-1 items-center">
+                            <div className="grid grid-cols-[30px_105px_105px_30px_60px_1fr_30px] gap-1 items-center">
+
+                              <div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    const shifted = shiftPeriodMonth(period.fromDate, -1, selectedMonth, selectedYear);
+                                    if (shifted) {
+                                      const entries = form.getValues("entries");
+                                      const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                      if (entryIndex !== -1) {
+                                        const newEntries = [...entries];
+                                        newEntries[entryIndex] = {
+                                          ...newEntries[entryIndex],
+                                          periods: [...newEntries[entryIndex].periods]
+                                        };
+                                        newEntries[entryIndex].periods[periodIndex] = {
+                                          ...newEntries[entryIndex].periods[periodIndex],
+                                          fromDate: shifted.fromDate,
+                                          toDate: shifted.toDate,
+                                          days: isGuestTeacher(employee.id) ? newEntries[entryIndex].periods[periodIndex].days : calculateDays(shifted.fromDate, shifted.toDate)
+                                        };
+                                        form.setValue("entries", newEntries, { shouldDirty: true });
+                                      }
+                                    }
+                                  }}
+                                  disabled={isLoading || !includedEmployees.has(employee.id)}
+                                >
+                                  <ChevronsLeft className="h-4 w-4" />
+                                </Button>
+                              </div>
 
                               <div>
                                 <input
                                   type="date"
+                                  max={maxDateForInput}
                                   className="w-full p-1 text-sm border rounded-md"
                                   value={formatDateForInput(period.fromDate)}
                                   onChange={(e) => {
@@ -877,6 +1014,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                               <div>
                                 <input
                                   type="date"
+                                  max={maxDateForInput}
                                   className="w-full p-1 text-sm border rounded-md"
                                   value={formatDateForInput(period.toDate)}
                                   onChange={(e) => {
@@ -904,6 +1042,48 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                   }}
                                   disabled={isLoading || !includedEmployees.has(employee.id)}
                                 />
+                              </div>
+
+                              <div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    const shifted = shiftPeriodMonth(period.fromDate, 1, selectedMonth, selectedYear);
+                                    if (shifted) {
+                                      const entries = form.getValues("entries");
+                                      const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
+                                      if (entryIndex !== -1) {
+                                        const newEntries = [...entries];
+                                        newEntries[entryIndex] = {
+                                          ...newEntries[entryIndex],
+                                          periods: [...newEntries[entryIndex].periods]
+                                        };
+                                        newEntries[entryIndex].periods[periodIndex] = {
+                                          ...newEntries[entryIndex].periods[periodIndex],
+                                          fromDate: shifted.fromDate,
+                                          toDate: shifted.toDate,
+                                          days: isGuestTeacher(employee.id) ? newEntries[entryIndex].periods[periodIndex].days : calculateDays(shifted.fromDate, shifted.toDate)
+                                        };
+                                        form.setValue("entries", newEntries, { shouldDirty: true });
+                                      }
+                                    }
+                                  }}
+                                  disabled={
+                                    isLoading ||
+                                    !includedEmployees.has(employee.id) ||
+                                    (() => {
+                                      const [fDay, fMonth, fYear] = period.fromDate.split('-').map(Number);
+                                      const currentFDate = new Date(2000 + fYear, fMonth - 1, 1);
+                                      const targetDate = new Date(currentFDate.getFullYear(), currentFDate.getMonth() + 1, 1);
+                                      return targetDate.getFullYear() > selectedYear || (targetDate.getFullYear() === selectedYear && targetDate.getMonth() + 1 > selectedMonth);
+                                    })()
+                                  }
+                                >
+                                  <ChevronsRight className="h-4 w-4" />
+                                </Button>
                               </div>
 
                               <div className="text-center">
@@ -984,9 +1164,30 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 </button>
                               </div>
                             </div>
+
+                            {/* Overlap Warning Inline */}
+                            {(() => {
+                              if (!includedEmployees.has(employee.id)) return null;
+                              const overlapState = checkReportedOverlap(employee.id, period.fromDate, period.toDate, reportId);
+                              if (overlapState.hasOverlap) {
+                                return (
+                                  <div className="text-destructive text-[11px] mt-1 font-medium text-center bg-red-50 p-1 rounded-sm">
+                                    Warning: {overlapState.message}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
 
                         ))}
+
+                      {isGuestTeacher(employee.id) && includedEmployees.has(employee.id) && (
+                        <div className="text-[11px] font-bold text-center mt-1 pb-1">
+                          ** Original Bill must be sent to Salary Section **
+                        </div>
+                      )}
+
                       {includedEmployees.has(employee.id) && (
                         <button
                           type="button"
