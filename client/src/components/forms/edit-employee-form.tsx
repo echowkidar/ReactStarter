@@ -383,7 +383,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
       salary_asstt: employee.salary_asstt || "",
       departmentId: employee.departmentId,
 
-      isActive: employee.isActive || "active",
+      isActive: (employee.isActive || "active").toLowerCase() === "disabled"
+        ? "inactive"
+        : (employee.isActive || "active").toLowerCase(),
       remarks: employee.remarks || "",
       panCardUrl: employee.panCardUrl || "",
       bankProofUrl: employee.bankProofUrl || "",
@@ -439,6 +441,16 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const onSubmit = async (data: any) => {
     try {
       setIsSubmitting(true);
+
+      if (!selectedSalaryAsstt) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Please select a salary assistant"
+        });
+        setIsSubmitting(false);
+        return;
+      }
 
       // Get department info for department-specific API
       const departmentInfo = JSON.parse(localStorage.getItem("department") || "{}");
@@ -856,30 +868,30 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                     >
                       <input
                         type="radio"
-                        checked={watch("isActive") === "disabled"}
+                        checked={watch("isActive") === "inactive"}
                         onChange={() => {
                           if (isRestricted) return;
-                          // Open the disable reason modal instead of directly setting disabled
-                          if (employee.isActive !== "disabled") {
+                          // Open the disable reason modal instead of directly setting inactive
+                          if (employee.isActive !== "inactive") {
                             setShowDisableModal(true);
                           }
                         }}
                         className="sr-only"
                         disabled={isRestricted}
                       />
-                      <div className={`w-4 h-4 rounded-full border-2 mr-2 ${watch("isActive") === "disabled"
-                        ? "bg-red-500 border-red-500"
+                      <div className={`w-4 h-4 rounded-full border-2 mr-2 ${watch("isActive") === "inactive"
+                        ? "bg-orange-500 border-orange-500"
                         : "border-gray-300"
                         }`}>
-                        {watch("isActive") === "disabled" && (
+                        {watch("isActive") === "inactive" && (
                           <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
                         )}
                       </div>
-                      <span className="text-sm font-medium text-red-600">Disabled</span>
+                      <span className="text-sm font-medium text-orange-600">Disabled</span>
                     </label>
                   </div>
-                  {/* Show disable reason if already disabled */}
-                  {watch("isActive") === "disabled" && disableReason && (
+                  {/* Show disable reason if already inactive */}
+                  {watch("isActive") === "inactive" && disableReason && (
                     <p className="text-xs text-muted-foreground mt-2">
                       Reason: {DISABLE_REASONS.find(r => r.value === disableReason)?.label || disableReason}
                       {disableWefDate && ` (WEF ${disableWefDate})`}
@@ -889,7 +901,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Salary Assistant</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Salary Assistant <span className="text-red-500">*</span></label>
                   <SearchableSelect
                     options={salaryAssistantOptions}
                     value={selectedSalaryAsstt}
@@ -1156,7 +1168,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
         onConfirm={(reason, wefDate) => {
           setDisableReason(reason);
           setDisableWefDate(wefDate);
-          form.setValue("isActive", "disabled");
+          form.setValue("isActive", "inactive");
           setShowDisableModal(false);
         }}
         employeeName={employee.name}

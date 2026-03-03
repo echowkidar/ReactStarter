@@ -17,6 +17,7 @@ import { EditEmployeeForm } from "@/components/forms/edit-employee-form";
 import { Input } from "@/components/ui/input";
 import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 const EmployeeDetails = ({ employee }: { employee: Employee }) => {
   return (
@@ -202,6 +203,7 @@ export default function Employees() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>(["active"]);
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],
@@ -226,14 +228,28 @@ export default function Employees() {
     return a.epid.localeCompare(b.epid, undefined, { numeric: true });
   });
 
-  // Filter employees based on search query
-  const filteredEmployees = searchQuery.trim()
-    ? sortedEmployees.filter(employee =>
-      employee.epid.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.designation.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    : sortedEmployees;
+  // Filter employees based on search query AND status filter
+  const filteredEmployees = sortedEmployees.filter(employee => {
+    // 1. Filter by Status
+    // Treat null/undefined isActive as "active" for backward compatibility
+    let empStatus = (employee.isActive || "active").toLowerCase();
+    // Map 'disabled' backward compatibly to 'inactive'
+    if (empStatus === "disabled") empStatus = "inactive";
+
+    // If no filter selected, show all. Otherwise, check if status is included in array.
+    if (statusFilter.length > 0 && !statusFilter.includes(empStatus)) {
+      return false;
+    }
+
+    // 2. Filter by search query
+    if (searchQuery.trim()) {
+      return employee.epid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.designation.toLowerCase().includes(searchQuery.toLowerCase());
+    }
+
+    return true;
+  });
 
   // Reorder Mutation
   const reorderMutation = useMutation({
@@ -428,25 +444,45 @@ export default function Employees() {
             </Dialog>
           </div>
 
-          {/* Search input */}
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by any (ID, Name, or Designation...)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-10"
-            />
-            {searchQuery && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
-                onClick={() => setSearchQuery("")}
+          {/* Filters row: Search and Status toggle */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-4 items-center justify-between">
+            <div className="relative w-full sm:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by any (ID, Name, or Designation...)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setSearchQuery("")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Employees Status:</span>
+              <ToggleGroup
+                type="multiple"
+                value={statusFilter}
+                onValueChange={(v) => {
+                  setStatusFilter(v);
+                }}
               >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
+                <ToggleGroupItem value="active" aria-label="Toggle active" className="data-[state=on]:bg-green-100 data-[state=on]:text-green-800">
+                  Active
+                </ToggleGroupItem>
+                <ToggleGroupItem value="inactive" aria-label="Toggle disabled" className="data-[state=on]:bg-orange-100 data-[state=on]:text-orange-800">
+                  Disabled
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </div>
 
           <div className="rounded-md border">
@@ -477,11 +513,11 @@ export default function Employees() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee.isActive === "active"
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${(employee.isActive || "active").toLowerCase() === "active"
                           ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
+                          : "bg-orange-100 text-orange-800"
                           }`}>
-                          {employee.isActive === "active" ? "Active" : "Disabled"}
+                          {(employee.isActive || "active").toLowerCase() === "active" ? "Active" : "Disabled"}
                         </span>
                         {/* Transfer status badge */}
                         {employee.transferStatus === "pending" && (

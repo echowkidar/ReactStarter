@@ -39,7 +39,7 @@ const employeeSchema = z.object({
   joiningDate: z.string().min(1, "Joining Date is required"),
   joiningShift: z.enum(["FN", "AN"]),
   salaryRegisterNo: z.string().min(1, "Salary Register No. is required"),
-  salary_asstt: z.string().optional(),
+  salary_asstt: z.string().min(1, "Salary Assistant is required"),
   // Document fields
   panCardDoc: z.string().optional(),
   bankAccountDoc: z.string().optional(),
@@ -462,7 +462,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                 name="salary_asstt"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Salary Assistant</FormLabel>
+                    <FormLabel>Salary Assistant <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
                       <SearchableSelect
                         options={salaryAssistantOptions}

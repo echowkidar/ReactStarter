@@ -23,6 +23,7 @@ import { compressImageToWebP } from "@/lib/image-utils";
 
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Import master data for designations and register numbers
 import designationsData from "@/lib/designations.json";
@@ -119,8 +120,8 @@ export default function AdminEmployees() {
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
   const [dealingAssistantFilter, setDealingAssistantFilter] = useState<string[]>([]);
-
   const [regNoFilter, setRegNoFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(["active"]);
 
   // Sorting state
   type SortKey = "epid" | "name" | "departmentName" | "designation" | "salary_asstt" | "salaryRegisterNo" | "employmentStatus" | "isActive" | "termExpiry" | "";
@@ -302,6 +303,16 @@ export default function AdminEmployees() {
   const filteredEmployees = useMemo(() => {
     let result = [...employees];
 
+    // Apply status filter
+    if (statusFilter.length > 0) {
+      result = result.filter(emp => {
+        let empStatus = (emp.isActive || "active").toLowerCase();
+        // Map 'disabled' backward compatibly to 'inactive'
+        if (empStatus === "disabled") empStatus = "inactive";
+        return statusFilter.includes(empStatus);
+      });
+    }
+
     // Apply search filter
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
@@ -361,7 +372,7 @@ export default function AdminEmployees() {
     }
 
     return result;
-  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter, regNoFilter, sortConfig]);
+  }, [employees, searchTerm, departmentFilter, dealingAssistantFilter, regNoFilter, statusFilter, sortConfig]);
 
   // Paginate filtered results
   const paginatedEmployees = useMemo(() => {
@@ -673,6 +684,15 @@ export default function AdminEmployees() {
         variant: "destructive",
         title: "Error",
         description: "Please select a department"
+      });
+      return;
+    }
+
+    if (!selectedSalaryAsstt) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select a salary assistant"
       });
       return;
     }
@@ -1198,23 +1218,23 @@ export default function AdminEmployees() {
                                   type="checkbox"
                                   id="isActive"
                                   name="isActive"
-                                  defaultChecked={selectedEmployee?.isActive === "active" || !selectedEmployee}
+                                  defaultChecked={(selectedEmployee?.isActive || "active").toLowerCase() === "active" || !selectedEmployee}
                                   className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                                   disabled={(() => {
                                     const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
                                     // Restriction: Cannot disable if reported AND date <= 25
-                                    return selectedEmployee?.isActive === "active" && isReported && !isDayPast25;
+                                    return (selectedEmployee?.isActive || "active").toLowerCase() === "active" && isReported && !isDayPast25;
                                   })()}
                                 />
                                 <Label
                                   htmlFor="isActive"
                                   className={`text-sm font-medium ${(() => {
                                     const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
-                                    return selectedEmployee?.isActive === "active" && isReported && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
+                                    return (selectedEmployee?.isActive || "active").toLowerCase() === "active" && isReported && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
                                   })()}`}
                                   onClick={(e) => {
                                     const isReported = selectedEmployee && reportedEmployeeIds ? reportedEmployeeIds.some(id => Number(id) === selectedEmployee.id) : false;
-                                    if (selectedEmployee?.isActive === "active" && isReported && !isDayPast25) {
+                                    if ((selectedEmployee?.isActive || "active").toLowerCase() === "active" && isReported && !isDayPast25) {
                                       e.preventDefault();
                                       toast({
                                         variant: "destructive",
@@ -1339,7 +1359,7 @@ export default function AdminEmployees() {
                               </div>
 
                               <div>
-                                <Label htmlFor="salary_asstt">Salary Assistant</Label>
+                                <Label htmlFor="salary_asstt">Salary Assistant <span className="text-red-500">*</span></Label>
                                 <SearchableSelect
                                   options={salaryAssistantOptions}
                                   value={selectedSalaryAsstt}
@@ -1492,6 +1512,25 @@ export default function AdminEmployees() {
                   placeholder="Filter by Reg.No."
                   className="min-w-[180px]"
                 />
+              </div>
+              <div className="w-full md:w-auto flex items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground whitespace-nowrap hidden md:inline">Status:</span>
+                <ToggleGroup
+                  type="multiple"
+                  value={statusFilter}
+                  onValueChange={(v) => {
+                    setStatusFilter(v);
+                    setCurrentPage(1);
+                  }}
+                  className="bg-white border text-sm max-h-[40px] px-1 py-1 rounded-md shadow-sm h-10"
+                >
+                  <ToggleGroupItem value="active" aria-label="Toggle active" className="data-[state=on]:bg-green-100 data-[state=on]:text-green-800 h-8 px-3">
+                    Active
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="inactive" aria-label="Toggle disabled" className="data-[state=on]:bg-orange-100 data-[state=on]:text-orange-800 h-8 px-3">
+                    Disabled
+                  </ToggleGroupItem>
+                </ToggleGroup>
               </div>
             </div>
 
@@ -1658,7 +1697,7 @@ export default function AdminEmployees() {
                         <div className="flex items-center space-x-2">
                           <Checkbox
                             id={`status-${employee.id}`}
-                            checked={employee.isActive === "active"}
+                            checked={(employee.isActive || "active").toLowerCase() === "active"}
                             disabled={(() => {
                               // Permission check
                               // Permission check
@@ -1689,7 +1728,7 @@ export default function AdminEmployees() {
                               // 1. Employee is Active (checked)
                               // 2. Employee is Reported
                               // 3. Date <= 25
-                              return employee.isActive === "active" && isReported && !isDayPast25;
+                              return (employee.isActive || "active").toLowerCase() === "active" && isReported && !isDayPast25;
                             })()}
                             onCheckedChange={(checked) => {
                               toggleStatusMutation.mutate({
@@ -1700,7 +1739,7 @@ export default function AdminEmployees() {
                           />
                           <Label
                             htmlFor={`status-${employee.id}`}
-                            className={`text-sm cursor-pointer ${employee.isActive === "active" ? "text-green-600" : "text-muted-foreground"} ${employee.isActive === "active" && reportedEmployeeIds.includes(employee.id) && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : ''
+                            className={`text-sm cursor-pointer px-2 py-1 rounded-full font-medium ${(employee.isActive || "active").toLowerCase() === "active" ? "text-green-800 bg-green-100" : "text-orange-800 bg-orange-100"} ${(employee.isActive || "active").toLowerCase() === "active" && reportedEmployeeIds.includes(employee.id) && !isDayPast25 ? 'opacity-50 cursor-not-allowed' : ''
                               }`}
                             onClick={(e) => {
                               // Permission check
@@ -1734,7 +1773,7 @@ export default function AdminEmployees() {
                               }
 
                               const isReported = reportedEmployeeIds.includes(employee.id);
-                              if (employee.isActive === "active" && isReported && !isDayPast25) {
+                              if ((employee.isActive || "active").toLowerCase() === "active" && isReported && !isDayPast25) {
                                 e.preventDefault();
                                 toast({
                                   variant: "destructive",
@@ -1744,7 +1783,7 @@ export default function AdminEmployees() {
                               }
                             }}
                           >
-                            {employee.isActive === "active" ? "Active" : "Inactive"}
+                            {(employee.isActive || "active").toLowerCase() === "active" ? "Active" : "Disabled"}
                           </Label>
                         </div>
                       </TableCell>
