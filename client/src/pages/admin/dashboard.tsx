@@ -260,6 +260,31 @@ export default function AdminDashboard() {
     },
     refetchInterval: 120000,
   });
+
+  // Calculate previous month/year for comparison
+  const prevApiMonth = apiMonth === 1 ? 12 : apiMonth - 1;
+  const prevFilterYear = apiMonth === 1 ? filterYear - 1 : filterYear;
+
+  // Fetch previous month's department employee stats for comparison
+  const { data: prevDeptStats = [] } = useQuery<DeptEmployeeStats[]>({
+    queryKey: ["/api/admin/department-employee-stats", prevApiMonth, prevFilterYear],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/admin/department-employee-stats?month=${prevApiMonth}&year=${prevFilterYear}`);
+      return response.json();
+    },
+    refetchInterval: 120000,
+  });
+
+  // Sum reported employees from the previous month
+  const prevMonthReported = useMemo(() => {
+    return prevDeptStats.reduce((sum, s) => sum + (s.reported || 0), 0);
+  }, [prevDeptStats]);
+
+  // Get previous month name for display
+  const prevMonthName = useMemo(() => {
+    return new Date(prevFilterYear, prevApiMonth - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }, [prevApiMonth, prevFilterYear]);
+
   const deptStatsMap = useMemo(() => {
     const map = new Map<number, DeptEmployeeStats>();
     deptStats.forEach(s => map.set(s.departmentId, s));
@@ -787,9 +812,11 @@ export default function AdminDashboard() {
     }
 
     // Clear admin data from localStorage
+    localStorage.removeItem("admin");
     localStorage.removeItem("adminType");
     localStorage.removeItem("adminEmail");
     localStorage.removeItem("adminUsername");
+    localStorage.removeItem("adminSessionToken");
     setLocation("/admin/login");
   };
 
@@ -1043,7 +1070,7 @@ export default function AdminDashboard() {
         {/* Dashboard Stats - 3x1 Grid Layout (Modified) */}
         {/* Row 1: Attendance Report Status + Status Breakdown + Transfer Requests */}
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 mb-4">
-          <div className="lg:col-span-4 bg-white rounded-lg border shadow-sm flex overflow-hidden h-[180px]">
+          <div className="lg:col-span-4 bg-white rounded-lg border shadow-sm flex overflow-hidden">
             {/* Departments Partition */}
             <div className="flex-1 flex border-r border-gray-100">
               {/* Vertical Label Strip */}
@@ -1120,39 +1147,87 @@ export default function AdminDashboard() {
             </div>
 
             {/* Employees Partition */}
-            <div className="flex-1 flex bg-slate-50">
-              {/* Vertical Label Strip */}
-              <div className="w-10 bg-gray-100 flex items-center justify-center shrink-0">
-                <span className="text-[8px] font-bold text-gray-400 uppercase rotate-180 text-center leading-tight tracking-tight" style={{ writingMode: 'vertical-lr' }}>
-                  EMPLOYEES' ATTENDANCE<br />REPORTS STATUS
-                </span>
+            <div className="flex-1 flex flex-col bg-slate-50">
+              {/* Top: Horizontal Stacked Progress Bar */}
+              <div className="flex items-center px-2 pt-2">
+                <div className="w-10 shrink-0"></div>
+                <div className="flex-1">
+                  <div className="flex w-full h-5 rounded-full overflow-hidden shadow-inner bg-gray-200" title={`Received: ${stats.barData[0]?.value || 0} | Processed: ${stats.barData[1]?.value || 0} | Missing: ${stats.barData[2]?.value || 0} | ${prevMonthName}: ${prevMonthReported}`}>
+                    {(() => {
+                      const received = stats.barData[0]?.value || 0;
+                      const processed = stats.barData[1]?.value || 0;
+                      const missing = stats.barData[2]?.value || 0;
+                      const total = stats.totalEmployees || 1;
+                      const prevPct = (prevMonthReported / (total > prevMonthReported ? total : prevMonthReported + 1)) * 100;
+                      const recPct = (received / total) * 100;
+                      const procPct = (processed / total) * 100;
+                      const missPct = (missing / total) * 100;
+                      return (
+                        <>
+                          {received > 0 && (
+                            <div className="flex items-center justify-center text-[9px] font-bold text-white" style={{ width: `${Math.max(recPct, 3)}%`, backgroundColor: '#16a34a' }} title={`Received: ${received}`}>
+                              {received}
+                            </div>
+                          )}
+                          {processed > 0 && (
+                            <div className="flex items-center justify-center text-[9px] font-bold text-white" style={{ width: `${Math.max(procPct, 3)}%`, backgroundColor: '#d97706' }} title={`Processed: ${processed}`}>
+                              {processed}
+                            </div>
+                          )}
+                          {missing > 0 && (
+                            <div className="flex items-center justify-center text-[9px] font-bold text-white" style={{ width: `${Math.max(missPct, 4)}%`, backgroundColor: '#ef4444' }} title={`Missing: ${missing}`}>
+                              {missing}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  {/* Previous month bar below */}
+                  <div className="flex w-full h-4 rounded-full overflow-hidden shadow-inner bg-gray-200 mt-1" title={`${prevMonthName}: ${prevMonthReported} reported`}>
+                    {prevMonthReported > 0 && (
+                      <div className="flex items-center justify-center text-[8px] font-bold text-white" style={{ width: `${Math.max((prevMonthReported / (stats.totalEmployees || 1)) * 100, 4)}%`, backgroundColor: '#3b82f6' }} title={`${prevMonthName}: ${prevMonthReported}`}>
+                        {prevMonthReported} ({prevMonthName})
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Content */}
-              <div className="flex-1 flex items-center p-2">
-                <div className="flex-1 h-full pt-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.barData} barSize={12} barCategoryGap="5%">
-                      <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} interval={0} dy={5} />
-                      <Tooltip
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-                        cursor={{ fill: 'transparent' }}
-                      />
-                      <Bar dataKey="value" radius={[2, 2, 0, 0]}>
-                        {
-                          stats.barData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))
-                        }
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+              {/* Bottom: Bar Chart + Total */}
+              <div className="flex-1 flex items-center min-h-[130px]">
+                {/* Vertical Label Strip */}
+                <div className="w-10 bg-gray-100 flex items-center justify-center shrink-0 self-stretch">
+                  <span className="text-[8px] font-bold text-gray-400 uppercase rotate-180 text-center leading-tight tracking-tight" style={{ writingMode: 'vertical-lr' }}>
+                    EMPLOYEES' ATTENDANCE<br />REPORTS STATUS
+                  </span>
                 </div>
 
-                <div className="flex flex-col justify-center items-center w-20 border-l border-gray-100 ml-2 h-4/5">
-                  <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Total</span>
-                  <span className="text-xl font-bold text-gray-700">{stats.totalEmployees}</span>
-                  <div className="text-[8px] text-gray-400 text-center mt-1 leading-tight">Active<br />Staff</div>
+                <div className="flex-1 flex items-center p-2">
+                  <div className="flex-1" style={{ height: '110px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={[...stats.barData, { name: prevMonthName, value: prevMonthReported, color: '#3b82f6' }]} barSize={12} barCategoryGap="5%">
+                        <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} interval={0} dy={5} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                          cursor={{ fill: 'transparent' }}
+                        />
+                        <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                          {
+                            [...stats.barData, { name: prevMonthName, value: prevMonthReported, color: '#3b82f6' }].map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))
+                          }
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="flex flex-col justify-center items-center w-20 border-l border-gray-100 ml-2 h-4/5">
+                    <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Total</span>
+                    <span className="text-xl font-bold text-gray-700">{stats.totalEmployees}</span>
+                    <div className="text-[8px] text-gray-400 text-center mt-1 leading-tight">Active<br />Staff</div>
+                  </div>
                 </div>
               </div>
             </div>

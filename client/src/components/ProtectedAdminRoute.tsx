@@ -57,10 +57,16 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
           setIsAuthenticated(true);
         } catch (error) {
           console.error("Session verification failed:", error);
+          // On network error, allow access if admin data exists (offline tolerance)
+          setIsAuthenticated(true);
         }
+      } else {
+        // No session token found — not authenticated
+        localStorage.removeItem("admin");
+        localStorage.removeItem("adminType");
+        localStorage.removeItem("adminUsername");
+        setIsAuthenticated(false);
       }
-
-      setIsAuthenticated(true);
     };
 
     verifySession();

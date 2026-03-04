@@ -2414,6 +2414,58 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Save admin noting for attendance entry (auto-save on blur)
+  app.patch("/api/attendance/entries/:entryId/noting", verifyAdminSession, async (req, res) => {
+    try {
+      const entryId = Number(req.params.entryId);
+      const { noting } = req.body;
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const result = await db.execute(sql`
+        UPDATE attendance_entries 
+        SET admin_noting = ${noting || null}
+        WHERE id = ${entryId}
+        RETURNING *
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Entry not found" });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error saving admin noting:", error);
+      res.status(500).json({ message: "Failed to save admin noting" });
+    }
+  });
+
+  // Update permanent remarks for an employee (from attendance reports page pin button)
+  app.patch("/api/employees/:employeeId/remarks", verifyAdminSession, async (req, res) => {
+    try {
+      const employeeId = Number(req.params.employeeId);
+      const { remarks } = req.body;
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const result = await db.execute(sql`
+        UPDATE employees 
+        SET remarks = ${remarks || null}
+        WHERE id = ${employeeId}
+        RETURNING id, remarks
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error updating employee remarks:", error);
+      res.status(500).json({ message: "Failed to update employee remarks" });
+    }
+  });
+
   // App Settings - GET (available to all, needed by both admin and department forms)
   app.get("/api/admin/settings", async (_req, res) => {
     try {

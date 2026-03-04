@@ -735,7 +735,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                     maxLength={5}
                     placeholder="5-digit numeric ID"
                     disabled={!!employee.epid} // Lock if editing existing employee with EPID
-                    className={`w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${!!employee.epid ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
+                    className={`w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${!!employee.epid ? 'bg-slate-100 text-slate-900 font-medium cursor-not-allowed' : ''}`}
                     onChange={(e) => {
                       // Only allow numeric input
                       const value = e.target.value.replace(/\D/g, '').slice(0, 5);
@@ -773,7 +773,8 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                   <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
                   <input
                     {...register("name")}
-                    className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    readOnly={!isAdmin}
+                    className={`w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${!isAdmin ? 'bg-slate-100 text-slate-900 font-medium cursor-not-allowed outline-none select-none' : ''}`}
                   />
                   {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
                 </div>
@@ -790,8 +791,8 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                     placeholder="Select designation..."
                     searchPlaceholder="Search designation..."
                     emptyMessage="No designation found."
-                    className="bg-white"
-                    disabled={isSubmitting}
+                    className={`bg-white ${!isAdmin ? '!opacity-100 bg-slate-100 text-slate-900 font-medium cursor-not-allowed' : ''}`}
+                    disabled={!isAdmin || isSubmitting}
                   />
                   {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation.message}</p>}
                 </div>
@@ -912,8 +913,8 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                     placeholder="Select salary assistant..."
                     searchPlaceholder="Search salary assistant..."
                     emptyMessage="No salary assistant found."
-                    className="bg-white"
-                    disabled={isSubmitting}
+                    className={`bg-white ${!isAdmin ? '!opacity-100 bg-slate-100 text-slate-900 font-medium cursor-not-allowed' : ''}`}
+                    disabled={!isAdmin || isSubmitting}
                   />
                 </div>
 

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { NeuralNetworkStyles, NeuralNetworkOverlay } from "@/components/NeuralNetworkOverlay";
 
 // n8n chat integration
 import { useEffect as useEffectOnce } from "react";
@@ -21,33 +22,24 @@ const N8nChatStyles = () => (
     <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
     <style>
       {`
-        .chat-window-toggle svg {
-          display: none !important;
-        }
+        .chat-window-toggle svg { display: none !important; }
         .chat-window-toggle {
           background-image: url('/logo_favicon/amuai_logo.webp') !important;
           background-size: cover !important;
           background-position: center !important;
           background-repeat: no-repeat !important;
+          overflow: visible !important;
+          z-index: 50 !important;
         }
-        .chat-header h1 {
-          display: flex !important;
-          align-items: center !important;
-          width: 100% !important;
-        }
+        .chat-header h1 { display: flex !important; align-items: center !important; width: 100% !important; }
         .chat-header h1::after {
-          content: '';
-          display: inline-block;
-          width: 50px;
-          height: 50px;
-          margin-left: auto !important;
+          content: ''; display: inline-block; width: 50px; height: 50px; margin-left: auto !important;
           background-image: url('/logo_favicon/android-chrome-192x192.png');
-          background-size: contain;
-          background-repeat: no-repeat;
-          background-position: center;
+          background-size: contain; background-repeat: no-repeat; background-position: center;
         }
       `}
     </style>
+    <NeuralNetworkStyles />
   </>
 );
 
@@ -203,6 +195,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
       <N8nChatStyles />
       <N8nChatScript />
+      <NeuralNetworkOverlay />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">

@@ -645,6 +645,12 @@ export default function AdminEmployees() {
   };
 
   const handleLogout = () => {
+    // Clear admin data from localStorage
+    localStorage.removeItem("admin");
+    localStorage.removeItem("adminType");
+    localStorage.removeItem("adminEmail");
+    localStorage.removeItem("adminUsername");
+    localStorage.removeItem("adminSessionToken");
     setLocation('/admin/login');
   };
 
@@ -1399,6 +1405,18 @@ export default function AdminEmployees() {
                               </div>
 
                             </div>
+                          </div>
+
+                          {/* Remarks Section */}
+                          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold mb-4 text-primary">Remarks</h3>
+                            <textarea
+                              name="remarks"
+                              defaultValue={selectedEmployee?.remarks || ""}
+                              placeholder="Add any permanent notes or remarks about this employee..."
+                              rows={3}
+                              className="w-full text-sm px-3 py-2 border rounded-md bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+                            />
                           </div>
 
                           <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">

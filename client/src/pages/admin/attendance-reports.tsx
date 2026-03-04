@@ -9,6 +9,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +24,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin } from "lucide-react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { ArrowUpDown } from "lucide-react";
 import * as XLSX from "xlsx";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -33,6 +41,8 @@ type AttendanceEntry = {
   periods: string;
   remarks: string;
   verified?: boolean;
+  adminNoting?: string;
+  admin_noting?: string;
   employee?: {
     id: number;
     departmentId: number;
@@ -42,6 +52,7 @@ type AttendanceEntry = {
     designation: string;
     salaryRegisterNo: string;
     salary_asstt?: string;
+    remarks?: string;
   };
 };
 
@@ -60,6 +71,209 @@ type AttendanceReport = {
   fileUrl?: string;
   entries?: AttendanceEntry[];
 };
+
+// NotingCell component for inline noting with auto-save and permanent remarks dialog
+function NotingCell({
+  entryId,
+  employeeDbId,
+  adminNoting,
+  employeeRemarks,
+  monthFilter,
+  toast,
+}: {
+  entryId: number;
+  employeeDbId: number;
+  adminNoting: string;
+  employeeRemarks: string;
+  monthFilter: string[];
+  toast: any;
+}) {
+  const [notingValue, setNotingValue] = useState(adminNoting);
+  const [permRemarks, setPermRemarks] = useState(employeeRemarks);
+  const [permDialogOpen, setPermDialogOpen] = useState(false);
+  const [permDialogValue, setPermDialogValue] = useState(employeeRemarks);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingPerm, setIsSavingPerm] = useState(false);
+  const lastSavedRef = useRef(adminNoting);
+  const lastSavedPermRef = useRef(employeeRemarks);
+
+  // Sync with prop changes (e.g. after refetch)
+  useEffect(() => {
+    setNotingValue(adminNoting);
+    lastSavedRef.current = adminNoting;
+  }, [adminNoting]);
+
+  useEffect(() => {
+    setPermRemarks(employeeRemarks);
+    setPermDialogValue(employeeRemarks);
+    lastSavedPermRef.current = employeeRemarks;
+  }, [employeeRemarks]);
+
+  // Auto-save monthly noting on blur
+  const handleNotingBlur = useCallback(async () => {
+    const trimmed = notingValue.trim();
+    if (trimmed === lastSavedRef.current) return; // No change
+    setIsSaving(true);
+    try {
+      await apiRequest('PATCH', `/api/attendance/entries/${entryId}/noting`, { noting: trimmed || null });
+      lastSavedRef.current = trimmed;
+      // Silently update cache without full refetch
+      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
+        if (!old) return old;
+        return old.map((report: any) => ({
+          ...report,
+          entries: report.entries?.map((entry: any) =>
+            entry.id === entryId ? { ...entry, admin_noting: trimmed || null } : entry
+          ),
+        }));
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save noting",
+      });
+      // Revert on error
+      setNotingValue(lastSavedRef.current);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [notingValue, entryId, monthFilter, toast]);
+
+  // Save permanent remarks on dialog save
+  const handlePermSave = useCallback(async () => {
+    const trimmed = permDialogValue.trim();
+    if (trimmed === lastSavedPermRef.current) {
+      setPermDialogOpen(false);
+      return;
+    }
+    setIsSavingPerm(true);
+    try {
+      await apiRequest('PATCH', `/api/employees/${employeeDbId}/remarks`, { remarks: trimmed || null });
+      lastSavedPermRef.current = trimmed;
+      setPermRemarks(trimmed);
+      // Update employee remarks in cache
+      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
+        if (!old) return old;
+        return old.map((report: any) => ({
+          ...report,
+          entries: report.entries?.map((entry: any) =>
+            entry.employee?.id === employeeDbId
+              ? { ...entry, employee: { ...entry.employee, remarks: trimmed || null } }
+              : entry
+          ),
+        }));
+      });
+      toast({
+        title: "Saved",
+        description: "Permanent remark updated",
+      });
+      setPermDialogOpen(false);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update permanent remark",
+      });
+    } finally {
+      setIsSavingPerm(false);
+    }
+  }, [permDialogValue, employeeDbId, monthFilter, toast]);
+
+  const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+  const isViewOnly = adminData.userCode === 'VEW';
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          value={notingValue}
+          onChange={(e) => setNotingValue(e.target.value)}
+          onBlur={handleNotingBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          disabled={isViewOnly}
+          placeholder="Add note..."
+          className={`w-full text-xs px-1.5 py-1 border rounded bg-white focus:outline-none focus:ring-1 focus:ring-orange-400 focus:border-orange-400 ${isSaving ? 'opacity-50' : ''
+            } ${isViewOnly ? 'cursor-not-allowed opacity-50 bg-gray-50' : ''}`}
+          title={isViewOnly ? 'View Only' : 'Type and click away to auto-save'}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            if (isViewOnly) {
+              toast({
+                variant: "destructive",
+                title: "Access Denied",
+                description: "You do not have permission to edit remarks."
+              });
+              return;
+            }
+            setPermDialogValue(permRemarks);
+            setPermDialogOpen(true);
+          }}
+          className={`flex-shrink-0 p-1 rounded hover:bg-orange-50 transition-colors ${permRemarks ? 'text-orange-600' : 'text-gray-400 hover:text-orange-500'
+            } ${isViewOnly ? 'cursor-not-allowed opacity-50' : ''}`}
+          title={permRemarks ? `Permanent: ${permRemarks}` : 'Add permanent remark'}
+        >
+          <Pin className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {permRemarks && (
+        <p className="text-[10px] text-muted-foreground/60 leading-tight truncate max-w-[160px]" title={permRemarks}>
+          📌 {permRemarks}
+        </p>
+      )}
+
+      {/* Permanent Remarks Dialog */}
+      <Dialog open={permDialogOpen} onOpenChange={setPermDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-base">Permanent Remark</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              This remark will appear on every future month's report for this employee.
+              It is also visible in the Edit Employee form.
+            </p>
+            <textarea
+              value={permDialogValue}
+              onChange={(e) => setPermDialogValue(e.target.value)}
+              rows={3}
+              className="w-full text-sm px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 resize-none"
+              placeholder="Enter permanent remark..."
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <DialogClose asChild>
+              <Button variant="outline" size="sm">Cancel</Button>
+            </DialogClose>
+            <Button
+              size="sm"
+              onClick={handlePermSave}
+              disabled={isSavingPerm}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {isSavingPerm ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Permanent'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 export default function AttendanceReports() {
   const [, setLocation] = useLocation();
@@ -238,6 +452,9 @@ export default function AttendanceReports() {
       fileUrl?: string;
       entryId: number;
       verified: boolean;
+      adminNoting: string;
+      employeeRemarks: string;
+      employeeDbId: number;
     }> = [];
 
     reports.forEach(report => {
@@ -278,6 +495,9 @@ export default function AttendanceReports() {
                   departmentId: report.departmentId,
                   fileUrl: report.fileUrl || undefined,
                   entryId: entry.id,
+                  adminNoting: entry.admin_noting || entry.adminNoting || "",
+                  employeeRemarks: entry.employee?.remarks || "",
+                  employeeDbId: entry.employee?.id || 0,
                   verified: entry.verified || false,
                 });
               });
@@ -352,7 +572,9 @@ export default function AttendanceReports() {
           entry.employeeName.toLowerCase().includes(lowerSearchTerm) ||
           entry.departmentName.toLowerCase().includes(lowerSearchTerm) ||
           entry.designation.toLowerCase().includes(lowerSearchTerm) ||
-          entry.remarks.toLowerCase().includes(lowerSearchTerm)
+          entry.remarks.toLowerCase().includes(lowerSearchTerm) ||
+          (entry.adminNoting || "").toLowerCase().includes(lowerSearchTerm) ||
+          (entry.employeeRemarks || "").toLowerCase().includes(lowerSearchTerm)
       );
     }
 
@@ -404,7 +626,9 @@ export default function AttendanceReports() {
           entry.employeeName.toLowerCase().includes(lowerSearchTerm) ||
           entry.departmentName.toLowerCase().includes(lowerSearchTerm) ||
           entry.designation.toLowerCase().includes(lowerSearchTerm) ||
-          entry.remarks.toLowerCase().includes(lowerSearchTerm)
+          entry.remarks.toLowerCase().includes(lowerSearchTerm) ||
+          (entry.adminNoting || "").toLowerCase().includes(lowerSearchTerm) ||
+          (entry.employeeRemarks || "").toLowerCase().includes(lowerSearchTerm)
       );
     }
 
@@ -544,7 +768,11 @@ export default function AttendanceReports() {
 
   const handleLogout = () => {
     // Clear admin data from localStorage
+    localStorage.removeItem("admin");
     localStorage.removeItem("adminType");
+    localStorage.removeItem("adminEmail");
+    localStorage.removeItem("adminUsername");
+    localStorage.removeItem("adminSessionToken");
     setLocation("/admin/login");
   };
 
@@ -573,7 +801,9 @@ export default function AttendanceReports() {
         "Period From": fromStr || "",
         "Period To": toStr || "",
         "Days": entry.days,
-        "Remarks": entry.remarks
+        "Remarks": entry.remarks,
+        "Admin Noting": entry.adminNoting || "",
+        "Permanent Remark": entry.employeeRemarks || ""
       };
     }));
 
@@ -592,7 +822,9 @@ export default function AttendanceReports() {
       { wch: 15 }, // Period From
       { wch: 15 }, // Period To
       { wch: 8 },  // Days
-      { wch: 25 }  // Remarks
+      { wch: 25 }, // Remarks
+      { wch: 25 }, // Admin Noting
+      { wch: 25 }  // Permanent Remark
     ];
     worksheet['!cols'] = columnWidths;
 
@@ -888,6 +1120,7 @@ export default function AttendanceReports() {
                     <TableHead>Period</TableHead>
                     <TableHead>Days</TableHead>
                     <TableHead>Remarks</TableHead>
+                    <TableHead className="min-w-[180px]">Noting</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -915,6 +1148,16 @@ export default function AttendanceReports() {
                         <TableCell>{entry.period}</TableCell>
                         <TableCell>{entry.days}</TableCell>
                         <TableCell>{entry.remarks || "-"}</TableCell>
+                        <TableCell>
+                          <NotingCell
+                            entryId={entry.entryId}
+                            employeeDbId={(entry as any).employeeDbId}
+                            adminNoting={(entry as any).adminNoting || ""}
+                            employeeRemarks={(entry as any).employeeRemarks || ""}
+                            monthFilter={monthFilter}
+                            toast={toast}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Button

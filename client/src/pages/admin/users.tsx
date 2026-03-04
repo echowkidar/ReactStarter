@@ -411,8 +411,11 @@ export default function AdminUsers() {
 
   const handleLogout = () => {
     // Clear admin data from localStorage
-    localStorage.removeItem("adminType");
     localStorage.removeItem("admin");
+    localStorage.removeItem("adminType");
+    localStorage.removeItem("adminEmail");
+    localStorage.removeItem("adminUsername");
+    localStorage.removeItem("adminSessionToken");
     setLocation("/admin/login");
   };
 

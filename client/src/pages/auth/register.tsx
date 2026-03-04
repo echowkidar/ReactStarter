@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useEffect } from "react";
+import { NeuralNetworkStyles, NeuralNetworkOverlay } from "@/components/NeuralNetworkOverlay";
 
 // n8n chat integration
 // Add n8n chat styles
@@ -10,33 +11,24 @@ const N8nChatStyles = () => (
     <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
     <style>
       {`
-        .chat-window-toggle svg {
-          display: none !important;
-        }
+        .chat-window-toggle svg { display: none !important; }
         .chat-window-toggle {
           background-image: url('/logo_favicon/amuai_logo.webp') !important;
           background-size: cover !important;
           background-position: center !important;
           background-repeat: no-repeat !important;
+          overflow: visible !important;
+          z-index: 50 !important;
         }
-        .chat-header h1 {
-          display: flex !important;
-          align-items: center !important;
-          width: 100% !important;
-        }
+        .chat-header h1 { display: flex !important; align-items: center !important; width: 100% !important; }
         .chat-header h1::after {
-          content: '';
-          display: inline-block;
-          width: 50px;
-          height: 50px;
-          margin-left: auto !important;
+          content: ''; display: inline-block; width: 50px; height: 50px; margin-left: auto !important;
           background-image: url('/logo_favicon/android-chrome-192x192.png');
-          background-size: contain;
-          background-repeat: no-repeat;
-          background-position: center;
+          background-size: contain; background-repeat: no-repeat; background-position: center;
         }
       `}
     </style>
+    <NeuralNetworkStyles />
   </>
 );
 
@@ -81,6 +73,7 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
       <N8nChatStyles />
       <N8nChatScript />
+      <NeuralNetworkOverlay />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <h1 className="text-2xl font-bold">Department Registration</h1>

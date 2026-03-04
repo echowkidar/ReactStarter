@@ -162,6 +162,11 @@ export async function runMigrations() {
       WHERE ae.report_id = ar.id AND ae.department_id IS NULL;
     `);
 
+    // Add admin_noting column to attendance_entries table for salary assistant notes
+    await db.execute(sql`
+      ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS admin_noting TEXT;
+    `);
+
     console.log("Database migrations completed successfully");
   } catch (error) {
     console.error("Error running migrations:", error);
