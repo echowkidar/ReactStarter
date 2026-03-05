@@ -548,11 +548,10 @@ export default function AdminDashboard() {
     }));
   };
 
-  // Calculate Dashboard Stats (Current Month)
+  // Calculate Dashboard Stats (Selected Month)
   const stats = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1; // 1-indexed
+    const currentYear = filterYear;
+    const currentMonth = apiMonth; // 1-indexed, matches selected filter
 
     // Create a map of dept stats for easy lookup FIRST
     const statsMap = new Map<number, DeptEmployeeStats>();
@@ -605,6 +604,7 @@ export default function AdminDashboard() {
       submitted: currentReports.filter(r => r.status === 'submitted').length,
       draft: currentReports.filter(r => r.status === 'draft').length,
       cancelled: currentReports.filter(r => r.status === 'cancelled').length,
+      notProcessed: notProcessedCount,
     };
 
     const requests = {
@@ -661,7 +661,7 @@ export default function AdminDashboard() {
     ];
 
     return { totalRelevant, totalEmployees, sentCount, processedCount, notProcessedCount, breakdown, requests, barData };
-  }, [departments, reports, deptStats]);
+  }, [departments, reports, deptStats, apiMonth, filterYear]);
 
   const filteredAndSortedReports = useMemo(() => {
     if (!reports) return [];
@@ -1070,7 +1070,7 @@ export default function AdminDashboard() {
         {/* Dashboard Stats - 3x1 Grid Layout (Modified) */}
         {/* Row 1: Attendance Report Status + Status Breakdown + Transfer Requests */}
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 mb-4">
-          <div className="lg:col-span-4 bg-white rounded-lg border shadow-sm flex overflow-hidden">
+          <div className="lg:col-span-6 bg-white rounded-lg border shadow-sm flex overflow-hidden">
             {/* Departments Partition */}
             <div className="flex-1 flex border-r border-gray-100">
               {/* Vertical Label Strip */}
@@ -1206,7 +1206,7 @@ export default function AdminDashboard() {
                 <div className="flex-1 flex items-center p-2">
                   <div className="flex-1" style={{ height: '110px' }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={[...stats.barData, { name: prevMonthName, value: prevMonthReported, color: '#3b82f6' }]} barSize={12} barCategoryGap="5%">
+                      <BarChart data={[...stats.barData, { name: prevMonthName, value: prevMonthReported, color: '#3b82f6' }]} barSize={24} barCategoryGap="5%">
                         <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} interval={0} dy={5} />
                         <Tooltip
                           contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
@@ -1233,26 +1233,30 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="lg:col-span-3 bg-white p-3 rounded-lg border shadow-sm flex flex-col justify-center">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Status Breakdown</h3>
-            <div className="grid grid-cols-1 gap-2">
-              <div className="px-3 py-1.5 bg-blue-50 rounded border border-blue-100 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wider text-blue-600 font-semibold">Submitted</span>
-                <span className="text-lg font-bold text-blue-700">{stats.breakdown.submitted}</span>
+          <div className="lg:col-span-2 bg-white p-3 rounded-lg border shadow-sm flex flex-col justify-center">
+            <h3 className="text-sm font-medium text-gray-500 mb-1.5">Status Breakdown</h3>
+            <div className="grid grid-cols-1 gap-1">
+              <div onClick={() => setStatusFilter(prev => prev === 'submitted' ? 'all' : 'submitted')} className={`px-2 py-0.5 bg-blue-50 rounded border border-blue-100 flex items-center justify-between cursor-pointer hover:bg-blue-100 transition-colors ${statusFilter === 'submitted' ? 'ring-2 ring-blue-400' : ''}`}>
+                <span className="text-[9px] uppercase tracking-wider text-blue-600 font-semibold">Submitted</span>
+                <span className="text-base font-bold text-blue-700">{stats.breakdown.submitted}</span>
               </div>
-              <div className="px-3 py-1.5 bg-yellow-50 rounded border border-yellow-100 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wider text-yellow-600 font-semibold">Draft</span>
-                <span className="text-lg font-bold text-yellow-700">{stats.breakdown.draft}</span>
+              <div onClick={() => setStatusFilter(prev => prev === 'draft' ? 'all' : 'draft')} className={`px-2 py-0.5 bg-yellow-50 rounded border border-yellow-100 flex items-center justify-between cursor-pointer hover:bg-yellow-100 transition-colors ${statusFilter === 'draft' ? 'ring-2 ring-yellow-400' : ''}`}>
+                <span className="text-[9px] uppercase tracking-wider text-yellow-600 font-semibold">Draft</span>
+                <span className="text-base font-bold text-yellow-700">{stats.breakdown.draft}</span>
               </div>
-              <div className="px-3 py-1.5 bg-red-50 rounded border border-red-100 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wider text-red-600 font-semibold">Cancelled</span>
-                <span className="text-lg font-bold text-red-700">{stats.breakdown.cancelled}</span>
+              <div onClick={() => setStatusFilter(prev => prev === 'cancelled' ? 'all' : 'cancelled')} className={`px-2 py-0.5 bg-red-50 rounded border border-red-100 flex items-center justify-between cursor-pointer hover:bg-red-100 transition-colors ${statusFilter === 'cancelled' ? 'ring-2 ring-red-400' : ''}`}>
+                <span className="text-[9px] uppercase tracking-wider text-red-600 font-semibold">Cancelled</span>
+                <span className="text-base font-bold text-red-700">{stats.breakdown.cancelled}</span>
+              </div>
+              <div onClick={() => setStatusFilter(prev => prev === 'not_received' ? 'all' : 'not_received')} className={`px-2 py-0.5 bg-gray-50 rounded border border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors ${statusFilter === 'not_received' ? 'ring-2 ring-gray-400' : ''}`}>
+                <span className="text-[9px] uppercase tracking-wider text-gray-600 font-semibold">Not Processed</span>
+                <span className="text-base font-bold text-gray-700">{stats.breakdown.notProcessed}</span>
               </div>
             </div>
           </div>
 
           {/* Transfer Requests Card */}
-          <div className="lg:col-span-3 bg-white p-3 rounded-lg border shadow-sm border-l-4 border-l-orange-500 flex flex-col justify-center">
+          <div className="lg:col-span-2 bg-white p-3 rounded-lg border shadow-sm border-l-4 border-l-orange-500 flex flex-col justify-center">
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Transfer Requests</h3>

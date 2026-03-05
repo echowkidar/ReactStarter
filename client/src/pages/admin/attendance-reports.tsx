@@ -24,7 +24,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin } from "lucide-react";
+import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { ArrowUpDown } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -851,6 +857,175 @@ export default function AttendanceReports() {
     XLSX.writeFile(workbook, fileName);
   };
 
+  // Oracle T_ATTEND Excel export — matches export.xls format (Excel serial dates)
+  const exportOracleXlsx = () => {
+    // Convert DD-MM-YY date string to Excel serial number
+    const toExcelSerial = (dateStr: string): number | null => {
+      if (!dateStr) return null;
+      const parts = dateStr.trim().split('-');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1;
+        let year = parseInt(parts[2]);
+        if (year < 100) year += 2000;
+        const d = new Date(year, month, day);
+        // Excel serial: days since 1900-01-00 (with leap year bug)
+        const start = new Date(1899, 11, 30);
+        return Math.round((d.getTime() - start.getTime()) / 86400000);
+      }
+      return null;
+    };
+
+    // CTL column order (same as export.xls)
+    const headers = [
+      'NAME', 'NP', 'NFDATE', 'NTDATE', 'FP', 'FFDATE', 'FTDATE', 'HP', 'HFDATE', 'HTDATE',
+      'FDAYS', 'HDAYS', 'NDAYS', 'DEPT', 'ECODE', 'D_AST', 'REMARK1', 'PF', 'MONTH', 'YEAR',
+      'RECFLAG', 'DUES', 'SAL_TYPE', 'BRK_DAYS', 'SINGLE_FLAG', 'PAY_RELEASE_FLAG',
+      'BRK_DAYS_FR', 'BRK_DAYS_TO', 'TERM_APP', 'OLD_DESIG', 'OLD_BASIC'
+    ];
+
+    const dataRows = processedEntries.map(entry => {
+      const [fromStr, toStr] = entry.period.split(' to ');
+      const ffSerial = toExcelSerial(fromStr || '');
+      const ftSerial = toExcelSerial(toStr || '');
+      return [
+        entry.employeeName,  // NAME
+        null,                // NP
+        null,                // NFDATE
+        null,                // NTDATE
+        'FP',               // FP
+        ffSerial,            // FFDATE (Excel serial)
+        ftSerial,            // FTDATE (Excel serial)
+        'HP',               // HP
+        null,                // HFDATE
+        null,                // HTDATE
+        entry.days,          // FDAYS
+        0,                   // HDAYS
+        null,                // NDAYS
+        '',                  // DEPT
+        entry.employeeId,    // ECODE
+        entry.salaryAsstt,   // D_AST
+        entry.remarks || '', // REMARK1
+        null,                // PF
+        entry.monthNum,      // MONTH
+        entry.yearNum,       // YEAR
+        '0',                 // RECFLAG
+        '',                  // DUES
+        1,                   // SAL_TYPE
+        null,                // BRK_DAYS
+        'N',                 // SINGLE_FLAG
+        'Y',                 // PAY_RELEASE_FLAG
+        null,                // BRK_DAYS_FR
+        null,                // BRK_DAYS_TO
+        null,                // TERM_APP
+        '',                  // OLD_DESIG
+        null,                // OLD_BASIC
+      ];
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+
+    // Mark date columns as date format
+    const dateCols = [2, 3, 5, 6, 8, 9, 26, 27, 28]; // NFDATE,NTDATE,FFDATE,FTDATE,HFDATE,HTDATE,BRK_DAYS_FR,BRK_DAYS_TO,TERM_APP
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let row = 1; row <= range.e.r; row++) {
+      dateCols.forEach(col => {
+        const addr = XLSX.utils.encode_cell({ r: row, c: col });
+        if (ws[addr] && ws[addr].v !== null && ws[addr].v !== undefined) {
+          ws[addr].t = 'n';
+          ws[addr].z = 'mm/dd/yyyy';
+        }
+      });
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'T_ATTEND');
+
+    let fileName = 'T_ATTEND';
+    if (monthFilter.length > 0) fileName += `_${monthFilter[0].replace(/\s+/g, '_')}`;
+    XLSX.writeFile(wb, `${fileName}.xls`, { bookType: 'xls' });
+  };
+
+  // Oracle T_ATTEND format export — semicolon CSV matching T_ATTEND.ctl
+  const exportOracleExcel = () => {
+    // Oracle date format: MM/DD/YYYY HH24:MI:SS
+    const toOracleDate = (dateStr: string): string => {
+      if (!dateStr) return 'NULL';
+      // Handle DD-MM-YY or DD-MM-YYYY format
+      const parts = dateStr.trim().split('-');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        let year = parts[2];
+        if (year.length === 2) year = `20${year}`;
+        return `${month}/${day}/${year} 00:00:00`;
+      }
+      return 'NULL';
+    };
+
+    // Escape a value for semicolon CSV: wrap in quotes
+    const q = (val: string | number | null | undefined): string => {
+      if (val === null || val === undefined || val === '') return '""';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    };
+    const num = (val: number | null | undefined): string => {
+      if (val === null || val === undefined) return 'NULL';
+      return String(val);
+    };
+
+    // CTL column order (31 columns)
+    const lines: string[] = processedEntries.map(entry => {
+      const [fromStr, toStr] = entry.period.split(' to ');
+      const ffdate = toOracleDate(fromStr || '');
+      const ftdate = toOracleDate(toStr || '');
+
+      return [
+        q(entry.employeeName),
+        q(''),
+        'NULL',
+        'NULL',
+        q('FP'),
+        ffdate === 'NULL' ? 'NULL' : q(ffdate),
+        ftdate === 'NULL' ? 'NULL' : q(ftdate),
+        q('HP'),
+        'NULL',
+        'NULL',
+        num(entry.days),
+        '0',
+        'NULL',
+        q(''),
+        q(entry.employeeId),
+        q(entry.salaryAsstt),
+        q(entry.remarks || ''),
+        'NULL',
+        num(entry.monthNum),
+        num(entry.yearNum),
+        q('0'),
+        'NULL',
+        '1',
+        'NULL',
+        q('N'),
+        q('Y'),
+        'NULL',
+        'NULL',
+        'NULL',
+        q(''),
+        'NULL',
+      ].join(';');
+    });
+
+    const csvContent = lines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    let fileName = 'T_ATTEND';
+    if (monthFilter.length > 0) fileName += `_${monthFilter[0].replace(/\s+/g, '_')}`;
+    a.download = `${fileName}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) return <Loading />;
 
   return (
@@ -875,6 +1050,28 @@ export default function AttendanceReports() {
                   <FileDown className="h-4 w-4" />
                   Download Excel
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="flex items-center gap-2 text-blue-700 border-blue-200 hover:bg-blue-50"
+                    >
+                      <FileDown className="h-4 w-4" />
+                      Export
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={exportOracleXlsx} className="cursor-pointer">
+                      <FileDown className="h-4 w-4 mr-2 text-green-600" />
+                      Export as Excel (.xls)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exportOracleExcel} className="cursor-pointer">
+                      <FileDown className="h-4 w-4 mr-2 text-blue-600" />
+                      Export as CSV (Oracle CTL)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   variant="outline"
                   onClick={() => setLocation("/admin/missing-employees")}

@@ -19,6 +19,10 @@ const N8nChatStyles = () => (
           background-repeat: no-repeat !important;
           overflow: visible !important;
           z-index: 50 !important;
+          bottom: 40px !important;
+          right: 25px !important;
+          width: 80px !important;
+          height: 80px !important;
         }
         .chat-header h1 { display: flex !important; align-items: center !important; width: 100% !important; }
         .chat-header h1::after {

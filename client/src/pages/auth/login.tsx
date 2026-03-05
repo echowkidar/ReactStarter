@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { NeuralNetworkStyles, NeuralNetworkOverlay } from "@/components/NeuralNetworkOverlay";
+import { SplashScreen } from "@/components/SplashScreen";
 
 // n8n chat integration
 import { useEffect as useEffectOnce } from "react";
@@ -30,6 +31,10 @@ const N8nChatStyles = () => (
           background-repeat: no-repeat !important;
           overflow: visible !important;
           z-index: 50 !important;
+          bottom: 40px !important;
+          right: 25px !important;
+          width: 80px !important;
+          height: 80px !important;
         }
         .chat-header h1 { display: flex !important; align-items: center !important; width: 100% !important; }
         .chat-header h1::after {
@@ -94,6 +99,7 @@ export default function Login() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [lockMessage, setLockMessage] = useState<string | null>(null);
   const turnstileRef = useRef<HTMLDivElement>(null);
+  const [showSplash, setShowSplash] = useState(true);
 
   // Track visitor
   useVisitorTracking({ pageVisited: '/login' });
@@ -192,92 +198,95 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <N8nChatStyles />
-      <N8nChatScript />
-      <NeuralNetworkOverlay />
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-20 w-auto" />
-          </div>
-          <h1 className="text-2xl font-bold">Department Login</h1>
-          <p className="text-sm text-muted-foreground">
-            Welcome to AMU Salary Section
-          </p>
-        </CardHeader>
-        <CardContent>
-          {lockMessage && (
-            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="text-sm">{lockMessage}</span>
+    <>
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <N8nChatStyles />
+        <N8nChatScript />
+        <NeuralNetworkOverlay />
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-20 w-auto" />
             </div>
-          )}
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="email" disabled={isLoading} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="password" disabled={isLoading} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Turnstile CAPTCHA */}
-              <div className="flex justify-center">
-                <div ref={turnstileRef}></div>
+            <h1 className="text-2xl font-bold">Department Login</h1>
+            <p className="text-sm text-muted-foreground">
+              Welcome to AMU Salary Section
+            </p>
+          </CardHeader>
+          <CardContent>
+            {lockMessage && (
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="text-sm">{lockMessage}</span>
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading || !turnstileToken}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-        <CardFooter className="flex flex-col space-y-2">
-          <Button
-            variant="link"
-            onClick={() => setLocation("/forgot-password")}
-            disabled={isLoading}
-            className="text-sm text-muted-foreground hover:text-primary"
-          >
-            Forgot Password?
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => setLocation("/admin/login")}
-            disabled={isLoading}
-            className="text-sm text-muted-foreground hover:text-primary"
-          >
-            Admin Login
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
+            )}
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="email" disabled={isLoading} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="password" disabled={isLoading} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {/* Turnstile CAPTCHA */}
+                <div className="flex justify-center">
+                  <div ref={turnstileRef}></div>
+                </div>
+                <Button type="submit" className="w-full" disabled={isLoading || !turnstileToken}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    "Sign In"
+                  )}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-2">
+            <Button
+              variant="link"
+              onClick={() => setLocation("/forgot-password")}
+              disabled={isLoading}
+              className="text-sm text-muted-foreground hover:text-primary"
+            >
+              Forgot Password?
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setLocation("/admin/login")}
+              disabled={isLoading}
+              className="text-sm text-muted-foreground hover:text-primary"
+            >
+              Admin Login
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </>
   );
 }
 
