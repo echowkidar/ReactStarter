@@ -939,9 +939,9 @@ export default function AttendanceReports() {
     }
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'T_ATTEND');
+    XLSX.utils.book_append_sheet(wb, ws, 'ATTENDANCE');
 
-    let fileName = 'T_ATTEND';
+    let fileName = 'ATTENDANCE';
     if (monthFilter.length > 0) fileName += `_${monthFilter[0].replace(/\s+/g, '_')}`;
     XLSX.writeFile(wb, `${fileName}.xls`, { bookType: 'xls' });
   };
@@ -1019,7 +1019,7 @@ export default function AttendanceReports() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    let fileName = 'T_ATTEND';
+    let fileName = 'ATTENDANCE';
     if (monthFilter.length > 0) fileName += `_${monthFilter[0].replace(/\s+/g, '_')}`;
     a.download = `${fileName}.csv`;
     a.click();
@@ -1068,7 +1068,7 @@ export default function AttendanceReports() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={exportOracleExcel} className="cursor-pointer">
                       <FileDown className="h-4 w-4 mr-2 text-blue-600" />
-                      Export as CSV (Oracle CTL)
+                      Export as CSV
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
