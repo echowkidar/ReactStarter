@@ -126,6 +126,7 @@ export default function AdminEditAttendance() {
                             <AttendanceForm
                                 initialData={initialData}
                                 departmentId={report.departmentId}
+                                reportId={String(reportId)}
                                 onSubmit={async (data) => {
                                     try {
                                         await updateMutation.mutateAsync(data);
