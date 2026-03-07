@@ -16,6 +16,7 @@ interface MultiSelectProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  hideSelectAll?: boolean
 }
 
 export function MultiSelect({
@@ -25,6 +26,7 @@ export function MultiSelect({
   placeholder = "Select options",
   className,
   disabled = false,
+  hideSelectAll = false,
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -122,7 +124,7 @@ export function MultiSelect({
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
-            {filteredOptions.length > 0 && (
+            {filteredOptions.length > 0 && !hideSelectAll && (
               <div className="px-1">
                 <div
                   className="relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm font-semibold outline-none hover:bg-accent text-primary"
@@ -174,7 +176,8 @@ export function MultiSelect({
             ))
           )}
         </div>
-      )}
-    </div>
+      )
+      }
+    </div >
   )
 } 

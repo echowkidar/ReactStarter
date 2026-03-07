@@ -36,6 +36,7 @@ import { ArrowUpDown } from "lucide-react";
 import * as XLSX from "xlsx";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import salaryAssistants from "@/lib/salary-assistants.json";
 
 type AttendanceEntry = {
   id: number;
@@ -400,6 +401,28 @@ export default function AttendanceReports() {
     ),
   });
 
+  const { apiMonth, filterYear } = useMemo(() => {
+    const selectedMonth = Array.isArray(monthFilter) && monthFilter.length > 0 ? monthFilter[0] : null;
+    if (selectedMonth) {
+      const [monthName, yearStr] = selectedMonth.split(' ');
+      if (monthName && yearStr) {
+        const monthDate = new Date(`${monthName} 1, 2000`);
+        return { apiMonth: (monthDate.getMonth() + 1).toString(), filterYear: yearStr };
+      }
+    }
+    return { apiMonth: null, filterYear: null };
+  }, [monthFilter]);
+
+  const { data: missingEmployees = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/all-missing-employees", apiMonth, filterYear],
+    queryFn: async () => {
+      if (!apiMonth || !filterYear) return [];
+      const response = await apiRequest("GET", `/api/admin/all-missing-employees?month=${apiMonth}&year=${filterYear}`);
+      return response.json();
+    },
+    enabled: !!apiMonth && !!filterYear
+  });
+
   // Accept cancellation mutation
   const acceptCancellation = useMutation({
     mutationFn: async (reportId: number) => {
@@ -647,38 +670,38 @@ export default function AttendanceReports() {
 
     // Apply Analysis Filters
     if (analysisFilter.length > 0) {
+      const wantsMissing = analysisFilter.includes("missing_employees");
+      const wantsMultiple = analysisFilter.includes("multiple_entries");
+      const wantsFull = analysisFilter.includes("full_month");
+      const wantsPartial = analysisFilter.includes("partial_month");
+
       // 1. Pre-calculate employee counts for "Multiple Entries"
       const empCounts = new Map<string, number>();
-      if (analysisFilter.includes("multiple_entries")) {
+      if (wantsMultiple) {
         result.forEach(e => {
           empCounts.set(e.employeeId, (empCounts.get(e.employeeId) || 0) + 1);
         });
       }
 
-      // 2. Filter
-      result = result.filter(entry => {
-        let matchesAll = true;
+      // 2. Filter existing entries
+      let filteredResult = result.filter(entry => {
+        let matchesAnalysis = false;
 
-        if (analysisFilter.includes("multiple_entries")) {
-          if ((empCounts.get(entry.employeeId) || 0) <= 1) matchesAll = false;
+        if (wantsMultiple && (empCounts.get(entry.employeeId) || 0) > 1) {
+          matchesAnalysis = true;
         }
 
-        if (matchesAll && (analysisFilter.includes("full_month") || analysisFilter.includes("partial_month"))) {
-          // Parse Period: "DD-MM-YY to DD-MM-YY"
+        if (wantsFull || wantsPartial) {
           const parts = entry.period.split(" to ");
           if (parts.length === 2) {
             const [startStr, endStr] = parts;
-            // Helper to parse YY date
             const parseYY = (str: string) => {
               const [d, m, y] = str.split('-').map(Number);
-              const fullYear = y < 100 ? 2000 + y : y; // Assume 20xx
+              const fullYear = y < 100 ? 2000 + y : y;
               return new Date(fullYear, m - 1, d);
             };
-
             const startDate = parseYY(startStr);
             const endDate = parseYY(endStr);
-
-            // Calculate expected Full Month range based on entry.monthNum/yearNum
             const daysInMonth = new Date(entry.yearNum, entry.monthNum, 0).getDate();
             const expectedStart = new Date(entry.yearNum, entry.monthNum - 1, 1);
             const expectedEnd = new Date(entry.yearNum, entry.monthNum - 1, daysInMonth);
@@ -687,20 +710,89 @@ export default function AttendanceReports() {
               startDate.getTime() === expectedStart.getTime() &&
               endDate.getTime() === expectedEnd.getTime();
 
-            if (analysisFilter.includes("full_month") && !isFullMonth) matchesAll = false;
-            if (analysisFilter.includes("partial_month") && isFullMonth) matchesAll = false; // "Partial/Excess" means NOT full month
-          } else {
-            // Invalid period format - treat as partial/irregular?
-            if (analysisFilter.includes("full_month")) matchesAll = false;
+            if (wantsFull && isFullMonth) matchesAnalysis = true;
+            if (wantsPartial && !isFullMonth) matchesAnalysis = true;
+          } else if (wantsPartial) {
+            matchesAnalysis = true;
           }
         }
 
-        return matchesAll;
+        // Analysis is an OR filter for the categories selected
+        return matchesAnalysis;
       });
+
+      // 3. If "wants missing", we map missing employees into synthetic entries and append
+      // Notice that if ONLY missing employees is selected, existing entries are filtered out unless they match other stuff
+      if (wantsMissing) {
+        // Find which month string we are currently filtering for
+        const selectedMonthStr = monthFilter.length > 0 ? monthFilter[0] : "";
+        const mParts = selectedMonthStr.split(' ');
+        const mMonthNum = mParts[0] ? new Date(`${mParts[0]} 1, 2000`).getMonth() + 1 : 1;
+        const mYearNum = mParts[1] ? parseInt(mParts[1]) : new Date().getFullYear();
+
+        const missingSynthetic = missingEmployees.map(emp => ({
+          month: selectedMonthStr,
+          monthNum: mMonthNum,
+          yearNum: mYearNum,
+          departmentName: emp.department_name || "Unknown",
+          employeeId: emp.epid || "",
+          employeeName: emp.name || "",
+          designation: emp.designation || "",
+          salaryAsstt: emp.salary_asstt || "",
+          salaryRegisterNo: emp.salary_register_no || "",
+          period: "MISSING",
+          days: 0,
+          remarks: "Missing Attendance",
+          reportId: 0, // Synthetic
+          departmentId: 0, // Fallback
+          entryId: -emp.id, // Negative ID for synthetic
+          verified: false,
+          adminNoting: "",
+          employeeRemarks: "",
+          employeeDbId: emp.id,
+        }));
+
+        // Apply basic filters to these missing employees too, so they respect department/search filtering
+        let filteredMissing = missingSynthetic;
+        if (searchTerm) {
+          const lowerSearchTerm = searchTerm.toLowerCase();
+          filteredMissing = filteredMissing.filter(e =>
+            e.employeeId.toLowerCase().includes(lowerSearchTerm) ||
+            e.employeeName.toLowerCase().includes(lowerSearchTerm) ||
+            e.departmentName.toLowerCase().includes(lowerSearchTerm) ||
+            e.designation.toLowerCase().includes(lowerSearchTerm) ||
+            e.remarks.toLowerCase().includes(lowerSearchTerm)
+          );
+        }
+        if (departmentFilter.length > 0) {
+          // missing employees don't have departmentId readily mapped to the same IDs as reports, but we can filter by exact name if needed,
+          // or we just skip department filtering for missing if we can't match IDs reliably.
+          // Wait, the department filter uses IDs (stringly typed). Because missing employees only have `department_name`, we can map it via `availableDepartments`.
+          const matchIds = departmentFilter.map(Number);
+          filteredMissing = filteredMissing.filter(e => {
+            const deptObj = departments.find(ad => ad.name === e.departmentName);
+            return deptObj && matchIds.includes(deptObj.id);
+          });
+        }
+        if (salaryRegisterFilter.length > 0) filteredMissing = filteredMissing.filter(e => salaryRegisterFilter.includes(e.salaryRegisterNo));
+        if (salaryAssistantFilter.length > 0) filteredMissing = filteredMissing.filter(e => salaryAssistantFilter.includes(e.salaryAsstt));
+        if (designationFilter.length > 0) filteredMissing = filteredMissing.filter(e => designationFilter.includes(e.designation));
+
+        // Append missing ones to the result.
+        // If other filters were active (e.g. wantMultiple AND wantsMissing), we union them.
+        filteredResult = [...filteredResult, ...filteredMissing];
+      } else {
+        // Ensure if ONLY basic filters are selected, we don't accidentally wipe results
+        if (!wantsMultiple && !wantsFull && !wantsPartial) {
+          filteredResult = result;
+        }
+      }
+
+      result = filteredResult;
     }
 
     return result;
-  }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, analysisFilter]);
+  }, [allEntries, missingEmployees, departments, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, analysisFilter]);
 
   // Process entries to show department name only once
   const processedEntries = useMemo(() => {
@@ -885,18 +977,43 @@ export default function AttendanceReports() {
     ];
 
     const dataRows = processedEntries.map(entry => {
-      const [fromStr, toStr] = entry.period.split(' to ');
-      const ffSerial = toExcelSerial(fromStr || '');
-      const ftSerial = toExcelSerial(toStr || '');
+      let ffSerial: number | null = null;
+      let ftSerial: number | null = null;
+      let nfSerial: number | null = null;
+      let ntSerial: number | null = null;
+
+      // Map salary assistant code to name
+      let saName = entry.salaryAsstt;
+      if (saName) {
+        const saObj = salaryAssistants.find(s => s.value === saName);
+        if (saObj && saObj.label.includes(' - ')) {
+          saName = saObj.label.split(' - ')[1];
+        }
+      }
+
+      if (entry.period !== 'MISSING') {
+        const [fromStr, toStr] = entry.period.split(' to ');
+        ffSerial = toExcelSerial(fromStr || '');
+        ftSerial = toExcelSerial(toStr || '');
+      } else {
+        // Missing employee: period is blank, but NFDATE and NTDATE should be the whole month
+        const daysInMonth = new Date(entry.yearNum, entry.monthNum, 0).getDate();
+        const startD = new Date(entry.yearNum, entry.monthNum - 1, 1);
+        const endD = new Date(entry.yearNum, entry.monthNum - 1, daysInMonth);
+        const excelEpoch = new Date(1899, 11, 30);
+        nfSerial = Math.round((startD.getTime() - excelEpoch.getTime()) / 86400000);
+        ntSerial = Math.round((endD.getTime() - excelEpoch.getTime()) / 86400000);
+      }
+
       return [
         entry.employeeName,  // NAME
         null,                // NP
-        null,                // NFDATE
-        null,                // NTDATE
-        'FP',               // FP
+        nfSerial,            // NFDATE
+        ntSerial,            // NTDATE
+        'FP',                // FP
         ffSerial,            // FFDATE (Excel serial)
         ftSerial,            // FTDATE (Excel serial)
-        'HP',               // HP
+        'HP',                // HP
         null,                // HFDATE
         null,                // HTDATE
         entry.days,          // FDAYS
@@ -904,7 +1021,7 @@ export default function AttendanceReports() {
         null,                // NDAYS
         '',                  // DEPT
         entry.employeeId,    // ECODE
-        entry.salaryAsstt,   // D_AST
+        saName,              // D_AST
         entry.remarks || '', // REMARK1
         null,                // PF
         entry.monthNum,      // MONTH
@@ -975,15 +1092,38 @@ export default function AttendanceReports() {
 
     // CTL column order (31 columns)
     const lines: string[] = processedEntries.map(entry => {
-      const [fromStr, toStr] = entry.period.split(' to ');
-      const ffdate = toOracleDate(fromStr || '');
-      const ftdate = toOracleDate(toStr || '');
+      let ffdate = 'NULL';
+      let ftdate = 'NULL';
+      let nfdate = 'NULL';
+      let ntdate = 'NULL';
+
+      // Map salary assistant code to name
+      let saName = entry.salaryAsstt;
+      if (saName) {
+        const saObj = salaryAssistants.find(s => s.value === saName);
+        if (saObj && saObj.label.includes(' - ')) {
+          saName = saObj.label.split(' - ')[1];
+        }
+      }
+
+      if (entry.period !== 'MISSING') {
+        const [fromStr, toStr] = entry.period.split(' to ');
+        ffdate = toOracleDate(fromStr || '');
+        ftdate = toOracleDate(toStr || '');
+      } else {
+        // Missing employee: MM/DD/YYYY 00:00:00 for NFDATE/NTDATE
+        const m = entry.monthNum.toString().padStart(2, '0');
+        const y = entry.yearNum.toString();
+        const daysInMonth = new Date(entry.yearNum, entry.monthNum, 0).getDate().toString().padStart(2, '0');
+        nfdate = `${m}/01/${y} 00:00:00`;
+        ntdate = `${m}/${daysInMonth}/${y} 00:00:00`;
+      }
 
       return [
         q(entry.employeeName),
         q(''),
-        'NULL',
-        'NULL',
+        nfdate === 'NULL' ? 'NULL' : q(nfdate),
+        ntdate === 'NULL' ? 'NULL' : q(ntdate),
         q('FP'),
         ffdate === 'NULL' ? 'NULL' : q(ffdate),
         ftdate === 'NULL' ? 'NULL' : q(ftdate),
@@ -995,7 +1135,7 @@ export default function AttendanceReports() {
         'NULL',
         q(''),
         q(entry.employeeId),
-        q(entry.salaryAsstt),
+        q(saName),
         q(entry.remarks || ''),
         'NULL',
         num(entry.monthNum),
@@ -1250,6 +1390,7 @@ export default function AttendanceReports() {
               <div className="w-full md:w-64">
                 <MultiSelect
                   options={[
+                    { label: "Missing Employees", value: "missing_employees" },
                     { label: "Multiple Entries", value: "multiple_entries" },
                     { label: "Full Month Period", value: "full_month" },
                     { label: "Partial/Excess Period", value: "partial_month" },
@@ -1261,6 +1402,7 @@ export default function AttendanceReports() {
                   }}
                   placeholder="Entry Analysis"
                   className="min-w-[180px]"
+                  hideSelectAll={true}
                 />
               </div>
             </div>
