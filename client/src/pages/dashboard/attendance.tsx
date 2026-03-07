@@ -638,6 +638,29 @@ const PDFDialogContent = ({
   );
 };
 
+const POSITIVE_REMARKS = [
+  {
+    en: "The Attendance Management System has significantly simplified the reporting process for our department. In my opinion, this system should continue permanently.",
+    hi: "इस उपस्थिति प्रबंधन प्रणाली ने हमारे विभाग के लिए रिपोर्टिंग प्रक्रिया को काफी सरल बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance System has been very helpful for our department. It has simplified the attendance submission process, reduced paperwork, saved time and resources, and improved efficiency. In my opinion, this system should continue permanently.",
+    hi: "उपस्थिति प्रणाली हमारे विभाग के लिए बहुत उपयोगी रही है। इसने उपस्थिति जमा करने की प्रक्रिया को सरल बनाया है, कागजी काम कम किया है, समय और संसाधनों की बचत की है, और कार्यकुशलता में सुधार किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "This system has improved efficiency and reduced manual workload. In my opinion, this system should continue permanently.",
+    hi: "इस प्रणाली ने कार्यक्षमता में सुधार किया है और मैन्युअल कार्यभार को कम किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The digital attendance reporting system is very helpful. In my opinion, this system should continue permanently.",
+    hi: "डिजिटल उपस्थिति रिपोर्टिंग प्रणाली बहुत उपयोगी है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The system has saved time, resources, and improved administrative workflow. In my opinion, this system should continue permanently.",
+    hi: "प्रणाली ने समय और संसाधनों की बचत की है, और प्रशासनिक कार्यप्रवाह में सुधार किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  }
+];
+
 export default function Attendance() {
   const { toast } = useToast();
   const department = getCurrentDepartment();
@@ -647,6 +670,11 @@ export default function Attendance() {
   const [, setLocation] = useLocation();
   const [cancelDialogReportId, setCancelDialogReportId] = useState<number | null>(null);
   const [recallDialogReportId, setRecallDialogReportId] = useState<number | null>(null);
+
+  const [feedbackReport, setFeedbackReport] = useState<AttendanceReport | null>(null);
+  const [feedbackSelection, setFeedbackSelection] = useState<'positive' | 'negative' | null>(null);
+  const [finalizeReport, setFinalizeReport] = useState<AttendanceReport | null>(null);
+  const [randomFeedbackIndex, setRandomFeedbackIndex] = useState<number>(0);
 
   // Check if cancellation is allowed (only before 23rd of each month)
   const today = new Date();
@@ -1379,50 +1407,22 @@ export default function Attendance() {
                                 </DialogFooter>
                               </DialogContent>
                             </Dialog>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  disabled={changeStatus.isPending}
-                                >
-                                  {changeStatus.isPending ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <FileCheck className="h-4 w-4 mr-2" />
-                                  )}
-                                  Finalize
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Finalize Attendance Report</DialogTitle>
-                                  <DialogDescription className="pt-3 text-sm text-foreground space-y-3">
-                                    <p>
-                                      <strong>Please note the next steps:</strong>
-                                    </p>
-                                    <p>
-                                      1. Now please print the submitted report, get it signed by the HOD, and write the dispatch number and date on the attendance report.
-                                    </p>
-                                    <p>
-                                      2. After that, return here to upload the signed report. As soon as you upload the signed report and fill in the dispatch details and click the submit button, the attendance report will be sent to the Salary Section.
-                                    </p>
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter className="mt-4">
-                                  <DialogClose asChild>
-                                    <Button variant="outline">Cancel</Button>
-                                  </DialogClose>
-                                  <DialogClose asChild>
-                                    <Button
-                                      onClick={() => changeStatus.mutate(report)}
-                                      disabled={changeStatus.isPending}
-                                    >
-                                      I Understand, Finalize Now
-                                    </Button>
-                                  </DialogClose>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
+                            <Button
+                              size="sm"
+                              disabled={changeStatus.isPending}
+                              onClick={() => {
+                                setFeedbackReport(report);
+                                setFeedbackSelection(null);
+                                setRandomFeedbackIndex(Math.floor(Math.random() * POSITIVE_REMARKS.length));
+                              }}
+                            >
+                              {changeStatus.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <FileCheck className="h-4 w-4 mr-2" />
+                              )}
+                              Finalize
+                            </Button>
                           </>
                         )}
                         {report.status !== "draft" && (
@@ -1601,6 +1601,116 @@ export default function Attendance() {
           </div>
         </main>
       </div>
+
+      {/* Feedback Modal */}
+      <Dialog open={!!feedbackReport} onOpenChange={(open) => !open && setFeedbackReport(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Department Feedback on Attendance System / उपस्थिति प्रणाली पर विभाग की प्रतिक्रिया</DialogTitle>
+            <DialogDescription asChild>
+              <div className="pt-3 text-sm text-foreground space-y-3">
+                <p>
+                  This Attendance Management System was introduced on a trial basis to simplify the submission of attendance reports.<br />
+                  Your department's feedback is important to evaluate whether the system should continue in the future.<br />
+                  <span className="text-muted-foreground mt-1 block">यह उपस्थिति प्रबंधन प्रणाली (Attendance Management System) उपस्थिति रिपोर्ट जमा करने की प्रक्रिया को सरल बनाने के लिए परीक्षण (trial) के आधार पर शुरू की गई थी। इस प्रणाली को भविष्य में जारी रखा जाना चाहिए या नहीं, इसका मूल्यांकन करने के लिए आपके विभाग की प्रतिक्रिया (feedback) महत्वपूर्ण है।</span>
+                </p>
+                <p className="font-medium text-amber-900 mt-4">
+                  Kindly select your department's recommendation regarding this system.<br />
+                  <span className="text-sm font-normal">कृपया इस प्रणाली के संबंध में अपने विभाग की अनुशंसा (recommendation) चुनें।</span>
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div
+                    className={`p-4 border rounded-md cursor-pointer transition-colors ${feedbackSelection === 'positive' ? 'border-green-600 bg-green-50 ring-1 ring-green-600' : 'hover:bg-muted'}`}
+                    onClick={() => setFeedbackSelection('positive')}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="mt-1">
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${feedbackSelection === 'positive' ? 'border-green-600 border-4' : 'border-input'}`}></div>
+                      </div>
+                      <div>
+                        <p className="font-bold mb-1 text-[15px] text-green-700">Option 1 - Positive Recommendation<br /><span className="text-sm font-medium">विकल्प 1 - सकारात्मक अनुशंसा</span></p>
+                        <p className="text-sm text-muted-foreground mt-2">{POSITIVE_REMARKS[randomFeedbackIndex].en}</p>
+                        <p className="text-sm text-muted-foreground mt-2 border-t pt-2">{POSITIVE_REMARKS[randomFeedbackIndex].hi}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`p-4 border rounded-md cursor-pointer transition-colors ${feedbackSelection === 'negative' ? 'border-red-600 bg-red-50 ring-1 ring-red-600' : 'hover:bg-muted'}`}
+                    onClick={() => setFeedbackSelection('negative')}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="mt-1">
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${feedbackSelection === 'negative' ? 'border-red-600 border-4' : 'border-input'}`}></div>
+                      </div>
+                      <div>
+                        <p className="font-bold mb-1 text-[15px] text-red-700">Option 2 - Negative Recommendation<br /><span className="text-sm font-medium">विकल्प 2 - नकारात्मक अनुशंसा</span></p>
+                        <p className="text-sm text-muted-foreground mt-2">The Attendance System should be discontinued after the trial period and the previous manual system should be continued.</p>
+                        <p className="text-sm text-muted-foreground mt-2 border-t pt-2">परीक्षण अवधि के बाद उपस्थिति प्रणाली को बंद कर दिया जाना चाहिए और पिछली मैन्युअल प्रणाली को जारी रखा जाना चाहिए।</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setFeedbackReport(null)}>Cancel</Button>
+            <Button
+              disabled={!feedbackSelection}
+              onClick={() => {
+                if (feedbackReport) {
+                  if (feedbackSelection === 'positive') {
+                    localStorage.setItem(`feedback_remark_${feedbackReport.id}`, `Positive: ${POSITIVE_REMARKS[randomFeedbackIndex].en}`);
+                  } else {
+                    localStorage.setItem(`feedback_remark_${feedbackReport.id}`, "Negative: The Attendance System should be discontinued after the trial period and the previous manual system should be continued.");
+                  }
+                  setFinalizeReport(feedbackReport);
+                  setFeedbackReport(null);
+                }
+              }}
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Finalize Dialog */}
+      <Dialog open={!!finalizeReport} onOpenChange={(open) => !open && setFinalizeReport(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalize Attendance Report</DialogTitle>
+            <DialogDescription asChild>
+              <div className="pt-3 text-sm text-foreground space-y-3">
+                <p>
+                  <strong>Please note the next steps:</strong>
+                </p>
+                <p>
+                  1. Now please print the submitted report, get it signed by the HOD, and write the dispatch number and date on the attendance report.
+                </p>
+                <p>
+                  2. After that, return here to upload the signed report. As soon as you upload the signed report and fill in the dispatch details and click the submit button, the attendance report will be sent to the Salary Section.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setFinalizeReport(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (finalizeReport) {
+                  changeStatus.mutate(finalizeReport);
+                  setFinalizeReport(null);
+                }
+              }}
+              disabled={changeStatus.isPending}
+            >
+              I Understand, Finalize Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Deadline Passed Alert Modal */}
       <Dialog open={showDeadlineAlert} onOpenChange={setShowDeadlineAlert}>

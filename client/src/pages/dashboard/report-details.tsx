@@ -10,7 +10,7 @@ import { format } from "date-fns";
 import { AttendanceReport, AttendanceEntry, Department, Employee } from "@shared/schema";
 import { Download, Printer, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getPayLevelOrder } from "@/lib/pay-levels";
 
 interface ExtendedAttendanceEntry extends AttendanceEntry {
@@ -44,6 +44,16 @@ export default function ReportDetails() {
   const [, setLocation] = useLocation();
   const reportId = params?.id;
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [feedbackRemark, setFeedbackRemark] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (reportId) {
+      const savedRemark = localStorage.getItem(`feedback_remark_${reportId}`);
+      if (savedRemark) {
+        setFeedbackRemark(savedRemark);
+      }
+    }
+  }, [reportId]);
 
   const { data: report, isLoading: isLoadingReport } = useQuery<ExtendedAttendanceReport>({
     queryKey: [`/api/admin/attendance/${reportId}`],
@@ -795,6 +805,11 @@ export default function ReportDetails() {
                   <TableCell colSpan={9} className="p-0" style={{ border: 'none' }}>
                     <div className="mt-8 space-y-4 text-right certification-section page-break-inside-avoid">
                       <p>Certified that the above attendance report is correct.</p>
+                      {feedbackRemark && (
+                        <div className="mb-2 text-right w-full block italic font-bold text-[11px] text-black tracking-tight mt-1 pr-1">
+                          {feedbackRemark.replace(/^(Positive:|Negative:)\s*/, '')}
+                        </div>
+                      )}
                       <div className="space-y-1">
                         <div style={{ height: '3em' }}></div>
                         <p>{report.department?.hodName}</p>
