@@ -2184,7 +2184,8 @@ export async function registerRoutes(app: Express) {
         SELECT ae.employee_id, ae.periods, ar.id as report_id
         FROM attendance_entries ae
         JOIN attendance_reports ar ON ae.report_id = ar.id
-        WHERE ar.department_id = ${departmentId}
+        JOIN employees e ON ae.employee_id = e.id
+        WHERE e.department_id = ${departmentId}
           AND ar.status IN ('submitted', 'sent')
       `);
 

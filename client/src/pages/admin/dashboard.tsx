@@ -1081,25 +1081,25 @@ export default function AdminDashboard() {
               </div>
 
               {/* Content */}
-              <div className="flex-1 flex items-center justify-center px-1 gap-4">
+              <div className="flex-1 flex items-center justify-center px-2 py-2 gap-6">
                 {/* Vertical Stats */}
-                <div className="flex flex-col gap-1 items-center min-w-[60px]">
+                <div className="flex flex-col gap-2 items-center min-w-[70px]">
                   <div className="text-center leading-tight">
-                    <div className="text-2xl font-bold text-green-600 leading-none">{stats.sentCount}</div>
-                    <div className="text-[9px] text-gray-500 font-medium">Received</div>
+                    <div className="text-4xl font-extrabold text-green-600 leading-none">{stats.sentCount}</div>
+                    <div className="text-xs text-gray-500 font-semibold mt-1">Received</div>
                   </div>
                   <div className="text-center leading-tight">
-                    <div className="text-2xl font-bold text-amber-600 leading-none">{stats.processedCount}</div>
-                    <div className="text-[9px] text-gray-500 font-medium">Processed</div>
+                    <div className="text-4xl font-extrabold text-amber-600 leading-none">{stats.processedCount}</div>
+                    <div className="text-xs text-gray-500 font-semibold mt-1">Processed</div>
                   </div>
                   <div className="text-center leading-tight">
-                    <div className="text-2xl font-bold text-red-500 leading-none">{stats.notProcessedCount}</div>
-                    <div className="text-[9px] text-gray-500 font-medium">Missing</div>
+                    <div className="text-4xl font-extrabold text-red-500 leading-none">{stats.notProcessedCount}</div>
+                    <div className="text-xs text-gray-500 font-semibold mt-1">Missing</div>
                   </div>
                 </div>
 
                 {/* Donut Chart */}
-                <div className="h-[120px] w-[120px] relative">
+                <div className="h-[160px] w-[160px] relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -1110,8 +1110,8 @@ export default function AdminDashboard() {
                         ]}
                         cx="50%"
                         cy="50%"
-                        innerRadius={42}
-                        outerRadius={58}
+                        innerRadius={55}
+                        outerRadius={75}
                         paddingAngle={2}
                         dataKey="value"
                         stroke="none"
@@ -1134,10 +1134,10 @@ export default function AdminDashboard() {
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="flex flex-col items-center justify-center">
-                      <span className="text-2xl font-bold text-gray-900 leading-none">
+                      <span className="text-4xl font-extrabold text-gray-900 leading-none">
                         {stats.sentCount + stats.processedCount}
                       </span>
-                      <span className="text-sm text-gray-500 font-medium leading-none mt-1">
+                      <span className="text-base text-gray-500 font-semibold leading-none mt-1">
                         / {stats.totalRelevant}
                       </span>
                     </div>

@@ -806,8 +806,13 @@ export default function ReportDetails() {
                     <div className="mt-8 space-y-4 text-right certification-section page-break-inside-avoid">
                       <p>Certified that the above attendance report is correct.</p>
                       {feedbackRemark && (
-                        <div className="mb-2 text-right w-full block italic font-bold text-[11px] text-black tracking-tight mt-1 pr-1">
-                          {feedbackRemark.replace(/^(Positive:|Negative:)\s*/, '')}
+                        <div className="mb-2 w-full flex justify-end">
+                          <span
+                            className="italic font-bold text-[11px] text-black tracking-tight mt-1 pr-1 text-right text-wrap-balance"
+                            style={{ textWrap: 'balance', maxWidth: '80%' }}
+                          >
+                            {feedbackRemark.replace(/^(Positive:|Negative:)\s*/, '')}
+                          </span>
                         </div>
                       )}
                       <div className="space-y-1">

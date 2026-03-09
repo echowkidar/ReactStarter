@@ -1663,7 +1663,7 @@ export default function Attendance() {
                   if (feedbackSelection === 'positive') {
                     localStorage.setItem(`feedback_remark_${feedbackReport.id}`, `Positive: ${POSITIVE_REMARKS[randomFeedbackIndex].en}`);
                   } else {
-                    localStorage.setItem(`feedback_remark_${feedbackReport.id}`, "Negative: The Attendance System should be discontinued after the trial period and the previous manual system should be continued.");
+                    localStorage.setItem(`feedback_remark_${feedbackReport.id}`, "Negative: .");
                   }
                   setFinalizeReport(feedbackReport);
                   setFeedbackReport(null);
