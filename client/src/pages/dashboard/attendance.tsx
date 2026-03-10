@@ -1742,6 +1742,7 @@ export default function Attendance() {
                 if (feedbackReport) {
                   if (feedbackSelection === 'positive') {
                     localStorage.setItem(`feedback_remark_${feedbackReport.id}`, `Positive: ${POSITIVE_REMARKS[randomFeedbackIndex].en}`);
+                  } else {
                     localStorage.setItem(`feedback_remark_${feedbackReport.id}`, "Negative: ----");
                   }
                   setFinalizeReport(feedbackReport);
