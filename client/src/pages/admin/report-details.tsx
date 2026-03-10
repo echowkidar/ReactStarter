@@ -613,8 +613,16 @@ export default function ReportDetails() {
                     return <TableBody>{signatureRow}</TableBody>;
                   }
 
-                  const initialRows = allRows.slice(0, -1);
-                  const lastRow = allRows[allRows.length - 1];
+                  const entries = report.entries || [];
+                  const lastEntry = entries[entries.length - 1];
+                  const lastEntryPeriods = typeof lastEntry?.periods === 'string'
+                    ? JSON.parse(lastEntry.periods)
+                    : lastEntry?.periods;
+                  const lastEntryPeriodCount = lastEntryPeriods?.length || 1;
+
+                  const cutIndex = allRows.length - lastEntryPeriodCount;
+                  const initialRows = allRows.slice(0, cutIndex);
+                  const lastRows = allRows.slice(cutIndex);
 
                   return (
                     <>
@@ -622,7 +630,7 @@ export default function ReportDetails() {
                         {initialRows}
                       </TableBody>
                       <TableBody className="border-t-0" style={{ pageBreakInside: 'avoid' }}>
-                        {lastRow}
+                        {lastRows}
                         {signatureRow}
                       </TableBody>
                     </>

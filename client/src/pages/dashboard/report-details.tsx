@@ -830,8 +830,34 @@ export default function ReportDetails() {
                 return <TableBody>{signatureRow}</TableBody>;
               }
 
-              const initialRows = allRows.slice(0, -1);
-              const lastRow = allRows[allRows.length - 1];
+              // Fix for multi-period rowSpans breaking across TableBody tags:
+              // Determine how many rows belong to the final employee (from their period count)
+              // We need the sorted entries to find the actual last entry
+              const sortedEntries = [...(report.entries || [])].sort((a, b) => {
+                const payLevelA = a.employee?.payLevel || "L-0";
+                const payLevelB = b.employee?.payLevel || "L-0";
+                if (payLevelA !== payLevelB) {
+                  return getPayLevelOrder(payLevelB) - getPayLevelOrder(payLevelA);
+                }
+                const sortOrderA = a.employee?.sortOrder || 0;
+                const sortOrderB = b.employee?.sortOrder || 0;
+                if (sortOrderA !== sortOrderB) {
+                  return sortOrderA - sortOrderB;
+                }
+                const epidA = a.employee?.epid || '';
+                const epidB = b.employee?.epid || '';
+                return epidA.localeCompare(epidB);
+              });
+
+              const lastEntry = sortedEntries[sortedEntries.length - 1];
+              const lastEntryPeriods = typeof lastEntry?.periods === 'string'
+                ? JSON.parse(lastEntry.periods)
+                : lastEntry?.periods;
+              const lastEntryPeriodCount = lastEntryPeriods?.length || 1;
+
+              const cutIndex = allRows.length - lastEntryPeriodCount;
+              const initialRows = allRows.slice(0, cutIndex);
+              const lastRows = allRows.slice(cutIndex);
 
               return (
                 <>
@@ -839,7 +865,7 @@ export default function ReportDetails() {
                     {initialRows}
                   </TableBody>
                   <TableBody className="border-t-0" style={{ pageBreakInside: 'avoid' }}>
-                    {lastRow}
+                    {lastRows}
                     {signatureRow}
                   </TableBody>
                 </>
