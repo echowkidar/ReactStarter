@@ -658,6 +658,86 @@ const POSITIVE_REMARKS = [
   {
     en: "The system has saved time, resources, and improved administrative workflow. In my opinion, this system should continue permanently.",
     hi: "प्रणाली ने समय और संसाधनों की बचत की है, और प्रशासनिक कार्यप्रवाह में सुधार किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance Management System has made the submission and monitoring of attendance reports much easier for our department. In my view, this system should be continued permanently.",
+    hi: "उपस्थिति प्रबंधन प्रणाली ने हमारे विभाग के लिए उपस्थिति रिपोर्ट जमा करना और उनकी निगरानी करना काफी आसान बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The implementation of this Attendance System has streamlined our departmental work and reduced unnecessary delays. In my opinion, this system should remain in operation permanently.",
+    hi: "इस उपस्थिति प्रणाली के लागू होने से हमारे विभाग का कार्य सुव्यवस्थित हुआ है और अनावश्यक देरी कम हुई है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The system has made the process of attendance reporting more transparent and efficient for our department. I strongly recommend that this system should continue permanently.",
+    hi: "इस प्रणाली ने हमारे विभाग के लिए उपस्थिति रिपोर्टिंग की प्रक्रिया को अधिक पारदर्शी और प्रभावी बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance System has reduced manual errors and simplified record keeping in our department. In my view, this system should be maintained as a permanent solution.",
+    hi: "उपस्थिति प्रणाली ने मैन्युअल त्रुटियों को कम किया है और हमारे विभाग में रिकॉर्ड रखने की प्रक्रिया को सरल बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The digital approach of this Attendance System has improved accuracy and efficiency in managing attendance reports. In my opinion, this system deserves to be continued permanently.",
+    hi: "इस उपस्थिति प्रणाली के डिजिटल तरीके ने उपस्थिति रिपोर्ट प्रबंधन में सटीकता और कार्यकुशलता को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance Management System has made coordination between our department and the Salary Section more convenient. I believe this system should remain in use on a permanent basis.",
+    hi: "उपस्थिति प्रबंधन प्रणाली ने हमारे विभाग और सैलरी सेक्शन के बीच समन्वय को अधिक सुविधाजनक बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The system has reduced the dependency on manual paperwork and improved overall administrative efficiency. In my opinion, this system should be adopted permanently.",
+    hi: "इस प्रणाली ने मैन्युअल कागजी कार्य पर निर्भरता कम की है और समग्र प्रशासनिक कार्यकुशलता में सुधार किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance System has made the reporting process faster and more organized for our department. I recommend that this system be continued permanently for future use.",
+    hi: "उपस्थिति प्रणाली ने हमारे विभाग के लिए रिपोर्टिंग प्रक्रिया को अधिक तेज और व्यवस्थित बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "This system has brought better organization and clarity in attendance reporting within our department. In my view, the continuation of this system on a permanent basis would be beneficial.",
+    hi: "इस प्रणाली ने हमारे विभाग में उपस्थिति रिपोर्टिंग को अधिक व्यवस्थित और स्पष्ट बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance System has minimized paperwork and improved the efficiency of administrative tasks in our department. I am of the opinion that this system should continue permanently.",
+    hi: "उपस्थिति प्रणाली ने कागजी कार्य को कम किया है और हमारे विभाग में प्रशासनिक कार्यों की कार्यकुशलता को बढ़ाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The system has made the preparation and submission of attendance reports much more convenient. In my opinion, this system should be retained permanently.",
+    hi: "इस प्रणाली ने उपस्थिति रिपोर्ट तैयार करने और जमा करने की प्रक्रिया को काफी अधिक सुविधाजनक बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "This Attendance System has improved the speed and reliability of attendance reporting in our department. I strongly believe this system should continue as a permanent arrangement.",
+    hi: "इस उपस्थिति प्रणाली ने हमारे विभाग में उपस्थिति रिपोर्टिंग की गति और विश्वसनीयता को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The digital attendance reporting process has been beneficial and user friendly for our department. In my view, this system should remain a permanent part of the process.",
+    hi: "डिजिटल उपस्थिति रिपोर्टिंग प्रक्रिया हमारे विभाग के लिए लाभदायक और उपयोगकर्ता अनुकूल रही है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance Management System has improved administrative workflow and reduced unnecessary workload. I recommend that this system be implemented on a permanent basis.",
+    hi: "उपस्थिति प्रबंधन प्रणाली ने प्रशासनिक कार्यप्रवाह को बेहतर बनाया है और अनावश्यक कार्यभार को कम किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "This system has made attendance documentation more systematic and efficient for our department. In my opinion, the system should continue to operate permanently.",
+    hi: "इस प्रणाली ने हमारे विभाग के लिए उपस्थिति दस्तावेजीकरण को अधिक व्यवस्थित और प्रभावी बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance System has enhanced transparency and improved the reporting structure in our department. I believe this system should be continued indefinitely.",
+    hi: "उपस्थिति प्रणाली ने पारदर्शिता बढ़ाई है और हमारे विभाग में रिपोर्टिंग संरचना को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The system has helped our department manage attendance records more efficiently and with less effort. In my view, the system should remain permanently in use.",
+    hi: "इस प्रणाली ने हमारे विभाग को उपस्थिति रिकॉर्ड अधिक कुशलता और कम प्रयास के साथ प्रबंधित करने में मदद की है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The digital attendance submission system has made the process smoother and more reliable. I strongly support the permanent continuation of this system.",
+    hi: "डिजिटल उपस्थिति जमा प्रणाली ने प्रक्रिया को अधिक सुचारु और विश्वसनीय बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "This Attendance System has reduced complexity and improved the overall reporting process in our department. In my opinion, this system should be continued for the long term.",
+    hi: "इस उपस्थिति प्रणाली ने जटिलता को कम किया है और हमारे विभाग में समग्र रिपोर्टिंग प्रक्रिया को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+  },
+  {
+    en: "The Attendance Management System has proven to be a practical and efficient solution for attendance reporting. I recommend that this system remain permanently in place.",
+    hi: "उपस्थिति प्रबंधन प्रणाली उपस्थिति रिपोर्टिंग के लिए एक व्यावहारिक और प्रभावी समाधान साबित हुई है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
   }
 ];
 
@@ -1662,8 +1742,7 @@ export default function Attendance() {
                 if (feedbackReport) {
                   if (feedbackSelection === 'positive') {
                     localStorage.setItem(`feedback_remark_${feedbackReport.id}`, `Positive: ${POSITIVE_REMARKS[randomFeedbackIndex].en}`);
-                  } else {
-                    localStorage.setItem(`feedback_remark_${feedbackReport.id}`, "Negative: .");
+                    localStorage.setItem(`feedback_remark_${feedbackReport.id}`, "Negative: ----");
                   }
                   setFinalizeReport(feedbackReport);
                   setFeedbackReport(null);
