@@ -65,6 +65,37 @@ export default function ReportDetails() {
     return `${day}-${month}-${year.slice(-2)}`;
   };
 
+  const isWholeCurrentMonth = (fromDate: string, toDate: string, reportMonth: number, reportYear: number): boolean => {
+    // Check if period starts from day 1
+    const fromParts = fromDate.split('-');
+    if (fromParts.length !== 3 || fromParts[0] !== '01') return false;
+
+    // Extract month and year from the period
+    const fromMonth = parseInt(fromParts[1]);
+    const fromYear = parseInt(fromParts[2].length === 2 ? `20${fromParts[2]}` : fromParts[2]);
+
+    // Check if period ends on the last day of month
+    const toParts = toDate.split('-');
+    if (toParts.length !== 3) return false;
+
+    const toMonth = parseInt(toParts[1]);
+    const toYear = parseInt(toParts[2].length === 2 ? `20${toParts[2]}` : toParts[2]);
+
+    // Months should be same for whole month period
+    if (fromMonth !== toMonth || fromYear !== toYear) return false;
+
+    // Calculate last day of the month
+    const lastDay = new Date(fromYear, fromMonth, 0).getDate();
+
+    // Check if end date is the last day of month
+    const isCompleteMonth = parseInt(toParts[0]) === lastDay;
+
+    // Also check if this period month matches the report month/year
+    const matchesReportMonth = fromMonth === reportMonth && fromYear === reportYear;
+
+    return isCompleteMonth && matchesReportMonth;
+  };
+
   const handlePrint = () => {
     setTimeout(() => {
       const printContent = document.querySelector('.print-content');
