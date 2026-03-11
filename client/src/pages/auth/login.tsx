@@ -51,6 +51,9 @@ const N8nChatStyles = () => (
 // Add n8n chat script
 const N8nChatScript = () => {
   useEffectOnce(() => {
+    // Cleanup any existing chat instances from previous sessions
+    document.querySelectorAll('.chat-window-toggle, .chat-window, .n8n-chat, #n8n-chat-container, .n8n-chat-root').forEach(el => el.remove());
+
     const script = document.createElement("script");
     script.type = "module";
     script.innerHTML = `
@@ -78,6 +81,8 @@ const N8nChatScript = () => {
       if (script.parentNode) {
         script.parentNode.removeChild(script);
       }
+      // Also cleanup dom instances when unmounting
+      document.querySelectorAll('.chat-window-toggle, .chat-window, .n8n-chat, #n8n-chat-container, .n8n-chat-root').forEach(el => el.remove());
     };
   }, []);
 

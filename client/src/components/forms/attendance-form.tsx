@@ -361,6 +361,22 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
 
 
+  const hadFullMonthPreviousMonth = (employeeId: number): boolean => {
+    const prevStartDate = formatDateForDisplay(prevMonthStartDate);
+    const prevEndDate = formatDateForDisplay(prevMonthEndDate);
+    const empReportedPeriods = reportedPeriods[employeeId] || [];
+
+    return empReportedPeriods.some(rp => {
+      const isFullMonthStr = rp.fromDate === prevStartDate && rp.toDate === prevEndDate;
+      if (isFullMonthStr) return true;
+      if (!rp.fromDate || !rp.toDate) return false;
+      const days = calculateDays(rp.fromDate, rp.toDate);
+      const totalDaysInPrevMonth = prevMonthEndDate.getDate();
+      return days === totalDaysInPrevMonth &&
+        rp.fromDate.endsWith(`${String(prevMonth).padStart(2, '0')}-${String(prevYear).slice(-2)}`);
+    });
+  };
+
   const toggleEmployee = (employeeId: number) => {
     setIncludedEmployees(prev => {
       const next = new Set(prev);
@@ -374,8 +390,19 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         // Initialize entry when adding employee
         const currentEntries = form.getValues("entries") || [];
         const isGuest = isGuestTeacher(employeeId);
+        const emp = employees.find((e: any) => e.id === employeeId);
+        const isExcluded = emp && excludedDesignations.includes(emp.designation?.toUpperCase());
+
         const fromDateStr = formatDateForDisplay(isGuest ? prevMonthStartDate : defaultStartDate);
-        const toDateStr = formatDateForDisplay(isGuest ? prevMonthEndDate : defaultEndDate);
+
+        let initialEndDate = isGuest ? prevMonthEndDate : defaultEndDate;
+        if (isExcluded && hadFullMonthPreviousMonth(employeeId)) {
+          // Auto apply One Day Break if previous month was full
+          initialEndDate = new Date(defaultEndDate);
+          initialEndDate.setDate(initialEndDate.getDate() - 1);
+        }
+
+        const toDateStr = formatDateForDisplay(initialEndDate);
 
         form.setValue("entries", [
           ...currentEntries,
@@ -445,6 +472,85 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     }
   };
 
+  const handleDateChangeWithSplit = (
+    employeeId: number,
+    entryIndex: number,
+    periodIndex: number,
+    newFromStr: string,
+    newToStr: string
+  ) => {
+    const entries = form.getValues("entries");
+    const newEntries = [...entries];
+    const employee = employees.find((e: any) => e.id === employeeId);
+    if (!employee) return;
+
+    const isExcluded = excludedDesignations.includes(employee.designation?.toUpperCase());
+    const totalDays = calculateDays(newFromStr, newToStr);
+
+    if (isExcluded && totalDays > 56) {
+      alert("Period exceeds 56 days. The system will automatically split it with 1-day breaks (56-Day Rule).");
+
+      const generatedPeriods = [];
+      let remainingDays = totalDays;
+      let currentStart = parseDateFromDisplay(newFromStr);
+      const finalEnd = parseDateFromDisplay(newToStr);
+
+      while (remainingDays > 56) {
+        const pEnd = new Date(currentStart);
+        pEnd.setDate(pEnd.getDate() + 55); // 56 days inclusive
+
+        generatedPeriods.push({
+          fromDate: formatDateForDisplay(currentStart),
+          toDate: formatDateForDisplay(pEnd),
+          days: 56,
+          remarks: "",
+        });
+
+        // Skip 1 day (break)
+        currentStart = new Date(pEnd);
+        currentStart.setDate(currentStart.getDate() + 2);
+
+        if (currentStart <= finalEnd) {
+          remainingDays = Math.ceil((finalEnd.getTime() - currentStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        } else {
+          remainingDays = 0;
+        }
+      }
+
+      if (remainingDays > 0) {
+        generatedPeriods.push({
+          fromDate: formatDateForDisplay(currentStart),
+          toDate: formatDateForDisplay(finalEnd),
+          days: remainingDays,
+          remarks: "",
+        });
+      }
+
+      // Replace the current period with the generated ones
+      const currentPeriods = [...newEntries[entryIndex].periods];
+      currentPeriods.splice(periodIndex, 1, ...generatedPeriods);
+
+      newEntries[entryIndex] = {
+        ...newEntries[entryIndex],
+        periods: currentPeriods
+      };
+    } else {
+      // Normal update
+      newEntries[entryIndex] = {
+        ...newEntries[entryIndex],
+        periods: [...newEntries[entryIndex].periods]
+      };
+      newEntries[entryIndex].periods[periodIndex] = {
+        ...newEntries[entryIndex].periods[periodIndex],
+        fromDate: newFromStr,
+        toDate: newToStr,
+        days: isGuestTeacher(employeeId) ? newEntries[entryIndex].periods[periodIndex].days : totalDays
+      };
+    }
+
+    form.setValue("entries", newEntries, { shouldDirty: true });
+  };
+
   // Remove employee entries when unselected
   useEffect(() => {
     const currentEntries = form.getValues("entries") || [];
@@ -481,7 +587,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   const excludedDesignations = [
     "DAILY WAGE (SEMI-SKILLED)",
     "DAILY WAGE (CLERICAL/SKILLED)",
-    "DAILY WAGE (UN-SKILLED)"
+    "DAILY WAGE (UN-SKILLED)",
+    "DAILY WAGER (FIXED)"
   ];
 
   // Filter employees eligible for "All" selection
@@ -511,34 +618,61 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       const currentEntries = form.getValues("entries") || [];
       const existingIds = new Set(currentEntries.map(e => e.employeeId));
 
-      const newEntries = eligibleEmployees
-        .filter((emp: any) => !existingIds.has(emp.id))
-        .map((employee: any) => {
-          // Check if excluded designation (Daily Wage)
-          const isExcluded = excludedDesignations.includes(employee.designation?.toUpperCase());
-          const isGuest = employee.designation?.toUpperCase() === 'GUEST TEACHER' || employee.designation?.toUpperCase() === 'GUEST FACULTY';
+      const employeesToAdd = eligibleEmployees.filter((emp: any) => !existingIds.has(emp.id));
 
-          let startDate = isGuest ? prevMonthStartDate : defaultStartDate;
-          let endDate = isGuest ? prevMonthEndDate : defaultEndDate;
+      let forceFullMonth = false;
+      if (includeExcludedFull) {
+        const violators = employeesToAdd.filter((emp: any) =>
+          excludedDesignations.includes(emp.designation?.toUpperCase()) &&
+          hadFullMonthPreviousMonth(emp.id)
+        );
+        if (violators.length > 0) {
+          forceFullMonth = window.confirm(`Some daily wagers (${violators.length}) had full attendance last month.\nAccording to the 56-days rule, a 1-day break is mandatory for them.\nDo you still want to force full month attendance?`);
+        } else {
+          forceFullMonth = true;
+        }
+      }
 
-          if (isExcluded) {
-            // One day before month end for Daily Wagers
+      const newEntries = employeesToAdd.map((employee: any) => {
+        // Check if excluded designation (Daily Wage)
+        const isExcluded = excludedDesignations.includes(employee.designation?.toUpperCase());
+        const isGuest = employee.designation?.toUpperCase() === 'GUEST TEACHER' || employee.designation?.toUpperCase() === 'GUEST FACULTY';
+
+        let startDate = isGuest ? prevMonthStartDate : defaultStartDate;
+        let endDate = isGuest ? prevMonthEndDate : defaultEndDate;
+
+        if (isExcluded) {
+          if (includeExcludedFull) {
+            // Full month requested
+            if (!forceFullMonth && hadFullMonthPreviousMonth(employee.id)) {
+              endDate = new Date(defaultEndDate);
+              endDate.setDate(endDate.getDate() - 1);
+            }
+          } else if (includeExcluded) {
+            // One Day break requested for all daily wagers
             endDate = new Date(defaultEndDate);
             endDate.setDate(endDate.getDate() - 1);
+          } else {
+            // Default behavior (neither box checked but manually eligible?)
+            if (hadFullMonthPreviousMonth(employee.id)) {
+              endDate = new Date(defaultEndDate);
+              endDate.setDate(endDate.getDate() - 1);
+            }
           }
+        }
 
-          const fromStr = formatDateForDisplay(startDate);
-          const toStr = formatDateForDisplay(endDate);
-          return {
-            employeeId: employee.id,
-            periods: [{
-              fromDate: fromStr,
-              toDate: toStr,
-              days: isGuest ? 0 : calculateDays(fromStr, toStr),
-              remarks: "",
-            }],
-          };
-        });
+        const fromStr = formatDateForDisplay(startDate);
+        const toStr = formatDateForDisplay(endDate);
+        return {
+          employeeId: employee.id,
+          periods: [{
+            fromDate: fromStr,
+            toDate: toStr,
+            days: isGuest ? 0 : calculateDays(fromStr, toStr),
+            remarks: "",
+          }],
+        };
+      });
 
       form.setValue("entries", [...currentEntries, ...newEntries]);
     }
@@ -788,6 +922,15 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                   const currentEntries = form.getValues("entries") || [];
                   form.setValue("entries", currentEntries.filter(entry => !excludedIds.includes(entry.employeeId)));
                 } else if (allRegularsSelected) {
+                  let forceFullMonth = false;
+                  const violators = excludedEmployees.filter((emp: any) => hadFullMonthPreviousMonth(emp.id));
+
+                  if (violators.length > 0) {
+                    forceFullMonth = window.confirm(`Some daily wagers (${violators.length}) had full attendance last month.\nAccording to the 56-days rule, a 1-day break is mandatory for them.\nDo you still want to force full month attendance?`);
+                  } else {
+                    forceFullMonth = true;
+                  }
+
                   setIncludedEmployees(prev => {
                     const next = new Set(prev);
                     excludedIds.forEach((id: number) => next.add(id));
@@ -799,7 +942,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
                   const newEntries = excludedEmployees.map((employee: any) => {
                     let endDate = defaultEndDate;
-                    // Full mode -> defaultEndDate
+                    // IF forceFullMonth is false, we enforce the break on violators
+                    if (!forceFullMonth && hadFullMonthPreviousMonth(employee.id)) {
+                      endDate = new Date(defaultEndDate);
+                      endDate.setDate(endDate.getDate() - 1);
+                    }
 
                     return {
                       employeeId: employee.id,
@@ -911,6 +1058,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     return currentEndDate.getDate() === breakDate.getDate();
                                   })()}
                                   onCheckedChange={(checked) => {
+                                    if (!checked && hadFullMonthPreviousMonth(employee.id)) {
+                                      const confirmOff = window.confirm("This employee had full attendance (no break) last month. According to the 56-days rule, a 1-day break is mandatory this month. Do you still want to give full month attendance?");
+                                      if (!confirmOff) return;
+                                    }
+
                                     const currentEntries = form.getValues("entries");
                                     const entryIndex = currentEntries.findIndex(e => e.employeeId === employee.id);
                                     if (entryIndex === -1) return;
@@ -988,23 +1140,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     const entries = form.getValues("entries");
                                     const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
                                     if (entryIndex !== -1) {
-                                      const newEntries = [...entries];
                                       const newFromDate = formatDateFromInput(e.target.value);
-
-                                      // Create deep copy of the entry and periods
-                                      newEntries[entryIndex] = {
-                                        ...newEntries[entryIndex],
-                                        periods: [...newEntries[entryIndex].periods]
-                                      };
-
-                                      newEntries[entryIndex].periods[periodIndex] = {
-                                        ...newEntries[entryIndex].periods[periodIndex],
-                                        fromDate: newFromDate,
-                                        days: isGuestTeacher(employee.id) ? newEntries[entryIndex].periods[periodIndex].days : calculateDays(newFromDate, period.toDate)
-                                      };
-
-
-                                      form.setValue("entries", newEntries, { shouldDirty: true });
+                                      handleDateChangeWithSplit(employee.id, entryIndex, periodIndex, newFromDate, period.toDate);
                                     }
                                   }}
                                   disabled={isLoading || !includedEmployees.has(employee.id)}
@@ -1021,23 +1158,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     const entries = form.getValues("entries");
                                     const entryIndex = entries.findIndex(entry => entry.employeeId === employee.id);
                                     if (entryIndex !== -1) {
-                                      const newEntries = [...entries];
                                       const newToDate = formatDateFromInput(e.target.value);
-
-                                      // Create deep copy of the entry and periods
-                                      newEntries[entryIndex] = {
-                                        ...newEntries[entryIndex],
-                                        periods: [...newEntries[entryIndex].periods]
-                                      };
-
-                                      newEntries[entryIndex].periods[periodIndex] = {
-                                        ...newEntries[entryIndex].periods[periodIndex],
-                                        toDate: newToDate,
-                                        days: isGuestTeacher(employee.id) ? newEntries[entryIndex].periods[periodIndex].days : calculateDays(period.fromDate, newToDate)
-                                      };
-
-
-                                      form.setValue("entries", newEntries, { shouldDirty: true });
+                                      handleDateChangeWithSplit(employee.id, entryIndex, periodIndex, period.fromDate, newToDate);
                                     }
                                   }}
                                   disabled={isLoading || !includedEmployees.has(employee.id)}

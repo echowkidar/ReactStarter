@@ -82,6 +82,8 @@ export const NeuralNetworkOverlay = () => {
   useEffect(() => {
     let overlayEl: HTMLDivElement | null = null;
     let animFrame: number;
+    let handleMouseOver: (e: MouseEvent) => void;
+    let handleMouseOut: (e: MouseEvent) => void;
 
     const injectNeuralNet = () => {
       const toggleBtn = document.querySelector('.chat-window-toggle') as HTMLElement;
@@ -263,8 +265,26 @@ export const NeuralNetworkOverlay = () => {
 
       // Position overlay centered on the button, updated on resize/scroll
       const updatePosition = () => {
-        if (!overlayEl || !toggleBtn) return;
-        const rect = toggleBtn.getBoundingClientRect();
+        if (!overlayEl) return;
+
+        // Re-query dynamically to handle DOM changes, unmounts, or remounts gracefully
+        const currentBtn = document.querySelector('.chat-window-toggle') as HTMLElement;
+
+        if (!currentBtn) {
+          overlayEl.style.opacity = '0';
+          return;
+        }
+
+        const rect = currentBtn.getBoundingClientRect();
+
+        // Hide overlay if button is hidden (0x0 rect) or detached
+        if (rect.width === 0 || (rect.left === 0 && rect.top === 0)) {
+          overlayEl.style.opacity = '0';
+          return;
+        } else {
+          overlayEl.style.opacity = '1';
+        }
+
         const btnCenterX = rect.left + rect.width / 2;
         const btnCenterY = rect.top + rect.height / 2;
         overlayEl.style.left = `${btnCenterX - svgSize / 2}px`;
@@ -277,13 +297,22 @@ export const NeuralNetworkOverlay = () => {
       window.addEventListener('resize', updatePosition);
       window.addEventListener('scroll', updatePosition);
 
-      // Hover sync
-      toggleBtn.addEventListener('mouseenter', () => {
-        overlayEl?.classList.add('hovered');
-      });
-      toggleBtn.addEventListener('mouseleave', () => {
-        overlayEl?.classList.remove('hovered');
-      });
+      // Hover sync using event delegation
+      handleMouseOver = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target && target.closest('.chat-window-toggle')) {
+          overlayEl?.classList.add('hovered');
+        }
+      };
+      handleMouseOut = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target && target.closest('.chat-window-toggle')) {
+          overlayEl?.classList.remove('hovered');
+        }
+      };
+
+      document.body.addEventListener('mouseover', handleMouseOver);
+      document.body.addEventListener('mouseout', handleMouseOut);
 
       // Keep position updated
       const posLoop = () => {
@@ -304,6 +333,8 @@ export const NeuralNetworkOverlay = () => {
       observer.disconnect();
       clearTimeout(timer);
       if (animFrame) cancelAnimationFrame(animFrame);
+      if (handleMouseOver) document.body.removeEventListener('mouseover', handleMouseOver);
+      if (handleMouseOut) document.body.removeEventListener('mouseout', handleMouseOut);
       if (overlayEl && overlayEl.parentNode) {
         overlayEl.parentNode.removeChild(overlayEl);
       }
