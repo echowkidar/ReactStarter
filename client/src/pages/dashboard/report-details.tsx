@@ -779,22 +779,22 @@ export default function ReportDetails() {
                             </>
                           )}
                           <TableCell className="whitespace-normal min-w-[120px]">
-                            {isMultiPeriodDesignation
-                              ? (
-                                <div className="flex flex-col">
-                                  <span>{formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}</span>
-                                  {periodIndex === periodCount - 1 && designation.includes('GUEST') && (
-                                    <span className="text-[10px] font-bold mt-1 leading-tight">** Original Bill must be sent to Salary Section **</span>
-                                  )}
-                                </div>
-                              )
-                              : isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
-                                ? "- "
+                            {isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year) && !designation.includes('GUEST')
+                              ? "- "
+                              : isMultiPeriodDesignation
+                                ? (
+                                  <div className="flex flex-col">
+                                    <span>{formatShortDate(period.fromDate)} to {formatShortDate(period.toDate)}</span>
+                                    {periodIndex === periodCount - 1 && designation.includes('GUEST') && (
+                                      <span className="text-[10px] font-bold mt-1 leading-tight">** Original Bill must be sent to Salary Section **</span>
+                                    )}
+                                  </div>
+                                )
                                 : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {isMultiPeriodDesignation
-                              ? <div className="flex flex-col items-center justify-center -mt-1"><span className="leading-tight">{period.days}</span><span className="font-bold text-[9px] text-[#ea580c] leading-tight mt-0.5">Periods</span></div>
+                              ? <div className="flex flex-col items-center justify-center -mt-1"><span className="leading-tight">{period.days}</span>{designation.includes('GUEST') && <span className="font-bold text-[9px] text-[#ea580c] leading-tight mt-0.5">Periods</span>}</div>
                               : period.days}
                           </TableCell>
                           <TableCell>{period.remarks || "-"}</TableCell>
