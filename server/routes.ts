@@ -1305,6 +1305,17 @@ export async function registerRoutes(app: Express) {
       if (process.env.NODE_ENV !== 'production') {
       }
 
+      if (employeeData.epid) {
+        const existingEmployee = await storage.getEmployeeByEpid(employeeData.epid);
+        if (existingEmployee) {
+          const dept = await storage.getDepartment(existingEmployee.departmentId);
+          return res.status(400).json({
+            message: `Duplicate EPID: This employee ID is already assigned to ${existingEmployee.name}, ${existingEmployee.designation || 'No Designation'}, ${dept?.name || 'Unknown Department'}`,
+            details: 'Duplicate EPID'
+          });
+        }
+      }
+
       const parsedData = insertEmployeeSchema.parse(employeeData);
 
       const employee = await storage.createEmployee(parsedData);
@@ -1379,6 +1390,16 @@ export async function registerRoutes(app: Express) {
               return res.status(400).json({ message: attendanceCheck.message });
             }
           }
+        }
+      }
+      if (updates.epid && updates.epid !== currentEmployee.epid) {
+        const existingEmployee = await storage.getEmployeeByEpid(updates.epid);
+        if (existingEmployee && existingEmployee.id !== employeeId) {
+          const dept = await storage.getDepartment(existingEmployee.departmentId);
+          return res.status(400).json({
+            message: `Duplicate EPID: This employee ID is already assigned to ${existingEmployee.name}, ${existingEmployee.designation || 'No Designation'}, ${dept?.name || 'Unknown Department'}`,
+            details: 'Duplicate EPID'
+          });
         }
       }
 
@@ -1514,6 +1535,17 @@ export async function registerRoutes(app: Express) {
         'department',
         departmentId
       );
+
+      if (updates.epid && updates.epid !== employee.epid) {
+        const existingEmployee = await storage.getEmployeeByEpid(updates.epid);
+        if (existingEmployee && existingEmployee.id !== employeeId) {
+          const dept = await storage.getDepartment(existingEmployee.departmentId);
+          return res.status(400).json({
+            message: `Duplicate EPID: This employee ID is already assigned to ${existingEmployee.name}, ${existingEmployee.designation || 'No Designation'}, ${dept?.name || 'Unknown Department'}`,
+            details: 'Duplicate EPID'
+          });
+        }
+      }
 
       const updatedEmployee = await storage.updateEmployee(employeeId, updates);
       res.json(updatedEmployee);
@@ -3151,6 +3183,17 @@ export async function registerRoutes(app: Express) {
         joiningReportUrl: files?.joiningReportDoc ? `/uploads/${files.joiningReportDoc[0].filename}` : req.body.joiningReportUrl || null,
         termExtensionUrl: files?.termExtensionDoc ? `/uploads/${files.termExtensionDoc[0].filename}` : req.body.termExtensionUrl || null,
       };
+
+      if (employeeData.epid) {
+        const existingEmployee = await storage.getEmployeeByEpid(employeeData.epid);
+        if (existingEmployee) {
+          const dept = await storage.getDepartment(existingEmployee.departmentId);
+          return res.status(400).json({
+            message: `Duplicate EPID: This employee ID is already assigned to ${existingEmployee.name}, ${existingEmployee.designation || 'No Designation'}, ${dept?.name || 'Unknown Department'}`,
+            details: 'Duplicate EPID'
+          });
+        }
+      }
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
 

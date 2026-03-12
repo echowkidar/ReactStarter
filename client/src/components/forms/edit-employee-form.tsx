@@ -629,7 +629,12 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`API Error: ${response.status} - ${errorText}`);
+          try {
+            const parsed = JSON.parse(errorText);
+            throw new Error(parsed.message || errorText);
+          } catch (e) {
+            throw new Error(e instanceof Error && e.message !== errorText ? e.message : `API Error: ${response.status} - ${errorText}`);
+          }
         }
 
         const updatedEmployee = await response.json();
@@ -684,7 +689,12 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`API Error: ${response.status} - ${errorText}`);
+          try {
+            const parsed = JSON.parse(errorText);
+            throw new Error(parsed.message || errorText);
+          } catch (e) {
+            throw new Error(e instanceof Error && e.message !== errorText ? e.message : `API Error: ${response.status} - ${errorText}`);
+          }
         }
 
         const updatedEmployee = await response.json();

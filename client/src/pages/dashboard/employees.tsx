@@ -397,7 +397,7 @@ export default function Employees() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to add employee",
+        description: error instanceof Error ? error.message : "Failed to add employee",
       });
     },
   });
