@@ -1389,6 +1389,23 @@ export async function registerRoutes(app: Express) {
             if (attendanceCheck.hasAttendance) {
               return res.status(400).json({ message: attendanceCheck.message });
             }
+
+            // --- Auto-Cancel Transfer Request Logic ---
+            // If the admin is forcing a department change, any pending transfer requests should be auto-cancelled
+            const pendingRequest = await storage.getTransferRequestByEmployee(employeeId);
+            if (pendingRequest) {
+              const adminInitiator = ((req as any).user?.email) || "System Admin";
+              const autoRemark = `Auto-cancelled by ${adminInitiator} because employee's department was changed manually via Admin Dashboard.`;
+
+              await storage.updateTransferRequest(pendingRequest.id, {
+                status: 'cancelled',
+                remarks: pendingRequest.remarks ? `${pendingRequest.remarks}\n\n[ADMIN CANCELLED]: ${autoRemark}` : `[ADMIN CANCELLED]: ${autoRemark}`,
+                processedAt: new Date()
+              });
+
+              // Clear the employee's badge flag
+              updates.transferStatus = null;
+            }
           }
         }
       }

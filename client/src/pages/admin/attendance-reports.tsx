@@ -24,7 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin, ChevronDown } from "lucide-react";
+import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin, ChevronDown, Filter } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -312,6 +312,7 @@ export default function AttendanceReports() {
   const [salaryAssistantFilter, setSalaryAssistantFilter] = useState<string[]>([]);
   const [designationFilter, setDesignationFilter] = useState<string[]>([]);
   const [analysisFilter, setAnalysisFilter] = useState<string[]>([]);
+  const [verifiedFilter, setVerifiedFilter] = useState<"all" | "verified" | "unverified">("all");
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
   const { toast } = useToast();
 
@@ -668,12 +669,20 @@ export default function AttendanceReports() {
     if (salaryAssistantFilter.length > 0) result = result.filter(entry => salaryAssistantFilter.includes(entry.salaryAsstt));
     if (designationFilter.length > 0) result = result.filter(entry => designationFilter.includes(entry.designation));
 
-    // Apply Analysis Filters
     if (analysisFilter.length > 0) {
       const wantsMissing = analysisFilter.includes("missing_employees");
       const wantsMultiple = analysisFilter.includes("multiple_entries");
       const wantsFull = analysisFilter.includes("full_month");
       const wantsPartial = analysisFilter.includes("partial_month");
+      const excludeGuests = analysisFilter.includes("exclude_guests");
+
+      // First, filter out Guest Teachers if requested
+      if (excludeGuests) {
+        result = result.filter(e => {
+          const desig = (e.designation || "").toUpperCase();
+          return desig !== "GUEST TEACHER" && desig !== "GUEST FACULTY";
+        });
+      }
 
       // 1. Pre-calculate employee counts for "Multiple Entries"
       const empCounts = new Map<string, number>();
@@ -684,11 +693,20 @@ export default function AttendanceReports() {
       }
 
       // 2. Filter existing entries
-      let filteredResult = result.filter(entry => {
-        let matchesAnalysis = false;
+      let filteredResult: typeof result = [];
+
+      // Determine which employees match the criteria
+      const employeeIdsToIncludeAll = new Set<string>();
+      // Use combination of entryId and period string to uniquely identify a period
+      const specificUniqueKeysToInclude = new Set<string>();
+
+      result.forEach(entry => {
+        let isMultiple = false;
+        let isPartial = false;
+        let isFull = false;
 
         if (wantsMultiple && (empCounts.get(entry.employeeId) || 0) > 1) {
-          matchesAnalysis = true;
+          isMultiple = true;
         }
 
         if (wantsFull || wantsPartial) {
@@ -710,16 +728,33 @@ export default function AttendanceReports() {
               startDate.getTime() === expectedStart.getTime() &&
               endDate.getTime() === expectedEnd.getTime();
 
-            if (wantsFull && isFullMonth) matchesAnalysis = true;
-            if (wantsPartial && !isFullMonth) matchesAnalysis = true;
+            if (wantsFull && isFullMonth) isFull = true;
+            if (wantsPartial && !isFullMonth) isPartial = true;
           } else if (wantsPartial) {
-            matchesAnalysis = true;
+            isPartial = true;
           }
         }
 
-        // Analysis is an OR filter for the categories selected
-        return matchesAnalysis;
+        // Grouping behavior for Partial & Multiple
+        if (isMultiple || isPartial) {
+          employeeIdsToIncludeAll.add(entry.employeeId);
+        }
+        // Specific entry inclusion for Full Month (unique to the exact parsed period)
+        if (isFull) {
+          specificUniqueKeysToInclude.add(`${entry.entryId}-${entry.period}`);
+        }
       });
+
+      // Include all entries for employees that matched the grouping criteria, OR specific full entries
+      if (wantsMultiple || wantsFull || wantsPartial) {
+        filteredResult = result.filter(entry =>
+          employeeIdsToIncludeAll.has(entry.employeeId) || specificUniqueKeysToInclude.has(`${entry.entryId}-${entry.period}`)
+        );
+      } else {
+        // If none of those three were selected, then filteredResult starts as empty
+        // (but might be populated by missing employees below)
+        filteredResult = [];
+      }
 
       // 3. If "wants missing", we map missing employees into synthetic entries and append
       // Notice that if ONLY missing employees is selected, existing entries are filtered out unless they match other stuff
@@ -764,6 +799,12 @@ export default function AttendanceReports() {
             e.remarks.toLowerCase().includes(lowerSearchTerm)
           );
         }
+        if (excludeGuests) {
+          filteredMissing = filteredMissing.filter(e => {
+            const desig = (e.designation || "").toUpperCase();
+            return desig !== "GUEST TEACHER" && desig !== "GUEST FACULTY";
+          });
+        }
         if (departmentFilter.length > 0) {
           // missing employees don't have departmentId readily mapped to the same IDs as reports, but we can filter by exact name if needed,
           // or we just skip department filtering for missing if we can't match IDs reliably.
@@ -791,8 +832,16 @@ export default function AttendanceReports() {
       result = filteredResult;
     }
 
+    if (verifiedFilter !== "all") {
+      result = result.filter(entry => {
+        if (verifiedFilter === "verified") return entry.verified === true;
+        if (verifiedFilter === "unverified") return entry.verified !== true;
+        return true;
+      });
+    }
+
     return result;
-  }, [allEntries, missingEmployees, departments, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, analysisFilter]);
+  }, [allEntries, missingEmployees, departments, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, analysisFilter, verifiedFilter]);
 
   // Process entries to show department name only once
   const processedEntries = useMemo(() => {
@@ -1394,6 +1443,7 @@ export default function AttendanceReports() {
                     { label: "Multiple Entries", value: "multiple_entries" },
                     { label: "Full Month Period", value: "full_month" },
                     { label: "Partial/Excess Period", value: "partial_month" },
+                    { label: "Exclude Guest Teachers", value: "exclude_guests" },
                   ]}
                   selected={analysisFilter}
                   onChange={(values) => {
@@ -1460,7 +1510,38 @@ export default function AttendanceReports() {
                     <TableHead>Days</TableHead>
                     <TableHead>Remarks</TableHead>
                     <TableHead className="min-w-[180px]">Noting</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="min-w-[140px]">
+                      <div className="flex items-center justify-between">
+                        <span>Actions</span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="-mr-3 h-8 w-8 p-0" title="Filter by Verification Status">
+                              <Filter className={`h-4 w-4 ${verifiedFilter !== 'all' ? 'text-orange-600 fill-orange-100' : ''}`} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setVerifiedFilter('all')}>
+                              <div className="flex items-center">
+                                {verifiedFilter === 'all' && <Check className="mr-2 h-4 w-4" />}
+                                <span className={verifiedFilter !== 'all' ? 'ml-6' : ''}>All</span>
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setVerifiedFilter('verified')}>
+                              <div className="flex items-center text-green-600">
+                                {verifiedFilter === 'verified' && <Check className="mr-2 h-4 w-4" />}
+                                <span className={verifiedFilter !== 'verified' ? 'ml-6' : ''}>Verified</span>
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setVerifiedFilter('unverified')}>
+                              <div className="flex items-center text-orange-600">
+                                {verifiedFilter === 'unverified' && <Check className="mr-2 h-4 w-4" />}
+                                <span className={verifiedFilter !== 'unverified' ? 'ml-6' : ''}>Pending Verification</span>
+                              </div>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -230,14 +230,14 @@ export default function Employees() {
 
   // Filter employees based on search query AND status filter
   const filteredEmployees = sortedEmployees.filter(employee => {
-    // 1. Filter by Status
+    // 1. Filter by Status (IGNORE if there is a search query)
     // Treat null/undefined isActive as "active" for backward compatibility
     let empStatus = (employee.isActive || "active").toLowerCase();
     // Map 'disabled' backward compatibly to 'inactive'
     if (empStatus === "disabled") empStatus = "inactive";
 
     // If no filter selected, show all. Otherwise, check if status is included in array.
-    if (statusFilter.length > 0 && !statusFilter.includes(empStatus)) {
+    if (!searchQuery.trim() && statusFilter.length > 0 && !statusFilter.includes(empStatus)) {
       return false;
     }
 

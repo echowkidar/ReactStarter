@@ -120,8 +120,24 @@ export default function AdminDashboard() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   // Send heartbeat for admin user tracking
-  const adminName = localStorage.getItem("adminUsername") || "Admin";
-  const adminEmail = localStorage.getItem("adminEmail") || "";
+  const getDisplayName = (email: string, name: string) => {
+    if (!email) return name || "Admin";
+
+    if (email === "admin@amu.ac.in") {
+      return "Super Administrator";
+    } else if (email === "salary@amu.ac.in") {
+      return "Salary Officer";
+    } else {
+      // If it's another email, show name if available, else first part of the email capitalized
+      if (name && name !== "Admin") return name;
+      return email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1);
+    }
+  };
+
+  const adminInfo = JSON.parse(localStorage.getItem("admin") || "{}");
+  const adminName = getDisplayName(adminInfo.email, adminInfo.name);
+  const adminEmail = adminInfo.email || "";
+
   useHeartbeat({
     type: 'admin',
     name: adminName,
@@ -324,8 +340,8 @@ export default function AdminDashboard() {
     const now = new Date().getTime();
     const diffMs = now - ls;
     const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "Just now";
-    if (diffMins === 1) return "1 min ago";
+    // Heartbeat is sent every 60 seconds, so < 2 minutes is effectively "Just now"
+    if (diffMins < 2) return "Just now";
     if (diffMins < 60) return `${diffMins} mins ago`;
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours === 1) return "1 hour ago";

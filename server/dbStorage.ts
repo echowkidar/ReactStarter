@@ -844,7 +844,10 @@ export class DbStorage implements IStorage {
     return await db.query.transferRequests.findFirst({
       where: and(
         eq(transferRequests.employeeId, employeeId),
-        eq(transferRequests.status, 'pending')
+        or(
+          eq(transferRequests.status, 'pending'),
+          eq(transferRequests.status, 'release_requested')
+        )
       )
     });
   }

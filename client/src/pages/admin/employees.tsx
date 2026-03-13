@@ -9,7 +9,7 @@ import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown, History, AlertCircle, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, ChevronRight, Search, Filter, FileDown, History, AlertCircle, ArrowUp, ArrowDown, ArrowRightLeft } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
@@ -303,8 +303,8 @@ export default function AdminEmployees() {
   const filteredEmployees = useMemo(() => {
     let result = [...employees];
 
-    // Apply status filter
-    if (statusFilter.length > 0) {
+    // Apply status filter (IGNORE if there is a search term)
+    if (!searchTerm && statusFilter.length > 0) {
       result = result.filter(emp => {
         let empStatus = (emp.isActive || "active").toLowerCase();
         // Map 'disabled' backward compatibly to 'inactive'
@@ -671,8 +671,9 @@ export default function AdminEmployees() {
       }
     }
 
-    // Convert isActive checkbox to string value
-    const isActiveCheckbox = formData.get('isActive');
+    // Handle isActive checkbox explicitly (since disabled inputs aren't in FormData)
+    const isActiveInput = (document.getElementById('isActive') as HTMLInputElement);
+    const isActiveCheckbox = isActiveInput ? isActiveInput.checked : false;
     data.isActive = isActiveCheckbox ? 'active' : 'inactive';
 
     // Explicitly get the aadharCard value and ensure it's included
@@ -1803,6 +1804,12 @@ export default function AdminEmployees() {
                           >
                             {(employee.isActive || "active").toLowerCase() === "active" ? "Active" : "Disabled"}
                           </Label>
+                          {employee.transferStatus === "pending" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800" title="Transfer Pending">
+                              <ArrowRightLeft className="h-3 w-3" />
+                              Transfer
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
