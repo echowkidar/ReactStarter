@@ -180,10 +180,11 @@ export default function AdminDashboard() {
   });
 
   // Fetch active users count (refresh every 10 seconds)
-  const { data: activeUsersStats = { total: 0, departments: 0, admins: 0 } } = useQuery<{
+  const { data: activeUsersStats = { total: 0, departments: 0, admins: 0, users: [] } } = useQuery<{
     total: number;
     departments: number;
     admins: number;
+    users: { type: string, name: string, lastSeen: string }[];
   }>({
     queryKey: ["/api/admin/active-users"],
     queryFn: async () => {
@@ -313,6 +314,23 @@ export default function AdminDashboard() {
   // Delete feature state
   const [reportToDelete, setReportToDelete] = useState<ReportWithDepartment | null>(null);
   const [deleteStage, setDeleteStage] = useState<1 | 2>(1);
+
+  // Active Users Popup state
+  const [activeUsersPopup, setActiveUsersPopup] = useState<{ open: boolean; type: 'department' | 'admin' }>({ open: false, type: 'department' });
+
+  // Format active duration
+  const formatActiveDuration = (lastSeen: string | Date) => {
+    const ls = new Date(lastSeen).getTime();
+    const now = new Date().getTime();
+    const diffMs = now - ls;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "Just now";
+    if (diffMins === 1) return "1 min ago";
+    if (diffMins < 60) return `${diffMins} mins ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours === 1) return "1 hour ago";
+    return `${diffHours} hours ago`;
+  };
 
   // Department stats expand/popup state
   const [expandedDeptId, setExpandedDeptId] = useState<number | null>(null);
@@ -1309,11 +1327,17 @@ export default function AdminDashboard() {
                     <p className="text-xl font-bold text-purple-700 leading-none">{activeUsersStats.total}</p>
                     <p className="text-[8px] uppercase tracking-wider text-purple-600 font-semibold">Total</p>
                   </div>
-                  <div className="text-center py-1 px-0.5 bg-white/70 rounded border border-purple-100">
+                  <div
+                    className="text-center py-1 px-0.5 bg-white/70 rounded border border-purple-100 cursor-pointer hover:bg-purple-50 transition-colors"
+                    onClick={() => setActiveUsersPopup({ open: true, type: 'department' })}
+                  >
                     <p className="text-sm font-bold text-blue-600 leading-none">{activeUsersStats.departments}</p>
                     <p className="text-[7px] uppercase tracking-wider text-blue-500 font-semibold">Depts</p>
                   </div>
-                  <div className="text-center py-1 px-0.5 bg-white/70 rounded border border-purple-100">
+                  <div
+                    className="text-center py-1 px-0.5 bg-white/70 rounded border border-purple-100 cursor-pointer hover:bg-purple-50 transition-colors"
+                    onClick={() => setActiveUsersPopup({ open: true, type: 'admin' })}
+                  >
                     <p className="text-sm font-bold text-indigo-600 leading-none">{activeUsersStats.admins}</p>
                     <p className="text-[7px] uppercase tracking-wider text-indigo-500 font-semibold">Admins</p>
                   </div>
@@ -2165,6 +2189,42 @@ export default function AdminDashboard() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Active Users Dialog */}
+        <Dialog open={activeUsersPopup.open} onOpenChange={(open) => setActiveUsersPopup(prev => ({ ...prev, open }))}>
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Active {activeUsersPopup.type === 'department' ? 'Departments' : 'Admins'}
+              </DialogTitle>
+              <DialogDescription>
+                Live list of currently active {activeUsersPopup.type === 'department' ? 'departments' : 'admin users'}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 space-y-2">
+              {activeUsersStats.users?.filter(u => u.type === activeUsersPopup.type).length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No active {activeUsersPopup.type === 'department' ? 'departments' : 'admins'} found.
+                </div>
+              ) : (
+                activeUsersStats.users?.filter(u => u.type === activeUsersPopup.type).map((user, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 border rounded-md hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${activeUsersPopup.type === 'department' ? 'bg-blue-100' : 'bg-indigo-100'}`}>
+                        <Users className={`h-4 w-4 ${activeUsersPopup.type === 'department' ? 'text-blue-600' : 'text-indigo-600'}`} />
+                      </div>
+                      <span className="font-medium">{user.name}</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">
+                      {formatActiveDuration(user.lastSeen)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </div >
     </div >
   );
