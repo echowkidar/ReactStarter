@@ -866,6 +866,34 @@ export default function AttendanceReports() {
         return sortConfig.direction === 'asc' ? comparison : -comparison;
       }
 
+      // If sorting by Noting is active
+      if (sortConfig && sortConfig.key === 'noting') {
+        const hasNoteA = !!(a.adminNoting || a.employeeRemarks);
+        const hasNoteB = !!(b.adminNoting || b.employeeRemarks);
+
+        // Both have notes or both don't have notes, fallback to default sorting
+        if (hasNoteA === hasNoteB) {
+          // Fallback Default sorting: Department -> Month -> Employee Name
+          const deptCompare = a.departmentName.localeCompare(b.departmentName);
+          if (deptCompare !== 0) return sortConfig.direction === 'asc' ? deptCompare : -deptCompare;
+
+          const monthCompare = a.month.localeCompare(b.month);
+          if (monthCompare !== 0) return sortConfig.direction === 'asc' ? monthCompare : -monthCompare;
+
+          const nameCompare = a.employeeName.localeCompare(b.employeeName);
+          return sortConfig.direction === 'asc' ? nameCompare : -nameCompare;
+        }
+
+        // One has a note, the other doesn't. 
+        // In 'asc' (first click), we want notes to appear at the TOP (so hasNote should be "less than" no note)
+        // In 'desc', we want notes to appear at the BOTTOM
+        if (sortConfig.direction === 'asc') {
+          return hasNoteA ? -1 : 1;
+        } else {
+          return hasNoteA ? 1 : -1;
+        }
+      }
+
       // Default sorting: Department -> Month -> Employee Name
       // First sort by department name
       const deptCompare = a.departmentName.localeCompare(b.departmentName);
@@ -1509,7 +1537,15 @@ export default function AttendanceReports() {
                     <TableHead>Period</TableHead>
                     <TableHead>Days</TableHead>
                     <TableHead>Remarks</TableHead>
-                    <TableHead className="min-w-[180px]">Noting</TableHead>
+                    <TableHead
+                      className="min-w-[180px] cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('noting')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Noting
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
                     <TableHead className="min-w-[140px]">
                       <div className="flex items-center justify-between">
                         <span>Actions</span>
