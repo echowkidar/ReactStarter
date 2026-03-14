@@ -198,6 +198,7 @@ interface ActiveSession {
   name: string;
   email?: string;
   lastHeartbeat: Date;
+  loginTime: Date;
 }
 
 const activeUsers = new Map<string, ActiveSession>();
@@ -229,7 +230,8 @@ function getActiveUsersCount() {
     users: Array.from(activeUsers.values()).map(s => ({
       type: s.type,
       name: s.name,
-      lastSeen: s.lastHeartbeat
+      lastSeen: s.lastHeartbeat,
+      loginTime: s.loginTime
     }))
   };
 }
@@ -487,12 +489,15 @@ export async function registerRoutes(app: Express) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    const existing = activeUsers.get(sessionId);
+
     activeUsers.set(sessionId, {
       id: sessionId,
       type: type as 'department' | 'admin',
       name,
       email,
-      lastHeartbeat: new Date()
+      lastHeartbeat: new Date(),
+      loginTime: existing ? existing.loginTime : new Date()
     });
 
     return res.json({ success: true });

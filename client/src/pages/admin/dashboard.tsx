@@ -200,7 +200,7 @@ export default function AdminDashboard() {
     total: number;
     departments: number;
     admins: number;
-    users: { type: string, name: string, lastSeen: string }[];
+    users: { type: string, name: string, lastSeen: string, loginTime: string }[];
   }>({
     queryKey: ["/api/admin/active-users"],
     queryFn: async () => {
@@ -335,17 +335,24 @@ export default function AdminDashboard() {
   const [activeUsersPopup, setActiveUsersPopup] = useState<{ open: boolean; type: 'department' | 'admin' }>({ open: false, type: 'department' });
 
   // Format active duration
-  const formatActiveDuration = (lastSeen: string | Date) => {
-    const ls = new Date(lastSeen).getTime();
+  const formatActiveDuration = (lastSeen: string | Date, loginTime?: string | Date) => {
+    const ls = new Date(loginTime || lastSeen).getTime();
     const now = new Date().getTime();
     const diffMs = now - ls;
     const diffMins = Math.floor(diffMs / 60000);
-    // Heartbeat is sent every 60 seconds, so < 2 minutes is effectively "Just now"
-    if (diffMins < 2) return "Just now";
-    if (diffMins < 60) return `${diffMins} mins ago`;
+
+    // If somehow loginTime is in the future or very recent
+    if (diffMins < 1) return "Just now";
+
+    if (diffMins < 60) return `${diffMins}m ago`;
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours === 1) return "1 hour ago";
-    return `${diffHours} hours ago`;
+    if (diffHours < 24) {
+      if (diffHours === 1) return "1h ago";
+      return `${diffHours}h ago`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return "1d ago";
+    return `${diffDays}d ago`;
   };
 
   // Department stats expand/popup state
@@ -2232,7 +2239,7 @@ export default function AdminDashboard() {
                       <span className="font-medium">{user.name}</span>
                     </div>
                     <span className="text-sm text-muted-foreground whitespace-nowrap">
-                      {formatActiveDuration(user.lastSeen)}
+                      {formatActiveDuration(user.lastSeen, user.loginTime)}
                     </span>
                   </div>
                 ))

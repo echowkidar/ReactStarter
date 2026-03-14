@@ -19,7 +19,11 @@ import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-const EmployeeDetails = ({ employee }: { employee: Employee }) => {
+const EmployeeDetails = ({ employee, fieldSettings }: { employee: Employee; fieldSettings?: Record<string, string> }) => {
+  const showPan = fieldSettings?.show_pan_field !== "false";
+  const showBank = fieldSettings?.show_bank_field !== "false";
+  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
@@ -45,18 +49,24 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
             <p>{format(new Date(employee.termExpiry), "dd MMM yyyy")}</p>
           </div>
         )}
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">PAN Number</label>
-          <p>{employee.panNumber}</p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">Bank Account</label>
-          <p>{employee.bankAccount}</p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">Adhar Number</label>
-          <p>{employee.aadharCard}</p>
-        </div>
+        {showPan && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">PAN Number</label>
+            <p>{employee.panNumber}</p>
+          </div>
+        )}
+        {showBank && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Bank Account</label>
+            <p>{employee.bankAccount}</p>
+          </div>
+        )}
+        {showAadhar && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Adhar Number</label>
+            <p>{employee.aadharCard}</p>
+          </div>
+        )}
         <div>
           <label className="text-sm font-medium text-muted-foreground">Office Memo No</label>
           <p>{employee.officeMemoNo}</p>
@@ -79,59 +89,65 @@ const EmployeeDetails = ({ employee }: { employee: Employee }) => {
       <div>
         <h3 className="text-lg font-medium mb-4">Documents</h3>
         <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">PAN Card</label>
-            {employee.panCardUrl ? (
-              <p>
-                <a
-                  href={employee.panCardUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  View Document
-                </a>
-              </p>
-            ) : (
-              <p className="text-muted-foreground">Not available</p>
-            )}
-          </div>
+          {showPan && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">PAN Card</label>
+              {employee.panCardUrl ? (
+                <p>
+                  <a
+                    href={employee.panCardUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    View Document
+                  </a>
+                </p>
+              ) : (
+                <p className="text-muted-foreground">Not available</p>
+              )}
+            </div>
+          )}
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Bank Account Proof</label>
-            {employee.bankProofUrl ? (
-              <p>
-                <a
-                  href={employee.bankProofUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  View Document
-                </a>
-              </p>
-            ) : (
-              <p className="text-muted-foreground">Not available</p>
-            )}
-          </div>
+          {showBank && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Bank Account Proof</label>
+              {employee.bankProofUrl ? (
+                <p>
+                  <a
+                    href={employee.bankProofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    View Document
+                  </a>
+                </p>
+              ) : (
+                <p className="text-muted-foreground">Not available</p>
+              )}
+            </div>
+          )}
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Adhar Number</label>
-            {employee.aadharCardUrl ? (
-              <p>
-                <a
-                  href={employee.aadharCardUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  View Document
-                </a>
-              </p>
-            ) : (
-              <p className="text-muted-foreground">Not available</p>
-            )}
-          </div>
+          {showAadhar && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Adhar Number</label>
+              {employee.aadharCardUrl ? (
+                <p>
+                  <a
+                    href={employee.aadharCardUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    View Document
+                  </a>
+                </p>
+              ) : (
+                <p className="text-muted-foreground">Not available</p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="text-sm font-medium text-muted-foreground">Office Memo</label>
@@ -212,6 +228,11 @@ export default function Employees() {
       return response.json();
     },
     enabled: !!department?.id
+  });
+
+  // Fetch field visibility settings
+  const { data: fieldSettings } = useQuery<Record<string, string>>({
+    queryKey: ["/api/admin/settings"],
   });
 
   // Sort employees by Pay Level (desc) -> Sort Order (asc) -> EPID (asc)
@@ -584,7 +605,7 @@ export default function Employees() {
                             <DialogHeader>
                               <DialogTitle>Employee Details</DialogTitle>
                             </DialogHeader>
-                            {selectedEmployee && <EmployeeDetails employee={selectedEmployee} />}
+                            {selectedEmployee && <EmployeeDetails employee={selectedEmployee} fieldSettings={fieldSettings} />}
                           </DialogContent>
                         </Dialog>
 
