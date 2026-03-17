@@ -570,7 +570,7 @@ export default function ReportDetails() {
                     <TableHead className="whitespace-nowrap">Emp Status</TableHead>
                     <TableHead className="whitespace-nowrap">Reg.No</TableHead>
                     <TableHead className="whitespace-nowrap">Period</TableHead>
-                    <TableHead className="whitespace-nowrap">Days</TableHead>
+                    <TableHead className="whitespace-nowrap text-center">Days</TableHead>
                     <TableHead className="whitespace-nowrap">Remarks</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -618,7 +618,7 @@ export default function ReportDetails() {
                                   : `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`
                               }
                             </TableCell>
-                            <TableCell className="whitespace-nowrap">
+                            <TableCell className="whitespace-nowrap text-center">
                               {isMultiPeriodDesignation
                                 ? <div className="flex flex-col items-center justify-center -mt-1"><span className="leading-tight">{period.days}</span>{designation.includes('GUEST') && <span className="font-bold text-[9px] text-[#ea580c] leading-tight mt-0.5">Periods</span>}</div>
                                 : period.days}

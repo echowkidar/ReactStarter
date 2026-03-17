@@ -158,7 +158,15 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   const { toast } = useToast();
 
   // Fetch all historically sent/submitted periods for overlapping check
-  const { data: reportedPeriods = {} } = useQuery<Record<number, Array<{ fromDate: string, toDate: string, reportId: number }>>>({
+  // Response now includes departmentName, month, year for informative error messages
+  const { data: reportedPeriods = {} } = useQuery<Record<number, Array<{
+    fromDate: string,
+    toDate: string,
+    reportId: number,
+    departmentName?: string,
+    month?: number,
+    year?: number
+  }>>>({
     queryKey: [`/api/departments/${departmentId}/attendance/reported-periods`],
     enabled: !!departmentId,
   });
@@ -173,14 +181,21 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     if (!fromDate || !toDate) return { hasOverlap: false };
     const empPeriods = reportedPeriods[employeeId] || [];
 
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+
     for (const rp of empPeriods) {
       if (currentReportId && rp.reportId === Number(currentReportId)) {
         continue;
       }
       if (doPeriodsOverlap(fromDate, toDate, rp.fromDate, rp.toDate)) {
+        const deptInfo = rp.departmentName ? ` by "${rp.departmentName}"` : '';
+        const monthInfo = (rp.month && rp.year)
+          ? ` in ${monthNames[rp.month]} ${rp.year}`
+          : '';
         return {
           hasOverlap: true,
-          message: `Attendance for ${rp.fromDate} to ${rp.toDate} has already been sent.`
+          message: `Attendance for ${rp.fromDate} to ${rp.toDate} was already sent${deptInfo}${monthInfo}. This period cannot be included again.`
         };
       }
     }
@@ -560,7 +575,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
   // Update the useEffect for initialData
   useEffect(() => {
-    if (initialData?.entries) {
+    if (initialData?.entries && employees.length > 0) {
       // Set included employees
       const employeeIds = new Set(initialData.entries.map(entry => entry.employeeId));
       setIncludedEmployees(employeeIds);
@@ -568,20 +583,23 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       // Update form with initial data, ensuring periods are properly set
       const formattedData = {
         ...initialData,
-        entries: initialData.entries.map(entry => ({
-          employeeId: entry.employeeId,
-          periods: entry.periods.map(period => ({
-            fromDate: period.fromDate,
-            toDate: period.toDate,
-            days: isGuestTeacher(entry.employeeId) ? (period.days || 0) : calculateDays(period.fromDate, period.toDate),
-            remarks: period.remarks || ''
-          }))
-        }))
+        entries: initialData.entries.map(entry => {
+          const isGuest = isGuestTeacher(entry.employeeId);
+          return {
+            employeeId: entry.employeeId,
+            periods: entry.periods.map(period => ({
+              fromDate: period.fromDate,
+              toDate: period.toDate,
+              days: isGuest ? (period.days || 0) : calculateDays(period.fromDate, period.toDate),
+              remarks: period.remarks || ''
+            }))
+          };
+        })
       };
 
       form.reset(formattedData);
     }
-  }, [initialData, form]);
+  }, [initialData, form, employees.length]);
 
   // Designations to exclude from "All" selection (Daily Wage employees with breaks)
   const excludedDesignations = [

@@ -22,16 +22,31 @@ import fs from "fs";
 import { sql, eq } from "drizzle-orm";
 import { db } from "./db";
 
-// Helper: Check if employee has attendance entries in current month (blocks transfer)
-async function checkEmployeeAttendanceForCurrentMonth(
+// Helper: Check if employee's current-month attendance BLOCKS transfer.
+// Logic:
+//   - If any period covers the ENTIRE month (from 1st to last day) → block transfer.
+//   - If only partial periods exist (e.g. 1st to 7th) → allow transfer.
+//   - If no attendance this month → allow transfer.
+async function checkEmployeeAttendanceBlocksTransfer(
   storage: DbStorage, employeeId: number
-): Promise<{ hasAttendance: boolean; message?: string }> {
+): Promise<{ blocked: boolean; message?: string }> {
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
+  const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Last day of current month
+  const lastDayOfMonth = new Date(currentYear, currentMonth, 0).getDate();
+
+  // Format helpers for DD-MM-YY comparison (format used in periods JSON)
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const fullMonthStart = `${pad(1)}-${pad(currentMonth)}-${currentYear.toString().slice(-2)}`;
+  const fullMonthEnd = `${pad(lastDayOfMonth)}-${pad(currentMonth)}-${currentYear.toString().slice(-2)}`;
+
   const result = await db.execute(sql`
-    SELECT ae.id, ar.department_id, ar.month, ar.year, ar.status, d.name as department_name
+    SELECT ae.periods, ar.month, ar.year, ar.status, d.name as department_name
     FROM attendance_entries ae
     JOIN attendance_reports ar ON ae.report_id = ar.id
     LEFT JOIN departments d ON ar.department_id = d.id
@@ -39,20 +54,27 @@ async function checkEmployeeAttendanceForCurrentMonth(
       AND ar.month = ${currentMonth}
       AND ar.year = ${currentYear}
       AND ar.status != 'cancelled'
-    LIMIT 1
   `);
 
-  if (result.rows.length > 0) {
-    const row = result.rows[0] as any;
-    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'];
-    return {
-      hasAttendance: true,
-      message: `Cannot transfer: This employee has attendance entries for ${monthNames[currentMonth]} ${currentYear} in department "${row.department_name || 'Unknown'}" (Report Status: ${row.status}). Please remove the attendance entry first before transferring.`
-    };
+  for (const row of result.rows as any[]) {
+    let periods: any[] = [];
+    try {
+      periods = typeof row.periods === 'string' ? JSON.parse(row.periods) : (row.periods || []);
+    } catch (e) {
+      continue;
+    }
+
+    for (const period of periods) {
+      if (period.fromDate === fullMonthStart && period.toDate === fullMonthEnd) {
+        return {
+          blocked: true,
+          message: `Cannot transfer: Full month attendance for ${monthNames[currentMonth]} ${currentYear} has already been created/sent by department "${row.department_name || 'Unknown'}" (Status: ${row.status}). You may request this transfer next month (after the new month begins), or contact the department directly to cancel the attendance report first.`
+        };
+      }
+    }
   }
 
-  return { hasAttendance: false };
+  return { blocked: false };
 }
 import { v4 as uuid } from "uuid";
 import { setupTestEmailAccount, sendPasswordResetEmail } from "./emailService";
@@ -1390,8 +1412,8 @@ export async function registerRoutes(app: Express) {
           }
 
           if (isDepartmentActuallyChanging) {
-            const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, employeeId);
-            if (attendanceCheck.hasAttendance) {
+            const attendanceCheck = await checkEmployeeAttendanceBlocksTransfer(storage, employeeId);
+            if (attendanceCheck.blocked) {
               return res.status(400).json({ message: attendanceCheck.message });
             }
 
@@ -2223,7 +2245,11 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Get list of all reported periods for all employees in a department to prevent overlaps
+  // Get list of all reported periods for all employees in a department to prevent overlaps.
+  // IMPORTANT: This queries attendance from ALL departments for employees currently in this dept.
+  // This ensures that if an employee was transferred, their previous dept's attendance is
+  // also included in the overlap check — preventing the new dept from double-counting periods
+  // that the previous dept already submitted/sent.
   app.get("/api/departments/:departmentId/attendance/reported-periods", async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
@@ -2234,21 +2260,35 @@ export async function registerRoutes(app: Express) {
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
 
+      // Fetch attendance entries for all employees currently in this department,
+      // regardless of which department submitted the report (cross-department history).
       const result = await db.execute(sql`
-        SELECT ae.employee_id, ae.periods, ar.id as report_id
+        SELECT ae.employee_id, ae.periods, ar.id as report_id,
+               ar.month, ar.year, d.name as department_name
         FROM attendance_entries ae
         JOIN attendance_reports ar ON ae.report_id = ar.id
+        JOIN departments d ON ar.department_id = d.id
         JOIN employees e ON ae.employee_id = e.id
         WHERE e.department_id = ${departmentId}
           AND ar.status IN ('submitted', 'sent')
       `);
 
-      // Construct a dictionary: employeeId -> Array<{ fromDate, toDate, reportId }>
-      const reportedPeriods: Record<number, Array<{ fromDate: string, toDate: string, reportId: number }>> = {};
+      // Construct a dictionary: employeeId -> Array<{ fromDate, toDate, reportId, departmentName, month, year }>
+      const reportedPeriods: Record<number, Array<{
+        fromDate: string,
+        toDate: string,
+        reportId: number,
+        departmentName: string,
+        month: number,
+        year: number
+      }>> = {};
 
       result.rows.forEach((row: any) => {
         const empId = row.employee_id;
         const reportId = row.report_id;
+        const deptName = row.department_name || 'Unknown Department';
+        const month = row.month;
+        const year = row.year;
         let periods = [];
         try {
           periods = typeof row.periods === 'string' ? JSON.parse(row.periods) : row.periods;
@@ -2266,7 +2306,10 @@ export async function registerRoutes(app: Express) {
               reportedPeriods[empId].push({
                 fromDate: p.fromDate,
                 toDate: p.toDate,
-                reportId: reportId
+                reportId: reportId,
+                departmentName: deptName,
+                month: month,
+                year: year
               });
             }
           });
@@ -2283,6 +2326,7 @@ export async function registerRoutes(app: Express) {
       });
     }
   });
+
 
   app.post("/api/departments/:departmentId/attendance", async (req, res) => {
     try {
@@ -3951,9 +3995,9 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Employee already has a pending transfer request" });
       }
 
-      // Guard: Block transfer if employee has attendance in current month
-      const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, employeeId);
-      if (attendanceCheck.hasAttendance) {
+      // Guard: Block transfer if employee has FULL month attendance in current month
+      const attendanceCheck = await checkEmployeeAttendanceBlocksTransfer(storage, employeeId);
+      if (attendanceCheck.blocked) {
         return res.status(400).json({ message: attendanceCheck.message });
       }
 
@@ -4087,9 +4131,9 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Transfer request is no longer pending" });
       }
 
-      // Guard: Block transfer acceptance if employee has attendance in current month
-      const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, request.employeeId);
-      if (attendanceCheck.hasAttendance) {
+      // Guard: Block transfer acceptance if employee has FULL month attendance in current month
+      const attendanceCheck = await checkEmployeeAttendanceBlocksTransfer(storage, request.employeeId);
+      if (attendanceCheck.blocked) {
         return res.status(400).json({ message: attendanceCheck.message });
       }
 
@@ -4466,9 +4510,9 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Request is not in 'release_requested' state" });
       }
 
-      // Guard: Block release approval if employee has attendance in current month
-      const attendanceCheck = await checkEmployeeAttendanceForCurrentMonth(storage, request.employeeId);
-      if (attendanceCheck.hasAttendance) {
+      // Guard: Block release approval if employee has FULL month attendance in current month
+      const attendanceCheck = await checkEmployeeAttendanceBlocksTransfer(storage, request.employeeId);
+      if (attendanceCheck.blocked) {
         return res.status(400).json({ message: attendanceCheck.message });
       }
 
