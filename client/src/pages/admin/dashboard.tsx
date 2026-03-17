@@ -44,6 +44,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type ReportWithDepartment = AttendanceReport & {
   department?: Department;
@@ -325,6 +335,7 @@ export default function AdminDashboard() {
 
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [revertConfirmReport, setRevertConfirmReport] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   // Delete feature state
@@ -1978,8 +1989,10 @@ export default function AdminDashboard() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className={report.status === "recall_requested" ? "text-yellow-600 border-yellow-300 hover:bg-yellow-50" : ""}
-                                  onClick={() => revertToDraft.mutate(report.id)}
+                                  className={report.status === "recall_requested"
+                                    ? "text-yellow-600 border-yellow-300 hover:bg-yellow-50"
+                                    : "text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"}
+                                  onClick={() => setRevertConfirmReport(report.id)}
                                   disabled={revertToDraft.isPending}
                                   title={report.status === "recall_requested" ? "Approve Recall Request" : "Revert to Draft"}
                                 >
@@ -2044,6 +2057,34 @@ export default function AdminDashboard() {
               )}
           </DialogContent>
         </Dialog>
+
+        {/* Revert to Draft / Approve Recall Confirmation Dialog */}
+        <AlertDialog open={revertConfirmReport !== null} onOpenChange={(open) => !open && setRevertConfirmReport(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will revert the attendance report back to <strong>Draft</strong> status.
+                The department will need to finalize and submit it again.
+                This action is usually only needed if there was an error in the original submission.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+                onClick={() => {
+                  if (revertConfirmReport) {
+                    revertToDraft.mutate(revertConfirmReport);
+                    setRevertConfirmReport(null);
+                  }
+                }}
+              >
+                Confirm Revert
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Delete Confirmation Dialog */}
         <Dialog open={!!reportToDelete} onOpenChange={(open) => !open && setReportToDelete(null)}>
