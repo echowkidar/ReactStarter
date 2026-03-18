@@ -39,11 +39,12 @@ export default function AdminEditAttendance() {
     }) as any;
 
     const initialData = useMemo(() => {
-        if (!report || !entries) return undefined;
+        if (!report || !report.entries) return undefined;
 
         try {
-            const formattedEntries = entries.map((entry: any) => ({
+            const formattedEntries = report.entries.map((entry: any) => ({
                 employeeId: entry.employeeId,
+                employee: entry.employee,
                 periods: typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods
             }));
 
@@ -56,7 +57,7 @@ export default function AdminEditAttendance() {
             console.error("Error parsing entries:", error);
             return undefined;
         }
-    }, [report, entries]);
+    }, [report]);
 
     const updateMutation = useMutation({
         mutationFn: async (data: any) => {

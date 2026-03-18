@@ -2678,6 +2678,28 @@ export async function registerRoutes(app: Express) {
         });
       }
 
+      // Count distinct employees per report for all filtered reports
+      const reportIds = filteredReports.map(r => r.id);
+      const countsByReport = new Map<number, number>();
+
+      if (reportIds.length > 0) {
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        try {
+          const countResult = await db.execute(sql`
+            SELECT report_id, COUNT(DISTINCT employee_id) as emp_count
+            FROM attendance_entries
+            WHERE report_id IN (${sql.join(reportIds, sql`, `)})
+            GROUP BY report_id
+          `);
+          for (const row of countResult.rows as any[]) {
+            countsByReport.set(row.report_id, Number(row.emp_count));
+          }
+        } catch (e) {
+          console.error("Error fetching employee counts for reports:", e);
+        }
+      }
+
       // Assemble response using maps (no extra DB queries)
       const reportsWithDetails = filteredReports.map(report => {
         const department = departmentMap.get(report.departmentId);
@@ -2695,6 +2717,7 @@ export async function registerRoutes(app: Express) {
           ...report,
           department,
           entries: entriesWithDetails,
+          employeeCount: countsByReport.get(report.id) || 0,
           receiptNo: report.receiptNo,
           receiptDate: report.receiptDate,
         };
@@ -2928,9 +2951,17 @@ export async function registerRoutes(app: Express) {
       const department = await storage.getDepartment(report.departmentId);
       const entries = await storage.getAttendanceEntriesByReport(report.id);
 
-      // Fetch all employees for this department
-      const employees = await storage.getEmployeesByDepartment(report.departmentId);
-      const employeesMap = new Map(employees.map(emp => [emp.id, emp]));
+      // Fetch all employees referenced in this report's entries
+      // This ensures we get employee details even if they transferred to another department later
+      const employeeIds = [...new Set(entries.map(e => e.employeeId))];
+      const employeesMap = new Map();
+
+      await Promise.all(employeeIds.map(async (id) => {
+        const emp = await storage.getEmployee(id);
+        if (emp) {
+          employeesMap.set(id, emp);
+        }
+      }));
 
       // Add employee details to entries
       const entriesWithEmployeeDetails = entries.map(entry => ({

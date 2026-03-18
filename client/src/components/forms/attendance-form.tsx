@@ -330,7 +330,19 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   const employees = React.useMemo(() => {
     const initiallySelectedIds = new Set((initialData?.entries || []).map((entry: any) => entry.employeeId));
 
-    return rawEmployees.filter((e: any) => {
+    // Combine rawEmployees with employees from initialData to prevent missing transferred employees
+    const allEmployeesMap = new Map();
+    rawEmployees.forEach((e: any) => allEmployeesMap.set(e.id, e));
+
+    (initialData?.entries || []).forEach((entry: any) => {
+      if (entry.employee && !allEmployeesMap.has(entry.employeeId)) {
+        allEmployeesMap.set(entry.employeeId, entry.employee);
+      }
+    });
+
+    const combinedRawEmployees = Array.from(allEmployeesMap.values());
+
+    return combinedRawEmployees.filter((e: any) => {
       // If the employee is part of the initial data (e.g. we are editing this draft), they SHOULD be visible
       if (initiallySelectedIds.has(e.id)) {
         return true;

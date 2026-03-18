@@ -1801,16 +1801,16 @@ export default function AdminDashboard() {
                             <div className="flex items-center gap-1.5">
                               <span
                                 className="text-xs font-semibold text-green-600 cursor-pointer hover:underline"
-                                title="Employees in submitted/sent attendance"
+                                title={`Employees in this report (${(report as any).employeeCount ?? 0}). Click to view all ${st?.reported ?? 0} reported for the month.`}
                                 onClick={() => setEmployeePopup({
                                   open: true,
                                   departmentId: deptId,
                                   departmentName: deptName,
                                   category: 'reported',
-                                  categoryLabel: 'Attendance Reported'
+                                  categoryLabel: 'Attendance Reported (Month)'
                                 })}
                               >
-                                {st?.reported ?? '—'} Reported
+                                {(report as any).employeeCount ?? st?.reported ?? '—'} Reported
                               </span>
                               <button
                                 className="text-xs text-muted-foreground hover:text-foreground transition-transform"

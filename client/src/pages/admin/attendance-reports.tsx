@@ -894,6 +894,39 @@ export default function AttendanceReports() {
         }
       }
 
+      // If sorting by Remarks is active
+      if (sortConfig && sortConfig.key === 'remarks') {
+        const remarksA = a.remarks || "";
+        const remarksB = b.remarks || "";
+
+        const hasRemarkA = remarksA.trim() !== '' && remarksA.trim() !== '-';
+        const hasRemarkB = remarksB.trim() !== '' && remarksB.trim() !== '-';
+
+        if (hasRemarkA !== hasRemarkB) {
+          if (sortConfig.direction === 'asc') {
+            return hasRemarkA ? -1 : 1;
+          } else {
+            return hasRemarkA ? 1 : -1;
+          }
+        }
+
+        if (hasRemarkA && hasRemarkB) {
+          const remarkCompare = remarksA.localeCompare(remarksB);
+          if (remarkCompare !== 0) {
+            return sortConfig.direction === 'asc' ? remarkCompare : -remarkCompare;
+          }
+        }
+
+        const deptCompare = a.departmentName.localeCompare(b.departmentName);
+        if (deptCompare !== 0) return sortConfig.direction === 'asc' ? deptCompare : -deptCompare;
+
+        const monthCompare = a.month.localeCompare(b.month);
+        if (monthCompare !== 0) return sortConfig.direction === 'asc' ? monthCompare : -monthCompare;
+
+        const nameCompare = a.employeeName.localeCompare(b.employeeName);
+        return sortConfig.direction === 'asc' ? nameCompare : -nameCompare;
+      }
+
       // Default sorting: Department -> Month -> Employee Name
       // First sort by department name
       const deptCompare = a.departmentName.localeCompare(b.departmentName);
@@ -1536,7 +1569,15 @@ export default function AttendanceReports() {
                     <TableHead>Salary Register No</TableHead>
                     <TableHead>Period</TableHead>
                     <TableHead>Days</TableHead>
-                    <TableHead>Remarks</TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('remarks')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Remarks
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
                     <TableHead
                       className="min-w-[180px] cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort('noting')}
