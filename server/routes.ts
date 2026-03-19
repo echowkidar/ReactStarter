@@ -4599,5 +4599,237 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // ============ Useful Downloads ============
+
+  // Admin: Get all useful downloads
+  app.get("/api/admin/downloads", verifyAdminSession, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { usefulDownloads } = await import("../shared/schema");
+      const { desc } = await import("drizzle-orm");
+
+      const downloads = await db.select().from(usefulDownloads).orderBy(desc(usefulDownloads.createdAt));
+      res.json(downloads);
+    } catch (error) {
+      console.error("Error fetching downloads:", error);
+      res.status(500).json({ message: "Failed to fetch downloads" });
+    }
+  });
+
+  // Admin: Add new useful download
+  app.post("/api/admin/downloads", verifyAdminSession, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
+    try {
+      const { title, description, externalLink } = req.body;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+      if (!title) {
+        return res.status(400).json({ message: "Title is required" });
+      }
+
+      let fileUrl = null;
+      let thumbnailUrl = null;
+
+      if (files?.file?.[0]) {
+        fileUrl = `/uploads/${files.file[0].filename}`;
+      }
+
+      if (files?.thumbnail?.[0]) {
+        thumbnailUrl = `/uploads/${files.thumbnail[0].filename}`;
+      }
+
+      if (!fileUrl && !externalLink) {
+        return res.status(400).json({ message: "Either a file upload or an external link is required" });
+      }
+
+      const { db } = await import("./db");
+      const { usefulDownloads } = await import("../shared/schema");
+
+      const [newDownload] = await db.insert(usefulDownloads).values({
+        title,
+        description: description || null,
+        fileUrl,
+        externalLink: externalLink || null,
+        thumbnailUrl
+      }).returning();
+
+      res.json(newDownload);
+    } catch (error) {
+      console.error("Error creating download:", error);
+      res.status(500).json({ message: "Failed to create download", error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });
+    }
+  });
+
+  // Admin: Update useful download
+  app.patch("/api/admin/downloads/:id", verifyAdminSession, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title, description, externalLink, removeFile, removeThumbnail } = req.body;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+      const { db } = await import("./db");
+      const { usefulDownloads } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [existing] = await db.select().from(usefulDownloads).where(eq(usefulDownloads.id, parseInt(id)));
+      if (!existing) {
+        return res.status(404).json({ message: "Download not found" });
+      }
+
+      const updates: any = {};
+      if (title !== undefined) updates.title = title;
+      if (description !== undefined) updates.description = description || null;
+      if (externalLink !== undefined) updates.externalLink = externalLink || null;
+
+      if (removeFile === 'true') {
+        updates.fileUrl = null;
+      } else if (files?.file?.[0]) {
+        updates.fileUrl = `/uploads/${files.file[0].filename}`;
+        if (updates.externalLink !== undefined && updates.externalLink !== null) {
+          // If they update both file and link, that's fine, we allow both or override.
+          // By default, let's just save what they send.
+        }
+      }
+
+      if (removeThumbnail === 'true') {
+        updates.thumbnailUrl = null;
+      } else if (files?.thumbnail?.[0]) {
+        updates.thumbnailUrl = `/uploads/${files.thumbnail[0].filename}`;
+      }
+
+      const [updatedDownload] = await db.update(usefulDownloads)
+        .set(updates)
+        .where(eq(usefulDownloads.id, parseInt(id)))
+        .returning();
+
+      res.json(updatedDownload);
+    } catch (error) {
+      console.error("Error updating download:", error);
+      res.status(500).json({ message: "Failed to update download" });
+    }
+  });
+
+  // Admin: Delete useful download
+  app.delete("/api/admin/downloads/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { db } = await import("./db");
+      const { usefulDownloads } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [download] = await db.select().from(usefulDownloads).where(eq(usefulDownloads.id, parseInt(id)));
+      if (!download) {
+        return res.status(404).json({ message: "Download not found" });
+      }
+
+      // Cleanup files from storage before deleting the record
+      const fs = await import("fs");
+      const path = await import("path");
+
+      const deleteFile = (url: string | null) => {
+        if (!url) return;
+        try {
+          const filename = url.split('/').pop();
+          if (filename) {
+            const filePath = path.join(process.cwd(), 'uploads', filename);
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+              console.log(`Deleted file: ${filePath}`);
+            }
+          }
+        } catch (e) {
+          console.error(`Failed to delete file from ${url}:`, e);
+        }
+      };
+
+      deleteFile(download.fileUrl);
+      deleteFile(download.thumbnailUrl);
+
+      await db.delete(usefulDownloads).where(eq(usefulDownloads.id, parseInt(id)));
+      res.json({ message: "Download deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting download:", error);
+      res.status(500).json({ message: "Failed to delete download" });
+    }
+  });
+
+  // Department: Get all useful downloads
+  app.get("/api/downloads", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { usefulDownloads } = await import("../shared/schema");
+      const { desc } = await import("drizzle-orm");
+
+      const downloads = await db.select().from(usefulDownloads).orderBy(desc(usefulDownloads.createdAt));
+      res.json(downloads);
+    } catch (error) {
+      console.error("Error fetching downloads:", error);
+      res.status(500).json({ message: "Failed to fetch downloads" });
+    }
+  });
+
+  // Department/Public: Proxy external link or local file securely
+  app.get("/api/downloads/:id/access", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { db } = await import("./db");
+      const { usefulDownloads } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [download] = await db.select().from(usefulDownloads).where(eq(usefulDownloads.id, parseInt(id)));
+
+      if (!download) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+
+      if (download.fileUrl) {
+        // Option 1: It's a local file.
+        return res.redirect(download.fileUrl);
+      } else if (download.externalLink) {
+        // Option 2: It's an external link. Proxy the content securely and bypass SSL certificate issues.
+        let externalUrl = download.externalLink;
+        if (!externalUrl.startsWith('http://') && !externalUrl.startsWith('https://')) {
+          externalUrl = 'https://' + externalUrl;
+        }
+
+        try {
+          // Temporarily bypass strict SSL checks for AMU internal servers
+          process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+          const response = await fetch(externalUrl);
+          process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
+
+          if (!response.ok) throw new Error(`HTTP ${response.status} from external resource`);
+
+          // Pass necessary headers
+          const contentType = response.headers.get('content-type');
+          if (contentType) res.setHeader('Content-Type', contentType);
+
+          const contentDisposition = response.headers.get('content-disposition');
+          if (contentDisposition) {
+            res.setHeader('Content-Disposition', contentDisposition);
+          } else {
+            res.setHeader('Content-Disposition', `inline; filename="download-${id}"`);
+          }
+
+          if (response.body) {
+            const { pipeline } = await import('stream/promises');
+            const { Readable } = await import('stream');
+            await pipeline(Readable.fromWeb(response.body as any), res);
+            return;
+          }
+        } catch (fetchErr) {
+          console.error("Proxy fetch error:", fetchErr);
+          // Make sure to reset it just in case it threw before resetting
+          process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
+          return res.status(500).send("External resource cannot be proxied or is unavailable.");
+        }
+      } else {
+        return res.status(404).json({ message: "No content available for this resource" });
+      }
+    } catch (error) {
+      console.error("Error accessing download:", error);
+      res.status(500).json({ message: "Failed to access resource" });
+    }
+  });
+
   return httpServer;
 }

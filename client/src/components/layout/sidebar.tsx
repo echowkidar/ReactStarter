@@ -14,6 +14,7 @@ import {
   Ticket,
   Megaphone,
   Search,
+  DownloadCloud,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -115,6 +116,7 @@ const navigation = [
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
   { name: "Global Search", href: "/dashboard/global-search", icon: Search },
   { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
+  { name: "Useful Downloads", href: "/dashboard/downloads", icon: DownloadCloud },
   { name: "Support Tickets", href: "/dashboard/tickets", icon: Ticket },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Help", href: "/dashboard/help", icon: HelpCircle },

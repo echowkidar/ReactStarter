@@ -12,6 +12,7 @@ import Attendance from "@/pages/dashboard/attendance";
 import ReportDetails from "@/pages/dashboard/report-details";
 import Settings from "@/pages/dashboard/settings";
 import Documents from "@/pages/dashboard/documents";
+import Downloads from "@/pages/dashboard/downloads";
 import Help from "@/pages/help";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
@@ -44,6 +45,7 @@ function AppRouter() {
       <ProtectedRoute path="/dashboard/attendance" component={Attendance} />
       <ProtectedRoute path="/dashboard/settings" component={Settings} />
       <ProtectedRoute path="/dashboard/documents" component={Documents} />
+      <ProtectedRoute path="/dashboard/downloads" component={Downloads} />
       <ProtectedRoute path="/dashboard/reports/:id" component={ReportDetails} />
       <ProtectedRoute path="/dashboard/help" component={Help} />
       <ProtectedRoute path="/dashboard/global-search" component={GlobalSearch} />

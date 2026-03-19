@@ -9,6 +9,7 @@ import AdminHeader from "@/components/layout/admin-header";
 import Loading from "@/components/layout/loading";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { UsefulDownloadsManager } from "@/components/admin/useful-downloads-manager";
 
 type Settings = Record<string, string>;
 
@@ -118,6 +119,8 @@ export default function AdminSettings() {
                         </div>
                     </CardContent>
                 </Card>
+
+                <UsefulDownloadsManager />
             </div>
         </div>
     );

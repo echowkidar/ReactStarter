@@ -3,14 +3,16 @@ import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
 import { login, getCurrentDepartment } from "@/lib/auth";
-import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardContent, CardFooter, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, DownloadCloud, ChevronDown, PlayCircle } from "lucide-react";
 import { NeuralNetworkStyles, NeuralNetworkOverlay } from "@/components/NeuralNetworkOverlay";
 import { SplashScreen } from "@/components/SplashScreen";
 
@@ -96,6 +98,41 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 });
+
+function PublicDownloadsDropdown() {
+  const { data: downloads = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/downloads"],
+  });
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="w-full justify-between font-normal text-slate-700 bg-white hover:bg-slate-50 border-slate-200 shadow-sm transition-all" disabled={isLoading}>
+          <div className="flex items-center">
+            <DownloadCloud className="w-4 h-4 mr-2 text-blue-500" />
+            {isLoading ? "Loading..." : "Select to Download"}
+          </div>
+          <ChevronDown className="w-4 h-4 ml-2 opacity-50" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-auto shadow-xl border-slate-200">
+        {downloads.length === 0 && !isLoading ? (
+          <div className="p-4 text-sm text-muted-foreground text-center">No downloads available</div>
+        ) : (
+          downloads.map((item) => (
+            <DropdownMenuItem
+              key={item.id}
+              className="cursor-pointer py-2.5 px-3 flex items-start group focus:bg-blue-50 focus:text-blue-700"
+              onClick={() => window.open(`/api/downloads/${item.id}/access`, "_blank")}
+            >
+              <span className="font-medium text-sm leading-tight group-hover:underline">{item.title}</span>
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export default function Login() {
   const [location, setLocation] = useLocation();
@@ -205,91 +242,119 @@ export default function Login() {
   return (
     <>
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4 py-8 relative">
         <N8nChatStyles />
         <N8nChatScript />
         <NeuralNetworkOverlay />
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-20 w-auto" />
-            </div>
-            <h1 className="text-2xl font-bold">Department Login</h1>
-            <p className="text-sm text-muted-foreground">
-              Welcome to AMU Salary Section
-            </p>
-          </CardHeader>
-          <CardContent>
-            {lockMessage && (
-              <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <span className="text-sm">{lockMessage}</span>
+
+        <div className="w-full max-w-md relative z-10 flex flex-col gap-4">
+          <Card className="w-full shadow-lg border-primary/10">
+            <CardHeader className="text-center pt-5 pb-2">
+              <div className="flex justify-center mb-2">
+                <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-16 w-auto drop-shadow-sm" />
               </div>
-            )}
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="email" disabled={isLoading} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="password" disabled={isLoading} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {/* Turnstile CAPTCHA */}
-                <div className="flex justify-center">
-                  <div ref={turnstileRef}></div>
+              <h1 className="text-2xl font-bold tracking-tight">Department Login</h1>
+              <p className="text-sm text-muted-foreground mt-0">
+                Welcome to AMU Salary Section
+              </p>
+            </CardHeader>
+            <CardContent className="pb-3">
+              {lockMessage && (
+                <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-sm">{lockMessage}</span>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading || !turnstileToken}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    "Sign In"
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-2">
-            <Button
-              variant="link"
-              onClick={() => setLocation("/forgot-password")}
-              disabled={isLoading}
-              className="text-sm text-muted-foreground hover:text-primary"
+              )}
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" disabled={isLoading} className="bg-slate-50" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="password" disabled={isLoading} className="bg-slate-50" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Turnstile CAPTCHA */}
+                  <div className="flex justify-center pt-2">
+                    <div ref={turnstileRef}></div>
+                  </div>
+                  <Button type="submit" className="w-full font-medium shadow-sm transition-all active:scale-[0.98]" disabled={isLoading || !turnstileToken}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      "Sign In to Dashboard"
+                    )}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-0 border-t pt-2 pb-2 bg-slate-50/50">
+              <Button
+                variant="link"
+                onClick={() => setLocation("/forgot-password")}
+                disabled={isLoading}
+                className="text-xs text-muted-foreground hover:text-primary h-7 py-0"
+              >
+                Forgot Password?
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setLocation("/admin/login")}
+                disabled={isLoading}
+                className="text-xs text-muted-foreground hover:text-primary h-7 py-0"
+              >
+                Admin Login
+              </Button>
+            </CardFooter>
+          </Card>
+
+          {/* Helper Resources row */}
+          <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4">
+            <div
+              className="w-[160px] h-[90px] shrink-0 rounded overflow-hidden relative cursor-pointer group shadow-sm bg-slate-900"
+              onClick={() => window.open('https://www.youtube.com/watch?v=s3uPEzevL5w', '_blank')}
             >
-              Forgot Password?
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setLocation("/admin/login")}
-              disabled={isLoading}
-              className="text-sm text-muted-foreground hover:text-primary"
-            >
-              Admin Login
-            </Button>
-          </CardFooter>
-        </Card>
+              <img
+                src="https://img.youtube.com/vi/s3uPEzevL5w/mqdefault.jpg"
+                alt="Tutorial Thumbnail"
+                className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity"
+              />
+              <div className="absolute top-1 left-1.5 z-20">
+                <span className="bg-red-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm tracking-wide uppercase">Tutorial</span>
+              </div>
+              {/* Overlay with custom Play icon */}
+              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors z-10 flex items-center justify-center">
+                <PlayCircle className="text-white w-10 h-10 opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all drop-shadow-md" />
+              </div>
+            </div>
+            <div className="flex-1 flex flex-col justify-center">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 px-0.5">Useful Downloads</h4>
+              <PublicDownloadsDropdown />
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );

@@ -393,3 +393,22 @@ export const insertEmployeeHistorySchema = createInsertSchema(employeeHistory).o
 
 export type EmployeeHistory = typeof employeeHistory.$inferSelect;
 export type InsertEmployeeHistory = z.infer<typeof insertEmployeeHistorySchema>;
+
+// Useful Downloads - for department sidebar resources
+export const usefulDownloads = pgTable("useful_downloads", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  fileUrl: text("file_url"),
+  externalLink: text("external_link"),
+  thumbnailUrl: text("thumbnail_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertUsefulDownloadSchema = createInsertSchema(usefulDownloads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type UsefulDownload = typeof usefulDownloads.$inferSelect;
+export type InsertUsefulDownload = z.infer<typeof insertUsefulDownloadSchema>;
