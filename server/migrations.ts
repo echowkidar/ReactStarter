@@ -167,6 +167,29 @@ export async function runMigrations() {
       ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS admin_noting TEXT;
     `);
 
+    // Create department_contacts table for attendance contact persons
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS department_contacts (
+        id SERIAL PRIMARY KEY,
+        department_id INTEGER NOT NULL,
+        employee_id INTEGER NOT NULL,
+        contact_phone TEXT NOT NULL,
+        internal_phone TEXT,
+        contact_email TEXT,
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Add internal_phone and contact_email columns if they don't exist
+    await db.execute(sql`
+      ALTER TABLE department_contacts ADD COLUMN IF NOT EXISTS internal_phone TEXT;
+    `);
+    await db.execute(sql`
+      ALTER TABLE department_contacts ADD COLUMN IF NOT EXISTS contact_email TEXT;
+    `);
+
     console.log("Database migrations completed successfully");
   } catch (error) {
     console.error("Error running migrations:", error);

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1090,6 +1090,17 @@ export default function AdminDashboard() {
               >
                 <Users className="h-4 w-4" />
                 <span className="hidden lg:inline">Employees</span>
+              </Button>
+            )}
+            {canManageEmployees && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation("/admin/department-contacts")}
+                className="flex items-center gap-1"
+              >
+                <Phone className="h-4 w-4" />
+                <span className="hidden lg:inline">Contacts</span>
               </Button>
             )}
             {isSuperAdmin && (

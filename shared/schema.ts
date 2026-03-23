@@ -412,3 +412,25 @@ export const insertUsefulDownloadSchema = createInsertSchema(usefulDownloads).om
 
 export type UsefulDownload = typeof usefulDownloads.$inferSelect;
 export type InsertUsefulDownload = z.infer<typeof insertUsefulDownloadSchema>;
+
+// Department Contacts - for salary admin to find attendance contact person per department
+export const departmentContacts = pgTable("department_contacts", {
+  id: serial("id").primaryKey(),
+  departmentId: integer("department_id").notNull(),   // FK → departments.id
+  employeeId: integer("employee_id").notNull(),       // FK → employees.id (selected from department's list)
+  contactPhone: text("contact_phone").notNull(),      // Phone number
+  internalPhone: text("internal_phone"),              // Internal phone number (optional)
+  contactEmail: text("contact_email"),                // Email ID (optional)
+  notes: text("notes"),                                // Optional remark
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertDepartmentContactSchema = createInsertSchema(departmentContacts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DepartmentContact = typeof departmentContacts.$inferSelect;
+export type InsertDepartmentContact = z.infer<typeof insertDepartmentContactSchema>;

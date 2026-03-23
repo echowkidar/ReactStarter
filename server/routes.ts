@@ -4831,5 +4831,156 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // ========== DEPARTMENT CONTACTS (Attendance Contact Person) ==========
+
+  // Get all department contacts with employee and department info
+  app.get("/api/admin/department-contacts", verifyAdminSession, async (req, res) => {
+    try {
+      const { departmentContacts, departments, employees } = await import("../shared/schema");
+      const { eq, like, or, ilike } = await import("drizzle-orm");
+
+      const search = (req.query.search as string) || "";
+      const departmentId = req.query.departmentId ? Number(req.query.departmentId) : null;
+
+      // Join department_contacts with employees and departments
+      let query = db
+        .select({
+          id: departmentContacts.id,
+          departmentId: departmentContacts.departmentId,
+          employeeId: departmentContacts.employeeId,
+          contactPhone: departmentContacts.contactPhone,
+          internalPhone: departmentContacts.internalPhone,
+          contactEmail: departmentContacts.contactEmail,
+          notes: departmentContacts.notes,
+          createdAt: departmentContacts.createdAt,
+          updatedAt: departmentContacts.updatedAt,
+          departmentName: departments.name,
+          employeeName: employees.name,
+          employeeEpid: employees.epid,
+          employeeDesignation: employees.designation,
+        })
+        .from(departmentContacts)
+        .leftJoin(departments, eq(departmentContacts.departmentId, departments.id))
+        .leftJoin(employees, eq(departmentContacts.employeeId, employees.id));
+
+      const results = await query;
+
+      // Apply filters in JS (simpler than building dynamic SQL)
+      let filtered = results;
+      if (departmentId) {
+        filtered = filtered.filter(c => c.departmentId === departmentId);
+      }
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = filtered.filter(c =>
+          (c.departmentName || "").toLowerCase().includes(s) ||
+          (c.employeeName || "").toLowerCase().includes(s) ||
+          (c.employeeEpid || "").toLowerCase().includes(s) ||
+          (c.contactPhone || "").toLowerCase().includes(s) ||
+          (c.employeeDesignation || "").toLowerCase().includes(s)
+        );
+      }
+
+      // Sort by department name
+      filtered.sort((a, b) => (a.departmentName || "").localeCompare(b.departmentName || ""));
+
+      res.json(filtered);
+    } catch (error) {
+      console.error("Error fetching department contacts:", error);
+      res.status(500).json({ message: "Failed to fetch department contacts" });
+    }
+  });
+
+  // Add a new department contact
+  app.post("/api/admin/department-contacts", verifyAdminSession, async (req, res) => {
+    try {
+      const { departmentContacts } = await import("../shared/schema");
+      const { departmentId, employeeId, contactPhone, internalPhone, contactEmail, notes } = req.body;
+
+      if (!departmentId || !employeeId || !contactPhone) {
+        return res.status(400).json({ message: "Department, employee, and phone number are required" });
+      }
+
+      // Check if contact already exists for this department+employee
+      const { eq, and } = await import("drizzle-orm");
+      const existing = await db.select().from(departmentContacts)
+        .where(and(
+          eq(departmentContacts.departmentId, Number(departmentId)),
+          eq(departmentContacts.employeeId, Number(employeeId))
+        ));
+
+      if (existing.length > 0) {
+        return res.status(400).json({ message: "This employee is already a contact for this department" });
+      }
+
+      const [newContact] = await db.insert(departmentContacts).values({
+        departmentId: Number(departmentId),
+        employeeId: Number(employeeId),
+        contactPhone: contactPhone.trim(),
+        internalPhone: internalPhone?.trim() || null,
+        contactEmail: contactEmail?.trim() || null,
+        notes: notes?.trim() || null,
+      }).returning();
+
+      res.status(201).json(newContact);
+    } catch (error) {
+      console.error("Error creating department contact:", error);
+      res.status(500).json({ message: "Failed to create department contact" });
+    }
+  });
+
+  // Update a department contact
+  app.put("/api/admin/department-contacts/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const contactId = Number(req.params.id);
+      const { departmentContacts } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const { employeeId, contactPhone, internalPhone, contactEmail, notes } = req.body;
+
+      const updates: any = { updatedAt: new Date() };
+      if (employeeId !== undefined) updates.employeeId = Number(employeeId);
+      if (contactPhone !== undefined) updates.contactPhone = contactPhone.trim();
+      if (internalPhone !== undefined) updates.internalPhone = internalPhone?.trim() || null;
+      if (contactEmail !== undefined) updates.contactEmail = contactEmail?.trim() || null;
+      if (notes !== undefined) updates.notes = notes?.trim() || null;
+
+      const [updated] = await db.update(departmentContacts)
+        .set(updates)
+        .where(eq(departmentContacts.id, contactId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating department contact:", error);
+      res.status(500).json({ message: "Failed to update department contact" });
+    }
+  });
+
+  // Delete a department contact
+  app.delete("/api/admin/department-contacts/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const contactId = Number(req.params.id);
+      const { departmentContacts } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [deleted] = await db.delete(departmentContacts)
+        .where(eq(departmentContacts.id, contactId))
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      res.json({ message: "Contact deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting department contact:", error);
+      res.status(500).json({ message: "Failed to delete department contact" });
+    }
+  });
+
   return httpServer;
 }

@@ -27,6 +27,7 @@ import TransferRequests from "@/pages/admin/transfer-requests";
 import MissingEmployees from "@/pages/admin/missing-employees";
 import AdminSettings from "@/pages/admin/settings";
 import AdminEditAttendance from "@/pages/admin/edit-attendance";
+import DepartmentContacts from "@/pages/admin/department-contacts";
 import Tickets from "@/pages/dashboard/tickets";
 import GlobalSearch from "@/pages/dashboard/global-search";
 import ForgotPassword from "@/pages/forgot-password";
@@ -64,6 +65,7 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/notices" component={AdminNotices} />
       <ProtectedAdminRoute path="/admin/transfer-requests" component={TransferRequests} />
       <ProtectedAdminRoute path="/admin/settings" component={AdminSettings} />
+      <ProtectedAdminRoute path="/admin/department-contacts" component={DepartmentContacts} />
       <ProtectedRoute path="/dashboard/tickets" component={Tickets} />
       <Route component={NotFound} />
     </Switch>
