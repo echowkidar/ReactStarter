@@ -122,6 +122,11 @@ export async function runMigrations() {
       ALTER TABLE attendance_reports ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP;
     `);
 
+    // Add finalized_at column to attendance_reports table
+    await db.execute(sql`
+      ALTER TABLE attendance_reports ADD COLUMN IF NOT EXISTS finalized_at TIMESTAMP;
+    `);
+
     // Add attendance_permitted column to departments table
     await db.execute(sql`
       ALTER TABLE departments ADD COLUMN IF NOT EXISTS attendance_permitted BOOLEAN NOT NULL DEFAULT true;

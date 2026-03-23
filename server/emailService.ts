@@ -1,5 +1,33 @@
 import nodemailer from 'nodemailer';
 import { TransportOptions } from 'nodemailer';
+import dns from 'dns';
+import { promisify } from 'util';
+
+const resolveMx = promisify(dns.resolveMx);
+
+async function validateEmailDomain(email: string): Promise<boolean> {
+  try {
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (!domain) return false;
+
+    // Reject common typo squatted domains that have live MX records
+    const blockedTypos = [
+      'gmyail.com', 'gamil.com', 'gmail.co', 'gmai.com', 'gmal.com',
+      'yaho.com', 'yahoo.co', 'yhoo.com',
+      'hotmai.com', 'hotmail.co', 'hotmal.com',
+      'uotlook.com', 'outlok.com', 'outlook.co'
+    ];
+
+    if (blockedTypos.includes(domain)) {
+      return false;
+    }
+
+    const records = await resolveMx(domain);
+    return records && records.length > 0;
+  } catch (error) {
+    return false;
+  }
+}
 
 // Try to use real SMTP settings from environment variables if available
 // Otherwise fallback to Ethereal for testing
@@ -158,6 +186,15 @@ export async function sendAttendanceNotification(
   adminRemarks?: string
 ) {
   try {
+    const isValidDomain = await validateEmailDomain(email);
+    if (!isValidDomain) {
+      return {
+        success: false,
+        error: 'wrong_email',
+        message: 'Email domain does not exist'
+      };
+    }
+
     let subject = '';
     let htmlContent = '';
     const reportMonthStr = `${reportDetails.monthName || ''} ${reportDetails.year || ''}`.trim();
@@ -182,7 +219,7 @@ export async function sendAttendanceNotification(
         htmlContent = `
           <h2 style="color: #333;">Attendance Report Finalized</h2>
           <p>Your attendance report for <strong>${reportMonthStr}</strong> (Report ID: ${reportDetails.reportId}) has been finalized.</p>
-          <p style="color: #d97706; font-weight: bold;">Action Required: Please remember to click on "Send Report / Forward to Salary Section" to officially submit it.</p>
+          <p style="color: #d97706; font-weight: bold;">Action Required: Please remember to click on "Upload Signed Report" button to oficially submit it.</p>
         `;
         break;
       case 'sent':
@@ -269,13 +306,23 @@ export async function sendAttendanceNotification(
 export async function sendAttendanceReminder(
   email: string,
   departmentName: string,
-  type: 'not_created' | 'not_finalized' | 'not_sent',
+  type: 'not_created' | 'not_finalized' | 'not_sent' | 'deadline_warning',
   reportDetails: {
     monthName?: string;
     year?: number;
+    currentStatus?: string;
   }
 ) {
   try {
+    const isValidDomain = await validateEmailDomain(email);
+    if (!isValidDomain) {
+      return {
+        success: false,
+        error: 'wrong_email',
+        message: 'Email domain does not exist'
+      };
+    }
+
     let subject = '';
     let htmlContent = '';
     const reportMonthStr = `${reportDetails.monthName || ''} ${reportDetails.year || ''}`.trim();
@@ -298,11 +345,27 @@ export async function sendAttendanceReminder(
         `;
         break;
       case 'not_sent':
-        subject = 'Reminder: Please Send Attendance Report to Salary Section';
+        subject = 'Reminder: Please Upload & Send Attendance Report to Salary Section';
         htmlContent = `
           <h2 style="color: #333;">Action Required: Send Attendance Report</h2>
           <p>Your attendance report for <strong>${reportMonthStr}</strong> has been finalized but has not been sent to the Salary Section.</p>
           <p style="color: #d97706; font-weight: bold;">Please remember to log in and click on "Send Report / Forward to Salary Section" to officially submit it.</p>
+        `;
+        break;
+      case 'deadline_warning':
+        let statusMessage = "has not been created yet";
+        if (reportDetails.currentStatus === 'draft') {
+          statusMessage = "has been created but is currently in Draft status";
+        } else if (reportDetails.currentStatus === 'submitted') {
+          statusMessage = "has been Finalized but has not yet been Uploaded & Sent to the Salary Section";
+        }
+
+        subject = 'Urgent Action Required: Attendance Report Deadline Approaching';
+        htmlContent = `
+          <h2 style="color: #d97706;">CRITICAL: Submission Deadline Tomorrow</h2>
+          <p>This is an urgent reminder that the deadline for submitting the Attendance Report for <strong>${reportMonthStr}</strong> is the 15th (Tomorrow).</p>
+          <p>Our records indicate that your report <strong>${statusMessage}</strong>.</p>
+          <p style="font-weight: bold;">Please log in to the Attendance Portal immediately and complete the submission process to avoid any administrative delays.</p>
         `;
         break;
     }

@@ -5,6 +5,8 @@ import { eq, and, isNotNull, sql } from 'drizzle-orm';
 import { sendAttendanceReminder } from './emailService';
 
 export function setupCronJobs() {
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
     // Run every day at 09:00 AM
     cron.schedule('0 9 * * *', async () => {
         console.log('Running daily attendance reminders cron...');
@@ -33,8 +35,9 @@ export function setupCronJobs() {
                 )
             });
 
-            // 1. Not Created by 10th
-            if (today.getDate() >= 10) {
+            // 1. Not Created by 10th (Runs exactly on the 10th)
+            if (today.getDate() === 10) {
+                console.log('Running 10th day reminders...');
                 for (const dept of permittedDepts) {
                     const reports = await db.query.attendanceReports.findMany({
                         where: and(
@@ -49,6 +52,35 @@ export function setupCronJobs() {
                             monthName: monthNames[targetMonth],
                             year: targetYear
                         });
+                        await delay(2000); // Wait 2 seconds between emails
+                    }
+                }
+            }
+
+            // 4. Day before deadline (14th of the month)
+            if (today.getDate() === 14) {
+                console.log('Running 14th day deadline warnings...');
+                for (const dept of permittedDepts) {
+                    const reports = await db.query.attendanceReports.findMany({
+                        where: and(
+                            eq(attendanceReports.departmentId, dept.id),
+                            eq(attendanceReports.month, targetMonth),
+                            eq(attendanceReports.year, targetYear)
+                        )
+                    });
+
+                    const report = reports.length > 0 ? reports[0] : null;
+                    if (!report || report.status !== 'sent') {
+                        let currentStatus = 'not_created';
+                        if (report) {
+                            currentStatus = report.status;
+                        }
+                        await sendAttendanceReminder(dept.email, dept.name, 'deadline_warning', {
+                            monthName: monthNames[targetMonth],
+                            year: targetYear,
+                            currentStatus: currentStatus
+                        });
+                        await delay(2000); // Wait 2 seconds between emails
                     }
                 }
             }
@@ -80,6 +112,7 @@ export function setupCronJobs() {
                         monthName: monthNames[report.month],
                         year: report.year
                     });
+                    await delay(2000); // Wait 2 seconds
                 }
             }
 
@@ -99,6 +132,7 @@ export function setupCronJobs() {
                         monthName: monthNames[report.month],
                         year: report.year
                     });
+                    await delay(2000); // Wait 2 seconds
                 }
             }
 
