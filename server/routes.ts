@@ -77,7 +77,7 @@ async function checkEmployeeAttendanceBlocksTransfer(
   return { blocked: false };
 }
 import { v4 as uuid } from "uuid";
-import { setupTestEmailAccount, sendPasswordResetEmail } from "./emailService";
+import { setupTestEmailAccount, sendPasswordResetEmail, sendAttendanceNotification } from "./emailService";
 
 // Add custom type for Request with session
 interface RequestWithSession extends Request {
@@ -2370,6 +2370,27 @@ export async function registerRoutes(app: Express) {
       }
 
       const report = await storage.createAttendanceReport(reportData);
+
+      try {
+        if (department?.email) {
+          const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const emailResponse = await sendAttendanceNotification(
+            department.email,
+            department.name,
+            'created',
+            {
+              reportId: report.id,
+              monthName: monthNames[report.month],
+              year: report.year,
+              totalEmployees: (req.body as any).totalEmployees || 0
+            }
+          );
+          return res.status(201).json({ ...report, emailStatus: emailResponse.success ? 'sent' : 'failed', emailError: emailResponse.error, emailMessage: emailResponse.message });
+        }
+      } catch (err) {
+        console.error('Email error on create:', err);
+      }
+
       res.status(201).json(report);
     } catch (error) {
       console.error("Error creating attendance report:", error);
@@ -2387,7 +2408,6 @@ export async function registerRoutes(app: Express) {
         updates.despatchDate = new Date(updates.despatchDate);
       }
 
-      // Handle receipt date
       if (updates.receiptDate) {
         if (typeof updates.receiptDate === 'string') {
           updates.receiptDate = new Date(updates.receiptDate);
@@ -2399,7 +2419,39 @@ export async function registerRoutes(app: Express) {
         }
       }
 
+      if (updates.status === 'submitted') {
+        updates.finalizedAt = new Date();
+      } else if (updates.status === 'draft') {
+        updates.finalizedAt = null;
+      }
+
       const report = await storage.updateAttendanceReport(Number(req.params.id), updates);
+
+      try {
+        if (updates.status === 'submitted' || updates.status === 'sent') {
+          const department = await storage.getDepartment(report.departmentId);
+          if (department?.email) {
+            const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const type = updates.status === 'submitted' ? 'finalized' : 'sent';
+            const emailResponse = await sendAttendanceNotification(
+              department.email,
+              department.name,
+              type,
+              {
+                reportId: report.id,
+                monthName: monthNames[report.month],
+                year: report.year,
+                transactionId: updates.status === 'sent' ? (updates.transactionId || report.transactionId) : null,
+                despatchNo: updates.status === 'sent' ? (updates.despatchNo || report.despatchNo) : null
+              }
+            );
+            return res.json({ ...report, emailStatus: emailResponse.success ? 'sent' : 'failed', emailError: emailResponse.error, emailMessage: emailResponse.message });
+          }
+        }
+      } catch (err) {
+        console.error('Email error on update:', err);
+      }
+
       res.json(report);
     } catch (error) {
       console.error(error);
@@ -3027,6 +3079,27 @@ export async function registerRoutes(app: Express) {
         cancelRequestedAt: new Date()
       });
 
+      try {
+        const department = await storage.getDepartment(report.departmentId);
+        if (department?.email) {
+          const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const emailResponse = await sendAttendanceNotification(
+            department.email,
+            department.name,
+            'cancel_requested',
+            {
+              reportId: report.id,
+              monthName: monthNames[report.month],
+              year: report.year,
+              reason: req.body.reason || 'No reason provided'
+            }
+          );
+          return res.json({ ...updatedReport, emailStatus: emailResponse.success ? 'sent' : 'failed', emailError: emailResponse.error, emailMessage: emailResponse.message });
+        }
+      } catch (err) {
+        console.error('Email error on cancel request:', err);
+      }
+
       res.json(updatedReport);
     } catch (error) {
       console.error('Error requesting cancellation:', error);
@@ -3054,6 +3127,27 @@ export async function registerRoutes(app: Express) {
         status: 'recall_requested',
         cancelRequestedAt: new Date() // Reusing field for timestamp
       });
+
+      try {
+        const department = await storage.getDepartment(report.departmentId);
+        if (department?.email) {
+          const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const emailResponse = await sendAttendanceNotification(
+            department.email,
+            department.name,
+            'recall_requested',
+            {
+              reportId: report.id,
+              monthName: monthNames[report.month],
+              year: report.year,
+              reason: req.body.reason || 'No reason provided'
+            }
+          );
+          return res.json({ ...updatedReport, emailStatus: emailResponse.success ? 'sent' : 'failed', emailError: emailResponse.error, emailMessage: emailResponse.message });
+        }
+      } catch (err) {
+        console.error('Email error on recall request:', err);
+      }
 
       res.json(updatedReport);
     } catch (error) {
@@ -3084,6 +3178,27 @@ export async function registerRoutes(app: Express) {
         status: 'draft',
         cancelRequestedAt: null // Clear the request timestamp
       });
+
+      try {
+        const department = await storage.getDepartment(report.departmentId);
+        if (department?.email) {
+          const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const emailResponse = await sendAttendanceNotification(
+            department.email,
+            department.name,
+            'recall_approved',
+            {
+              reportId: report.id,
+              monthName: monthNames[report.month],
+              year: report.year
+            },
+            req.body.remarks
+          );
+          return res.json({ ...updatedReport, emailStatus: emailResponse.success ? 'sent' : 'failed', emailError: emailResponse.error, emailMessage: emailResponse.message });
+        }
+      } catch (err) {
+        console.error('Email error on revert to draft:', err);
+      }
 
       res.json(updatedReport);
     } catch (error) {
@@ -3116,6 +3231,27 @@ export async function registerRoutes(app: Express) {
         status: 'cancelled',
         cancelledAt: new Date()
       });
+
+      try {
+        const department = await storage.getDepartment(report.departmentId);
+        if (department?.email) {
+          const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const emailResponse = await sendAttendanceNotification(
+            department.email,
+            department.name,
+            'cancel_approved',
+            {
+              reportId: report.id,
+              monthName: monthNames[report.month],
+              year: report.year
+            },
+            req.body.remarks
+          );
+          return res.json({ ...updatedReport, emailStatus: emailResponse.success ? 'sent' : 'failed', emailError: emailResponse.error, emailMessage: emailResponse.message });
+        }
+      } catch (err) {
+        console.error('Email error on accept cancel:', err);
+      }
 
       res.json(updatedReport);
     } catch (error) {

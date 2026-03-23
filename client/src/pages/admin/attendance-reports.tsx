@@ -284,6 +284,20 @@ function NotingCell({
 
 export default function AttendanceReports() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const handleEmailResponse = (data: any) => {
+    if (data?.emailStatus === 'failed') {
+      if (data?.emailError === 'wrong_email') {
+        toast({ variant: "destructive", title: "Email Not Sent", description: "Department has a wrong email ID configured. Notification not sent." });
+      } else {
+        toast({ variant: "destructive", title: "Email Warning", description: "Email not sent." });
+      }
+    } else if (data?.emailStatus === 'sent') {
+      toast({ title: "Email Sent", description: "Notification email sent to department successfully." });
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
   // Fetch available months from backend
@@ -314,7 +328,6 @@ export default function AttendanceReports() {
   const [analysisFilter, setAnalysisFilter] = useState<string[]>([]);
   const [verifiedFilter, setVerifiedFilter] = useState<"all" | "verified" | "unverified">("all");
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
-  const { toast } = useToast();
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -427,14 +440,16 @@ export default function AttendanceReports() {
   // Accept cancellation mutation
   const acceptCancellation = useMutation({
     mutationFn: async (reportId: number) => {
-      await apiRequest("POST", `/api/attendance/${reportId}/accept-cancel`);
+      const res = await apiRequest("POST", `/api/attendance/${reportId}/accept-cancel`);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
       toast({
         title: "Cancellation Accepted",
         description: "Report cancelled successfully. Entries have been deleted.",
       });
+      if (data) handleEmailResponse(data);
     },
     onError: (error: any) => {
       toast({

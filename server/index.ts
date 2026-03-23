@@ -5,6 +5,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrations";
+import { setupCronJobs } from "./cronJobs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -59,6 +60,9 @@ export async function initApp() {
     // Register External API routes
     const { registerExternalRoutes } = await import("./external-api");
     registerExternalRoutes(app);
+
+    // Setup Cron Jobs
+    setupCronJobs();
 
     // Log if API Key is not set
     if (!process.env.EXTERNAL_API_KEY) {

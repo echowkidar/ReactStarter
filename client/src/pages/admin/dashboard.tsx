@@ -114,6 +114,18 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [adminType, setAdminType] = useState<string>("super");
 
+  const handleEmailResponse = (data: any) => {
+    if (data?.emailStatus === 'failed') {
+      if (data?.emailError === 'wrong_email') {
+        toast({ variant: "destructive", title: "Email Not Sent", description: "Department has a wrong email ID configured. Notification not sent." });
+      } else {
+        toast({ variant: "destructive", title: "Email Warning", description: "Email not sent." });
+      }
+    } else if (data?.emailStatus === 'sent') {
+      toast({ title: "Email Sent", description: "Notification email sent to department successfully." });
+    }
+  };
+
   useEffect(() => {
     const storedType = localStorage.getItem("adminType");
     if (storedType) {
@@ -429,14 +441,16 @@ export default function AdminDashboard() {
   // Accept cancellation mutation
   const acceptCancellation = useMutation({
     mutationFn: async (reportId: number) => {
-      await apiRequest("POST", `/api/attendance/${reportId}/accept-cancel`);
+      const res = await apiRequest("POST", `/api/attendance/${reportId}/accept-cancel`);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
       toast({
         title: "Cancellation Accepted",
         description: "Report cancelled successfully. Entries have been deleted.",
       });
+      if (data) handleEmailResponse(data);
     },
     onError: (error: any) => {
       toast({
@@ -449,14 +463,16 @@ export default function AdminDashboard() {
 
   const revertToDraft = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("POST", `/api/attendance/${id}/revert-to-draft`);
+      const res = await apiRequest("POST", `/api/attendance/${id}/revert-to-draft`);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
       toast({
         title: "Success",
         description: "Report reverted to draft successfully"
       });
+      if (data) handleEmailResponse(data);
     },
     onError: (error: any) => {
       toast({

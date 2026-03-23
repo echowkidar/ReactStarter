@@ -83,6 +83,7 @@ export const attendanceReports = pgTable("attendance_reports", {
   status: text("status").notNull().default("draft"),
   fileUrl: text("file_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  finalizedAt: timestamp("finalized_at"),
   cancelRequestedAt: timestamp("cancel_requested_at"),
   cancelledAt: timestamp("cancelled_at"),
 });

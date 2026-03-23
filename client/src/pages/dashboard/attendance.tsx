@@ -743,6 +743,19 @@ const POSITIVE_REMARKS = [
 
 export default function Attendance() {
   const { toast } = useToast();
+
+  const handleEmailResponse = (data: any) => {
+    if (data?.emailStatus === 'failed') {
+      if (data?.emailError === 'wrong_email') {
+        toast({ variant: "destructive", title: "Email Not Sent", description: "You have provided a wrong email ID. Please replace it with the correct one to get notifications." });
+      } else {
+        toast({ variant: "destructive", title: "Email Warning", description: "Email not sent." });
+      }
+    } else if (data?.emailStatus === 'sent') {
+      toast({ title: "Email Sent", description: "Notification email sent to department successfully." });
+    }
+  };
+
   const department = getCurrentDepartment();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
@@ -809,6 +822,7 @@ export default function Attendance() {
         month: parseInt(data.month),
         year: parseInt(data.year),
         status: "draft",
+        totalEmployees: data.entries.length,
       };
 
       const response = await apiRequest(
@@ -834,8 +848,9 @@ export default function Attendance() {
           periods,
         });
       }
+      return report;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: [`/api/departments/${department?.id}/attendance`],
       });
@@ -844,6 +859,7 @@ export default function Attendance() {
         title: "Success",
         description: "Attendance report created successfully",
       });
+      if (data) handleEmailResponse(data);
     },
     onError: (error: any) => {
       toast({
@@ -978,6 +994,8 @@ export default function Attendance() {
         description: "PDF uploaded successfully",
       });
 
+      handleEmailResponse(updateData);
+
       return { fileUrl: fileUrlToSave, report: updateData };
     } catch (error) {
       console.error("Error in handleUpload:", error);
@@ -1047,15 +1065,17 @@ export default function Attendance() {
 
   const changeStatus = useMutation({
     mutationFn: async (report: AttendanceReport) => {
-      await apiRequest("PATCH", `/api/attendance/${report.id}`, { status: "submitted" });
+      const res = await apiRequest("PATCH", `/api/attendance/${report.id}`, { status: "submitted" });
+      return res.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/attendance/${variables.id}`] });
       toast({
         title: "Success",
         description: "Report submitted successfully",
       });
+      if (data) handleEmailResponse(data);
     },
     onError: (error: any) => {
       toast({
@@ -1068,15 +1088,17 @@ export default function Attendance() {
 
   const requestCancellation = useMutation({
     mutationFn: async (reportId: number) => {
-      await apiRequest("POST", `/api/attendance/${reportId}/request-cancel`);
+      const res = await apiRequest("POST", `/api/attendance/${reportId}/request-cancel`);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setCancelDialogReportId(null); // Close the dialog
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
       toast({
         title: "Success",
         description: "Cancellation request sent to admin",
       });
+      if (data) handleEmailResponse(data);
     },
     onError: (error: any) => {
       toast({
@@ -1090,15 +1112,17 @@ export default function Attendance() {
   // Request Recall mutation
   const requestRecall = useMutation({
     mutationFn: async (reportId: number) => {
-      await apiRequest("POST", `/api/attendance/${reportId}/request-recall`);
+      const res = await apiRequest("POST", `/api/attendance/${reportId}/request-recall`);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setRecallDialogReportId(null);
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
       toast({
         title: "Success",
         description: "Recall request sent to admin",
       });
+      if (data) handleEmailResponse(data);
     },
     onError: (error: any) => {
       toast({
