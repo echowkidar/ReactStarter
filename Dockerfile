@@ -12,10 +12,14 @@ RUN npm run build
 FROM node:20-alpine
 
 WORKDIR /app
-COPY --from=builder /app /app
 
+# Sirf required files copy karo (clean image)
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+
+# Production dependencies only
 RUN npm install --omit=dev
 
 EXPOSE 5001
 
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]
