@@ -394,4 +394,49 @@ export async function sendAttendanceReminder(
       message: String(error)
     };
   }
-} 
+}
+
+export async function sendNoticeEmail(
+  email: string,
+  departmentName: string,
+  notice: { subject: string; message: string; imageUrl?: string | null; createdBy: string; }
+) {
+  try {
+    const isValidDomain = await validateEmailDomain(email);
+    if (!isValidDomain) {
+      return { success: false, error: 'wrong_email', message: 'Email domain does not exist' };
+    }
+
+    const htmlContent = `
+      <h2 style="color: #2563eb;">New Notice from Admin</h2>
+      <p>Dear ${departmentName},</p>
+      <p>A new notice has been issued by <strong>${notice.createdBy}</strong>.</p>
+      <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0;">
+        <h3 style="margin-top: 0;">${notice.subject}</h3>
+        <p style="white-space: pre-wrap; font-size: 14px;">${notice.message}</p>
+        ${notice.imageUrl ? `<p><a href="${notice.imageUrl}" style="color: #2563eb; font-weight: bold; text-decoration: underline;">View Attached Document/Image</a></p>` : ''}
+      </div>
+      <p>Please log in to the Attendance Portal to view all notices under "Notice Board".</p>
+    `;
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"AMU Salary Section" <noreply@amu.ac.in>',
+      to: email,
+      subject: `Notice: ${notice.subject}`,
+      html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+            ${htmlContent}
+            <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+            <p style="color: #666; font-size: 12px; text-align: center;">This is an automated notification from the AMU Salary Section.</p>
+          </div>
+        `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Notice email sent to ${email}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error(`Failed to send notice email to ${email}:`, error);
+    return { success: false, error: 'send_failed', message: String(error) };
+  }
+}

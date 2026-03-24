@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  salarysection:
+    build: .
+    container_name: salarysection
+    restart: always
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env

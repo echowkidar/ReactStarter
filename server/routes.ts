@@ -16,10 +16,11 @@ import {
   DepartmentName,
   InsertDepartment,
   InsertDepartmentName,
-  attendanceEntries
+  attendanceEntries,
+  departments
 } from "../shared/schema";
 import fs from "fs";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and, isNotNull, inArray } from "drizzle-orm";
 import { db } from "./db";
 
 // Helper: Check if employee's current-month attendance BLOCKS transfer.
@@ -77,7 +78,7 @@ async function checkEmployeeAttendanceBlocksTransfer(
   return { blocked: false };
 }
 import { v4 as uuid } from "uuid";
-import { setupTestEmailAccount, sendPasswordResetEmail, sendAttendanceNotification } from "./emailService";
+import { setupTestEmailAccount, sendPasswordResetEmail, sendAttendanceNotification, sendNoticeEmail } from "./emailService";
 
 // Add custom type for Request with session
 interface RequestWithSession extends Request {
@@ -4059,6 +4060,47 @@ export async function registerRoutes(app: Express) {
         createdBy,
         departmentIds: departmentIds ? JSON.parse(departmentIds) : [],
       });
+
+      // Send emails if the checkbox was checked
+      if (req.body.sendEmail === 'true') {
+        const sendEmailsAsync = async () => {
+          try {
+            const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+            let targetDepartments: any[] = [];
+
+            if (isGlobal === 'true' || isGlobal === true) {
+              // Get all permitted departments that have valid emails
+              targetDepartments = await db.query.departments.findMany({
+                where: and(isNotNull(departments.email), sql`TRIM(${departments.email}) != ''`)
+              });
+            } else if (departmentIds) {
+              const ids = JSON.parse(departmentIds);
+              if (ids.length > 0) {
+                targetDepartments = await db.query.departments.findMany({
+                  where: and(sql`id = ANY(${ids})`, isNotNull(departments.email), sql`TRIM(${departments.email}) != ''`)
+                });
+              }
+            }
+
+            for (const dept of targetDepartments) {
+              if (dept.email && dept.email.includes('@')) {
+                await sendNoticeEmail(dept.email, dept.name, {
+                  subject: notice.subject,
+                  message: notice.message,
+                  imageUrl: notice.imageUrl || null,
+                  createdBy: notice.createdBy
+                });
+                await delay(2000); // 2-sec wait for rate limiting
+              }
+            }
+          } catch (e) {
+            console.error("Failed to asynchronously send notice bulk emails", e);
+          }
+        };
+
+        // Fire and forget (don't await) to instantly return HTTP 201
+        sendEmailsAsync();
+      }
 
       res.status(201).json(notice);
     } catch (error) {

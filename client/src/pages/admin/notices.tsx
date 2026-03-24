@@ -50,6 +50,7 @@ export default function AdminNotices() {
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
     const [isGlobal, setIsGlobal] = useState(true);
+    const [sendEmail, setSendEmail] = useState(false);
     const [selectedDepts, setSelectedDepts] = useState<number[]>([]);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
@@ -80,6 +81,7 @@ export default function AdminNotices() {
             setImageFile(null);
             setSelectedDepts([]);
             setIsGlobal(true);
+            setSendEmail(false);
             formRef.current?.reset();
             toast({
                 title: "Notice Sent",
@@ -122,6 +124,9 @@ export default function AdminNotices() {
         formData.append("message", message);
         formData.append("isGlobal", String(isGlobal));
         formData.append("createdBy", adminUsername);
+        if (sendEmail) {
+            formData.append("sendEmail", "true");
+        }
 
         if (!isGlobal) {
             formData.append("departmentIds", JSON.stringify(selectedDepts));
@@ -270,6 +275,18 @@ export default function AdminNotices() {
                             </div>
 
                             <div className="space-y-4">
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="sendEmail"
+                                        checked={sendEmail}
+                                        onCheckedChange={(checked) => setSendEmail(checked as boolean)}
+                                    />
+                                    <Label htmlFor="sendEmail" className="flex items-center gap-2">
+                                        <Send className="h-4 w-4" />
+                                        Send Notice via Email
+                                    </Label>
+                                </div>
+
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
                                         id="isGlobal"
