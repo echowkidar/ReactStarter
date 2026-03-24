@@ -3,7 +3,6 @@ FROM node:20 AS builder
 
 WORKDIR /app
 
-# Install required build tools (IMPORTANT)
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
@@ -28,7 +27,8 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 
-RUN npm install --omit=dev
+
+RUN npm install
 
 EXPOSE 5001
 
