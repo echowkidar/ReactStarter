@@ -3704,40 +3704,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Cleanup routine for old files
-  const cleanupOldFiles = () => {
-    try {
-      const files = fs.readdirSync(uploadDestination);
 
-      // Find files older than 30 days that might be orphaned
-      const now = Date.now();
-      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-
-      // Check all files for age
-      files.forEach(file => {
-        const filePath = path.join(uploadDestination, file);
-        try {
-          const stats = fs.statSync(filePath);
-          const fileCreationTime = stats.birthtime.getTime();
-
-          // Delete very old files (orphaned files)
-          if (now - fileCreationTime > THIRTY_DAYS) {
-            fs.unlinkSync(filePath);
-          }
-        } catch (err) {
-          console.error(`Error checking file ${file}:`, err);
-        }
-      });
-    } catch (error) {
-      console.error("Error during cleanup:", error);
-    }
-  };
-
-  // Run cleanup every 12 hours
-  setInterval(cleanupOldFiles, 12 * 60 * 60 * 1000);
-
-  // Run cleanup on startup
-  setTimeout(cleanupOldFiles, 5 * 60 * 1000); // Wait 5 minutes after server start
 
   // ========== ATTENDANCE PERMISSION ROUTES (Super Admin Only) ==========
 
