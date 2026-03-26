@@ -1143,6 +1143,7 @@ export default function AttendanceReports() {
           saName = saObj.label.split(" - ")[1];
         }
       }
+      saName = (saName || "").substring(0, 20);
 
       const np = (nfdate && ntdate) ? "NP" : "";
       const fp = (ffdate && ftdate) ? "FP" : "";
@@ -1239,6 +1240,7 @@ export default function AttendanceReports() {
           saName = saObj.label.split(' - ')[1];
         }
       }
+      saName = (saName || "").substring(0, 20);
 
       if (entry.period !== "MISSING") {
         const [fromStr, toStr] = entry.period.split(" to ");
