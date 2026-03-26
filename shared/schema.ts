@@ -101,6 +101,7 @@ export const attendanceEntries = pgTable("attendance_entries", {
   remarks: text("remarks"),
   verified: boolean("verified").notNull().default(false),
   adminNoting: text("admin_noting"),
+  exportedToOracleAt: timestamp("exported_to_oracle_at"),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });

@@ -14,9 +14,16 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +31,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin, ChevronDown, Filter } from "lucide-react";
+import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin, ChevronDown, Filter, CalendarIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +57,8 @@ type AttendanceEntry = {
   verified?: boolean;
   adminNoting?: string;
   admin_noting?: string;
+  exported_to_oracle_at?: string;
+  exportedToOracleAt?: string;
   employee?: {
     id: number;
     departmentId: number;
@@ -327,7 +336,14 @@ export default function AttendanceReports() {
   const [designationFilter, setDesignationFilter] = useState<string[]>([]);
   const [analysisFilter, setAnalysisFilter] = useState<string[]>([]);
   const [verifiedFilter, setVerifiedFilter] = useState<"all" | "verified" | "unverified">("all");
+  const [exportFilter, setExportFilter] = useState<"all" | "exported" | "not_exported">("all");
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+
+  // Permission checks for Export button and date editing
+  const adminData = useMemo(() => JSON.parse(localStorage.getItem("admin") || "{}"), []);
+  const adminEmail = localStorage.getItem("adminEmail") || adminData.email || "";
+  const isSuperAdmin = adminData.role === "super" || adminEmail === "admin@amu.ac.in";
+  const canExport = isSuperAdmin || adminEmail === "salary@amu.ac.in" || adminEmail === "nasir@amu.ac.in";
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -384,6 +400,66 @@ export default function AttendanceReports() {
     }
   }, []);
 
+  // Parse current month/year from monthFilter for export-status API
+  const { apiMonth, filterYear } = useMemo(() => {
+    const selectedMonth = Array.isArray(monthFilter) && monthFilter.length > 0 ? monthFilter[0] : null;
+    if (selectedMonth) {
+      const [monthName, yearStr] = selectedMonth.split(' ');
+      if (monthName && yearStr) {
+        const monthDate = new Date(`${monthName} 1, 2000`);
+        return { apiMonth: (monthDate.getMonth() + 1).toString(), filterYear: yearStr };
+      }
+    }
+    return { apiMonth: null, filterYear: null };
+  }, [monthFilter]);
+
+  // Fetch export status for current month (for button color)
+  const { data: exportStatus } = useQuery<{ latestExportDate: string | null; exportedCount: number }>({
+    queryKey: ["/api/admin/attendance/export-status", apiMonth, filterYear],
+    queryFn: async () => {
+      let url = "/api/admin/attendance/export-status";
+      if (apiMonth && filterYear) {
+        url += `?month=${apiMonth}&year=${filterYear}`;
+      }
+      const res = await apiRequest("GET", url);
+      return res.json();
+    },
+    enabled: !!apiMonth && !!filterYear,
+  });
+
+  const hasExportedData = (exportStatus?.exportedCount || 0) > 0;
+
+  // Mark entries as exported mutation
+  const markExported = useMutation({
+    mutationFn: async (entryIds: number[]) => {
+      const res = await apiRequest('POST', '/api/admin/attendance/mark-exported', { entryIds });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance/export-status"] });
+      toast({ title: "Export Recorded", description: "Records marked as exported to Oracle." });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to mark entries as exported." });
+    },
+  });
+
+  // Update export date mutation (super admin only)
+  const updateExportDate = useMutation({
+    mutationFn: async ({ entryId, exportDate }: { entryId: number; exportDate: string | null }) => {
+      const res = await apiRequest('PATCH', `/api/admin/attendance/entry/${entryId}/export-date`, { exportDate });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance/export-status"] });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update export date." });
+    },
+  });
+
   // Fetch attendance reports - filtered by month/year if selected
   const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
     queryKey: ["/api/admin/attendance", monthFilter],
@@ -414,18 +490,6 @@ export default function AttendanceReports() {
       report.status === "cancel_requested"
     ),
   });
-
-  const { apiMonth, filterYear } = useMemo(() => {
-    const selectedMonth = Array.isArray(monthFilter) && monthFilter.length > 0 ? monthFilter[0] : null;
-    if (selectedMonth) {
-      const [monthName, yearStr] = selectedMonth.split(' ');
-      if (monthName && yearStr) {
-        const monthDate = new Date(`${monthName} 1, 2000`);
-        return { apiMonth: (monthDate.getMonth() + 1).toString(), filterYear: yearStr };
-      }
-    }
-    return { apiMonth: null, filterYear: null };
-  }, [monthFilter]);
 
   const { data: missingEmployees = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/all-missing-employees", apiMonth, filterYear],
@@ -500,6 +564,7 @@ export default function AttendanceReports() {
       adminNoting: string;
       employeeRemarks: string;
       employeeDbId: number;
+      exportedToOracleAt: string | null;
     }> = [];
 
     reports.forEach(report => {
@@ -544,6 +609,7 @@ export default function AttendanceReports() {
                   employeeRemarks: entry.employee?.remarks || "",
                   employeeDbId: entry.employee?.id || 0,
                   verified: entry.verified || false,
+                  exportedToOracleAt: entry.exported_to_oracle_at || entry.exportedToOracleAt || null,
                 });
               });
             } catch (error) {
@@ -817,6 +883,7 @@ export default function AttendanceReports() {
           adminNoting: "",
           employeeRemarks: "",
           employeeDbId: emp.id,
+          exportedToOracleAt: null,
         }));
 
         // Apply basic filters to these missing employees too, so they respect department/search filtering
@@ -872,8 +939,17 @@ export default function AttendanceReports() {
       });
     }
 
+    if (exportFilter !== "all") {
+      result = result.filter(entry => {
+        const isExported = !!entry.exportedToOracleAt;
+        if (exportFilter === "exported") return isExported;
+        if (exportFilter === "not_exported") return !isExported;
+        return true;
+      });
+    }
+
     return result;
-  }, [allEntries, missingEmployees, departments, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, analysisFilter, verifiedFilter]);
+  }, [allEntries, missingEmployees, departments, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, analysisFilter, verifiedFilter, exportFilter]);
 
   // Process entries to show department name only once
   const processedEntries = useMemo(() => {
@@ -957,6 +1033,26 @@ export default function AttendanceReports() {
 
         const nameCompare = a.employeeName.localeCompare(b.employeeName);
         return sortConfig.direction === 'asc' ? nameCompare : -nameCompare;
+      }
+
+      // If sorting by Export to Oracle on is active
+      if (sortConfig && sortConfig.key === 'exportedAt') {
+        const dateA = a.exportedToOracleAt ? new Date(a.exportedToOracleAt).getTime() : 0;
+        const dateB = b.exportedToOracleAt ? new Date(b.exportedToOracleAt).getTime() : 0;
+        const hasA = !!a.exportedToOracleAt;
+        const hasB = !!b.exportedToOracleAt;
+
+        if (hasA !== hasB) {
+          return sortConfig.direction === 'asc' ? (hasA ? -1 : 1) : (hasA ? 1 : -1);
+        }
+        if (hasA && hasB) {
+          const comp = dateA - dateB;
+          if (comp !== 0) return sortConfig.direction === 'asc' ? comp : -comp;
+        }
+
+        const deptCompare = a.departmentName.localeCompare(b.departmentName);
+        if (deptCompare !== 0) return sortConfig.direction === 'asc' ? deptCompare : -deptCompare;
+        return a.employeeName.localeCompare(b.employeeName);
       }
 
       // Default sorting: Department -> Month -> Employee Name
@@ -1197,6 +1293,12 @@ export default function AttendanceReports() {
     let fileName = 'ATTENDANCE';
     if (monthFilter.length > 0) fileName += `_${monthFilter[0].replace(/\s+/g, '_')}`;
     XLSX.writeFile(wb, `${fileName}.xls`, { bookType: 'xls' });
+
+    // Mark all visible entries as exported
+    const entryIds = [...new Set(processedEntries.map(e => e.entryId).filter(id => id > 0))];
+    if (entryIds.length > 0) {
+      markExported.mutate(entryIds);
+    }
   };
 
   // Oracle T_ATTEND format export — semicolon CSV matching T_ATTEND.ctl
@@ -1303,6 +1405,12 @@ export default function AttendanceReports() {
     a.download = `${fileName}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+
+    // Mark all visible entries as exported
+    const entryIds = [...new Set(processedEntries.map(e => e.entryId).filter(id => id > 0))];
+    if (entryIds.length > 0) {
+      markExported.mutate(entryIds);
+    }
   };
 
   if (isLoading) return <Loading />;
@@ -1329,28 +1437,33 @@ export default function AttendanceReports() {
                   <FileDown className="h-4 w-4" />
                   Download Excel
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2 text-blue-700 border-blue-200 hover:bg-blue-50"
-                    >
-                      <FileDown className="h-4 w-4" />
-                      Export
-                      <ChevronDown className="h-3 w-3 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={exportOracleXlsx} className="cursor-pointer">
-                      <FileDown className="h-4 w-4 mr-2 text-green-600" />
-                      Export as Excel (.xls)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={exportOracleExcel} className="cursor-pointer">
-                      <FileDown className="h-4 w-4 mr-2 text-blue-600" />
-                      Export as CSV
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {canExport && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant={hasExportedData ? "default" : "outline"}
+                        className={`flex items-center gap-2 ${hasExportedData
+                          ? 'bg-green-600 hover:bg-green-700 text-white border-green-600'
+                          : 'text-blue-700 border-blue-200 hover:bg-blue-50'
+                          }`}
+                      >
+                        <FileDown className="h-4 w-4" />
+                        Export
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={exportOracleXlsx} className="cursor-pointer">
+                        <FileDown className="h-4 w-4 mr-2 text-green-600" />
+                        Export as Excel (.xls)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={exportOracleExcel} className="cursor-pointer">
+                        <FileDown className="h-4 w-4 mr-2 text-blue-600" />
+                        Export as CSV
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => setLocation("/admin/missing-employees")}
@@ -1530,12 +1643,12 @@ export default function AttendanceReports() {
                 <MultiSelect
                   options={[
                     { label: "Missing Employees", value: "missing_employees" },
-                    { label: "Multiple Entries", value: "multiple_entries" },
-                    { label: "Full Month Period", value: "full_month" },
                     { label: "Partial/Excess Period", value: "partial_month" },
                     { label: "Include D/W Full Month", value: "daily_wager_full_month" },
                     { label: "Include Intern Full Month", value: "intern_full_month" },
                     { label: "Exclude Guest Teachers", value: "exclude_guests" },
+                    { label: "Multiple Entries", value: "multiple_entries" },
+                    { label: "Full Month Period", value: "full_month" },
                   ]}
                   selected={analysisFilter}
                   onChange={(values) => {
@@ -1618,6 +1731,44 @@ export default function AttendanceReports() {
                         <ArrowUpDown className="h-3 w-3" />
                       </div>
                     </TableHead>
+                    <TableHead className="min-w-[170px]">
+                      <div className="flex items-center justify-between">
+                        <div
+                          className="cursor-pointer hover:bg-muted/50 flex items-center gap-1"
+                          onClick={() => handleSort('exportedAt')}
+                        >
+                          Export to Oracle
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="-mr-3 h-8 w-8 p-0" title="Filter by Export Status">
+                              <Filter className={`h-4 w-4 ${exportFilter !== 'all' ? 'text-green-600 fill-green-100' : ''}`} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setExportFilter('all')}>
+                              <div className="flex items-center">
+                                {exportFilter === 'all' && <Check className="mr-2 h-4 w-4" />}
+                                <span className={exportFilter !== 'all' ? 'ml-6' : ''}>All</span>
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setExportFilter('exported')}>
+                              <div className="flex items-center text-green-600">
+                                {exportFilter === 'exported' && <Check className="mr-2 h-4 w-4" />}
+                                <span className={exportFilter !== 'exported' ? 'ml-6' : ''}>Exported</span>
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setExportFilter('not_exported')}>
+                              <div className="flex items-center text-gray-600">
+                                {exportFilter === 'not_exported' && <Check className="mr-2 h-4 w-4" />}
+                                <span className={exportFilter !== 'not_exported' ? 'ml-6' : ''}>Not Exported</span>
+                              </div>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableHead>
                     <TableHead className="min-w-[140px]">
                       <div className="flex items-center justify-between">
                         <span>Actions</span>
@@ -1655,7 +1806,7 @@ export default function AttendanceReports() {
                 <TableBody>
                   {paginatedEntries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-8">
+                      <TableCell colSpan={12} className="text-center py-8">
                         {searchTerm || departmentFilter.length > 0 || monthFilter.length > 0 || salaryRegisterFilter.length > 0
                           ? "No attendance entries found matching your search criteria."
                           : "No attendance entries found."}
@@ -1663,7 +1814,7 @@ export default function AttendanceReports() {
                     </TableRow>
                   ) : (
                     paginatedEntries.map((entry, index) => (
-                      <TableRow key={index}>
+                      <TableRow key={index} className={entry.exportedToOracleAt ? 'bg-green-50' : ''}>
                         {/* <TableCell>{entry.showMonth ? entry.month : ""}</TableCell> */}
                         <TableCell className="font-medium">
                           {entry.showDepartment ? entry.departmentName : ""}
@@ -1685,6 +1836,49 @@ export default function AttendanceReports() {
                             monthFilter={monthFilter}
                             toast={toast}
                           />
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {entry.exportedToOracleAt ? (() => {
+                            const d = new Date(entry.exportedToOracleAt!);
+                            const formatted = `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
+                            if (isSuperAdmin) {
+                              return (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="text-green-700 font-medium hover:underline cursor-pointer flex items-center gap-1" title="Click to edit date">
+                                      {formatted}
+                                      <CalendarIcon className="h-3 w-3" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={d}
+                                      onSelect={(date) => {
+                                        if (date) {
+                                          updateExportDate.mutate({ entryId: entry.entryId, exportDate: date.toISOString() });
+                                        }
+                                      }}
+                                      initialFocus
+                                    />
+                                    <div className="p-2 border-t bg-slate-50">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 h-8"
+                                        onClick={() => updateExportDate.mutate({ entryId: entry.entryId, exportDate: null })}
+                                      >
+                                        Remove Date
+                                      </Button>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              );
+                            }
+                            return <span className="text-green-700 font-medium">{formatted}</span>;
+                          })() : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">

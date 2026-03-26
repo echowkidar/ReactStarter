@@ -2592,6 +2592,101 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Mark attendance entries as exported to Oracle
+  app.post("/api/admin/attendance/mark-exported", verifyAdminSession, async (req, res) => {
+    try {
+      const { entryIds } = req.body;
+      if (!entryIds || !Array.isArray(entryIds) || entryIds.length === 0) {
+        return res.status(400).json({ message: "entryIds array is required" });
+      }
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const now = new Date();
+      const result = await db.execute(sql`
+        UPDATE attendance_entries 
+        SET exported_to_oracle_at = ${now}
+        WHERE id IN (${sql.join(entryIds.map((id: number) => sql`${id}`), sql`, `)})
+        RETURNING id
+      `);
+
+      res.json({ exportedAt: now.toISOString(), count: result.rows.length });
+    } catch (error) {
+      console.error("Error marking entries as exported:", error);
+      res.status(500).json({ message: "Failed to mark entries as exported" });
+    }
+  });
+
+  // Get export status for a specific month (for button color + admin popup)
+  app.get("/api/admin/attendance/export-status", async (req, res) => {
+    try {
+      const month = parseInt(req.query.month as string);
+      const year = parseInt(req.query.year as string);
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      let result;
+      if (!isNaN(month) && !isNaN(year)) {
+        result = await db.execute(sql`
+          SELECT MAX(ae.exported_to_oracle_at) as latest_export_date,
+                 COUNT(CASE WHEN ae.exported_to_oracle_at IS NOT NULL THEN 1 END)::int as exported_count
+          FROM attendance_entries ae
+          JOIN attendance_reports ar ON ae.report_id = ar.id
+          WHERE ar.month = ${month} AND ar.year = ${year}
+            AND ar.status IN ('sent', 'cancel_requested')
+        `);
+      } else {
+        result = await db.execute(sql`
+          SELECT MAX(ae.exported_to_oracle_at) as latest_export_date,
+                 COUNT(CASE WHEN ae.exported_to_oracle_at IS NOT NULL THEN 1 END)::int as exported_count
+          FROM attendance_entries ae
+          JOIN attendance_reports ar ON ae.report_id = ar.id
+          WHERE ar.status IN ('sent', 'cancel_requested')
+        `);
+      }
+
+      const row = result.rows[0] as any;
+      res.json({
+        latestExportDate: row?.latest_export_date || null,
+        exportedCount: row?.exported_count || 0
+      });
+    } catch (error) {
+      console.error("Error fetching export status:", error);
+      res.status(500).json({ message: "Failed to fetch export status" });
+    }
+  });
+
+  // Super admin: update export date for a single entry
+  app.patch("/api/admin/attendance/entry/:entryId/export-date", verifyAdminSession, async (req, res) => {
+    try {
+      const entryId = Number(req.params.entryId);
+      const { exportDate } = req.body; // ISO string or null
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const dateValue = exportDate ? new Date(exportDate) : null;
+
+      const result = await db.execute(sql`
+        UPDATE attendance_entries 
+        SET exported_to_oracle_at = ${dateValue}
+        WHERE id = ${entryId}
+        RETURNING id, exported_to_oracle_at
+      `);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Entry not found" });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error updating export date:", error);
+      res.status(500).json({ message: "Failed to update export date" });
+    }
+  });
+
   // Update permanent remarks for an employee (from attendance reports page pin button)
   app.patch("/api/employees/:employeeId/remarks", verifyAdminSession, async (req, res) => {
     try {

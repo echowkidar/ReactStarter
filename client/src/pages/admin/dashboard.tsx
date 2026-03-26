@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -299,6 +299,18 @@ export default function AdminDashboard() {
     },
     refetchInterval: 120000,
   });
+
+  // Fetch export status for current month to show popup if data is exported
+  const { data: exportStatus } = useQuery<{ latestExportDate: string | null; exportedCount: number }>({
+    queryKey: ["/api/admin/attendance/export-status", apiMonth, filterYear],
+    queryFn: async () => {
+      const url = `/api/admin/attendance/export-status?month=${apiMonth}&year=${filterYear}`;
+      const response = await apiRequest("GET", url);
+      return response.json();
+    },
+  });
+
+  const [showExportPopup, setShowExportPopup] = useState(true); // initially true, auto-hides if no data
 
   // Calculate previous month/year for comparison
   const prevApiMonth = apiMonth === 1 ? 12 : apiMonth - 1;
@@ -2313,6 +2325,44 @@ export default function AdminDashboard() {
                 ))
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Oracle Export Notification Popup */}
+        <Dialog open={showExportPopup && !!exportStatus?.latestExportDate} onOpenChange={setShowExportPopup}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-green-700">
+                <AlertCircle className="h-5 w-5" />
+                Oracle Export Notification
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-gray-700">
+                Attendance data for the selected month has been exported to Oracle on:
+              </p>
+              <p className="text-xl font-semibold text-green-600 mt-2 text-center bg-green-50 p-3 rounded-lg border border-green-100">
+                {exportStatus?.latestExportDate ? (() => {
+                  const d = new Date(exportStatus.latestExportDate);
+                  const dateStr = `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+                  let hours = d.getHours();
+                  const ampm = hours >= 12 ? 'PM' : 'AM';
+                  hours = hours % 12;
+                  hours = hours ? hours : 12; // the hour '0' should be '12'
+                  const minutes = d.getMinutes().toString().padStart(2, '0');
+                  const timeStr = `${hours}:${minutes} ${ampm}`;
+                  return `${dateStr} at ${timeStr}`;
+                })() : ""}
+              </p>
+              <p className="text-sm text-gray-500 mt-4 text-center">
+                Total {exportStatus?.exportedCount} records have been exported.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setShowExportPopup(false)} className="w-full bg-green-600 hover:bg-green-700">
+                OK, Got it
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

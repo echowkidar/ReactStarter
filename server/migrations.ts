@@ -195,6 +195,11 @@ export async function runMigrations() {
       ALTER TABLE department_contacts ADD COLUMN IF NOT EXISTS contact_email TEXT;
     `);
 
+    // Add exported_to_oracle_at column to attendance_entries table for Oracle export tracking
+    await db.execute(sql`
+      ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS exported_to_oracle_at TIMESTAMP;
+    `);
+
     console.log("Database migrations completed successfully");
   } catch (error) {
     console.error("Error running migrations:", error);
