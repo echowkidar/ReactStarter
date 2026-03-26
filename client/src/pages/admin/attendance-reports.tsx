@@ -1094,20 +1094,19 @@ export default function AttendanceReports() {
   // Oracle T_ATTEND Excel export — matches export.xls format (Excel serial dates)
   const exportOracleXlsx = () => {
     // Convert DD-MM-YY date string to Excel serial number
-    const toExcelSerial = (dateStr: string): number | null => {
-      if (!dateStr) return null;
-      const parts = dateStr.trim().split('-');
+    const formatDateHyphen = (dateStr: string): string => {
+      if (!dateStr) return "";
+      const parts = dateStr.trim().split("-");
+      if (parts.length === 0) return "";
+      // Match DD-MM-YYYY or DD-MM-YY
       if (parts.length === 3) {
-        const day = parseInt(parts[0]);
-        const month = parseInt(parts[1]) - 1;
-        let year = parseInt(parts[2]);
-        if (year < 100) year += 2000;
-        const d = new Date(year, month, day);
-        // Excel serial: days since 1900-01-00 (with leap year bug)
-        const start = new Date(1899, 11, 30);
-        return Math.round((d.getTime() - start.getTime()) / 86400000);
+        const d = parts[0].padStart(2, "0");
+        const m = parts[1].padStart(2, "0");
+        let y = parts[2];
+        if (y.length === 2) y = `20${y}`;
+        return `${d}-${m}-${y}`;
       }
-      return null;
+      return "";
     };
 
     // CTL column order (same as export.xls)
@@ -1119,83 +1118,77 @@ export default function AttendanceReports() {
     ];
 
     const dataRows = processedEntries.map(entry => {
-      let ffSerial: number | null = null;
-      let ftSerial: number | null = null;
-      let nfSerial: number | null = null;
-      let ntSerial: number | null = null;
+      let ffdate = "";
+      let ftdate = "";
+      let nfdate = "";
+      let ntdate = "";
+
+      if (entry.period !== "MISSING") {
+        const [fromStr, toStr] = entry.period.split(" to ");
+        ffdate = formatDateHyphen(fromStr || "");
+        ftdate = formatDateHyphen(toStr || "");
+      } else {
+        const m = entry.monthNum.toString().padStart(2, "0");
+        const y = entry.yearNum.toString();
+        const lastDay = new Date(entry.yearNum, entry.monthNum, 0).getDate().toString().padStart(2, "0");
+        nfdate = `01-${m}-${y}`;
+        ntdate = `${lastDay}-${m}-${y}`;
+      }
 
       // Map salary assistant code to name
       let saName = entry.salaryAsstt;
       if (saName) {
         const saObj = salaryAssistants.find(s => s.value === saName);
-        if (saObj && saObj.label.includes(' - ')) {
-          saName = saObj.label.split(' - ')[1];
+        if (saObj && saObj.label.includes(" - ")) {
+          saName = saObj.label.split(" - ")[1];
         }
       }
 
-      if (entry.period !== 'MISSING') {
-        const [fromStr, toStr] = entry.period.split(' to ');
-        ffSerial = toExcelSerial(fromStr || '');
-        ftSerial = toExcelSerial(toStr || '');
-      } else {
-        // Missing employee: period is blank, but NFDATE and NTDATE should be the whole month
-        const daysInMonth = new Date(entry.yearNum, entry.monthNum, 0).getDate();
-        const startD = new Date(entry.yearNum, entry.monthNum - 1, 1);
-        const endD = new Date(entry.yearNum, entry.monthNum - 1, daysInMonth);
-        const excelEpoch = new Date(1899, 11, 30);
-        nfSerial = Math.round((startD.getTime() - excelEpoch.getTime()) / 86400000);
-        ntSerial = Math.round((endD.getTime() - excelEpoch.getTime()) / 86400000);
-      }
+      const np = (nfdate && ntdate) ? "NP" : "";
+      const fp = (ffdate && ftdate) ? "FP" : "";
+      const remarks = (entry.remarks || "").substring(0, 30);
 
       return [
-        entry.employeeName,  // NAME
-        null,                // NP
-        nfSerial,            // NFDATE
-        ntSerial,            // NTDATE
-        'FP',                // FP
-        ffSerial,            // FFDATE (Excel serial)
-        ftSerial,            // FTDATE (Excel serial)
-        'HP',                // HP
-        null,                // HFDATE
-        null,                // HTDATE
-        entry.days,          // FDAYS
-        0,                   // HDAYS
-        null,                // NDAYS
-        '',                  // DEPT
-        entry.employeeId,    // ECODE
-        saName,              // D_AST
-        entry.remarks || '', // REMARK1
-        null,                // PF
-        entry.monthNum,      // MONTH
-        entry.yearNum,       // YEAR
-        '0',                 // RECFLAG
-        '',                  // DUES
-        1,                   // SAL_TYPE
-        null,                // BRK_DAYS
-        'N',                 // SINGLE_FLAG
-        'Y',                 // PAY_RELEASE_FLAG
-        null,                // BRK_DAYS_FR
-        null,                // BRK_DAYS_TO
-        null,                // TERM_APP
-        '',                  // OLD_DESIG
-        null,                // OLD_BASIC
+        entry.employeeName,  // NAME (0)
+        np,                  // NP (1)
+        nfdate,              // NFDATE (2)
+        ntdate,              // NTDATE (3)
+        fp,                  // FP (4)
+        ffdate,              // FFDATE (5)
+        ftdate,              // FTDATE (6)
+        "",                  // HP (7)
+        "",                  // HFDATE (8)
+        "",                  // HTDATE (9)
+        entry.days,          // FDAYS (10)
+        0,                   // HDAYS (11)
+        null,                // NDAYS (12)
+        "",                  // DEPT (13)
+        entry.employeeId,    // ECODE (14)
+        saName,              // D_AST (15)
+        remarks,             // REMARK1 (16)
+        null,                // PF (17)
+        entry.monthNum,      // MONTH (18)
+        entry.yearNum,       // YEAR (19)
+        "0",                 // RECFLAG (20)
+        "",                  // DUES (21)
+        1,                   // SAL_TYPE (22)
+        null,                // BRK_DAYS (23)
+        "N",                 // SINGLE_FLAG (24)
+        "Y",                 // PAY_RELEASE_FLAG (25)
+        "",                  // BRK_DAYS_FR (26)
+        "",                  // BRK_DAYS_TO (27)
+        "",                  // TERM_APP (28)
+        "",                  // OLD_DESIG (29)
+        null,                // OLD_BASIC (30)
       ];
     });
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
 
-    // Mark date columns as date format
-    const dateCols = [2, 3, 5, 6, 8, 9, 26, 27, 28]; // NFDATE,NTDATE,FFDATE,FTDATE,HFDATE,HTDATE,BRK_DAYS_FR,BRK_DAYS_TO,TERM_APP
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    for (let row = 1; row <= range.e.r; row++) {
-      dateCols.forEach(col => {
-        const addr = XLSX.utils.encode_cell({ r: row, c: col });
-        if (ws[addr] && ws[addr].v !== null && ws[addr].v !== undefined) {
-          ws[addr].t = 'n';
-          ws[addr].z = 'mm/dd/yyyy';
-        }
-      });
-    }
+    // Date format for the workbook (user wants ddmmyyyy strings)
+    // No specific Excel date marking needed if they are strings.
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    // Just ensure names and order are exactly what's requested.
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'ATTENDANCE');
@@ -1209,26 +1202,25 @@ export default function AttendanceReports() {
   const exportOracleExcel = () => {
     // Oracle date format: MM/DD/YYYY HH24:MI:SS
     const toOracleDate = (dateStr: string): string => {
-      if (!dateStr) return 'NULL';
-      // Handle DD-MM-YY or DD-MM-YYYY format
-      const parts = dateStr.trim().split('-');
+      if (!dateStr) return "";
+      const parts = dateStr.trim().split("-");
       if (parts.length === 3) {
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        let year = parts[2];
-        if (year.length === 2) year = `20${year}`;
-        return `${month}/${day}/${year} 00:00:00`;
+        const d = parts[0].padStart(2, "0");
+        const m = parts[1].padStart(2, "0");
+        let y = parts[2];
+        if (y.length === 2) y = `20${y}`;
+        return `${d}-${m}-${y}`; // dd-mm-yyyy
       }
-      return 'NULL';
+      return "";
     };
 
     // Escape a value for semicolon CSV: wrap in quotes
     const q = (val: string | number | null | undefined): string => {
-      if (val === null || val === undefined || val === '') return '""';
+      if (val === null || val === undefined || val === "") return '""';
       return `"${String(val).replace(/"/g, '""')}"`;
     };
     const num = (val: number | null | undefined): string => {
-      if (val === null || val === undefined) return 'NULL';
+      if (val === null || val === undefined) return "";
       return String(val);
     };
 
@@ -1248,52 +1240,55 @@ export default function AttendanceReports() {
         }
       }
 
-      if (entry.period !== 'MISSING') {
-        const [fromStr, toStr] = entry.period.split(' to ');
-        ffdate = toOracleDate(fromStr || '');
-        ftdate = toOracleDate(toStr || '');
+      if (entry.period !== "MISSING") {
+        const [fromStr, toStr] = entry.period.split(" to ");
+        ffdate = toOracleDate(fromStr || "");
+        ftdate = toOracleDate(toStr || "");
       } else {
-        // Missing employee: MM/DD/YYYY 00:00:00 for NFDATE/NTDATE
-        const m = entry.monthNum.toString().padStart(2, '0');
+        const m = entry.monthNum.toString().padStart(2, "0");
         const y = entry.yearNum.toString();
-        const daysInMonth = new Date(entry.yearNum, entry.monthNum, 0).getDate().toString().padStart(2, '0');
-        nfdate = `${m}/01/${y} 00:00:00`;
-        ntdate = `${m}/${daysInMonth}/${y} 00:00:00`;
+        const lastDay = new Date(entry.yearNum, entry.monthNum, 0).getDate().toString().padStart(2, "0");
+        nfdate = `01-${m}-${y}`;
+        ntdate = `${lastDay}-${m}-${y}`;
       }
 
+      const np = (nfdate && ntdate) ? "NP" : "";
+      const fp = (ffdate && ftdate) ? "FP" : "";
+      const remarks = (entry.remarks || "").substring(0, 30);
+
       return [
-        q(entry.employeeName),
-        q(''),
-        nfdate === 'NULL' ? 'NULL' : q(nfdate),
-        ntdate === 'NULL' ? 'NULL' : q(ntdate),
-        q('FP'),
-        ffdate === 'NULL' ? 'NULL' : q(ffdate),
-        ftdate === 'NULL' ? 'NULL' : q(ftdate),
-        q('HP'),
-        'NULL',
-        'NULL',
-        num(entry.days),
-        '0',
-        'NULL',
-        q(''),
-        q(entry.employeeId),
-        q(saName),
-        q(entry.remarks || ''),
-        'NULL',
-        num(entry.monthNum),
-        num(entry.yearNum),
-        q('0'),
-        'NULL',
-        '1',
-        'NULL',
-        q('N'),
-        q('Y'),
-        'NULL',
-        'NULL',
-        'NULL',
-        q(''),
-        'NULL',
-      ].join(';');
+        q(entry.employeeName), // 0: NAME
+        q(np),                 // 1: NP
+        nfdate === "" ? '""' : q(nfdate), // 2: NFDATE
+        ntdate === "" ? '""' : q(ntdate), // 3: NTDATE
+        q(fp),                 // 4: FP
+        ffdate === "" ? '""' : q(ffdate), // 5: FFDATE
+        ftdate === "" ? '""' : q(ftdate), // 6: FTDATE
+        q(""),                 // 7: HP
+        '""',                  // 8: HFDATE
+        '""',                  // 9: HTDATE
+        num(entry.days),       // 10: FDAYS
+        "0",                   // 11: HDAYS
+        '""',                  // 12: NDAYS
+        q(""),                 // 13: DEPT
+        q(entry.employeeId),   // 14: ECODE
+        q(saName),             // 15: D_AST
+        q(remarks),            // 16: REMARK1
+        '""',                  // 17: PF
+        num(entry.monthNum),   // 18: MONTH
+        num(entry.yearNum),    // 19: YEAR
+        q("0"),                // 20: RECFLAG
+        '""',                  // 21: DUES
+        "1",                   // 22: SAL_TYPE
+        '""',                  // 23: BRK_DAYS
+        q("N"),                // 24: SINGLE_FLAG
+        q("Y"),                // 25: PAY_RELEASE_FLAG
+        '""',                  // 26: BRK_DAYS_FR
+        '""',                  // 27: BRK_DAYS_TO
+        '""',                  // 28: TERM_APP
+        q(""),                 // 29: OLD_DESIG
+        '""',                  // 30: OLD_BASIC
+      ].join(";");
     });
 
     const csvContent = lines.join('\r\n');
