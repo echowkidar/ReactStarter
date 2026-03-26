@@ -690,6 +690,7 @@ export default function AttendanceReports() {
       const wantsFull = analysisFilter.includes("full_month");
       const wantsPartial = analysisFilter.includes("partial_month");
       const wantsDailyWagerFull = analysisFilter.includes("daily_wager_full_month");
+      const wantsInternFull = analysisFilter.includes("intern_full_month");
       const excludeGuests = analysisFilter.includes("exclude_guests");
 
       // First, filter out Guest Teachers if requested
@@ -725,7 +726,7 @@ export default function AttendanceReports() {
           isMultiple = true;
         }
 
-        if (wantsFull || wantsPartial || wantsDailyWagerFull) {
+        if (wantsFull || wantsPartial || wantsDailyWagerFull || wantsInternFull) {
           const parts = entry.period.split(" to ");
           if (parts.length === 2) {
             const [startStr, endStr] = parts;
@@ -754,6 +755,13 @@ export default function AttendanceReports() {
                 employeeIdsToIncludeAll.add(entry.employeeId);
               }
             }
+            // Intern Full Month: check if designation contains "INTERN" and period is full month
+            if (wantsInternFull && isFullMonth) {
+              const desig = (entry.designation || "").toUpperCase();
+              if (desig.includes("INTERN")) {
+                employeeIdsToIncludeAll.add(entry.employeeId);
+              }
+            }
           } else if (wantsPartial) {
             isPartial = true;
           }
@@ -770,7 +778,7 @@ export default function AttendanceReports() {
       });
 
       // Include all entries for employees that matched the grouping criteria, OR specific full entries
-      if (wantsMultiple || wantsFull || wantsPartial || wantsDailyWagerFull) {
+      if (wantsMultiple || wantsFull || wantsPartial || wantsDailyWagerFull || wantsInternFull) {
         filteredResult = result.filter(entry =>
           employeeIdsToIncludeAll.has(entry.employeeId) || specificUniqueKeysToInclude.has(`${entry.entryId}-${entry.period}`)
         );
@@ -848,7 +856,7 @@ export default function AttendanceReports() {
         filteredResult = [...filteredResult, ...filteredMissing];
       } else {
         // Ensure if ONLY basic filters are selected, we don't accidentally wipe results
-        if (!wantsMultiple && !wantsFull && !wantsPartial && !wantsDailyWagerFull) {
+        if (!wantsMultiple && !wantsFull && !wantsPartial && !wantsDailyWagerFull && !wantsInternFull) {
           filteredResult = result;
         }
       }
@@ -1529,6 +1537,7 @@ export default function AttendanceReports() {
                     { label: "Full Month Period", value: "full_month" },
                     { label: "Partial/Excess Period", value: "partial_month" },
                     { label: "Include D/W Full Month", value: "daily_wager_full_month" },
+                    { label: "Include Intern Full Month", value: "intern_full_month" },
                     { label: "Exclude Guest Teachers", value: "exclude_guests" },
                   ]}
                   selected={analysisFilter}
