@@ -2339,7 +2339,7 @@ export default function AdminDashboard() {
             </DialogHeader>
             <div className="py-4">
               <p className="text-gray-700">
-                Attendance data for the selected month has been exported to Oracle on:
+                Attendance data of this month has been exported to Oracle on:
               </p>
               <p className="text-xl font-semibold text-green-600 mt-2 text-center bg-green-50 p-3 rounded-lg border border-green-100">
                 {exportStatus?.latestExportDate ? (() => {
