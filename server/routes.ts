@@ -305,7 +305,11 @@ export async function registerRoutes(app: Express) {
 
       // CRITICAL: Block write operations for 'VEW' user code
       const writeMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
-      if (admin.userCode === 'VEW' && writeMethods.includes(req.method)) {
+
+      // Exception: Allow nasir to use the mark-exported API even if VEW
+      const isNasirExporting = admin.email === 'nasir@amu.ac.in' && req.path === '/api/admin/attendance/mark-exported' && req.method === 'POST';
+
+      if (admin.userCode === 'VEW' && writeMethods.includes(req.method) && !isNasirExporting) {
         return res.status(403).json({ message: "Forbidden: View-only access" });
       }
 
