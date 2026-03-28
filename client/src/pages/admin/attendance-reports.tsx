@@ -1413,6 +1413,37 @@ export default function AttendanceReports() {
     }
   };
 
+  const [isBulkVerifying, setIsBulkVerifying] = useState(false);
+
+  const handleBulkVerify = async () => {
+    const unverifiedEntries = paginatedEntries.filter(e => !e.verified && e.entryId > 0);
+
+    if (unverifiedEntries.length === 0) {
+      toast({ title: "Info", description: "All displayed records are already verified." });
+      return;
+    }
+
+    const confirm = window.confirm("Are you sure you want to verify attendance for all filtered employees? This action cannot be undone.");
+    if (!confirm) return;
+
+    setIsBulkVerifying(true);
+    let successCount = 0;
+
+    try {
+      for (const entry of unverifiedEntries) {
+        await toggleVerify.mutateAsync(entry.entryId);
+        successCount++;
+      }
+      toast({ title: "Success", description: `Successfully verified ${successCount} records.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "An error occurred during bulk verification." });
+    } finally {
+      setIsBulkVerifying(false);
+    }
+  };
+
+  const allVerifiedOnPage = paginatedEntries.length > 0 && paginatedEntries.every(e => e.verified);
+
   if (isLoading) return <Loading />;
 
   return (
@@ -1771,7 +1802,21 @@ export default function AttendanceReports() {
                     </TableHead>
                     <TableHead className="min-w-[140px]">
                       <div className="flex items-center justify-between">
-                        <span>Actions</span>
+                        <div className="flex items-center gap-2">
+                          {salaryRegisterFilter.length > 0 && (
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 cursor-pointer accent-green-600"
+                              title="Verify all on this page"
+                              disabled={isBulkVerifying || allVerifiedOnPage}
+                              checked={allVerifiedOnPage}
+                              onChange={() => {
+                                if (!allVerifiedOnPage) handleBulkVerify();
+                              }}
+                            />
+                          )}
+                          <span>Actions</span>
+                        </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="-mr-3 h-8 w-8 p-0" title="Filter by Verification Status">
