@@ -1123,8 +1123,18 @@ export default function AttendanceReports() {
   const downloadExcel = () => {
     // Create a worksheet from the filtered entries
     const worksheet = XLSX.utils.json_to_sheet(processedEntries.map(entry => {
-      // Split period string "DD-MM-YY to DD-MM-YY"
+      // Split period string "DD-MM-YYYY to DD-MM-YYYY"
       const [fromStr, toStr] = entry.period.split(" to ");
+
+      const convertToMMDDYYYY = (dateStr: string) => {
+        if (!dateStr) return "";
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+          // Assuming input is DD-MM-YYYY
+          return `${parts[1]}-${parts[0]}-${parts[2]}`;
+        }
+        return dateStr;
+      };
 
       return {
         "Month": entry.month,
@@ -1134,8 +1144,8 @@ export default function AttendanceReports() {
         "Designation": entry.designation,
         "Salary Assistant": entry.salaryAsstt,
         "Salary Register No": entry.salaryRegisterNo,
-        "Period From": fromStr || "",
-        "Period To": toStr || "",
+        "Period From": convertToMMDDYYYY(fromStr),
+        "Period To": convertToMMDDYYYY(toStr),
         "Days": entry.days,
         "Remarks": entry.remarks,
         "Admin Noting": entry.adminNoting || "",
