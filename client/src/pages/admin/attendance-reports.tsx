@@ -1223,7 +1223,16 @@ export default function AttendanceReports() {
       'BRK_DAYS_FR', 'BRK_DAYS_TO', 'TERM_APP', 'OLD_DESIG', 'OLD_BASIC'
     ];
 
-    const dataRows = processedEntries.map(entry => {
+    const isMissingEmployeesFilterActive = analysisFilter.includes("missing_employees");
+    
+    const exportEntries = isMissingEmployeesFilterActive
+      ? processedEntries.filter(entry => {
+          const desig = (entry.designation || "").toUpperCase();
+          return !desig.includes("DAILY WAGE");
+        })
+      : processedEntries;
+
+    const dataRows = exportEntries.map(entry => {
       let ffdate = "";
       let ftdate = "";
       let nfdate = "";
