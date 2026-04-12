@@ -1197,9 +1197,9 @@ export default function AttendanceReports() {
     XLSX.writeFile(workbook, fileName);
   };
 
-  // Oracle T_ATTEND Excel export — matches export.xls format (Excel serial dates)
+  // Oracle T_ATTEND Excel export — matches export.xls format (Excel serial dates or string)
   const exportOracleXlsx = () => {
-    // Convert DD-MM-YY date string to Excel serial number
+    // Convert DD-MM-YY date string to MM-DD-YYYY
     const formatDateHyphen = (dateStr: string): string => {
       if (!dateStr) return "";
       const parts = dateStr.trim().split("-");
@@ -1210,7 +1210,7 @@ export default function AttendanceReports() {
         const m = parts[1].padStart(2, "0");
         let y = parts[2];
         if (y.length === 2) y = `20${y}`;
-        return `${d}-${m}-${y}`;
+        return `${m}-${d}-${y}`;
       }
       return "";
     };
@@ -1237,8 +1237,8 @@ export default function AttendanceReports() {
         const m = entry.monthNum.toString().padStart(2, "0");
         const y = entry.yearNum.toString();
         const lastDay = new Date(entry.yearNum, entry.monthNum, 0).getDate().toString().padStart(2, "0");
-        nfdate = `01-${m}-${y}`;
-        ntdate = `${lastDay}-${m}-${y}`;
+        nfdate = `${m}-01-${y}`;
+        ntdate = `${m}-${lastDay}-${y}`;
       }
 
       // Map salary assistant code to name
