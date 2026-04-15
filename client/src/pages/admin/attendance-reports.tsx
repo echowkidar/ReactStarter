@@ -1119,10 +1119,23 @@ export default function AttendanceReports() {
     }
   };
 
+  // Helper to filter out Daily Wage employees when they are missing, for export purposes ONLY
+  const entriesToExport = useMemo(() => {
+    return processedEntries.filter(entry => {
+      if (entry.period === "MISSING") {
+        const desig = (entry.designation || "").toUpperCase();
+        if (desig.includes("DAILY WAGE")) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [processedEntries]);
+
   // Function to download filtered entries as Excel
   const downloadExcel = () => {
     // Create a worksheet from the filtered entries
-    const worksheet = XLSX.utils.json_to_sheet(processedEntries.map(entry => {
+    const worksheet = XLSX.utils.json_to_sheet(entriesToExport.map(entry => {
       // Split period string "DD-MM-YYYY to DD-MM-YYYY"
       const [fromStr, toStr] = entry.period.split(" to ");
 
@@ -1223,7 +1236,7 @@ export default function AttendanceReports() {
       'BRK_DAYS_FR', 'BRK_DAYS_TO', 'TERM_APP', 'OLD_DESIG', 'OLD_BASIC'
     ];
 
-    const dataRows = processedEntries.map(entry => {
+    const dataRows = entriesToExport.map(entry => {
       let ffdate = "";
       let ftdate = "";
       let nfdate = "";
@@ -1305,7 +1318,7 @@ export default function AttendanceReports() {
     XLSX.writeFile(wb, `${fileName}.xls`, { bookType: 'xls' });
 
     // Mark all visible entries as exported
-    const entryIds = [...new Set(processedEntries.map(e => e.entryId).filter(id => id > 0))];
+    const entryIds = [...new Set(entriesToExport.map(e => e.entryId).filter(id => id > 0))];
     if (entryIds.length > 0) {
       markExported.mutate(entryIds);
     }
@@ -1338,7 +1351,7 @@ export default function AttendanceReports() {
     };
 
     // CTL column order (31 columns)
-    const lines: string[] = processedEntries.map(entry => {
+    const lines: string[] = entriesToExport.map(entry => {
       let ffdate = 'NULL';
       let ftdate = 'NULL';
       let nfdate = 'NULL';
@@ -1417,7 +1430,7 @@ export default function AttendanceReports() {
     URL.revokeObjectURL(url);
 
     // Mark all visible entries as exported
-    const entryIds = [...new Set(processedEntries.map(e => e.entryId).filter(id => id > 0))];
+    const entryIds = [...new Set(entriesToExport.map(e => e.entryId).filter(id => id > 0))];
     if (entryIds.length > 0) {
       markExported.mutate(entryIds);
     }
