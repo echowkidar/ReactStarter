@@ -284,15 +284,41 @@ const PDFDialogContent = ({
       return;
     }
 
-    // If it's an image, process it
-    if (file.type.startsWith('image/')) {
+    if (file.type === 'application/pdf' || fileExtension === 'pdf') {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          variant: "destructive",
+          title: "File Too Large",
+          description: "PDF file size must be less than 5MB."
+        });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setSelectedFile(null);
+        return;
+      }
+    } else if (file.type.startsWith('image/')) {
+      // Only compress if image size is greater than 2MB
+      if (file.size <= 2 * 1024 * 1024) {
+        setProcessedFile(null); // Keep the original file as is
+        return;
+      }
+
       setIsProcessing(true);
       toast({ title: "Processing Image", description: "Compressing and resizing...", duration: 2000 });
       try {
         const result = await processImageFile(file);
         if (result) {
-          setProcessedFile(result);
-          toast({ title: "Processing Complete", description: `Image compressed to ${Math.round(result.size / 1024)} KB.` });
+          if (result.size > 2 * 1024 * 1024) {
+            toast({
+              variant: "destructive",
+              title: "File Too Large",
+              description: "Image is still larger than 2MB after compression. Please use a smaller image."
+            });
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            setSelectedFile(null);
+          } else {
+            setProcessedFile(result);
+            toast({ title: "Processing Complete", description: `Image compressed to ${Math.round(result.size / 1024)} KB.` });
+          }
         } else {
           throw new Error("Processing returned null");
         }
@@ -510,7 +536,7 @@ const PDFDialogContent = ({
             </div>
             <div className="space-y-2">
               <label htmlFor="pdfOrImageFile" className="text-sm font-medium">
-                PDF or Image File
+                PDF or Image File <span className="text-xs font-normal text-muted-foreground ml-1">(Max: Image 2MB, PDF 5MB)</span>
               </label>
               <Input
                 ref={fileInputRef}
