@@ -654,8 +654,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         let startDate = isGuest ? prevMonthStartDate : defaultStartDate;
         let endDate = isGuest ? prevMonthEndDate : defaultEndDate;
 
-        if (isExcluded) {
-          // One Day break requested for all daily wagers
+        if (isExcluded && hadFullMonthPreviousMonth(employee.id)) {
+          // One Day break requested because 56-day rule applies
           endDate = new Date(defaultEndDate);
           endDate.setDate(endDate.getDate() - 1);
         }
