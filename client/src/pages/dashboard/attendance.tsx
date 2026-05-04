@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getCurrentDepartment } from "@/lib/auth";
@@ -1023,7 +1023,11 @@ export default function Attendance() {
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const [cancelDialogReportId, setCancelDialogReportId] = useState<number | null>(null);
-  const [recallDialogReportId, setRecallDialogReportId] = useState<number | null>(null);
+
+  // Recall countdown state
+  const [recallCountdownReportId, setRecallCountdownReportId] = useState<number | null>(null);
+  const [recallCountdown, setRecallCountdown] = useState<number>(15);
+  const recallCancelledRef = useRef<boolean>(false);
 
   const [feedbackReport, setFeedbackReport] = useState<AttendanceReport | null>(null);
   const [feedbackSelection, setFeedbackSelection] = useState<'positive' | 'negative' | null>(null);
@@ -1370,29 +1374,55 @@ export default function Attendance() {
     },
   });
 
-  // Request Recall mutation
-  const requestRecall = useMutation({
+  // Direct Revert mutation (no admin approval needed — calls revert-to-draft directly)
+  const directRevert = useMutation({
     mutationFn: async (reportId: number) => {
-      const res = await apiRequest("POST", `/api/attendance/${reportId}/request-recall`);
+      const res = await apiRequest("POST", `/api/attendance/${reportId}/revert-to-draft`);
       return res.json();
     },
     onSuccess: (data: any) => {
-      setRecallDialogReportId(null);
       queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
       toast({
-        title: "Success",
-        description: "Recall request sent to admin",
+        title: "✅ Recall Successful",
+        description: "Your request has been accepted. You can now recreate, edit or delete this attendance report.",
+        duration: 5000,
       });
       if (data) handleEmailResponse(data);
+      setTimeout(() => window.location.reload(), 1800);
     },
     onError: (error: any) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to request recall",
+        title: "Recall Failed",
+        description: error.message || "Failed to recall report. Please try again.",
       });
     },
   });
+
+  // Countdown effect — triggers directRevert when countdown reaches 0
+  useEffect(() => {
+    if (recallCountdownReportId === null) return;
+
+    setRecallCountdown(15);
+    recallCancelledRef.current = false;
+    const capturedReportId = recallCountdownReportId;
+
+    let remaining = 15;
+    const interval = setInterval(() => {
+      remaining -= 1;
+      setRecallCountdown(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(interval);
+        if (!recallCancelledRef.current) {
+          setRecallCountdownReportId(null);
+          directRevert.mutate(capturedReportId);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [recallCountdownReportId]);
 
   const [editingReportData, setEditingReportData] = useState<any>(null);
   const [editingReportId, setEditingReportId] = useState<number | null>(null);
@@ -1884,52 +1914,19 @@ export default function Attendance() {
                             Cancel N/A after 23rd
                           </span>
                         )}
-                        {/* Request Recall for Submitted reports */}
+                        {/* Request Recall for Submitted reports — instant countdown, no admin approval */}
                         {report.status === "submitted" && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-yellow-600 border-yellow-300 hover:bg-yellow-50"
-                              onClick={() => setRecallDialogReportId(report.id)}
-                            >
-                              Request Recall
-                            </Button>
-                            <Dialog open={recallDialogReportId === report.id} onOpenChange={(open) => !open && setRecallDialogReportId(null)}>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Request Recall</DialogTitle>
-                                  <DialogDescription>
-                                    Are you sure you want to recall this submitted report?
-                                    This will send a request to the admin to revert it to draft status, allowing you to modify it.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter>
-                                  <Button variant="outline" onClick={() => setRecallDialogReportId(null)}>Cancel</Button>
-                                  <Button
-                                    variant="default"
-                                    className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                                    onClick={() => requestRecall.mutate(report.id)}
-                                    disabled={requestRecall.isPending}
-                                  >
-                                    {requestRecall.isPending ? (
-                                      <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Requesting...
-                                      </>
-                                    ) : (
-                                      "Request Recall"
-                                    )}
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          </>
-                        )}
-                        {report.status === "recall_requested" && (
-                          <span className="text-sm font-medium text-yellow-600">
-                            ⏳ Recall Pending
-                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-yellow-600 border-yellow-300 hover:bg-yellow-50"
+                            onClick={() => {
+                              recallCancelledRef.current = false;
+                              setRecallCountdownReportId(report.id);
+                            }}
+                          >
+                            Request Recall
+                          </Button>
                         )}
                         {/* Show status for cancel_requested and cancelled */}
                         {report.status === "cancel_requested" && (
@@ -2115,6 +2112,100 @@ export default function Attendance() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Recall Countdown Overlay ── */}
+      {recallCountdownReportId !== null && (() => {
+        const TOTAL = 15;
+        const radius = 54;
+        const circumference = 2 * Math.PI * radius;
+        const progress = recallCountdown / TOTAL;
+        const dashOffset = circumference * (1 - progress);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
+            <div
+              className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 text-center"
+              style={{ animation: 'fadeInScale 0.25s ease' }}
+            >
+              {/* Title */}
+              <h2 className="text-xl font-bold text-gray-800 mb-1">Recalling Report</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                The report will revert to <strong>draft</strong> automatically. Click cancel to stop.
+              </p>
+
+              {/* Circular clock */}
+              <div className="relative mx-auto mb-6" style={{ width: 140, height: 140 }}>
+                <svg
+                  width="140" height="140"
+                  viewBox="0 0 120 120"
+                  style={{ transform: 'rotate(-90deg)' }}
+                >
+                  {/* Track */}
+                  <circle
+                    cx="60" cy="60" r={radius}
+                    fill="none"
+                    stroke="#f3f4f6"
+                    strokeWidth="10"
+                  />
+                  {/* Progress arc */}
+                  <circle
+                    cx="60" cy="60" r={radius}
+                    fill="none"
+                    stroke={recallCountdown <= 5 ? '#ef4444' : '#f59e0b'}
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={dashOffset}
+                    style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s ease' }}
+                  />
+                </svg>
+                {/* Centre number */}
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center"
+                >
+                  <span
+                    className="font-bold leading-none"
+                    style={{
+                      fontSize: 42,
+                      color: recallCountdown <= 5 ? '#ef4444' : '#f59e0b',
+                      transition: 'color 0.3s ease'
+                    }}
+                  >
+                    {recallCountdown}
+                  </span>
+                  <span className="text-xs text-gray-400 mt-1">seconds</span>
+                </div>
+              </div>
+
+              {/* Status text */}
+              <p className="text-xs text-gray-500 mb-5">
+                {recallCountdown > 5
+                  ? '⏳ Processing your recall request...'
+                  : '⚠️ Almost done! Click cancel to stop.'}
+              </p>
+
+              {/* Cancel button */}
+              <Button
+                variant="outline"
+                className="w-full border-red-300 text-red-600 hover:bg-red-50 font-semibold"
+                onClick={() => {
+                  recallCancelledRef.current = true;
+                  setRecallCountdownReportId(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+
+            {/* Keyframe injection */}
+            <style>{`
+              @keyframes fadeInScale {
+                from { opacity: 0; transform: scale(0.88); }
+                to   { opacity: 1; transform: scale(1); }
+              }
+            `}</style>
+          </div>
+        );
+      })()}
     </div>
   );
 }
