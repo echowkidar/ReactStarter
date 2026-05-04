@@ -304,9 +304,17 @@ const PDFDialogContent = ({
     // Step 2: Tesseract OCR — verify text is readable
     setQualityStep('Step 2/2: Verifying document text readability...');
     try {
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('eng');
-      const { data } = await (worker as any).recognize(file);
+      // Load Tesseract from CDN (no npm package needed)
+      const Tesseract = await new Promise<any>((resolve, reject) => {
+        if ((window as any).Tesseract) { resolve((window as any).Tesseract); return; }
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.onload = () => resolve((window as any).Tesseract);
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+      const worker = await Tesseract.createWorker('eng');
+      const { data } = await worker.recognize(file);
       await worker.terminate();
       const textLength = (data.text || '').trim().replace(/\s+/g, '').length;
       if (textLength < 20) {
@@ -323,8 +331,19 @@ const PDFDialogContent = ({
   const checkPDFQuality = async (file: File): Promise<{ pass: boolean; reason?: string }> => {
     setQualityStep('Step 1/2: Loading PDF document...');
     try {
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      // Load pdfjs from CDN (no npm package needed)
+      const pdfjsLib = await new Promise<any>((resolve, reject) => {
+        if ((window as any).pdfjsLib) { resolve((window as any).pdfjsLib); return; }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        script.onload = () => {
+          const lib = (window as any).pdfjsLib;
+          lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve(lib);
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       if (pdf.numPages === 0) {
