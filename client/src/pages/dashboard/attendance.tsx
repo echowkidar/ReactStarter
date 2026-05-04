@@ -251,7 +251,7 @@ const PDFDialogContent = ({
               resolve(processedImageFile);
             },
             'image/jpeg',
-            0.7 // 70% quality
+            0.5 // 50% quality
           );
         };
         img.onerror = () => resolve(null); // Image load error
@@ -296,9 +296,21 @@ const PDFDialogContent = ({
         return;
       }
     } else if (file.type.startsWith('image/')) {
-      // Only compress if image size is greater than 2MB
-      if (file.size <= 2 * 1024 * 1024) {
-        setProcessedFile(null); // Keep the original file as is
+      // Reject if image size is greater than 2MB
+      if (file.size > 2 * 1024 * 1024) {
+        toast({
+          variant: "destructive",
+          title: "File Too Large",
+          description: "Image file size must be less than 2MB."
+        });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setSelectedFile(null);
+        return;
+      }
+
+      // Do not compress if size is less than or equal to 500KB
+      if (file.size <= 500 * 1024) {
+        setProcessedFile(null);
         return;
       }
 
@@ -307,18 +319,8 @@ const PDFDialogContent = ({
       try {
         const result = await processImageFile(file);
         if (result) {
-          if (result.size > 2 * 1024 * 1024) {
-            toast({
-              variant: "destructive",
-              title: "File Too Large",
-              description: "Image is still larger than 2MB after compression. Please use a smaller image."
-            });
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            setSelectedFile(null);
-          } else {
-            setProcessedFile(result);
-            toast({ title: "Processing Complete", description: `Image compressed to ${Math.round(result.size / 1024)} KB.` });
-          }
+          setProcessedFile(result);
+          toast({ title: "Processing Complete", description: `Image compressed to ${Math.round(result.size / 1024)} KB.` });
         } else {
           throw new Error("Processing returned null");
         }
