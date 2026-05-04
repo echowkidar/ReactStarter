@@ -1710,8 +1710,8 @@ export default function Attendance() {
                           </span>
                         )}
 
-                        {/* View Details button - hidden for cancelled reports */}
-                        {report.status !== "cancelled" && (
+                        {/* View Details button - hidden for cancelled and draft reports */}
+                        {report.status !== "cancelled" && report.status !== "draft" && (
                           <Button
                             variant="outline"
                             size="sm"
