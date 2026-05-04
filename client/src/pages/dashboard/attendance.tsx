@@ -89,6 +89,11 @@ const PDFDialogContent = ({
   const [isProcessing, setIsProcessing] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Quality check state
+  const [qualityStatus, setQualityStatus] = React.useState<'idle' | 'checking' | 'passed' | 'failed'>('idle');
+  const [qualityStep, setQualityStep] = React.useState<string>('');
+  const [qualityError, setQualityError] = React.useState<string>('');
+
   // Use effect hook at the top level of the component
   React.useEffect(() => {
     const fetchReportDetails = async () => {
@@ -208,6 +213,163 @@ const PDFDialogContent = ({
     checkFileExists();
   }, [currentReport.fileUrl]);
 
+  // --- Quality Check Helpers ---
+
+  const calcBlurScore = (imageData: ImageData): number => {
+    const { data, width, height } = imageData;
+    let sum = 0, count = 0;
+    const getGray = (x: number, y: number) => {
+      const i = (y * width + x) * 4;
+      return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    };
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const lap =
+          -getGray(x - 1, y - 1) - getGray(x, y - 1) - getGray(x + 1, y - 1)
+          - getGray(x - 1, y) + 8 * getGray(x, y) - getGray(x + 1, y)
+          - getGray(x - 1, y + 1) - getGray(x, y + 1) - getGray(x + 1, y + 1);
+        sum += lap * lap;
+        count++;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  };
+
+  const calcBrightness = (imageData: ImageData): number => {
+    const { data } = imageData;
+    let total = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    }
+    return total / (data.length / 4);
+  };
+
+  const loadImageToCanvas = (file: File): Promise<{ canvas: HTMLCanvasElement; width: number; height: number } | null> =>
+    new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (!ev.target?.result) return resolve(null);
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 800;
+          let w = img.width, h = img.height;
+          if (w > h ? w > MAX : h > MAX) {
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+            else { w = Math.round(w * MAX / h); h = MAX; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(null);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve({ canvas, width: img.width, height: img.height });
+        };
+        img.onerror = () => resolve(null);
+        img.src = ev.target.result as string;
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+
+  const checkImageQuality = async (file: File): Promise<{ pass: boolean; reason?: string }> => {
+    // Step 1: Canvas checks (blur, brightness, resolution)
+    setQualityStep('Step 1/2: Analyzing image clarity and brightness...');
+    const result = await loadImageToCanvas(file);
+    if (!result) return { pass: false, reason: 'Could not read the image file. Please try a different file.' };
+
+    const { canvas, width, height } = result;
+    const ctx = canvas.getContext('2d')!;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Resolution check (minimum 800x600 for a readable document)
+    if (width < 600 || height < 400) {
+      return { pass: false, reason: `Image resolution is too low (${width}x${height}px). Please upload a clearer photo with minimum 600x400 pixels.` };
+    }
+
+    // Blur check
+    const blurScore = calcBlurScore(imageData);
+    if (blurScore < 20) {
+      return { pass: false, reason: `Image appears too blurry (blur score: ${blurScore.toFixed(1)}). Please retake the photo in good lighting and hold the camera steady.` };
+    }
+
+    // Brightness check
+    const brightness = calcBrightness(imageData);
+    if (brightness < 40) {
+      return { pass: false, reason: 'Image is too dark. Please take the photo in a well-lit area.' };
+    }
+    if (brightness > 230) {
+      return { pass: false, reason: 'Image is overexposed (too bright). Avoid direct sunlight or flash directly on the document.' };
+    }
+
+    // Step 2: Tesseract OCR — verify text is readable
+    setQualityStep('Step 2/2: Verifying document text readability...');
+    try {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('eng');
+      const { data } = await (worker as any).recognize(file);
+      await worker.terminate();
+      const textLength = (data.text || '').trim().replace(/\s+/g, '').length;
+      if (textLength < 20) {
+        return { pass: false, reason: 'Document text could not be read clearly. Please ensure the document is flat, well-lit, and in focus before uploading.' };
+      }
+    } catch (ocrErr) {
+      // If Tesseract fails to load (network issue), skip OCR and allow upload
+      console.warn('Tesseract OCR skipped:', ocrErr);
+    }
+
+    return { pass: true };
+  };
+
+  const checkPDFQuality = async (file: File): Promise<{ pass: boolean; reason?: string }> => {
+    setQualityStep('Step 1/2: Loading PDF document...');
+    try {
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      if (pdf.numPages === 0) {
+        return { pass: false, reason: 'The PDF file appears to be empty (0 pages). Please upload a valid PDF.' };
+      }
+
+      setQualityStep('Step 2/2: Checking document visibility...');
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.0 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.min(viewport.width, 800);
+      canvas.height = Math.min(viewport.height, 1000);
+      const ctx = canvas.getContext('2d')!;
+      await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: canvas.width / viewport.width }) }).promise;
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const brightness = calcBrightness(imageData);
+
+      // A blank/white page would have very high brightness
+      if (brightness > 248) {
+        return { pass: false, reason: 'The first page of the PDF appears blank or empty. Please check the file and try again.' };
+      }
+      // Too dark (bad scan)
+      if (brightness < 30) {
+        return { pass: false, reason: 'The PDF page is too dark to read. Please re-scan the document with proper brightness settings.' };
+      }
+      return { pass: true };
+    } catch (err) {
+      console.error('PDF quality check error:', err);
+      // If pdfjs fails, allow upload rather than blocking
+      return { pass: true };
+    }
+  };
+
+  const rejectFile = (message: string) => {
+    setQualityStatus('failed');
+    setQualityError(message);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setSelectedFile(null);
+    setProcessedFile(null);
+    toast({ variant: 'destructive', title: 'Document Quality Check Failed', description: message });
+  };
+
+  // --- End Quality Check Helpers ---
+
   // Function to process image files (resize and compress)
   const processImageFile = async (file: File): Promise<File | null> => {
     return new Promise((resolve) => {
@@ -267,6 +429,9 @@ const PDFDialogContent = ({
     const file = e.target.files?.[0];
     setSelectedFile(file || null);
     setProcessedFile(null); // Reset processed file on new selection
+    setQualityStatus('idle');
+    setQualityError('');
+    setQualityStep('');
     if (!file) return;
 
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
@@ -298,44 +463,61 @@ const PDFDialogContent = ({
     } else if (file.type.startsWith('image/')) {
       // Reject if image size is greater than 2MB
       if (file.size > 2 * 1024 * 1024) {
-        toast({
-          variant: "destructive",
-          title: "File Too Large",
-          description: "Image file size must be less than 2MB."
-        });
+        toast({ variant: 'destructive', title: 'File Too Large', description: 'Image file size must be less than 2MB.' });
         if (fileInputRef.current) fileInputRef.current.value = '';
         setSelectedFile(null);
         return;
       }
 
-      // Do not compress if size is less than or equal to 500KB
+      // --- Run quality check on original image first ---
+      setQualityStatus('checking');
+      setQualityError('');
+      setProcessedFile(null);
+      const qResult = await checkImageQuality(file);
+      if (!qResult.pass) {
+        rejectFile(qResult.reason || 'Document quality check failed.');
+        return;
+      }
+      setQualityStatus('passed');
+      setQualityStep('');
+
+      // Compress only if size is greater than 500KB
       if (file.size <= 500 * 1024) {
-        setProcessedFile(null);
+        // Small file — no compression needed, use as-is
         return;
       }
 
       setIsProcessing(true);
-      toast({ title: "Processing Image", description: "Compressing and resizing...", duration: 2000 });
+      toast({ title: 'Processing Image', description: 'Compressing and resizing...', duration: 2000 });
       try {
         const result = await processImageFile(file);
         if (result) {
           setProcessedFile(result);
-          toast({ title: "Processing Complete", description: `Image compressed to ${Math.round(result.size / 1024)} KB.` });
+          toast({ title: 'Processing Complete', description: `Image compressed to ${Math.round(result.size / 1024)} KB.` });
         } else {
-          throw new Error("Processing returned null");
+          throw new Error('Processing returned null');
         }
       } catch (error) {
-        console.error("Image processing error:", error);
-        toast({
-          variant: "destructive",
-          title: "Processing Failed",
-          description: "Could not process the image file. Please try another one."
-        });
-        if (fileInputRef.current) fileInputRef.current.value = ''; // Clear the input on error
+        console.error('Image processing error:', error);
+        toast({ variant: 'destructive', title: 'Processing Failed', description: 'Could not process the image file. Please try another one.' });
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setSelectedFile(null);
+        setQualityStatus('idle');
       } finally {
         setIsProcessing(false);
       }
+
+    } else if (file.type === 'application/pdf' || fileExtension === 'pdf') {
+      // PDF quality check (already size-checked above)
+      setQualityStatus('checking');
+      setQualityError('');
+      const pdfResult = await checkPDFQuality(file);
+      if (!pdfResult.pass) {
+        rejectFile(pdfResult.reason || 'PDF quality check failed.');
+        return;
+      }
+      setQualityStatus('passed');
+      setQualityStep('');
     }
   };
 
@@ -548,20 +730,52 @@ const PDFDialogContent = ({
                 className="cursor-pointer"
                 onChange={handleFileChange}
               />
+              {/* Quality check progress */}
+              {qualityStatus === 'checking' && (
+                <div className="mt-3 p-3 rounded-md bg-blue-50 border border-blue-200">
+                  <div className="flex items-center gap-2 text-blue-700 text-sm font-medium">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Checking document quality...
+                  </div>
+                  <p className="text-xs text-blue-600 mt-1">{qualityStep}</p>
+                  <div className="mt-2 h-1.5 w-full bg-blue-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: qualityStep.includes('2/2') ? '85%' : '40%' }} />
+                  </div>
+                </div>
+              )}
+              {/* Quality check passed */}
+              {qualityStatus === 'passed' && !isProcessing && (
+                <div className="mt-3 p-3 rounded-md bg-green-50 border border-green-200 flex items-center gap-2">
+                  <FileCheck className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-green-700 font-medium">Document quality check passed.</span>
+                </div>
+              )}
+              {/* Quality check failed */}
+              {qualityStatus === 'failed' && (
+                <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-300">
+                  <div className="flex items-center gap-2 text-red-700 text-sm font-semibold">
+                    <AlertTriangle className="h-4 w-4" />
+                    Quality Check Failed
+                  </div>
+                  <p className="text-xs text-red-600 mt-1">{qualityError}</p>
+                  <p className="text-xs text-red-500 mt-1">Please select a different, higher quality file.</p>
+                </div>
+              )}
+              {/* Compression info */}
               {isProcessing && (
                 <div className="flex items-center text-sm text-muted-foreground mt-2">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing image...
+                  Compressing image...
                 </div>
               )}
-              {processedFile && (
+              {processedFile && qualityStatus === 'passed' && (
                 <div className="text-sm text-green-600 mt-2">
-                  Processed Image Ready: {processedFile.name} ({Math.round(processedFile.size / 1024)} KB)
+                  Ready: {processedFile.name} ({Math.round(processedFile.size / 1024)} KB)
                 </div>
               )}
-              {!processedFile && selectedFile && selectedFile.type.startsWith('application/pdf') && (
+              {!processedFile && selectedFile && selectedFile.type.startsWith('application/pdf') && qualityStatus === 'passed' && (
                 <div className="text-sm text-blue-600 mt-2">
-                  PDF Selected: {selectedFile.name}
+                  PDF Ready: {selectedFile.name}
                 </div>
               )}
             </div>
@@ -572,6 +786,7 @@ const PDFDialogContent = ({
             </DialogClose>
             <Button
               type="button"
+              disabled={qualityStatus === 'checking' || qualityStatus === 'failed' || isProcessing}
               onClick={async (e) => {
                 e.preventDefault();
                 const form = e.currentTarget.closest("form");
