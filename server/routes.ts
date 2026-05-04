@@ -2426,6 +2426,8 @@ export async function registerRoutes(app: Express) {
 
       if (updates.status === 'submitted') {
         updates.finalizedAt = new Date();
+        // Regenerate transaction ID on each submission to prevent old copy uploads
+        updates.transactionId = uuid().slice(0, 8).toUpperCase();
       } else if (updates.status === 'draft') {
         updates.finalizedAt = null;
       }
