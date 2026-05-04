@@ -479,6 +479,17 @@ const PDFDialogContent = ({
         setSelectedFile(null);
         return;
       }
+      // PDF quality check
+      setQualityStatus('checking');
+      setQualityError('');
+      const pdfResult = await checkPDFQuality(file);
+      if (!pdfResult.pass) {
+        rejectFile(pdfResult.reason || 'PDF quality check failed.');
+        return;
+      }
+      setQualityStatus('passed');
+      setQualityStep('');
+
     } else if (file.type.startsWith('image/')) {
       // Reject if image size is greater than 2MB
       if (file.size > 2 * 1024 * 1024) {
@@ -525,18 +536,6 @@ const PDFDialogContent = ({
       } finally {
         setIsProcessing(false);
       }
-
-    } else if (file.type === 'application/pdf' || fileExtension === 'pdf') {
-      // PDF quality check (already size-checked above)
-      setQualityStatus('checking');
-      setQualityError('');
-      const pdfResult = await checkPDFQuality(file);
-      if (!pdfResult.pass) {
-        rejectFile(pdfResult.reason || 'PDF quality check failed.');
-        return;
-      }
-      setQualityStatus('passed');
-      setQualityStep('');
     }
   };
 
