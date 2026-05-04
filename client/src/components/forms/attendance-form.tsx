@@ -226,8 +226,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   };
 
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
-  const [includeExcluded, setIncludeExcluded] = useState(false); // Mode: With Break
-  const [includeExcludedFull, setIncludeExcludedFull] = useState(false); // Mode: Full Month
   const [reportedEmployeeIds, setReportedEmployeeIds] = useState<Set<number>>(new Set());
 
   // Watch month/year to update reported employees list
@@ -622,17 +620,15 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   ];
 
   // Filter employees eligible for "All" selection
-  const eligibleEmployees = employees.filter(
-    (emp: any) => includeExcluded || includeExcludedFull || !excludedDesignations.includes(emp.designation?.toUpperCase())
-  );
+  const eligibleEmployees = employees;
 
-  // Add a function to select/deselect all eligible employees (excludes Daily Wage)
+  // Add a function to select/deselect all eligible employees
   const toggleAllEmployees = () => {
     const eligibleIds = new Set(eligibleEmployees.map((emp: any) => emp.id));
     const currentEligibleSelected = [...includedEmployees].filter(id => eligibleIds.has(id));
 
     if (currentEligibleSelected.length === eligibleEmployees.length && eligibleEmployees.length > 0) {
-      // Deselect all eligible (keep manually selected Daily Wage employees)
+      // Deselect all eligible
       const dailyWageSelected = [...includedEmployees].filter(id => !eligibleIds.has(id));
       setIncludedEmployees(new Set(dailyWageSelected));
 
@@ -640,7 +636,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       const currentEntries = form.getValues("entries") || [];
       form.setValue("entries", currentEntries.filter(entry => !eligibleIds.has(entry.employeeId)));
     } else {
-      // Select all eligible employees (keep existing Daily Wage selections)
+      // Select all eligible employees
       const newIncluded = new Set([...includedEmployees, ...eligibleEmployees.map((emp: any) => emp.id)]);
       setIncludedEmployees(newIncluded);
 
@@ -649,19 +645,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       const existingIds = new Set(currentEntries.map(e => e.employeeId));
 
       const employeesToAdd = eligibleEmployees.filter((emp: any) => !existingIds.has(emp.id));
-
-      let forceFullMonth = false;
-      if (includeExcludedFull) {
-        const violators = employeesToAdd.filter((emp: any) =>
-          excludedDesignations.includes(emp.designation?.toUpperCase()) &&
-          hadFullMonthPreviousMonth(emp.id)
-        );
-        if (violators.length > 0) {
-          forceFullMonth = window.confirm(`Some daily wagers (${violators.length}) had full attendance last month.\nAccording to the 56-days rule, a 1-day break is mandatory for them.\nDo you still want to force full month attendance?`);
-        } else {
-          forceFullMonth = true;
-        }
-      }
 
       const newEntries = employeesToAdd.map((employee: any) => {
         // Check if excluded designation (Daily Wage)
@@ -672,23 +655,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         let endDate = isGuest ? prevMonthEndDate : defaultEndDate;
 
         if (isExcluded) {
-          if (includeExcludedFull) {
-            // Full month requested
-            if (!forceFullMonth && hadFullMonthPreviousMonth(employee.id)) {
-              endDate = new Date(defaultEndDate);
-              endDate.setDate(endDate.getDate() - 1);
-            }
-          } else if (includeExcluded) {
-            // One Day break requested for all daily wagers
-            endDate = new Date(defaultEndDate);
-            endDate.setDate(endDate.getDate() - 1);
-          } else {
-            // Default behavior (neither box checked but manually eligible?)
-            if (hadFullMonthPreviousMonth(employee.id)) {
-              endDate = new Date(defaultEndDate);
-              endDate.setDate(endDate.getDate() - 1);
-            }
-          }
+          // One Day break requested for all daily wagers
+          endDate = new Date(defaultEndDate);
+          endDate.setDate(endDate.getDate() - 1);
         }
 
         const fromStr = formatDateForDisplay(startDate);
@@ -715,42 +684,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       </div>
     );
   }
-
-  // Logic for Mixed State Visuals
-  const formEntries = form.getValues("entries") || [];
-  const excludedEmployeesForMixed = employees.filter(
-    (emp: any) => excludedDesignations.includes(emp.designation?.toUpperCase())
-  );
-  const selectedExcludedIds = excludedEmployeesForMixed
-    .map((emp: any) => emp.id)
-    .filter((id: number) => includedEmployees.has(id));
-
-  let isBreakMixed = false;
-  let isFullMixed = false;
-
-  if (selectedExcludedIds.length > 0) {
-    const selectedEntries = formEntries.filter(e => selectedExcludedIds.includes(e.employeeId));
-
-    const allHaveBreak = selectedEntries.every(entry => {
-      const period = entry.periods[0];
-      if (!period?.toDate) return false;
-      const endDate = parseDateFromDisplay(period.toDate);
-      const breakDate = new Date(defaultEndDate);
-      breakDate.setDate(breakDate.getDate() - 1);
-      return endDate.getDate() === breakDate.getDate();
-    });
-
-    const allHaveFull = selectedEntries.every(entry => {
-      const period = entry.periods[0];
-      if (!period?.toDate) return false;
-      const endDate = parseDateFromDisplay(period.toDate);
-      return endDate.getDate() === defaultEndDate.getDate();
-    });
-
-    if (includeExcluded && !allHaveBreak) isBreakMixed = true;
-    if (includeExcludedFull && !allHaveFull) isFullMixed = true;
-  }
-
 
   return (
     <Form {...form}>
@@ -837,172 +770,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             )}
           />
         </div>
-
-        <div className="flex flex-col gap-2 mb-2">
-          <div className={`flex items-center space-x-2 ${isBreakMixed ? 'opacity-50' : ''}`} title={isBreakMixed ? "Some Daily Wagers have manually modified periods" : ""}>
-            <Checkbox
-              id="include-excluded"
-              checked={includeExcluded}
-              onCheckedChange={(checked) => {
-
-                const isChecked = checked as boolean;
-                setIncludeExcluded(isChecked);
-                if (isChecked) setIncludeExcludedFull(false);
-
-                const targetMode = isChecked ? 'break' : 'none';
-
-                // Logic to update rows based on mode
-                // 1. Identify "Regular" employees
-                const regularEmployees = employees.filter(
-                  (emp: any) => !excludedDesignations.includes(emp.designation?.toUpperCase())
-                );
-
-                // 2. Check if all regular employees are currently selected
-                const allRegularsSelected = regularEmployees.length > 0 &&
-                  regularEmployees.every((emp: any) => includedEmployees.has(emp.id));
-
-                // 3. Identify daily wagers
-                const excludedEmployees = employees.filter(
-                  (emp: any) => excludedDesignations.includes(emp.designation?.toUpperCase())
-                );
-                const excludedIds = excludedEmployees.map((emp: any) => emp.id);
-
-                if (targetMode === 'none') {
-                  // Remove daily wagers
-                  setIncludedEmployees(prev => {
-                    const next = new Set(prev);
-                    excludedIds.forEach((id: number) => next.delete(id));
-                    return next;
-                  });
-                  const currentEntries = form.getValues("entries") || [];
-                  form.setValue("entries", currentEntries.filter(entry => !excludedIds.includes(entry.employeeId)));
-                } else if (allRegularsSelected) {
-                  // Add daily wagers with correct date
-                  setIncludedEmployees(prev => {
-                    const next = new Set(prev);
-                    excludedIds.forEach((id: number) => next.add(id));
-                    return next;
-                  });
-
-                  const currentEntries = form.getValues("entries") || [];
-                  // Remove existing daily wager entries first to update date, or just add missing
-                  // Better to remove and re-add to ensure date is correct
-                  const cleanEntries = currentEntries.filter(entry => !excludedIds.includes(entry.employeeId));
-
-                  const newEntries = excludedEmployees.map((employee: any) => {
-                    let endDate = defaultEndDate;
-                    if (targetMode === 'break') {
-                      endDate = new Date(defaultEndDate);
-                      endDate.setDate(endDate.getDate() - 1);
-                    }
-
-                    return {
-                      employeeId: employee.id,
-                      periods: [{
-                        fromDate: formatDateForDisplay(defaultStartDate),
-                        toDate: formatDateForDisplay(endDate),
-                        days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(endDate)),
-                        remarks: "",
-                      }],
-                    };
-                  });
-
-                  form.setValue("entries", [...cleanEntries, ...newEntries]);
-                }
-              }}
-            />
-            <label
-              htmlFor="include-excluded"
-              className="text-sm font-medium leading-none cursor-pointer"
-            >
-              Include Unselected (Daily Wagers etc. with One Day Break) in 'All' option
-            </label>
-          </div>
-
-          <div className={`flex items-center space-x-2 ${isFullMixed ? 'opacity-50' : ''}`} title={isFullMixed ? "Some Daily Wagers have manually modified periods" : ""}>
-            <Checkbox
-              id="include-excluded-full"
-              checked={includeExcludedFull}
-              onCheckedChange={(checked) => {
-                const isChecked = checked as boolean;
-                setIncludeExcludedFull(isChecked);
-                if (isChecked) setIncludeExcluded(false);
-
-                const targetMode = isChecked ? 'full' : 'none';
-
-                // Logic to update rows based on mode (Duplicated for simplicity/independence context)
-                const regularEmployees = employees.filter(
-                  (emp: any) => !excludedDesignations.includes(emp.designation?.toUpperCase())
-                );
-
-                const allRegularsSelected = regularEmployees.length > 0 &&
-                  regularEmployees.every((emp: any) => includedEmployees.has(emp.id));
-
-                const excludedEmployees = employees.filter(
-                  (emp: any) => excludedDesignations.includes(emp.designation?.toUpperCase())
-                );
-                const excludedIds = excludedEmployees.map((emp: any) => emp.id);
-
-                if (targetMode === 'none') {
-                  setIncludedEmployees(prev => {
-                    const next = new Set(prev);
-                    excludedIds.forEach((id: number) => next.delete(id));
-                    return next;
-                  });
-                  const currentEntries = form.getValues("entries") || [];
-                  form.setValue("entries", currentEntries.filter(entry => !excludedIds.includes(entry.employeeId)));
-                } else if (allRegularsSelected) {
-                  let forceFullMonth = false;
-                  const violators = excludedEmployees.filter((emp: any) => hadFullMonthPreviousMonth(emp.id));
-
-                  if (violators.length > 0) {
-                    forceFullMonth = window.confirm(`Some daily wagers (${violators.length}) had full attendance last month.\nAccording to the 56-days rule, a 1-day break is mandatory for them.\nDo you still want to force full month attendance?`);
-                  } else {
-                    forceFullMonth = true;
-                  }
-
-                  setIncludedEmployees(prev => {
-                    const next = new Set(prev);
-                    excludedIds.forEach((id: number) => next.add(id));
-                    return next;
-                  });
-
-                  const currentEntries = form.getValues("entries") || [];
-                  const cleanEntries = currentEntries.filter(entry => !excludedIds.includes(entry.employeeId));
-
-                  const newEntries = excludedEmployees.map((employee: any) => {
-                    let endDate = defaultEndDate;
-                    // IF forceFullMonth is false, we enforce the break on violators
-                    if (!forceFullMonth && hadFullMonthPreviousMonth(employee.id)) {
-                      endDate = new Date(defaultEndDate);
-                      endDate.setDate(endDate.getDate() - 1);
-                    }
-
-                    return {
-                      employeeId: employee.id,
-                      periods: [{
-                        fromDate: formatDateForDisplay(defaultStartDate),
-                        toDate: formatDateForDisplay(endDate),
-                        days: calculateDays(formatDateForDisplay(defaultStartDate), formatDateForDisplay(endDate)),
-                        remarks: "",
-                      }],
-                    };
-                  });
-
-                  form.setValue("entries", [...cleanEntries, ...newEntries]);
-                }
-              }}
-            />
-            <label
-              htmlFor="include-excluded-full"
-              className="text-sm font-medium leading-none cursor-pointer"
-            >
-              Include Unselected (Daily Wagers etc. with Full Month) in 'All' option
-            </label>
-          </div>
-        </div>
-
-
 
         <div className="rounded-md border overflow-x-auto shadow-sm">
           <Table style={{ minWidth: '1100px' }}>
