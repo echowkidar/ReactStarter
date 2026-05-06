@@ -272,8 +272,8 @@ const PDFDialogContent = ({
     });
 
   const checkImageQuality = async (file: File): Promise<{ pass: boolean; reason?: string }> => {
-    // Step 1: Canvas checks (blur, brightness, resolution)
-    setQualityStep('Step 1/2: Analyzing image clarity and brightness...');
+    // Canvas checks (blur, brightness, resolution)
+    setQualityStep('Analyzing image clarity and brightness...');
     const result = await loadImageToCanvas(file);
     if (!result) return { pass: false, reason: 'Could not read the image file. Please try a different file.' };
 
@@ -281,49 +281,31 @@ const PDFDialogContent = ({
     const ctx = canvas.getContext('2d')!;
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // Resolution check (minimum 800x600 for a readable document)
-    if (width < 600 || height < 400) {
-      return { pass: false, reason: `Image resolution is too low (${width}x${height}px). Please upload a clearer photo with minimum 600x400 pixels.` };
+    // Resolution check — supports both landscape and portrait orientation
+    // A document photo is valid if its longer side >= 600 and shorter side >= 400
+    const longer = Math.max(width, height);
+    const shorter = Math.min(width, height);
+    if (longer < 600 || shorter < 400) {
+      return { pass: false, reason: `Image resolution is too low (${width}x${height}px). Please upload a clearer photo with at least 600x400 pixels.` };
     }
 
-    // Blur check
+    // Blur check — threshold lowered to 8 to accommodate compressed mobile scans
+    // (CamScanner, Adobe Scan, etc.) which have lower Laplacian variance due to JPEG compression
     const blurScore = calcBlurScore(imageData);
-    if (blurScore < 20) {
-      return { pass: false, reason: `Image appears too blurry (blur score: ${blurScore.toFixed(1)}). Please retake the photo in good lighting and hold the camera steady.` };
+    if (blurScore < 8) {
+      return { pass: false, reason: 'Image appears too blurry. Please retake the photo in good lighting and hold the camera steady.' };
     }
 
-    // Brightness check
+    // Brightness check — only check for too dark; upper limit removed because
+    // scanned documents on white paper legitimately have high brightness (> 230)
     const brightness = calcBrightness(imageData);
     if (brightness < 40) {
       return { pass: false, reason: 'Image is too dark. Please take the photo in a well-lit area.' };
     }
-    if (brightness > 230) {
-      return { pass: false, reason: 'Image is overexposed (too bright). Avoid direct sunlight or flash directly on the document.' };
-    }
 
-    // Step 2: Tesseract OCR — verify text is readable
-    setQualityStep('Step 2/2: Verifying document text readability...');
-    try {
-      // Load Tesseract from CDN (no npm package needed)
-      const Tesseract = await new Promise<any>((resolve, reject) => {
-        if ((window as any).Tesseract) { resolve((window as any).Tesseract); return; }
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-        script.onload = () => resolve((window as any).Tesseract);
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-      const worker = await Tesseract.createWorker('eng');
-      const { data } = await worker.recognize(file);
-      await worker.terminate();
-      const textLength = (data.text || '').trim().replace(/\s+/g, '').length;
-      if (textLength < 20) {
-        return { pass: false, reason: 'Document text could not be read clearly. Please ensure the document is flat, well-lit, and in focus before uploading.' };
-      }
-    } catch (ocrErr) {
-      // If Tesseract fails to load (network issue), skip OCR and allow upload
-      console.warn('Tesseract OCR skipped:', ocrErr);
-    }
+    // NOTE: Tesseract OCR removed — it only loaded the English model which
+    // caused false rejections for Hindi/Urdu/mixed-language government attendance
+    // forms. Canvas checks above are sufficient for document quality validation.
 
     return { pass: true };
   };
@@ -331,14 +313,20 @@ const PDFDialogContent = ({
   const checkPDFQuality = async (file: File): Promise<{ pass: boolean; reason?: string }> => {
     setQualityStep('Step 1/2: Loading PDF document...');
     try {
-      // Load pdfjs from CDN (no npm package needed)
+      // Load pdfjs from CDN — always re-set workerSrc even if lib is cached
+      // to handle cases where the PDF.js worker thread has died between uploads
       const pdfjsLib = await new Promise<any>((resolve, reject) => {
-        if ((window as any).pdfjsLib) { resolve((window as any).pdfjsLib); return; }
+        const workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        if ((window as any).pdfjsLib) {
+          (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+          resolve((window as any).pdfjsLib);
+          return;
+        }
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
         script.onload = () => {
           const lib = (window as any).pdfjsLib;
-          lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          lib.GlobalWorkerOptions.workerSrc = workerSrc;
           resolve(lib);
         };
         script.onerror = reject;
@@ -357,16 +345,32 @@ const PDFDialogContent = ({
       canvas.width = Math.min(viewport.width, 800);
       canvas.height = Math.min(viewport.height, 1000);
       const ctx = canvas.getContext('2d')!;
-      await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: canvas.width / viewport.width }) }).promise;
+      // Guard against zero/NaN scale (corrupt or unusual PDFs with zero-width viewport)
+      const renderScale = viewport.width > 0 ? canvas.width / viewport.width : 1.0;
+      await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: renderScale }) }).promise;
 
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const brightness = calcBrightness(imageData);
 
-      // A blank/white page would have very high brightness
-      if (brightness > 248) {
+      // Count non-white pixels to detect truly blank pages
+      // Adobe Scan PDFs have white backgrounds but always contain dark text/lines
+      const { data } = imageData;
+      let nonWhitePixels = 0;
+      const totalPixels = canvas.width * canvas.height;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        // A pixel is "non-white" if any channel is meaningfully below 240
+        if (r < 240 || g < 240 || b < 240) {
+          nonWhitePixels++;
+        }
+      }
+      const nonWhiteRatio = nonWhitePixels / totalPixels;
+
+      // A truly blank/empty page has almost zero non-white pixels (< 0.3%)
+      if (nonWhiteRatio < 0.003) {
         return { pass: false, reason: 'The first page of the PDF appears blank or empty. Please check the file and try again.' };
       }
-      // Too dark (bad scan)
+      // Too dark (bad scan) — still use brightness for this case
       if (brightness < 30) {
         return { pass: false, reason: 'The PDF page is too dark to read. Please re-scan the document with proper brightness settings.' };
       }
@@ -513,7 +517,9 @@ const PDFDialogContent = ({
 
       // Compress only if size is greater than 500KB
       if (file.size <= 500 * 1024) {
-        // Small file — no compression needed, use as-is
+        // Small file — no compression needed, use original file directly
+        // Set processedFile explicitly so the submit path has consistent state
+        setProcessedFile(file);
         return;
       }
 
