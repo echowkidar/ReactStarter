@@ -8078,5 +8078,33 @@
   {
     "value": "UNA4OTNUG",
     "label": "UNA4OTNUG - NISWAN WA QABALAT"
+  },
+  {
+    "value": "DEN91D",
+    "label": "DEN91D - PUBLIC HEALTH DENTISTRY"
+  },
+  {
+    "value": "DEN91C",
+    "label": "DEN91C - PERIODONTOLOGY"
+  },
+  {
+    "value": "DEN91CNT",
+    "label": "DEN91CNT - PERIODONTOLOGY"
+  },
+  {
+    "value": "DEN91A",
+    "label": "DEN91A - ORAL MEDICINE & RADIOLOGY"
+  },
+  {
+    "value": "DEN91ANT",
+    "label": "DEN91ANT - ORAL MEDICINE & RADIOLOGY"
+  },
+  {
+    "value": "DEN91B",
+    "label": "DEN91B - ORAL PATHOLOGY & MICROBIOLOGY"
+  },
+  {
+    "value": "DEN91BT",
+    "label": "DEN91BT - ORAL PATHOLOGY & MICROBIOLOGY"
   }
 ]
