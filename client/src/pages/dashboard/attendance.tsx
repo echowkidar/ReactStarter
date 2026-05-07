@@ -94,6 +94,19 @@ const PDFDialogContent = ({
   const [qualityStep, setQualityStep] = React.useState<string>('');
   const [qualityError, setQualityError] = React.useState<string>('');
 
+  // Transaction ID verification state
+  // 'idle'           → no file selected yet
+  // 'extracting'     → scanning file for Transaction ID
+  // 'verified'       → ID extracted AND matches system record → input locked ✅
+  // 'mismatch'       → ID extracted but doesn't match → old/wrong copy warning
+  // 'manual'         → extraction failed / user is typing manually
+  // 'manual_verified'→ user typed correct ID manually → input locked ✅
+  const [txIdStatus, setTxIdStatus] = React.useState<
+    'idle' | 'extracting' | 'verified' | 'mismatch' | 'manual' | 'manual_verified'
+  >('idle');
+  const [txIdLocked, setTxIdLocked] = React.useState(false);
+  const [txIdAutoDetected, setTxIdAutoDetected] = React.useState(false);
+
   // Use effect hook at the top level of the component
   React.useEffect(() => {
     const fetchReportDetails = async () => {
@@ -281,12 +294,16 @@ const PDFDialogContent = ({
     const ctx = canvas.getContext('2d')!;
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // Resolution check — supports both landscape and portrait orientation
-    // A document photo is valid if its longer side >= 600 and shorter side >= 400
+    // Resolution check
     const longer = Math.max(width, height);
     const shorter = Math.min(width, height);
     if (longer < 600 || shorter < 400) {
       return { pass: false, reason: `Image resolution is too low (${width}x${height}px). Please upload a clearer photo with at least 600x400 pixels.` };
+    }
+
+    // Orientation check
+    if (width > height) {
+      return { pass: false, reason: 'Image is in landscape orientation. Please upload the document straight in portrait orientation.' };
     }
 
     // Blur check — threshold lowered to 8 to accommodate compressed mobile scans
@@ -341,6 +358,12 @@ const PDFDialogContent = ({
       setQualityStep('Step 2/2: Checking document visibility...');
       const page = await pdf.getPage(1);
       const viewport = page.getViewport({ scale: 1.0 });
+
+      // Orientation check
+      if (viewport.width > viewport.height) {
+        return { pass: false, reason: 'PDF is in landscape orientation. Please upload the document straight in portrait orientation.' };
+      }
+
       const canvas = document.createElement('canvas');
       canvas.width = Math.min(viewport.width, 800);
       canvas.height = Math.min(viewport.height, 1000);
@@ -388,7 +411,250 @@ const PDFDialogContent = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
     setSelectedFile(null);
     setProcessedFile(null);
+    // Reset transaction ID state
+    setTxIdStatus('idle');
+    setTxIdLocked(false);
+    setTxIdAutoDetected(false);
+    setVerifyTransactionId('');
     toast({ variant: 'destructive', title: 'Document Quality Check Failed', description: message });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Transaction ID extraction helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Helper to clean up OCR mistakes where letters are confused for numbers.
+   * Since Transaction ID is Hexadecimal (0-9, A-F), letters like O, I, S, Z are definitely mistakes.
+   */
+  const sanitizeOCRText = (text: string): string => {
+    return text.toUpperCase()
+      .replace(/O/g, '0')
+      .replace(/I/g, '1')
+      .replace(/S/g, '5')
+      .replace(/Z/g, '2')
+      .replace(/G/g, '6');
+  };
+
+  /**
+   * Helper to find the best 8-char string match against the target ID.
+   */
+  const findBestMatch = (text: string, targetId: string): { id: string | null, similarity: number, isStrict: boolean } => {
+    const sanitized = sanitizeOCRText(text);
+    const target = targetId.toUpperCase();
+    if (!target || target.length !== 8) return { id: null, similarity: 0, isStrict: false };
+
+    let maxSim = 0;
+    let bestMatch: string | null = null;
+    let isStrict = false;
+
+    // 1. Check strict regex tokens first
+    const allTokens = sanitized.match(/\b([0-9A-F]{8})\b/g) || [];
+    for (const token of allTokens) {
+      let matches = 0;
+      for (let i = 0; i < 8; i++) {
+        if (token[i] === target[i]) matches++;
+      }
+      const sim = (matches / 8) * 100;
+      if (sim > maxSim) {
+        maxSim = sim;
+        bestMatch = token;
+        isStrict = true;
+      }
+    }
+
+    if (bestMatch && maxSim === 100) {
+      return { id: bestMatch, similarity: 100, isStrict: true };
+    }
+
+    // 2. Fuzzy search
+    let bestFuzzyMatch: string | null = null;
+    let maxFuzzySim = 0;
+    const cleanText = sanitized.replace(/[^A-Z0-9]/g, '');
+    if (cleanText.length >= 8) {
+      for (let i = 0; i <= cleanText.length - 8; i++) {
+        const window = cleanText.substring(i, i + 8);
+        let matches = 0;
+        for (let j = 0; j < 8; j++) {
+          if (window[j] === target[j]) matches++;
+        }
+        const sim = (matches / 8) * 100;
+        if (sim > maxFuzzySim) {
+          maxFuzzySim = sim;
+          bestFuzzyMatch = window;
+        }
+      }
+    }
+
+    // If fuzzy match is >= 50% (it's blurry correct ID), we return it.
+    if (maxFuzzySim >= 50 && maxFuzzySim > maxSim) {
+      return { id: bestFuzzyMatch, similarity: maxFuzzySim, isStrict: false };
+    }
+
+    // Otherwise return the strict match (even if 0% similarity, meaning it's a completely different report)
+    if (bestMatch) {
+      return { id: bestMatch, similarity: maxSim, isStrict: true };
+    }
+
+    // If no strict match and fuzzy is < 50%, return null to force manual entry
+    return { id: null, similarity: 0, isStrict: false };
+  };
+
+  /**
+   * Helper to load Tesseract JS dynamically.
+   */
+  const loadTesseract = async () => {
+    return new Promise<any>((resolve, reject) => {
+      if ((window as any).Tesseract) { resolve((window as any).Tesseract); return; }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      script.onload = () => resolve((window as any).Tesseract);
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  };
+
+  /**
+   * Orchestrates OCR on top and bottom strips of a canvas/image source.
+   */
+  const performOCROnSource = async (source: HTMLCanvasElement | HTMLImageElement, targetId: string): Promise<{ id: string | null, similarity: number }> => {
+    const Tesseract = await loadTesseract();
+    const W = source.width;
+    const H = source.height;
+
+    const ocrStrip = async (sy: number, sh: number): Promise<string> => {
+      const c = document.createElement('canvas');
+      const scale = 2; // 2x upscale drastically improves OCR accuracy for small text
+      c.width = W * scale;
+      c.height = sh * scale;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(source, 0, sy, W, sh, 0, 0, c.width, c.height);
+
+      const worker = await Tesseract.createWorker('eng');
+      const { data } = await worker.recognize(c);
+      await worker.terminate();
+      return data.text || '';
+    };
+
+    // Scan Top 25%
+    const headerHeight = Math.round(H * 0.25);
+    const headerText = await ocrStrip(0, headerHeight);
+    let result = findBestMatch(headerText, targetId);
+    if (result.similarity >= 50) return result;
+
+    // Scan Bottom 20%
+    const footerHeight = Math.round(H * 0.20);
+    const footerY = H - footerHeight;
+    const footerText = await ocrStrip(footerY, footerHeight);
+    const footerResult = findBestMatch(footerText, targetId);
+    return footerResult.similarity > result.similarity ? footerResult : result;
+  };
+
+  /**
+   * Extract Transaction ID from a PDF using PDF.js text layer.
+   * If text extraction fails (e.g., scanned PDF without text layer), it falls back to rendering
+   * the PDF page to a Canvas and running OCR.
+   */
+  const extractTransactionIdFromPDF = async (file: File, targetId: string): Promise<{ id: string | null, similarity: number }> => {
+    try {
+      const pdfjsLib = (window as any).pdfjsLib;
+      if (!pdfjsLib) return { id: null, similarity: 0 };
+
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      if (!pdf || pdf.numPages === 0) return { id: null, similarity: 0 };
+
+      const page = await pdf.getPage(1);
+
+      // Attempt fast native text extraction
+      const textContent = await page.getTextContent();
+      const fullText = textContent.items.map((item: any) => item.str).join(' ');
+      const result = findBestMatch(fullText, targetId);
+      if (result.similarity >= 80) return result;
+
+      // Fallback: No ID found via text (likely a scanned image PDF).
+      // Render to canvas and run OCR.
+      const viewport = page.getViewport({ scale: 1.5 }); // Base scale, will be 2x'd in performOCROnSource
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return result;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const fallbackResult = await performOCROnSource(canvas, targetId);
+      return fallbackResult.similarity > result.similarity ? fallbackResult : result;
+    } catch (err) {
+      console.error('PDF extraction failed:', err);
+      return { id: null, similarity: 0 };
+    }
+  };
+
+  /**
+   * Extract Transaction ID from an image using Tesseract OCR.
+   */
+  const extractTransactionIdFromImage = async (file: File, targetId: string): Promise<{ id: string | null, similarity: number }> => {
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const i = new Image();
+          i.onload = () => resolve(i);
+          i.onerror = reject;
+          i.src = ev.target!.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      return await performOCROnSource(img, targetId);
+    } catch (err) {
+      console.error('Image extraction failed:', err);
+      return { id: null, similarity: 0 };
+    }
+  };
+
+  /**
+   * Orchestrate extraction + immediate verification against report.transactionId.
+   * Updates txIdStatus, verifyTransactionId, and txIdLocked accordingly.
+   */
+  const runTransactionIdExtraction = async (file: File, isPdf: boolean) => {
+    setTxIdStatus('extracting');
+    setTxIdLocked(false);
+    setTxIdAutoDetected(false);
+
+    const targetId = report.transactionId?.toUpperCase() ?? '';
+
+    const { id: extracted, similarity } = isPdf
+      ? await extractTransactionIdFromPDF(file, targetId)
+      : await extractTransactionIdFromImage(file, targetId);
+
+    if (!extracted) {
+      // Extraction failed completely → leave blank, let user type
+      setTxIdStatus('manual');
+      setVerifyTransactionId('');
+      return;
+    }
+
+    if (similarity >= 50 && similarity < 100) {
+      // Blur detected (Option A)
+      rejectFile('Document is blurry or text is unreadable. Please upload a clearer copy.');
+      return;
+    }
+
+    setVerifyTransactionId(extracted);
+    setTxIdAutoDetected(true);
+
+    if (similarity === 100) {
+      setTxIdStatus('verified');
+      setTxIdLocked(true);
+    } else {
+      // Mismatch
+      setTxIdStatus('mismatch');
+      setTxIdLocked(false);
+    }
   };
 
   // --- End Quality Check Helpers ---
@@ -451,10 +717,15 @@ const PDFDialogContent = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     setSelectedFile(file || null);
-    setProcessedFile(null); // Reset processed file on new selection
+    setProcessedFile(null);
     setQualityStatus('idle');
     setQualityError('');
     setQualityStep('');
+    // Reset transaction ID state on new file selection
+    setTxIdStatus('idle');
+    setTxIdLocked(false);
+    setTxIdAutoDetected(false);
+    setVerifyTransactionId('');
     if (!file) return;
 
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
@@ -493,6 +764,8 @@ const PDFDialogContent = ({
       }
       setQualityStatus('passed');
       setQualityStep('');
+      // Extract Transaction ID from PDF text layer (runs asynchronously, fast)
+      runTransactionIdExtraction(file, true);
 
     } else if (file.type.startsWith('image/')) {
       // Reject if image size is greater than 2MB
@@ -514,11 +787,11 @@ const PDFDialogContent = ({
       }
       setQualityStatus('passed');
       setQualityStep('');
+      // Extract Transaction ID from image header/footer via Tesseract (runs asynchronously)
+      runTransactionIdExtraction(file, false);
 
       // Compress only if size is greater than 500KB
       if (file.size <= 500 * 1024) {
-        // Small file — no compression needed, use original file directly
-        // Set processedFile explicitly so the submit path has consistent state
         setProcessedFile(file);
         return;
       }
@@ -709,39 +982,8 @@ const PDFDialogContent = ({
       ) : (
         <form className="space-y-4">
           <div className="grid gap-4">
-            <div className="space-y-2">
-              <label htmlFor="verifyTransactionId" className="text-sm font-medium text-amber-900 flex items-center gap-1">
-                Verify Transaction ID <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id="verifyTransactionId"
-                placeholder="Enter ID printed on the paper report"
-                value={verifyTransactionId}
-                onChange={(e) => setVerifyTransactionId(e.target.value)}
-                className="font-mono uppercase"
-              />
-              <p className="text-xs text-muted-foreground">Please type the Transaction ID that is printed on the physical signed report.</p>
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="despatchNo" className="text-sm font-medium">
-                Despatch No
-              </label>
-              <Input
-                id="despatchNo"
-                placeholder="Enter despatch number"
-                defaultValue={report.despatchNo}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="despatchDate" className="text-sm font-medium">
-                Despatch Date
-              </label>
-              <Input
-                id="despatchDate"
-                type="date"
-                defaultValue={report.despatchDate ? new Date(report.despatchDate).toISOString().split('T')[0] : undefined}
-              />
-            </div>
+
+            {/* 1. File Upload Field */}
             <div className="space-y-2">
               <label htmlFor="pdfOrImageFile" className="text-sm font-medium">
                 PDF or Image File <span className="text-xs font-normal text-muted-foreground ml-1">(Max: Image 2MB, PDF 5MB)</span>
@@ -803,6 +1045,160 @@ const PDFDialogContent = ({
                 </div>
               )}
             </div>
+
+            {/* 2. Transaction ID Field */}
+            <div className="space-y-1.5">
+              <label htmlFor="verifyTransactionId" className="text-sm font-medium text-amber-900 flex items-center gap-1">
+                Verify Transaction ID <span className="text-red-500">*</span>
+              </label>
+
+              {/* Input wrapper with icon */}
+              <div className="relative">
+                <Input
+                  id="verifyTransactionId"
+                  placeholder={txIdStatus === 'extracting' ? 'Scanning document...' : 'Enter ID printed on the paper report'}
+                  value={verifyTransactionId}
+                  readOnly={txIdLocked || txIdStatus === 'extracting'}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+                    setVerifyTransactionId(val);
+                    setTxIdAutoDetected(false);
+                    if (val.length === 8) {
+                      const systemId = report.transactionId?.toUpperCase() ?? '';
+                      if (val === systemId) {
+                        setTxIdStatus('manual_verified');
+                        setTxIdLocked(true);
+                      } else {
+                        setTxIdStatus('mismatch');
+                      }
+                    } else {
+                      setTxIdStatus('manual');
+                      setTxIdLocked(false);
+                    }
+                  }}
+                  className={[
+                    'font-mono uppercase tracking-widest pr-10 transition-all duration-200',
+                    txIdStatus === 'verified' || txIdStatus === 'manual_verified'
+                      ? 'border-green-500 bg-green-50 text-green-800 focus-visible:ring-green-400'
+                      : txIdStatus === 'mismatch'
+                        ? 'border-amber-400 bg-amber-50 text-amber-900 focus-visible:ring-amber-400'
+                        : txIdStatus === 'extracting'
+                          ? 'bg-blue-50 border-blue-300'
+                          : ''
+                  ].join(' ')}
+                />
+
+                {/* Right-side icon inside input */}
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  {txIdStatus === 'extracting' && (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  )}
+                  {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && (
+                    <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                  {txIdStatus === 'mismatch' && (
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  )}
+                  {(txIdStatus === 'manual') && verifyTransactionId.length > 0 && verifyTransactionId.length < 8 && (
+                    <span className="text-xs text-muted-foreground font-mono">{verifyTransactionId.length}/8</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Status messages below input */}
+              {txIdStatus === 'extracting' && (
+                <p className="text-xs text-blue-600 flex items-center gap-1 animate-pulse">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Scanning document for Transaction ID...
+                </p>
+              )}
+
+              {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && (
+                <p className="text-xs text-green-700 flex items-center gap-1 font-medium">
+                  <svg className="h-3.5 w-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  {txIdAutoDetected
+                    ? 'Transaction ID auto-detected and verified. — Please confirm it matches the printed copy.'
+                    : 'Transaction ID verified.'}
+                </p>
+              )}
+
+              {txIdStatus === 'mismatch' && (
+                <div className="mt-1 p-2.5 rounded-md bg-amber-50 border border-amber-300">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-800">
+                        This does not appear to be the latest signed copy.
+                      </p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        The Transaction ID on this document (<span className="font-mono font-bold">{verifyTransactionId}</span>) does not match the current report ID.
+                        Please ensure you are uploading the most recently printed and signed attendance report.
+                      </p>
+                      <p className="text-xs text-amber-600 mt-1">
+                        If this is correct, please type the Transaction ID manually in the field above.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {txIdStatus === 'manual' && (
+                <div className="mt-2 p-3.5 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-800">
+                  <p className="font-bold text-[15px] mb-2 text-slate-900">
+                    The Transaction ID could not be detected automatically. This usually happens if the uploaded attendance report is:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 mb-3 text-slate-700 font-medium">
+                    <li>Blurry or of low image quality.</li>
+                    <li>Captured at an angle (skewed) rather than flat on a proper surface.</li>
+                    <li>Scanned at low resolution.</li>
+                    <li>The wrong document (not a valid attendance report).</li>
+                  </ul>
+                  <p className="font-bold text-amber-700 mb-2">
+                    Please ensure the file is clear, readable, and printable; otherwise, the system may reject it during deep analysis.
+                  </p>
+                  <p className="font-bold text-[15px] mb-2 text-slate-900">
+                    If you believe the PDF or image file is correct, please manually type the Transaction ID as it appears on the physically signed report.
+                  </p>
+                </div>
+              )}
+
+              {txIdStatus === 'idle' && (
+                <p className="text-xs text-muted-foreground">
+                  Please type the Transaction ID that is printed on the physical signed report.
+                </p>
+              )}
+            </div>
+
+            {/* 3. Despatch Details - Only show when quality is passed AND ID is verified */}
+            {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && qualityStatus === 'passed' && (
+              <>
+                <div className="space-y-2 border-t pt-4 mt-2">
+                  <h3 className="text-sm font-medium text-foreground">Despatch Details</h3>
+                  <label htmlFor="despatchNo" className="text-xs font-medium text-muted-foreground">
+                    Despatch No
+                  </label>
+                  <Input
+                    id="despatchNo"
+                    placeholder="Enter despatch number"
+                    defaultValue={report.despatchNo}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="despatchDate" className="text-xs font-medium text-muted-foreground">
+                    Despatch Date
+                  </label>
+                  <Input
+                    id="despatchDate"
+                    type="date"
+                    defaultValue={report.despatchDate ? new Date(report.despatchDate).toISOString().split('T')[0] : undefined}
+                  />
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <DialogClose asChild>
@@ -810,7 +1206,13 @@ const PDFDialogContent = ({
             </DialogClose>
             <Button
               type="button"
-              disabled={qualityStatus === 'checking' || qualityStatus === 'failed' || isProcessing}
+              disabled={
+                qualityStatus === 'checking' ||
+                qualityStatus === 'failed' ||
+                isProcessing ||
+                txIdStatus === 'extracting' ||
+                txIdStatus === 'mismatch'
+              }
               onClick={async (e) => {
                 e.preventDefault();
                 const form = e.currentTarget.closest("form");
@@ -1813,9 +2215,7 @@ export default function Attendance() {
                               size="sm"
                               disabled={changeStatus.isPending}
                               onClick={() => {
-                                setFeedbackReport(report);
-                                setFeedbackSelection(null);
-                                setRandomFeedbackIndex(Math.floor(Math.random() * POSITIVE_REMARKS.length));
+                                setFinalizeReport(report);
                               }}
                             >
                               {changeStatus.isPending ? (
