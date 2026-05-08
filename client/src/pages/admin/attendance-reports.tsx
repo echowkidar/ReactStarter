@@ -31,7 +31,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin, ChevronDown, Filter, CalendarIcon } from "lucide-react";
+import { LogOut, Users, Eye, Edit, Search, ArrowLeft, FileDown, ChevronLeft, ChevronRight, Loader2, XCircle, CheckCircle, FileText, Check, Pin, ChevronDown, Filter, CalendarIcon, RefreshCw } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -459,6 +459,57 @@ export default function AttendanceReports() {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update export date." });
     },
   });
+
+  // ---- Replace Signed Report (Super Admin only) ----
+  const [replaceReportId, setReplaceReportId] = useState<number | null>(null);
+  const [replaceOldFileUrl, setReplaceOldFileUrl] = useState<string>('');
+  const [isReplacing, setIsReplacing] = useState(false);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleReplaceReport = async () => {
+    const file = replaceFileInputRef.current?.files?.[0];
+    if (!file || !replaceReportId) return;
+    setIsReplacing(true);
+    try {
+      // 1. Upload new file
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!uploadRes.ok) throw new Error('File upload failed');
+      const uploadData = await uploadRes.json();
+      const newFileUrl: string = uploadData.fileUrl || uploadData.imageUrl || '';
+      if (!newFileUrl) throw new Error('Server did not return a file URL');
+
+      // 2. Update DB with new fileUrl only — all other fields remain untouched
+      const patchRes = await fetch(`/api/attendance/${replaceReportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileUrl: newFileUrl }),
+      });
+      if (!patchRes.ok) throw new Error('Failed to update report record');
+
+      // 3. Delete old physical file from server after successful DB update
+      if (replaceOldFileUrl) {
+        await fetch('/api/upload', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: replaceOldFileUrl }),
+        }).catch(() => {}); // non-fatal if old file already missing
+      }
+
+      // 4. Refresh table
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+      toast({ title: 'File Replaced', description: 'The signed report has been replaced successfully.' });
+      setReplaceReportId(null);
+      setReplaceOldFileUrl('');
+      if (replaceFileInputRef.current) replaceFileInputRef.current.value = '';
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Replace Failed', description: err.message || 'An error occurred.' });
+    } finally {
+      setIsReplacing(false);
+    }
+  };
+  // ---- End Replace Signed Report ----
 
   // Fetch attendance reports - filtered by month/year if selected
   const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
@@ -2003,6 +2054,21 @@ export default function AttendanceReports() {
                                 <FileText className="h-4 w-4 text-blue-600" />
                               </Button>
                             )}
+                            {isSuperAdmin && entry.fileUrl && (
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 text-orange-600 border-orange-200 hover:bg-orange-50"
+                                onClick={() => {
+                                  setReplaceReportId(entry.reportId);
+                                  setReplaceOldFileUrl(entry.fileUrl!);
+                                  if (replaceFileInputRef.current) replaceFileInputRef.current.value = '';
+                                }}
+                                title="Replace Signed Report (Super Admin)"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -2088,6 +2154,51 @@ export default function AttendanceReports() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Replace Signed Report Dialog — Super Admin only */}
+      <Dialog open={replaceReportId !== null} onOpenChange={(open) => { if (!open) { setReplaceReportId(null); setReplaceOldFileUrl(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-orange-600" />
+              Replace Signed Report
+            </DialogTitle>
+            <DialogDescription>
+              Upload a new signed attendance report to replace the existing file. The old file will be permanently deleted from the server. All other report data (status, despatch details, transaction ID) will remain unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800">
+              <strong>Note:</strong> This action is irreversible. The previous file will be permanently removed.
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Replacement File</label>
+              <input
+                ref={replaceFileInputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 border border-input rounded-md p-1 cursor-pointer"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isReplacing}>Cancel</Button>
+            </DialogClose>
+            <Button
+              onClick={handleReplaceReport}
+              disabled={isReplacing}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {isReplacing ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Replacing...</>
+              ) : (
+                <><RefreshCw className="h-4 w-4 mr-2" /> Replace File</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
