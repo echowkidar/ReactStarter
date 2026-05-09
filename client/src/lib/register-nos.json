@@ -1685,11 +1685,11 @@
   },
   {
     "value": "DEN76EII",
-    "label": "DEN76EII - PERIODONTIA & COMM. DENTISTRY"
+    "label": "DEN76EII - PERIODONTOLOGY"
   },
   {
     "value": "DEN76EIIDW",
-    "label": "DEN76EIIDW - PERIODONTIA & COMM. DENTISTRY"
+    "label": "DEN76EIIDW - PERIODONTOLOGY"
   },
   {
     "value": "DEN76EIII",
@@ -1701,7 +1701,7 @@
   },
   {
     "value": "DEN76EIINT",
-    "label": "DEN76EIINT - PERIODONTIA & COMM. DENTISTRY"
+    "label": "DEN76EIINT - PERIODONTOLOGY"
   },
   {
     "value": "DEN76EINT",
@@ -1753,7 +1753,7 @@
   },
   {
     "value": "DEN76IIT",
-    "label": "DEN76IIT - PERIODONTIA & COMM. DENTISTRY"
+    "label": "DEN76IIT - PERIODONTOLOGY"
   },
   {
     "value": "DTCXX",
@@ -4049,7 +4049,7 @@
   },
   {
     "value": "MED76EII",
-    "label": "MED76EII - PERIODONTIA & COMM. DENTISTRY"
+    "label": "MED76EII - PERIODONTOLOGY"
   },
   {
     "value": "MED76EIII",
@@ -4069,15 +4069,15 @@
   },
   {
     "value": "MED76EIIU",
-    "label": "MED76EIIU - PERIODONTIA & COMM. DENTISTRY"
+    "label": "MED76EIIU - PERIODONTOLOGY"
   },
   {
     "value": "MED76EIIUG",
-    "label": "MED76EIIUG - PERIODONTIA & COMM. DENTISTRY"
+    "label": "MED76EIIUG - PERIODONTOLOGY"
   },
   {
     "value": "MED76EIIZ",
-    "label": "MED76EIIZ - PERIODONTIA & COMM. DENTISTRY"
+    "label": "MED76EIIZ - PERIODONTOLOGY"
   },
   {
     "value": "MED76EIU",
