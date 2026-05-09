@@ -306,10 +306,12 @@ const PDFDialogContent = ({
       return { pass: false, reason: 'Image is in landscape orientation. Please upload the document straight in portrait orientation.' };
     }
 
-    // Blur check — threshold lowered to 8 to accommodate compressed mobile scans
-    // (CamScanner, Adobe Scan, etc.) which have lower Laplacian variance due to JPEG compression
+    // Blur check — threshold set to 3 to accommodate compressed mobile scans
+    // (CamScanner, Adobe Scan, phone camera JPEG) which have lower Laplacian variance
+    // due to JPEG compression even when the document is clearly readable.
+    // Only genuinely out-of-focus or heavily blurred images will score below 3.
     const blurScore = calcBlurScore(imageData);
-    if (blurScore < 8) {
+    if (blurScore < 3) {
       return { pass: false, reason: 'Image appears too blurry. Please retake the photo in good lighting and hold the camera steady.' };
     }
 
