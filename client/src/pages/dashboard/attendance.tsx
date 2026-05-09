@@ -439,67 +439,14 @@ const PDFDialogContent = ({
   };
 
   /**
-   * Helper to find the best 8-char string match against the target ID.
+   * Helper to find a valid 8-char hex Transaction ID in OCR text.
+   * Prefers tokens with at least one letter (to avoid matching dates like 01042026).
    */
-  const findBestMatch = (text: string, targetId: string): { id: string | null, similarity: number, isStrict: boolean } => {
+  const extractIdFromText = (text: string): string | null => {
     const sanitized = sanitizeOCRText(text);
-    const target = targetId.toUpperCase();
-    if (!target || target.length !== 8) return { id: null, similarity: 0, isStrict: false };
-
-    let maxSim = 0;
-    let bestMatch: string | null = null;
-    let isStrict = false;
-
-    // 1. Check strict regex tokens first
     const allTokens = sanitized.match(/\b([0-9A-F]{8})\b/g) || [];
-    for (const token of allTokens) {
-      let matches = 0;
-      for (let i = 0; i < 8; i++) {
-        if (token[i] === target[i]) matches++;
-      }
-      const sim = (matches / 8) * 100;
-      if (sim > maxSim) {
-        maxSim = sim;
-        bestMatch = token;
-        isStrict = true;
-      }
-    }
-
-    if (bestMatch && maxSim === 100) {
-      return { id: bestMatch, similarity: 100, isStrict: true };
-    }
-
-    // 2. Fuzzy search
-    let bestFuzzyMatch: string | null = null;
-    let maxFuzzySim = 0;
-    const cleanText = sanitized.replace(/[^A-Z0-9]/g, '');
-    if (cleanText.length >= 8) {
-      for (let i = 0; i <= cleanText.length - 8; i++) {
-        const window = cleanText.substring(i, i + 8);
-        let matches = 0;
-        for (let j = 0; j < 8; j++) {
-          if (window[j] === target[j]) matches++;
-        }
-        const sim = (matches / 8) * 100;
-        if (sim > maxFuzzySim) {
-          maxFuzzySim = sim;
-          bestFuzzyMatch = window;
-        }
-      }
-    }
-
-    // If fuzzy match is >= 50% (it's blurry correct ID), we return it.
-    if (maxFuzzySim >= 50 && maxFuzzySim > maxSim) {
-      return { id: bestFuzzyMatch, similarity: maxFuzzySim, isStrict: false };
-    }
-
-    // Otherwise return the strict match (even if 0% similarity, meaning it's a completely different report)
-    if (bestMatch) {
-      return { id: bestMatch, similarity: maxSim, isStrict: true };
-    }
-
-    // If no strict match and fuzzy is < 50%, return null to force manual entry
-    return { id: null, similarity: 0, isStrict: false };
+    // Prefer token with at least one letter (true hex ID), fallback to any 8-digit token
+    return allTokens.find((t) => /[A-F]/.test(t)) || allTokens[0] || null;
   };
 
   /**
@@ -519,21 +466,20 @@ const PDFDialogContent = ({
   /**
    * Orchestrates OCR on top and bottom strips of a canvas/image source.
    */
-  const performOCROnSource = async (source: HTMLCanvasElement | HTMLImageElement, targetId: string): Promise<{ id: string | null, similarity: number }> => {
+  const performOCROnSource = async (source: HTMLCanvasElement | HTMLImageElement): Promise<string | null> => {
     const Tesseract = await loadTesseract();
     const W = source.width;
     const H = source.height;
 
     const ocrStrip = async (sy: number, sh: number): Promise<string> => {
       const c = document.createElement('canvas');
-      const scale = 2; // 2x upscale drastically improves OCR accuracy for small text
+      const scale = 2;
       c.width = W * scale;
       c.height = sh * scale;
       const ctx = c.getContext('2d')!;
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, c.width, c.height);
       ctx.drawImage(source, 0, sy, W, sh, 0, 0, c.width, c.height);
-
       const worker = await Tesseract.createWorker('eng');
       const { data } = await worker.recognize(c);
       await worker.terminate();
@@ -543,61 +489,56 @@ const PDFDialogContent = ({
     // Scan Top 25%
     const headerHeight = Math.round(H * 0.25);
     const headerText = await ocrStrip(0, headerHeight);
-    let result = findBestMatch(headerText, targetId);
-    if (result.similarity >= 50) return result;
+    const headerId = extractIdFromText(headerText);
+    if (headerId) return headerId;
 
     // Scan Bottom 20%
     const footerHeight = Math.round(H * 0.20);
     const footerY = H - footerHeight;
     const footerText = await ocrStrip(footerY, footerHeight);
-    const footerResult = findBestMatch(footerText, targetId);
-    return footerResult.similarity > result.similarity ? footerResult : result;
+    return extractIdFromText(footerText);
   };
 
   /**
    * Extract Transaction ID from a PDF using PDF.js text layer.
-   * If text extraction fails (e.g., scanned PDF without text layer), it falls back to rendering
-   * the PDF page to a Canvas and running OCR.
+   * Falls back to canvas OCR if no text layer found (scanned PDFs).
    */
-  const extractTransactionIdFromPDF = async (file: File, targetId: string): Promise<{ id: string | null, similarity: number }> => {
+  const extractTransactionIdFromPDF = async (file: File): Promise<string | null> => {
     try {
       const pdfjsLib = (window as any).pdfjsLib;
-      if (!pdfjsLib) return { id: null, similarity: 0 };
+      if (!pdfjsLib) return null;
 
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      if (!pdf || pdf.numPages === 0) return { id: null, similarity: 0 };
+      if (!pdf || pdf.numPages === 0) return null;
 
       const page = await pdf.getPage(1);
 
       // Attempt fast native text extraction
       const textContent = await page.getTextContent();
       const fullText = textContent.items.map((item: any) => item.str).join(' ');
-      const result = findBestMatch(fullText, targetId);
-      if (result.similarity >= 80) return result;
+      const candidate = extractIdFromText(fullText);
+      if (candidate) return candidate;
 
-      // Fallback: No ID found via text (likely a scanned image PDF).
-      // Render to canvas and run OCR.
-      const viewport = page.getViewport({ scale: 1.5 }); // Base scale, will be 2x'd in performOCROnSource
+      // Fallback: render PDF page to canvas and OCR it
+      const viewport = page.getViewport({ scale: 1.5 });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       const ctx = canvas.getContext('2d');
-      if (!ctx) return result;
-
+      if (!ctx) return null;
       await page.render({ canvasContext: ctx, viewport }).promise;
-      const fallbackResult = await performOCROnSource(canvas, targetId);
-      return fallbackResult.similarity > result.similarity ? fallbackResult : result;
+      return await performOCROnSource(canvas);
     } catch (err) {
       console.error('PDF extraction failed:', err);
-      return { id: null, similarity: 0 };
+      return null;
     }
   };
 
   /**
    * Extract Transaction ID from an image using Tesseract OCR.
    */
-  const extractTransactionIdFromImage = async (file: File, targetId: string): Promise<{ id: string | null, similarity: number }> => {
+  const extractTransactionIdFromImage = async (file: File): Promise<string | null> => {
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const reader = new FileReader();
@@ -610,50 +551,41 @@ const PDFDialogContent = ({
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-
-      return await performOCROnSource(img, targetId);
+      return await performOCROnSource(img);
     } catch (err) {
       console.error('Image extraction failed:', err);
-      return { id: null, similarity: 0 };
+      return null;
     }
   };
 
   /**
    * Orchestrate extraction + immediate verification against report.transactionId.
-   * Updates txIdStatus, verifyTransactionId, and txIdLocked accordingly.
    */
   const runTransactionIdExtraction = async (file: File, isPdf: boolean) => {
     setTxIdStatus('extracting');
     setTxIdLocked(false);
     setTxIdAutoDetected(false);
 
-    const targetId = report.transactionId?.toUpperCase() ?? '';
-
-    const { id: extracted, similarity } = isPdf
-      ? await extractTransactionIdFromPDF(file, targetId)
-      : await extractTransactionIdFromImage(file, targetId);
+    const extracted = isPdf
+      ? await extractTransactionIdFromPDF(file)
+      : await extractTransactionIdFromImage(file);
 
     if (!extracted) {
-      // Extraction failed completely → leave blank, let user type
+      // Could not find any valid hex ID → let user type manually
       setTxIdStatus('manual');
       setVerifyTransactionId('');
-      return;
-    }
-
-    if (similarity >= 50 && similarity < 100) {
-      // Blur detected (Option A)
-      rejectFile('Document is blurry or text is unreadable. Please upload a clearer copy.');
       return;
     }
 
     setVerifyTransactionId(extracted);
     setTxIdAutoDetected(true);
 
-    if (similarity === 100) {
+    const systemId = report.transactionId?.toUpperCase() ?? '';
+    if (extracted.toUpperCase() === systemId) {
       setTxIdStatus('verified');
       setTxIdLocked(true);
     } else {
-      // Mismatch
+      // Extracted ID doesn't match → old/wrong copy warning
       setTxIdStatus('mismatch');
       setTxIdLocked(false);
     }
