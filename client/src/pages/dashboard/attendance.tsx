@@ -89,6 +89,9 @@ const PDFDialogContent = ({
   const [isProcessing, setIsProcessing] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Manual entry confirmation checkbox
+  const [manualConfirmed, setManualConfirmed] = React.useState(false);
+
   // Quality check state
   const [qualityStatus, setQualityStatus] = React.useState<'idle' | 'checking' | 'passed' | 'failed'>('idle');
   const [qualityStep, setQualityStep] = React.useState<string>('');
@@ -413,11 +416,13 @@ const PDFDialogContent = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
     setSelectedFile(null);
     setProcessedFile(null);
-    // Reset transaction ID state
+    setQualityStatus('idle');
+    setQualityError('');
     setTxIdStatus('idle');
     setTxIdLocked(false);
     setTxIdAutoDetected(false);
     setVerifyTransactionId('');
+    setManualConfirmed(false);
     toast({ variant: 'destructive', title: 'Document Quality Check Failed', description: message });
   };
 
@@ -980,132 +985,90 @@ const PDFDialogContent = ({
               )}
             </div>
 
-            {/* 2. Transaction ID Field */}
-            <div className="space-y-1.5">
-              <label htmlFor="verifyTransactionId" className="text-sm font-medium text-amber-900 flex items-center gap-1">
-                Verify Transaction ID <span className="text-red-500">*</span>
-              </label>
+            </div>
 
-              {/* Input wrapper with icon */}
-              <div className="relative">
-                <Input
-                  id="verifyTransactionId"
-                  placeholder={txIdStatus === 'extracting' ? 'Scanning document...' : 'Enter ID printed on the paper report'}
-                  value={verifyTransactionId}
-                  readOnly={txIdLocked || txIdStatus === 'extracting'}
-                  onChange={(e) => {
-                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-                    setVerifyTransactionId(val);
-                    setTxIdAutoDetected(false);
-                    if (val.length === 8) {
-                      const systemId = report.transactionId?.toUpperCase() ?? '';
-                      if (val === systemId) {
-                        setTxIdStatus('manual_verified');
-                        setTxIdLocked(true);
-                      } else {
-                        setTxIdStatus('mismatch');
-                      }
-                    } else {
-                      setTxIdStatus('manual');
-                      setTxIdLocked(false);
-                    }
-                  }}
-                  className={[
-                    'font-mono uppercase tracking-widest pr-10 transition-all duration-200',
-                    txIdStatus === 'verified' || txIdStatus === 'manual_verified'
-                      ? 'border-green-500 bg-green-50 text-green-800 focus-visible:ring-green-400'
-                      : txIdStatus === 'mismatch'
-                        ? 'border-amber-400 bg-amber-50 text-amber-900 focus-visible:ring-amber-400'
-                        : txIdStatus === 'extracting'
-                          ? 'bg-blue-50 border-blue-300'
-                          : ''
-                  ].join(' ')}
-                />
-
-                {/* Right-side icon inside input */}
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  {txIdStatus === 'extracting' && (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                  )}
-                  {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && (
-                    <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            {/* 2b. Non-manual status messages (extracting / verified / mismatch) */}
+            {txIdStatus !== 'idle' && txIdStatus !== 'manual' && (
+              <div className="space-y-1">
+                {txIdStatus === 'extracting' && (
+                  <p className="text-xs text-blue-600 flex items-center gap-1 animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Scanning document for Transaction ID...
+                  </p>
+                )}
+                {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && (
+                  <p className="text-xs text-green-700 flex items-center gap-1 font-medium">
+                    <svg className="h-3.5 w-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
-                  )}
-                  {txIdStatus === 'mismatch' && (
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  )}
-                  {(txIdStatus === 'manual') && verifyTransactionId.length > 0 && verifyTransactionId.length < 8 && (
-                    <span className="text-xs text-muted-foreground font-mono">{verifyTransactionId.length}/8</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Status messages below input */}
-              {txIdStatus === 'extracting' && (
-                <p className="text-xs text-blue-600 flex items-center gap-1 animate-pulse">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Scanning document for Transaction ID...
-                </p>
-              )}
-
-              {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && (
-                <p className="text-xs text-green-700 flex items-center gap-1 font-medium">
-                  <svg className="h-3.5 w-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                  {txIdAutoDetected
-                    ? 'Transaction ID auto-detected and verified. — Please confirm it matches the printed copy.'
-                    : 'Transaction ID verified.'}
-                </p>
-              )}
-
-              {txIdStatus === 'mismatch' && (
-                <div className="mt-1 p-2.5 rounded-md bg-amber-50 border border-amber-300">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-amber-800">
-                        This does not appear to be the latest signed copy.
-                      </p>
-                      <p className="text-xs text-amber-700 mt-0.5">
-                        The Transaction ID on this document (<span className="font-mono font-bold">{verifyTransactionId}</span>) does not match the current report ID.
-                        Please ensure you are uploading the most recently printed and signed attendance report.
-                      </p>
-                      <p className="text-xs text-amber-600 mt-1">
-                        If this is correct, please type the Transaction ID manually in the field above.
-                      </p>
+                    {txIdAutoDetected
+                      ? 'Transaction ID auto-detected and verified. — Please confirm it matches the printed copy.'
+                      : 'Transaction ID verified.'}
+                  </p>
+                )}
+                {txIdStatus === 'mismatch' && (
+                  <div className="mt-1 p-2.5 rounded-md bg-amber-50 border border-amber-300">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-amber-800">
+                          This does not appear to be the latest signed copy.
+                        </p>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          The Transaction ID on this document (<span className="font-mono font-bold">{verifyTransactionId}</span>) does not match the current report ID.
+                          Please ensure you are uploading the most recently printed and signed attendance report.
+                        </p>
+                        <p className="text-xs text-amber-600 mt-1">
+                          If this is correct, please type the Transaction ID manually in the field below.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )}
 
-              {txIdStatus === 'manual' && (
-                <div className="mt-2 p-3.5 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-800">
-                  <p className="font-bold text-[15px] mb-2 text-slate-900">
-                    The Transaction ID could not be detected automatically. This usually happens if the uploaded attendance report is:
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 mb-3 text-slate-700 font-medium">
-                    <li>Blurry or of low image quality.</li>
-                    <li>Captured at an angle (skewed) rather than flat on a proper surface.</li>
-                    <li>Scanned at low resolution.</li>
-                    <li>The wrong document (not a valid attendance report).</li>
-                  </ul>
-                  <p className="font-bold text-amber-700 mb-2">
-                    Please ensure the file is clear, readable, and printable; otherwise, the system may reject it during deep analysis.
-                  </p>
-                  <p className="font-bold text-[15px] mb-2 text-slate-900">
-                    If you believe the PDF or image file is correct, please manually type the Transaction ID as it appears on the physically signed report.
-                  </p>
-                </div>
-              )}
-
-              {txIdStatus === 'idle' && (
-                <p className="text-xs text-muted-foreground">
-                  Please type the Transaction ID that is printed on the physical signed report.
+            {/* 2c. Manual state info block with checkbox */}
+            {txIdStatus === 'manual' && (
+              <div className="mt-2 p-3.5 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-800">
+                <p className="font-bold text-[15px] mb-2 text-slate-900">
+                  The Transaction ID could not be detected automatically. This usually happens if the uploaded attendance report is:
                 </p>
-              )}
-            </div>
+                <ul className="list-disc pl-5 space-y-1 mb-3 text-slate-700 font-medium">
+                  <li>Blurry or of low image quality.</li>
+                  <li>Captured at an angle (skewed) rather than flat on a proper surface.</li>
+                  <li>Scanned at low resolution.</li>
+                  <li>The wrong document (not a valid attendance report).</li>
+                </ul>
+
+                {/* English + Hindi warning */}
+                <p className="font-bold text-amber-700 mb-1">
+                  Please ensure the file is clear, readable, and printable; otherwise, the system may reject it during deep analysis.
+                </p>
+                <p className="font-bold text-amber-700 mb-3" style={{ fontFamily: 'Noto Sans Devanagari, Arial, sans-serif' }}>
+                  कृपया सुनिश्चित करें कि फ़ाइल स्पष्ट, पठनीय और प्रिंट होने योग्य हो; अन्यथा सिस्टम गहरे विश्लेषण के दौरान इसे अस्वीकार कर सकता है।
+                </p>
+
+                {/* Confirmation checkbox */}
+                <label className="flex items-start gap-2.5 cursor-pointer select-none group">
+                  <input
+                    type="checkbox"
+                    checked={manualConfirmed}
+                    onChange={(e) => setManualConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-400 accent-blue-600 cursor-pointer flex-shrink-0"
+                  />
+                  <span className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 transition-colors">
+                    I believe the PDF or image file is correct.
+                  </span>
+                </label>
+
+                {manualConfirmed && (
+                  <p className="mt-2 text-sm text-blue-700 font-medium pl-6">
+                    Please manually type the Transaction ID as it appears on the physically signed report.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* 3. Despatch Details - Only show when quality is passed AND ID is verified */}
             {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && qualityStatus === 'passed' && (
@@ -1133,7 +1096,81 @@ const PDFDialogContent = ({
                 </div>
               </>
             )}
-          </div>
+
+            {/* 4. Verify Transaction ID — moved to bottom, just above Submit/Cancel */}
+            {(txIdStatus !== 'idle' || qualityStatus === 'passed') && (
+              <div className="space-y-1.5 border-t pt-4 mt-2">
+                <label htmlFor="verifyTransactionId" className="text-sm font-medium text-amber-900 flex items-center gap-1">
+                  Verify Transaction ID <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    id="verifyTransactionId"
+                    placeholder={
+                      txIdStatus === 'extracting'
+                        ? 'Scanning document...'
+                        : txIdStatus === 'manual' && !manualConfirmed
+                          ? 'Check the box above to enable manual entry'
+                          : 'ENTER ID PRINTED ON THE PAPER REPORT'
+                    }
+                    value={verifyTransactionId}
+                    readOnly={txIdLocked || txIdStatus === 'extracting'}
+                    disabled={txIdStatus === 'manual' && !manualConfirmed}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+                      setVerifyTransactionId(val);
+                      setTxIdAutoDetected(false);
+                      if (val.length === 8) {
+                        const systemId = report.transactionId?.toUpperCase() ?? '';
+                        if (val === systemId) {
+                          setTxIdStatus('manual_verified');
+                          setTxIdLocked(true);
+                        } else {
+                          setTxIdStatus('mismatch');
+                        }
+                      } else {
+                        setTxIdStatus('manual');
+                        setTxIdLocked(false);
+                      }
+                    }}
+                    className={[
+                      'font-mono uppercase tracking-widest pr-10 transition-all duration-200',
+                      txIdStatus === 'manual' && !manualConfirmed
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : txIdStatus === 'verified' || txIdStatus === 'manual_verified'
+                          ? 'border-green-500 bg-green-50 text-green-800 focus-visible:ring-green-400'
+                          : txIdStatus === 'mismatch'
+                            ? 'border-amber-400 bg-amber-50 text-amber-900 focus-visible:ring-amber-400'
+                            : txIdStatus === 'extracting'
+                              ? 'bg-blue-50 border-blue-300'
+                              : ''
+                    ].join(' ')}
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    {txIdStatus === 'extracting' && (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    )}
+                    {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && (
+                      <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                    {txIdStatus === 'mismatch' && (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    )}
+                    {txIdStatus === 'manual' && manualConfirmed && verifyTransactionId.length > 0 && verifyTransactionId.length < 8 && (
+                      <span className="text-xs text-muted-foreground font-mono">{verifyTransactionId.length}/8</span>
+                    )}
+                  </div>
+                </div>
+                {txIdStatus === 'idle' && (
+                  <p className="text-xs text-muted-foreground">
+                    Please type the Transaction ID that is printed on the physical signed report.
+                  </p>
+                )}
+              </div>
+            )}
+
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
