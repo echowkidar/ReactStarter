@@ -2210,8 +2210,12 @@ export async function registerRoutes(app: Express) {
     res.json(reports);
   });
 
-  // Get list of employee IDs that are already in a report for a specific month/year
-  // Get list of employee IDs that are already in a report for a specific month/year
+  // Get list of employee IDs that are already in a report for a specific month/year.
+  // IMPORTANT: We check the actual attendance PERIOD DATES (inside the periods JSON),
+  // NOT the report's submission month (ar.month/ar.year). This correctly handles the case
+  // where a report was submitted IN month X but covered attendance periods from month Y
+  // (e.g., submitted in May 2026 but covering March 2026 periods). Those employees
+  // should NOT be hidden when creating a supplementary report for May 2026.
   app.get("/api/departments/:departmentId/attendance/reported-employees", async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
@@ -2222,27 +2226,69 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Invalid parameters" });
       }
 
-      console.log(`[FullDebug] Fetching department reported employees: Dept=${departmentId}, ${month}/${year}`);
+      console.log(`[PeriodOverlap] Fetching reported employees by period overlap: Dept=${departmentId}, ${month}/${year}`);
 
-      // Dynamic import to match other routes logic
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
 
+      // Fetch all sent/submitted entries for this department (no month/year filter on report —
+      // we will filter by actual period dates in JS below)
       const result = await db.execute(sql`
-        SELECT DISTINCT ae.employee_id
+        SELECT ae.employee_id, ae.periods
         FROM attendance_entries ae
         JOIN attendance_reports ar ON ae.report_id = ar.id
         WHERE ar.department_id = ${departmentId}
-          AND ar.month = ${month} AND ar.year = ${year}
           AND ar.status IN ('submitted', 'sent')
       `);
 
-      console.log(`[FullDebug] Dept Query Success. Rows: ${result.rows.length}`);
-      const ids = result.rows.map((row: any) => row.employee_id);
+      // Target month date range (first and last day of the requested month)
+      const targetMonthStart = new Date(year, month - 1, 1);
+      const targetMonthEnd   = new Date(year, month, 0); // last day of month
+
+      // Helper: parse DD-MM-YY → Date
+      const parseDDMMYY = (dateStr: string): Date | null => {
+        if (!dateStr || typeof dateStr !== 'string') return null;
+        const parts = dateStr.split('-').map(Number);
+        if (parts.length !== 3) return null;
+        const [d, m, y] = parts;
+        return new Date(2000 + y, m - 1, d);
+      };
+
+      const reportedEmployeeIds = new Set<number>();
+
+      for (const row of result.rows as any[]) {
+        const empId = Number(row.employee_id);
+        if (reportedEmployeeIds.has(empId)) continue; // already confirmed, skip
+
+        let periods: any[] = [];
+        try {
+          periods = typeof row.periods === 'string' ? JSON.parse(row.periods) : (row.periods || []);
+        } catch (e) {
+          continue;
+        }
+
+        if (!Array.isArray(periods)) continue;
+
+        for (const p of periods) {
+          if (!p.fromDate || !p.toDate) continue;
+          const periodStart = parseDDMMYY(p.fromDate);
+          const periodEnd   = parseDDMMYY(p.toDate);
+          if (!periodStart || !periodEnd) continue;
+
+          // Check if this period overlaps with the target month
+          if (periodStart <= targetMonthEnd && periodEnd >= targetMonthStart) {
+            reportedEmployeeIds.add(empId);
+            break; // no need to check more periods for this employee
+          }
+        }
+      }
+
+      const ids = [...reportedEmployeeIds];
+      console.log(`[PeriodOverlap] Employees with periods overlapping ${month}/${year}: ${ids.length}`);
       res.json(ids);
 
     } catch (error: any) {
-      console.error("[FullDebug] Dept Route Error:", error);
+      console.error("[PeriodOverlap] Route Error:", error);
       res.status(500).json({
         message: "Failed to fetch reported employees",
         error: error.message
