@@ -337,6 +337,7 @@ export default function AttendanceReports() {
   const [analysisFilter, setAnalysisFilter] = useState<string[]>([]);
   const [verifiedFilter, setVerifiedFilter] = useState<"all" | "verified" | "unverified">("all");
   const [exportFilter, setExportFilter] = useState<"all" | "exported" | "not_exported">("all");
+  const [skipExported, setSkipExported] = useState(true); // default: checked — skip already-exported rows on export
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
 
   // Permission checks for Export button and date editing
@@ -1171,6 +1172,7 @@ export default function AttendanceReports() {
   };
 
   // Helper to filter out Daily Wage employees when they are missing, for export purposes ONLY
+  // Also skips already-exported entries when skipExported checkbox is checked
   const entriesToExport = useMemo(() => {
     return processedEntries.filter(entry => {
       if (entry.period === "MISSING") {
@@ -1179,9 +1181,13 @@ export default function AttendanceReports() {
           return false;
         }
       }
+      // Skip rows that already have an export date if checkbox is enabled
+      if (skipExported && entry.exportedToOracleAt) {
+        return false;
+      }
       return true;
     });
-  }, [processedEntries]);
+  }, [processedEntries, skipExported]);
 
   // Function to download filtered entries as Excel
   const downloadExcel = () => {
@@ -1765,6 +1771,24 @@ export default function AttendanceReports() {
                   hideSelectAll={true}
                 />
               </div>
+              {/* Skip Already Exported checkbox — shown only to users who can export */}
+              {canExport && (
+                <div className="flex items-center gap-2 self-center px-1">
+                  <input
+                    id="skip-exported-checkbox"
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer accent-green-600"
+                    checked={skipExported}
+                    onChange={(e) => setSkipExported(e.target.checked)}
+                  />
+                  <label
+                    htmlFor="skip-exported-checkbox"
+                    className="text-sm font-medium cursor-pointer select-none whitespace-nowrap text-muted-foreground"
+                  >
+                    Skip Already Exported
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Top pagination */}
