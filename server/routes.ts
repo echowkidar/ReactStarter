@@ -306,8 +306,11 @@ export async function registerRoutes(app: Express) {
       // CRITICAL: Block write operations for 'VEW' user code
       const writeMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
-      // Exception: Allow nasir to use the mark-exported API even if VEW
-      const isNasirExporting = admin.email === 'nasir@amu.ac.in' && req.path === '/api/admin/attendance/mark-exported' && req.method === 'POST';
+      // Exception: Allow nasir to use the mark-exported API and bulk-export-date PATCH even if VEW
+      const isNasirExporting = admin.email === 'nasir@amu.ac.in' && (
+        (req.path === '/api/admin/attendance/mark-exported' && req.method === 'POST') ||
+        (req.path === '/api/admin/attendance/bulk-export-date' && req.method === 'PATCH')
+      );
 
       if (admin.userCode === 'VEW' && writeMethods.includes(req.method) && !isNasirExporting) {
         return res.status(403).json({ message: "Forbidden: View-only access" });
@@ -2736,6 +2739,134 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error updating export date:", error);
       res.status(500).json({ message: "Failed to update export date" });
+    }
+  });
+
+  // Get distinct export dates (with counts) for a given month — used by Bulk Update dialog
+  app.get("/api/admin/attendance/export-dates", verifyAdminSession, async (req, res) => {
+    try {
+      const month = parseInt(req.query.month as string);
+      const year = parseInt(req.query.year as string);
+
+      if (isNaN(month) || isNaN(year)) {
+        return res.status(400).json({ message: "month and year are required" });
+      }
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const result = await db.execute(sql`
+        SELECT
+          DATE(ae.exported_to_oracle_at)::text AS export_date,
+          COUNT(*)::int AS count
+        FROM attendance_entries ae
+        JOIN attendance_reports ar ON ae.report_id = ar.id
+        WHERE ar.month = ${month} AND ar.year = ${year}
+          AND ar.status IN ('sent', 'cancel_requested')
+        GROUP BY DATE(ae.exported_to_oracle_at)
+        ORDER BY export_date NULLS LAST
+      `);
+
+      // Map rows: null export_date means blank entries
+      const rows = (result.rows as any[]).map(row => ({
+        exportDate: row.export_date ?? null,   // "2026-05-13" or null
+        count: row.count,
+      }));
+
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching export dates:", error);
+      res.status(500).json({ message: "Failed to fetch export dates" });
+    }
+  });
+
+  // Bulk update exported_to_oracle_at for entries of a month, filtered by selected dates
+  app.patch("/api/admin/attendance/bulk-export-date", verifyAdminSession, async (req, res) => {
+    try {
+      const { month, year, targetDates, newExportDate } = req.body;
+      // targetDates: Array<string | null>  e.g. ["2026-05-13", null]
+      // newExportDate: ISO string or null
+
+      if (!month || !year || !Array.isArray(targetDates) || targetDates.length === 0) {
+        return res.status(400).json({ message: "month, year, and targetDates array are required" });
+      }
+
+      // --- Nasir restriction: only today's date allowed ---
+      const adminUser = (req as any).adminUser;
+      const isNasirRequest = adminUser?.email === "nasir@amu.ac.in";
+      if (isNasirRequest) {
+        const d = new Date();
+        const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const invalidDates = targetDates.filter((d: string | null) => d !== null && d !== todayStr);
+        const hasNull = targetDates.includes(null);
+        if (invalidDates.length > 0 || hasNull) {
+          return res.status(403).json({
+            message: "You can only update entries exported on today's date."
+          });
+        }
+      }
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      const newDateValue = newExportDate ? new Date(newExportDate) : null;
+
+      // Split targetDates into non-null dates and whether null (blank) entries are included
+      const specificDates = targetDates.filter((d: string | null) => d !== null) as string[];
+      const includeNull = targetDates.includes(null);
+
+      let result;
+
+      if (specificDates.length > 0 && includeNull) {
+        // Both specific dates AND null entries
+        result = await db.execute(sql`
+          UPDATE attendance_entries ae
+          SET exported_to_oracle_at = ${newDateValue}
+          FROM attendance_reports ar
+          WHERE ae.report_id = ar.id
+            AND ar.month = ${month} AND ar.year = ${year}
+            AND ar.status IN ('sent', 'cancel_requested')
+            AND (
+              DATE(ae.exported_to_oracle_at)::text IN (${sql.join(specificDates.map((d: string) => sql`${d}`), sql`, `)})
+              OR ae.exported_to_oracle_at IS NULL
+            )
+          RETURNING ae.id
+        `);
+      } else if (specificDates.length > 0) {
+        // Only specific dates
+        result = await db.execute(sql`
+          UPDATE attendance_entries ae
+          SET exported_to_oracle_at = ${newDateValue}
+          FROM attendance_reports ar
+          WHERE ae.report_id = ar.id
+            AND ar.month = ${month} AND ar.year = ${year}
+            AND ar.status IN ('sent', 'cancel_requested')
+            AND DATE(ae.exported_to_oracle_at)::text IN (${sql.join(specificDates.map((d: string) => sql`${d}`), sql`, `)})
+          RETURNING ae.id
+        `);
+      } else if (includeNull) {
+        // Only blank entries
+        result = await db.execute(sql`
+          UPDATE attendance_entries ae
+          SET exported_to_oracle_at = ${newDateValue}
+          FROM attendance_reports ar
+          WHERE ae.report_id = ar.id
+            AND ar.month = ${month} AND ar.year = ${year}
+            AND ar.status IN ('sent', 'cancel_requested')
+            AND ae.exported_to_oracle_at IS NULL
+          RETURNING ae.id
+        `);
+      } else {
+        return res.status(400).json({ message: "No valid targetDates provided" });
+      }
+
+      res.json({
+        updatedCount: result.rows.length,
+        newExportDate: newDateValue ? newDateValue.toISOString() : null,
+      });
+    } catch (error) {
+      console.error("Error in bulk export date update:", error);
+      res.status(500).json({ message: "Failed to bulk update export dates" });
     }
   });
 

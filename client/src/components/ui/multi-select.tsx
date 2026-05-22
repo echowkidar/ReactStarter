@@ -7,6 +7,9 @@ import { Badge } from "./badge"
 export interface Option {
   label: string
   value: string
+  className?: string
+  selectedClassName?: string
+  badgeClassName?: string
 }
 
 interface MultiSelectProps {
@@ -91,7 +94,14 @@ export function MultiSelect({
             ) : (
               <div className="flex gap-1 overflow-hidden">
                 {selectedOptions.map((option) => (
-                  <Badge key={option.value} variant="secondary" className="flex items-center gap-1 font-normal rounded-sm truncate max-w-[150px]">
+                  <Badge
+                    key={option.value}
+                    variant={option.badgeClassName ? "outline" : "secondary"}
+                    className={cn(
+                      "flex items-center gap-1 font-normal rounded-sm truncate max-w-[150px]",
+                      option.badgeClassName
+                    )}
+                  >
                     <span className="truncate">{option.label}</span>
                     <X
                       className="h-3 w-3 shrink-0 cursor-pointer"
@@ -112,7 +122,7 @@ export function MultiSelect({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+        <div className="absolute z-50 mt-1 max-h-96 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
           <div className="sticky top-0 z-10 bg-popover border-b shadow-sm pb-1">
             <div className="p-2">
               <input
@@ -159,21 +169,27 @@ export function MultiSelect({
               No options found
             </div>
           ) : (
-            filteredOptions.map((option) => (
-              <div
-                key={option.value}
-                className={cn(
-                  "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                  selected.includes(option.value) ? "bg-accent text-accent-foreground" : ""
-                )}
-                onClick={() => handleSelect(option.value)}
-              >
-                <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                  {selected.includes(option.value) && <Check className="h-4 w-4" />}
-                </span>
-                {option.label}
-              </div>
-            ))
+            filteredOptions.map((option) => {
+              const isSelected = selected.includes(option.value);
+              return (
+                <div
+                  key={option.value}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors",
+                    option.className ? option.className : "hover:bg-accent hover:text-accent-foreground",
+                    isSelected
+                      ? (option.selectedClassName ? option.selectedClassName : "bg-accent text-accent-foreground")
+                      : ""
+                  )}
+                  onClick={() => handleSelect(option.value)}
+                >
+                  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                    {isSelected && <Check className="h-4 w-4" />}
+                  </span>
+                  {option.label}
+                </div>
+              );
+            })
           )}
         </div>
       )

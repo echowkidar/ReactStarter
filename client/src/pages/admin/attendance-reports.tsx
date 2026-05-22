@@ -345,6 +345,8 @@ export default function AttendanceReports() {
   const adminEmail = localStorage.getItem("adminEmail") || adminData.email || "";
   const isSuperAdmin = adminData.role === "super" || adminEmail === "admin@amu.ac.in";
   const canExport = isSuperAdmin || adminEmail === "salary@amu.ac.in" || adminEmail === "nasir@amu.ac.in";
+  // Nasir (Salary Admin) ke liye Skip Exported checkbox aur Month dropdown non-editable
+  const isNasirAdmin = adminEmail === "nasir@amu.ac.in";
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -460,6 +462,84 @@ export default function AttendanceReports() {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update export date." });
     },
   });
+
+  // ---- Bulk Export Date Reset/Update ----
+  const [bulkExportDialogOpen, setBulkExportDialogOpen] = useState(false);
+  const [selectedTargetDates, setSelectedTargetDates] = useState<Set<string | null>>(new Set());
+  const [bulkResetMode, setBulkResetMode] = useState(false);
+  const [bulkNewDate, setBulkNewDate] = useState(() => {
+    // Use LOCAL date (not UTC) to avoid timezone offset shifting the date
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+
+  // Today's date string (LOCAL date) for Nasir restriction
+  // Must use local date — not toISOString() which gives UTC and can be a different day in IST
+  const todayDateStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
+  // Fetch distinct export dates for selected month — lazy (only when dialog open)
+  const { data: exportDatesData = [], isLoading: isLoadingExportDates } = useQuery<{ exportDate: string | null; count: number }[]>({
+    queryKey: ["/api/admin/attendance/export-dates", apiMonth, filterYear],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/admin/attendance/export-dates?month=${apiMonth}&year=${filterYear}`);
+      return res.json();
+    },
+    enabled: bulkExportDialogOpen && !!apiMonth && !!filterYear,
+  });
+
+  const bulkUpdateExportDate = useMutation({
+    mutationFn: async ({ month, year, targetDates, newExportDate }: {
+      month: number; year: number;
+      targetDates: (string | null)[];
+      newExportDate: string | null;
+    }) => {
+      const res = await apiRequest('PATCH', '/api/admin/attendance/bulk-export-date', {
+        month, year, targetDates, newExportDate,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to bulk update export dates');
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance/export-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance/export-dates"] });
+      toast({ title: "Export Dates Updated", description: `${data.updatedCount} entries updated successfully.` });
+      setBulkExportDialogOpen(false);
+      setSelectedTargetDates(new Set());
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to bulk update export dates." });
+    },
+  });
+
+  const toggleTargetDate = (date: string | null) => {
+    setSelectedTargetDates(prev => {
+      const next = new Set(prev);
+      const key = date === null ? null : date;
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleBulkExportUpdate = () => {
+    if (!apiMonth || !filterYear || selectedTargetDates.size === 0) return;
+    const targetDates = Array.from(selectedTargetDates);
+    const newExportDate = bulkResetMode ? null : new Date(bulkNewDate + 'T00:00:00').toISOString();
+    bulkUpdateExportDate.mutate({
+      month: parseInt(apiMonth),
+      year: parseInt(filterYear),
+      targetDates,
+      newExportDate,
+    });
+  };
+  // ---- End Bulk Export Date ----
 
   // ---- Replace Signed Report (Super Admin only) ----
   const [replaceReportId, setReplaceReportId] = useState<number | null>(null);
@@ -1572,6 +1652,20 @@ export default function AttendanceReports() {
                         <FileDown className="h-4 w-4 mr-2 text-blue-600" />
                         Export as CSV
                       </DropdownMenuItem>
+                      {apiMonth && filterYear && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedTargetDates(new Set());
+                            setBulkResetMode(false);
+                            setBulkNewDate((() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })());
+                            setBulkExportDialogOpen(true);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2 text-orange-500" />
+                          Reset / Update Export Date
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
@@ -1682,11 +1776,14 @@ export default function AttendanceReports() {
                   }))}
                   selected={monthFilter}
                   onChange={(values) => {
-                    setMonthFilter(values);
-                    setCurrentPage(1); // Reset to first page on filter change
+                    if (!isNasirAdmin) {
+                      setMonthFilter(values);
+                      setCurrentPage(1); // Reset to first page on filter change
+                    }
                   }}
                   placeholder="Filter by month"
                   className="min-w-[180px]"
+                  disabled={isNasirAdmin}
                 />
               </div>
               <div className="w-full md:w-64">
@@ -1753,13 +1850,55 @@ export default function AttendanceReports() {
               <div className="w-full md:w-64">
                 <MultiSelect
                   options={[
-                    { label: "Missing Employees", value: "missing_employees" },
-                    { label: "Partial/Excess Period", value: "partial_month" },
-                    { label: "Include D/W Full Month", value: "daily_wager_full_month" },
-                    { label: "Include Intern Full Month", value: "intern_full_month" },
-                    { label: "Exclude Guest Teachers", value: "exclude_guests" },
-                    { label: "Multiple Entries", value: "multiple_entries" },
-                    { label: "Full Month Period", value: "full_month" },
+                    {
+                      label: "Missing Employees",
+                      value: "missing_employees",
+                      className: "bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/90 hover:text-emerald-900",
+                      selectedClassName: "bg-emerald-100 text-emerald-950 font-medium",
+                      badgeClassName: "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    },
+                    {
+                      label: "Partial/Excess Period",
+                      value: "partial_month",
+                      className: "bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/90 hover:text-emerald-900",
+                      selectedClassName: "bg-emerald-100 text-emerald-950 font-medium",
+                      badgeClassName: "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    },
+                    {
+                      label: "Include D/W Full Month",
+                      value: "daily_wager_full_month",
+                      className: "bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/90 hover:text-emerald-900",
+                      selectedClassName: "bg-emerald-100 text-emerald-950 font-medium",
+                      badgeClassName: "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    },
+                    {
+                      label: "Include Intern Full Month",
+                      value: "intern_full_month",
+                      className: "bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/90 hover:text-emerald-900",
+                      selectedClassName: "bg-emerald-100 text-emerald-950 font-medium",
+                      badgeClassName: "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    },
+                    {
+                      label: "Exclude Guest Teachers",
+                      value: "exclude_guests",
+                      className: "bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/90 hover:text-emerald-900",
+                      selectedClassName: "bg-emerald-100 text-emerald-950 font-medium",
+                      badgeClassName: "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    },
+                    {
+                      label: "Multiple Entries",
+                      value: "multiple_entries",
+                      className: "bg-indigo-50/70 text-indigo-800 hover:bg-indigo-100/90 hover:text-indigo-900",
+                      selectedClassName: "bg-indigo-100 text-indigo-950 font-medium",
+                      badgeClassName: "bg-indigo-50 text-indigo-800 border-indigo-200"
+                    },
+                    {
+                      label: "Full Month Period",
+                      value: "full_month",
+                      className: "bg-indigo-50/70 text-indigo-800 hover:bg-indigo-100/90 hover:text-indigo-900",
+                      selectedClassName: "bg-indigo-100 text-indigo-950 font-medium",
+                      badgeClassName: "bg-indigo-50 text-indigo-800 border-indigo-200"
+                    },
                   ]}
                   selected={analysisFilter}
                   onChange={(values) => {
@@ -1777,13 +1916,17 @@ export default function AttendanceReports() {
                   <input
                     id="skip-exported-checkbox"
                     type="checkbox"
-                    className="h-4 w-4 cursor-pointer accent-green-600"
+                    className={`h-4 w-4 accent-green-600 ${!isSuperAdmin ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                     checked={skipExported}
-                    onChange={(e) => setSkipExported(e.target.checked)}
+                    disabled={!isSuperAdmin}
+                    onChange={(e) => {
+                      if (isSuperAdmin) setSkipExported(e.target.checked);
+                    }}
+                    title={!isSuperAdmin ? 'Only Super Admin can change this option' : ''}
                   />
                   <label
                     htmlFor="skip-exported-checkbox"
-                    className="text-sm font-medium cursor-pointer select-none whitespace-nowrap text-muted-foreground"
+                    className={`text-sm font-medium select-none whitespace-nowrap text-muted-foreground ${!isSuperAdmin ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     Skip Already Exported
                   </label>
@@ -1982,7 +2125,12 @@ export default function AttendanceReports() {
                         </TableCell>
                         <TableCell className="text-xs">
                           {entry.exportedToOracleAt ? (() => {
-                            const d = new Date(entry.exportedToOracleAt!);
+                            // Strip trailing 'Z' before parsing — PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+                            // is stored in server local time (IST) but pg driver adds 'Z' suffix,
+                            // wrongly implying UTC. Parsing without Z treats it as local time correctly.
+                            const rawTs = entry.exportedToOracleAt!;
+                            const localStr = rawTs.endsWith('Z') ? rawTs.slice(0, -1) : rawTs;
+                            const d = new Date(localStr);
                             const formatted = `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
                             if (isSuperAdmin) {
                               return (
@@ -2218,6 +2366,146 @@ export default function AttendanceReports() {
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Replacing...</>
               ) : (
                 <><RefreshCw className="h-4 w-4 mr-2" /> Replace File</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Update Export Date Dialog */}
+      <Dialog open={bulkExportDialogOpen} onOpenChange={(open) => { if (!open) setBulkExportDialogOpen(false); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-orange-500" />
+              Bulk Update Export to Oracle Date
+            </DialogTitle>
+            <DialogDescription>
+              Selectively update the export date for entries of the selected month.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Month info */}
+          <div className="text-sm text-muted-foreground">
+            Month: <span className="font-semibold text-foreground">{monthFilter[0] || '—'}</span>
+          </div>
+
+          {/* Section 1: Select target dates */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Select entries to update:</p>
+            {isLoadingExportDates ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading export dates...
+              </div>
+            ) : exportDatesData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">No export data found for this month.</p>
+            ) : (
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {exportDatesData.map(({ exportDate, count }) => {
+                  // For Nasir: only today's date is enabled; blank entries disabled
+                  const isEnabled = isNasirAdmin
+                    ? exportDate !== null && exportDate === todayDateStr
+                    : true;
+                  const isChecked = selectedTargetDates.has(exportDate);
+
+                  // Format date for display: "2026-05-13" → "13-05-26"
+                  const displayDate = exportDate
+                    ? (() => {
+                        const [y, m, d] = exportDate.split('-');
+                        return `${d}-${m}-${y.slice(2)}`;
+                      })()
+                    : null;
+
+                  return (
+                    <label
+                      key={exportDate ?? '__null__'}
+                      className={`flex items-center gap-3 p-2 rounded-md border transition-colors ${
+                        isEnabled
+                          ? 'cursor-pointer hover:bg-muted/50'
+                          : 'cursor-not-allowed opacity-40 bg-gray-50'
+                      } ${isChecked && isEnabled ? 'border-orange-300 bg-orange-50' : 'border-border'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={!isEnabled}
+                        checked={isChecked}
+                        onChange={() => isEnabled && toggleTargetDate(exportDate)}
+                        className="h-4 w-4 accent-orange-500"
+                      />
+                      <span className="text-sm flex-1">
+                        {displayDate
+                          ? <><span className="font-medium">Exported on: {displayDate}</span><span className="text-muted-foreground ml-2">({count} {count === 1 ? 'entry' : 'entries'})</span></>
+                          : <><span className="font-medium">No export date (blank)</span><span className="text-muted-foreground ml-2">({count} {count === 1 ? 'entry' : 'entries'})</span></>}
+                      </span>
+                      {!isEnabled && isNasirAdmin && (
+                        <span className="text-xs text-gray-400 ml-auto">(locked)</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Nasir notice */}
+          {isNasirAdmin && (
+            <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-700">
+              ⚠️ You can only update entries exported on today's date ({(() => { const [y,m,d] = todayDateStr.split('-'); return `${d}-${m}-${y.slice(2)}`; })()}).
+            </div>
+          )}
+
+          {/* Section 2: New value */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Set new value:</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  checked={!bulkResetMode}
+                  onChange={() => setBulkResetMode(false)}
+                  className="accent-orange-500"
+                />
+                Set a specific date
+              </label>
+              {!bulkResetMode && (
+                <input
+                  type="date"
+                  value={bulkNewDate}
+                  onChange={(e) => setBulkNewDate(e.target.value)}
+                  className="w-full text-sm px-3 py-1.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 ml-6"
+                />
+              )}
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  checked={bulkResetMode}
+                  onChange={() => setBulkResetMode(true)}
+                  className="accent-orange-500"
+                />
+                Reset / Clear (set to blank)
+              </label>
+            </div>
+          </div>
+
+          {/* Warning */}
+          <div className="p-2 bg-slate-50 border rounded-md text-xs text-muted-foreground">
+            ⚠️ Only entries with the selected export dates above will be updated. All other entries remain unchanged.
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <DialogClose asChild>
+              <Button variant="outline" size="sm">Cancel</Button>
+            </DialogClose>
+            <Button
+              size="sm"
+              onClick={handleBulkExportUpdate}
+              disabled={selectedTargetDates.size === 0 || bulkUpdateExportDate.isPending}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {bulkUpdateExportDate.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Updating...</>
+              ) : (
+                <><RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Update Selected Entries</>
               )}
             </Button>
           </DialogFooter>
