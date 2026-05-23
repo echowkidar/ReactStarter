@@ -344,7 +344,7 @@ export default function AttendanceReports() {
   const adminData = useMemo(() => JSON.parse(localStorage.getItem("admin") || "{}"), []);
   const adminEmail = localStorage.getItem("adminEmail") || adminData.email || "";
   const isSuperAdmin = adminData.role === "super" || adminEmail === "admin@amu.ac.in";
-  const canExport = isSuperAdmin || adminEmail === "salary@amu.ac.in" || adminEmail === "nasir@amu.ac.in";
+  const canExport = isSuperAdmin || adminEmail === "nasir@amu.ac.in";
   // Nasir (Salary Admin) ke liye Skip Exported checkbox aur Month dropdown non-editable
   const isNasirAdmin = adminEmail === "nasir@amu.ac.in";
 
@@ -1318,6 +1318,14 @@ export default function AttendanceReports() {
 
   // Function to download filtered entries as Excel
   const downloadExcel = () => {
+    const formatExportDate = (dateStr: string | null | undefined): string => {
+      if (!dateStr) return "";
+      const localStr = dateStr.endsWith('Z') ? dateStr.slice(0, -1) : dateStr;
+      const d = new Date(localStr);
+      if (isNaN(d.getTime())) return "";
+      return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+    };
+
     // Create a worksheet from the filtered entries
     const worksheet = XLSX.utils.json_to_sheet(entriesToExport.map(entry => {
       // Split period string "DD-MM-YYYY to DD-MM-YYYY"
@@ -1346,7 +1354,8 @@ export default function AttendanceReports() {
         "Days": entry.days,
         "Remarks": entry.remarks,
         "Admin Noting": entry.adminNoting || "",
-        "Permanent Remark": entry.employeeRemarks || ""
+        "Permanent Remark": entry.employeeRemarks || "",
+        "Exported to Oracle Date": formatExportDate(entry.exportedToOracleAt)
       };
     }));
 
@@ -1367,7 +1376,8 @@ export default function AttendanceReports() {
       { wch: 8 },  // Days
       { wch: 25 }, // Remarks
       { wch: 25 }, // Admin Noting
-      { wch: 25 }  // Permanent Remark
+      { wch: 25 }, // Permanent Remark
+      { wch: 20 }  // Exported to Oracle Date
     ];
     worksheet['!cols'] = columnWidths;
 
@@ -1957,28 +1967,26 @@ export default function AttendanceReports() {
                   hideSelectAll={true}
                 />
               </div>
-              {/* Skip Already Exported checkbox — shown only to users who can export */}
-              {canExport && (
-                <div className="flex items-center gap-2 self-center px-1">
-                  <input
-                    id="skip-exported-checkbox"
-                    type="checkbox"
-                    className={`h-4 w-4 accent-green-600 ${!isSuperAdmin ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
-                    checked={skipExported}
-                    disabled={!isSuperAdmin}
-                    onChange={(e) => {
-                      if (isSuperAdmin) setSkipExported(e.target.checked);
-                    }}
-                    title={!isSuperAdmin ? 'Only Super Admin can change this option' : ''}
-                  />
-                  <label
-                    htmlFor="skip-exported-checkbox"
-                    className={`text-sm font-medium select-none whitespace-nowrap text-muted-foreground ${!isSuperAdmin ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    Skip Already Exported
-                  </label>
-                </div>
-              )}
+              {/* Skip Already Exported checkbox — shown to all admins */}
+              <div className="flex items-center gap-2 self-center px-1">
+                <input
+                  id="skip-exported-checkbox"
+                  type="checkbox"
+                  className={`h-4 w-4 accent-green-600 ${isNasirAdmin ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                  checked={skipExported}
+                  disabled={isNasirAdmin}
+                  onChange={(e) => {
+                    if (!isNasirAdmin) setSkipExported(e.target.checked);
+                  }}
+                  title={isNasirAdmin ? 'This option is locked for you' : ''}
+                />
+                <label
+                  htmlFor="skip-exported-checkbox"
+                  className={`text-sm font-medium select-none whitespace-nowrap text-muted-foreground ${isNasirAdmin ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  Skip Already Exported
+                </label>
+              </div>
             </div>
 
             {/* Top pagination */}
