@@ -1251,15 +1251,62 @@ export default function AttendanceReports() {
     }
   };
 
+  // Helper to check if a date range (period) overlaps with a target month/year
+  const isPeriodInMonth = (period: string, monthNum: number, yearNum: number): boolean => {
+    if (!period || period === "MISSING") return false;
+    const parts = period.split(" to ");
+    if (parts.length !== 2) return false;
+    const [startStr, endStr] = parts;
+    
+    const parseDate = (str: string) => {
+      const p = str.split('-');
+      if (p.length !== 3) return null;
+      const d = parseInt(p[0]);
+      const m = parseInt(p[1]);
+      let y = parseInt(p[2]);
+      if (y < 100) y += 2000;
+      return { day: d, month: m, year: y };
+    };
+
+    const start = parseDate(startStr);
+    const end = parseDate(endStr);
+    if (!start || !end) return false;
+
+    const startVal = start.year * 10000 + start.month * 100 + start.day;
+    const endVal = end.year * 10000 + end.month * 100 + end.day;
+    
+    const targetStartVal = yearNum * 10000 + monthNum * 100 + 1;
+    const lastDayOfTargetMonth = new Date(yearNum, monthNum, 0).getDate();
+    const targetEndVal = yearNum * 10000 + monthNum * 100 + lastDayOfTargetMonth;
+
+    return (startVal <= targetEndVal) && (endVal >= targetStartVal);
+  };
+
   // Helper to filter out Daily Wage employees when they are missing, for export purposes ONLY
-  // Also skips already-exported entries when skipExported checkbox is checked
+  // Also skips already-exported entries when skipExported checkbox is checked.
+  // Exception: if the entry is already exported AND its period is not in the current month,
+  // we convert it to a "MISSING" entry for export instead of skipping it completely.
   const entriesToExport = useMemo(() => {
-    return processedEntries.filter(entry => {
+    return processedEntries.map(entry => {
+      if (skipExported && entry.exportedToOracleAt && !entry.period.startsWith("MISSING")) {
+        const isInMonth = isPeriodInMonth(entry.period, entry.monthNum, entry.yearNum);
+        if (!isInMonth) {
+          return {
+            ...entry,
+            period: "MISSING",
+            days: 0,
+            remarks: "Missing Attendance"
+          };
+        }
+      }
+      return entry;
+    }).filter(entry => {
       if (entry.period === "MISSING") {
         const desig = (entry.designation || "").toUpperCase();
         if (desig.includes("DAILY WAGE")) {
           return false;
         }
+        return true;
       }
       // Skip rows that already have an export date if checkbox is enabled
       if (skipExported && entry.exportedToOracleAt) {
@@ -1454,8 +1501,8 @@ export default function AttendanceReports() {
     if (monthFilter.length > 0) fileName += `_${monthFilter[0].replace(/\s+/g, '_')}`;
     XLSX.writeFile(wb, `${fileName}.xls`, { bookType: 'xls' });
 
-    // Mark all visible entries as exported
-    const entryIds = [...new Set(entriesToExport.map(e => e.entryId).filter(id => id > 0))];
+    // Mark all visible entries as exported (excluding missing / converted missing ones)
+    const entryIds = [...new Set(entriesToExport.filter(e => e.period !== "MISSING").map(e => e.entryId).filter(id => id > 0))];
     if (entryIds.length > 0) {
       markExported.mutate(entryIds);
     }
@@ -1566,8 +1613,8 @@ export default function AttendanceReports() {
     a.click();
     URL.revokeObjectURL(url);
 
-    // Mark all visible entries as exported
-    const entryIds = [...new Set(entriesToExport.map(e => e.entryId).filter(id => id > 0))];
+    // Mark all visible entries as exported (excluding missing / converted missing ones)
+    const entryIds = [...new Set(entriesToExport.filter(e => e.period !== "MISSING").map(e => e.entryId).filter(id => id > 0))];
     if (entryIds.length > 0) {
       markExported.mutate(entryIds);
     }
