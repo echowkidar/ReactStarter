@@ -24,6 +24,8 @@ const months = [
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
+const AUTO_REMARK_TEXT = "No break in the previous month as well";
+
 // Utility function to format date to DD-MM-YY
 const formatDateForDisplay = (date: Date): string => {
   const day = date.getDate().toString().padStart(2, '0');
@@ -510,6 +512,35 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     if (!employee) return;
 
     const isExcluded = excludedDesignations.includes(employee.designation?.toUpperCase());
+
+    const currentPeriod = entries[entryIndex]?.periods[periodIndex];
+    const oldFromStr = currentPeriod?.fromDate;
+    const oldToStr = currentPeriod?.toDate;
+
+    const isNewFullMonth = newFromStr === formatDateForDisplay(defaultStartDate) && newToStr === formatDateForDisplay(defaultEndDate);
+    const isOldFullMonth = oldFromStr === formatDateForDisplay(defaultStartDate) && oldToStr === formatDateForDisplay(defaultEndDate);
+
+    if (isExcluded && isNewFullMonth && !isOldFullMonth && hadFullMonthPreviousMonth(employeeId)) {
+      const confirmOff = window.confirm("This employee had full attendance (no break) last month. According to the 56-days rule, a 1-day break is mandatory this month. Do you still want to give full month attendance?");
+      if (!confirmOff) {
+        form.setValue("entries", [...entries]);
+        return;
+      }
+    }
+
+    let updatedRemarks = currentPeriod?.remarks || "";
+    if (isExcluded) {
+      if (isNewFullMonth && !isOldFullMonth && hadFullMonthPreviousMonth(employeeId)) {
+        if (!updatedRemarks) {
+          updatedRemarks = AUTO_REMARK_TEXT;
+        }
+      } else if (!isNewFullMonth && isOldFullMonth) {
+        if (updatedRemarks === AUTO_REMARK_TEXT) {
+          updatedRemarks = "";
+        }
+      }
+    }
+
     const totalDays = calculateDays(newFromStr, newToStr);
 
     if (isExcluded && totalDays > 56) {
@@ -569,7 +600,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         ...newEntries[entryIndex].periods[periodIndex],
         fromDate: newFromStr,
         toDate: newToStr,
-        days: isGuestTeacher(employeeId) ? newEntries[entryIndex].periods[periodIndex].days : totalDays
+        days: isGuestTeacher(employeeId) ? newEntries[entryIndex].periods[periodIndex].days : totalDays,
+        remarks: updatedRemarks
       };
     }
 
@@ -869,17 +901,28 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     const updatedPeriods = [...currentEntry.periods];
 
                                     let newEndDate = defaultEndDate;
+                                    let updatedRemarks = updatedPeriods[periodIndex].remarks || "";
+
                                     if (checked) {
                                       // Enable Break Mode: End Date = Month End - 1
                                       newEndDate = new Date(defaultEndDate);
                                       newEndDate.setDate(newEndDate.getDate() - 1);
+
+                                      if (updatedRemarks === AUTO_REMARK_TEXT) {
+                                        updatedRemarks = "";
+                                      }
+                                    } else {
+                                      // Disable Break Mode: End Date = Month End
+                                      if (hadFullMonthPreviousMonth(employee.id) && !updatedRemarks) {
+                                        updatedRemarks = AUTO_REMARK_TEXT;
+                                      }
                                     }
-                                    // else Disable Break Mode: End Date = Month End
 
                                     updatedPeriods[periodIndex] = {
                                       ...updatedPeriods[periodIndex],
                                       toDate: formatDateForDisplay(newEndDate),
-                                      days: calculateDays(updatedPeriods[periodIndex].fromDate, formatDateForDisplay(newEndDate))
+                                      days: calculateDays(updatedPeriods[periodIndex].fromDate, formatDateForDisplay(newEndDate)),
+                                      remarks: updatedRemarks
                                     };
 
                                     currentEntry.periods = updatedPeriods;

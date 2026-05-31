@@ -197,11 +197,15 @@ export default function ReportDetails() {
                   font-family: system-ui, -apple-system, sans-serif;
                   font-size: 9pt;
                   counter-reset: page;
+                  color: #000 !important;
                 }
                 .print-content {
                   width: 100%;
                   max-width: 100%;
                   padding: 0 2mm;
+                }
+                .print-content, .print-content * {
+                  color: #000 !important;
                 }
                 
                 /* Simple page numbering that won't duplicate */
@@ -507,6 +511,7 @@ export default function ReportDetails() {
             margin: 0;
             padding: 0;
             counter-reset: page;
+            color: #000 !important;
           }
           .print-content { 
             visibility: visible;
@@ -515,6 +520,9 @@ export default function ReportDetails() {
             top: 0;
             width: 100%;
             padding: 0 2mm; /* Reduce side padding */
+          }
+          .print-content, .print-content * {
+            color: #000 !important;
           }
           .no-print {
             display: none !important;
@@ -672,8 +680,12 @@ export default function ReportDetails() {
 
       <div className="print-content space-y-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
             <CardTitle>{report.status === 'draft' ? 'Draft Attendance Report' : 'Attendance Report'}</CardTitle>
+            <div className="border border-black rounded px-4 py-2.5 flex items-center w-full sm:w-[340px] h-[40px] bg-white mr-2 shrink-0 print:w-[340px]">
+              <span className="text-sm font-bold text-black flex-1">D. No.</span>
+              <span className="text-sm font-bold text-black flex-1">D. Date</span>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

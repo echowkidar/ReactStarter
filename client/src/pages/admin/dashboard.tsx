@@ -1794,7 +1794,7 @@ export default function AdminDashboard() {
                 </TableHead>
                 <TableHead>Transaction ID</TableHead>
                 <TableHead>Despatch No.</TableHead>
-                <TableHead>Department Name</TableHead>
+                <TableHead>Despatch Date</TableHead>
                 <TableHead
                   className="cursor-pointer"
                   onClick={() => handleSort("status")}
