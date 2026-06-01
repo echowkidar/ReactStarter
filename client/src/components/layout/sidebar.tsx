@@ -39,20 +39,15 @@ const N8nChatStyles = () => (
     <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
     <style>
       {`
-        .chat-window-toggle svg {
+        /* Hide the default floating toggle button */
+        .chat-window-toggle {
           display: none !important;
         }
-        .chat-window-toggle {
-          background-image: url('/logo_favicon/amuai_logo.webp') !important;
-          background-size: cover !important;
-          background-position: center !important;
-          background-repeat: no-repeat !important;
-          overflow: visible !important;
-          z-index: 50 !important;
-          bottom: 40px !important;
-          right: 25px !important;
-          width: 80px !important;
-          height: 80px !important;
+        /* Keep chat window itself visible and positioned nicely */
+        .chat-window {
+          bottom: 60px !important;
+          left: 150px !important;
+          right: auto !important;
         }
         .chat-header h1 {
           display: flex !important;
@@ -172,26 +167,26 @@ export default function Sidebar({ className }: SidebarProps) {
   };
 
   const content = (
-    <div className={cn("flex h-full flex-col gap-4", className)}>
+    <div className={cn("flex h-full flex-col gap-1", className)}>
       <N8nChatStyles />
       <N8nChatScript />
       <NeuralNetworkOverlay />
-      <div className="px-3 py-2">
-        <div className="mb-4 px-4 flex items-center gap-2">
+      <div className="px-3 py-1">
+        <div className="mb-2 px-4 flex items-center gap-2">
           <img src="/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto" />
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-base font-semibold leading-tight">
             {department?.name}
           </h2>
         </div>
-        <p className="mb-4 px-4 text-sm text-gray-500">
+        <p className="mb-2 px-4 text-xs text-gray-500">
           {department?.email ? `${department.email}` : ""}
         </p>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {navigation.map((item) => (
             <Link key={item.name} href={item.href}>
               <Button
                 variant={location === item.href ? "secondary" : "ghost"}
-                className="w-full justify-start"
+                className="w-full justify-start h-8 text-sm"
                 onClick={() => setOpen(false)}
               >
                 <item.icon className="mr-2 h-4 w-4" />
@@ -199,23 +194,56 @@ export default function Sidebar({ className }: SidebarProps) {
               </Button>
             </Link>
           ))}
+
+          {/* AMU AI Chat Button — Help ke neeche */}
+          <div className="pt-1 pb-0.5">
+            <button
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-blue-50 transition-colors group"
+              onClick={() => {
+                const toggleBtn = document.querySelector('.chat-window-toggle') as HTMLElement | null;
+                if (toggleBtn) toggleBtn.click();
+                // Auto-focus chat input after window opens
+                setTimeout(() => {
+                  const chatInput = document.querySelector('.chat-input textarea, .chat-input input, [class*="chat"] textarea, [class*="chat"] input[type="text"]') as HTMLElement | null;
+                  if (chatInput) chatInput.focus();
+                }, 400);
+              }}
+              title="Chat with AMU AI"
+            >
+              <div className="relative flex-shrink-0">
+                <img
+                  src="/logo_favicon/amuai_logo.webp"
+                  alt="AMU AI"
+                  className="h-10 w-10 rounded-full object-cover ring-2 ring-blue-200 group-hover:ring-blue-400 transition-all"
+                />
+                <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{backgroundColor: '#f59e0b'}}></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3" style={{backgroundColor: '#d97706'}}></span>
+                </span>
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">AMU AI</span>
+                <span className="text-[11px] font-medium" style={{color: '#b45309'}}>✦ Active · Ask me anything</span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Notices Section */}
       {notices.length > 0 && (
-        <div className="px-3 py-2 border-t">
-          <div className="flex items-center gap-2 px-4 mb-2">
+        <div className="px-3 py-1 border-t">
+          <div className="flex items-center gap-2 px-4 mb-1">
             <Megaphone className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-semibold text-gray-700">Notices</span>
+            <span className="text-xs font-semibold text-gray-700">Notices</span>
           </div>
-          <div className="space-y-1 max-h-48 overflow-y-auto">
+          <div className="space-y-0.5 max-h-32 overflow-y-auto">
             {notices.slice(0, 5).map((notice) => (
               <Button
                 key={notice.id}
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start text-xs text-left h-auto py-2 px-4 hover:bg-blue-50"
+                className="w-full justify-start text-xs text-left h-auto py-1 px-4 hover:bg-blue-50"
                 onClick={() => setSelectedNotice(notice)}
               >
                 <span className="truncate">{notice.subject}</span>
@@ -225,10 +253,10 @@ export default function Sidebar({ className }: SidebarProps) {
         </div>
       )}
 
-      <div className="mt-auto px-3 py-2">
+      <div className="mt-auto px-3 py-1">
         <Button
           variant="ghost"
-          className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50"
+          className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 h-8 text-sm"
           onClick={handleLogout}
         >
           <LogOut className="mr-2 h-4 w-4" />
