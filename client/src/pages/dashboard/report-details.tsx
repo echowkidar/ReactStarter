@@ -99,7 +99,7 @@ export default function ReportDetails() {
     const day = d.getDate().toString().padStart(2, '0');
     const month = (d.getMonth() + 1).toString().padStart(2, '0');
     const year = d.getFullYear().toString().slice(-2);
-    return `${day}${month}${year}`;
+    return `${day}-${month}-${year}`;
   };
 
   const formatTermExpiry = (dateStr: string | null | undefined): string => {
@@ -253,7 +253,7 @@ export default function ReportDetails() {
                 }
                 th, td {
                   padding: 3px 2px;
-                  border: 1px solid #ddd;
+                  border: 1px solid #000;
                   text-align: left;
                   overflow: hidden;
                   text-overflow: ellipsis;
@@ -277,13 +277,13 @@ export default function ReportDetails() {
                 
                 /* Card styling */
                 .card {
-                  border: 1px solid #ddd;
+                  border: 1px solid #000;
                   margin-bottom: 5px;
                 }
                 .card-header {
                   padding: 5px 8px;
                   background-color: #f9fafb;
-                  border-bottom: 1px solid #ddd;
+                  border-bottom: 1px solid #000;
                 }
                 .card-content {
                   padding: 5px 8px;
@@ -305,11 +305,13 @@ export default function ReportDetails() {
                 }
                 .info-label {
                   font-size: 8pt;
-                  color: #6b7280;
+                  color: #000;
+                  font-weight: bold;
                   margin-bottom: 1px;
                 }
                 .info-value {
                   font-size: 9pt;
+                  font-weight: bold;
                 }
                 
                 /* Footer section */
@@ -580,7 +582,7 @@ export default function ReportDetails() {
           .print-content th, 
           .print-content td {
             padding: 3px 2px !important;
-            border: 1px solid #ddd;
+            border: 1px solid #000;
             overflow: hidden;
             text-overflow: ellipsis;
           }
@@ -595,14 +597,14 @@ export default function ReportDetails() {
           /* Card styling for print */
           .print-content [class*="card"] {
             box-shadow: none !important;
-            border: 1px solid #ddd !important;
+            border: 1px solid #000 !important;
             margin-bottom: 5px !important;
           }
           
           .print-content [class*="cardHeader"] {
             padding: 5px 8px !important;
             background-color: #f9fafb !important;
-            border-bottom: 1px solid #ddd !important;
+            border-bottom: 1px solid #000 !important;
           }
           
           .print-content [class*="cardContent"] {
@@ -619,6 +621,19 @@ export default function ReportDetails() {
             font-size: 11pt !important;
             font-weight: bold !important;
             margin: 0 !important;
+          }
+          
+          /* Bold all info labels and values in card */
+          .print-content .text-sm.font-medium,
+          .print-content [class*="muted"] {
+            font-weight: bold !important;
+            color: #000 !important;
+          }
+          
+          /* Bold all info values (the mt-1 divs under labels) */
+          .print-content .mt-1 {
+            font-weight: bold !important;
+            color: #000 !important;
           }
           
           /* Certification section */
@@ -682,10 +697,26 @@ export default function ReportDetails() {
         <Card>
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
             <CardTitle>{report.status === 'draft' ? 'Draft Attendance Report' : 'Attendance Report'}</CardTitle>
-            <div className="border border-black rounded px-4 py-2.5 flex items-center w-full sm:w-[340px] h-[40px] bg-white mr-2 shrink-0 print:w-[340px]">
-              <span className="text-sm font-bold text-black flex-1">D. No.</span>
-              <span className="text-sm font-bold text-black flex-1">D. Date</span>
-            </div>
+            {report.status === 'sent' ? (
+              /* Sent status: label + value ek line mein, wider box */
+              <div className="border border-black rounded flex items-center w-full sm:w-[420px] h-[40px] bg-white mr-2 shrink-0 print:w-[420px] overflow-hidden">
+                <div className="flex items-center flex-1 px-3 gap-1">
+                  <span className="text-[10px] font-bold text-black whitespace-nowrap">D. No.</span>
+                  <span className="text-[10px] font-bold text-black whitespace-nowrap">{report.despatchNo || '—'}</span>
+                </div>
+                <div className="w-px h-full bg-black" />
+                <div className="flex items-center flex-1 px-3 gap-1">
+                  <span className="text-[10px] font-bold text-black whitespace-nowrap">D. Date</span>
+                  <span className="text-[10px] font-bold text-black whitespace-nowrap">{report.despatchDate ? formatDispatchDate(report.despatchDate) : '—'}</span>
+                </div>
+              </div>
+            ) : (
+              /* Submitted / draft / other: original style — sirf labels */
+              <div className="border border-black rounded px-4 py-2.5 flex items-center w-full sm:w-[340px] h-[40px] bg-white mr-2 shrink-0 print:w-[340px]">
+                <span className="text-sm font-bold text-black flex-1">D. No.</span>
+                <span className="text-sm font-bold text-black flex-1">D. Date</span>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -695,11 +726,13 @@ export default function ReportDetails() {
                 label="Transaction ID"
                 value={
                   report.status === "draft" ? "*****" :
-                    report.status === "sent" ? (report.transactionId || "-") :
+                    report.status === "sent" ? (
+                      <span className="print:text-[13pt] print:font-bold print:tracking-wider">{report.transactionId || "-"}</span>
+                    ) :
                       (report.transactionId ? (
                         <>
                           <span className="print:hidden font-mono tracking-widest text-muted-foreground">***</span>
-                          <span className="hidden print:inline">{report.transactionId}</span>
+                          <span className="hidden print:inline print:text-[13pt] print:font-bold print:tracking-wider">{report.transactionId}</span>
                         </>
                       ) : "-")
                 }
@@ -715,10 +748,10 @@ export default function ReportDetails() {
                   </Badge>
                 }
               />
-              {report.despatchNo && (
+              {report.despatchNo && report.status !== 'sent' && report.status !== 'submitted' && (
                 <InfoItem label="Despatch No" value={report.despatchNo} />
               )}
-              {report.despatchDate && (
+              {report.despatchDate && report.status !== 'sent' && report.status !== 'submitted' && (
                 <InfoItem
                   label="Despatch Date"
                   value={report.despatchDate ? formatDispatchDate(report.despatchDate) : '-'}
