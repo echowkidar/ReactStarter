@@ -92,10 +92,29 @@ const PDFDialogContent = ({
   // Manual entry confirmation checkbox
   const [manualConfirmed, setManualConfirmed] = React.useState(false);
 
-  // Quality check state
-  const [qualityStatus, setQualityStatus] = React.useState<'idle' | 'checking' | 'passed' | 'failed'>('idle');
+  // ── Unified quality check state ───────────────────────────────
+  // The OCR API is the authoritative quality gatekeeper.
+  // Local canvas/pdfjs checks are a lightweight pre-filter only.
+  //
+  // 'idle'      → no file selected
+  // 'checking'  → pre-filter passed; OCR API call in progress (form awaits)
+  // 'passed'    → API confirmed quality_acceptable = true
+  // 'failed'    → API confirmed quality_acceptable = false (see qualityIssuesEn/Hi)
+  // 'fallback'  → API unavailable/503/timeout; local pre-filter passed → user may proceed
+  const [qualityStatus, setQualityStatus] = React.useState<
+    'idle' | 'checking' | 'passed' | 'failed' | 'fallback'
+  >('idle');
   const [qualityStep, setQualityStep] = React.useState<string>('');
+  // For local pre-filter rejections (shown via toast, qualityStatus stays 'idle')
   const [qualityError, setQualityError] = React.useState<string>('');
+  // Bilingual issues returned by the API when quality_acceptable = false
+  const [qualityIssuesEn, setQualityIssuesEn] = React.useState<string[]>([]);
+  const [qualityIssuesHi, setQualityIssuesHi] = React.useState<string[]>([]);
+  // ─────────────────────────────────────────────────────────────
+
+  // When the API fills the Transaction ID, Tesseract must not override it.
+  // This ref is reset on every new file selection.
+  const txIdSetByApiRef = React.useRef(false);
 
   // Transaction ID verification state
   // 'idle'           → no file selected yet
@@ -567,16 +586,21 @@ const PDFDialogContent = ({
    * Orchestrate extraction + immediate verification against report.transactionId.
    */
   const runTransactionIdExtraction = async (file: File, isPdf: boolean) => {
-    setTxIdStatus('extracting');
-    setTxIdLocked(false);
-    setTxIdAutoDetected(false);
+    // Only set 'extracting' if API hasn't already provided an ID
+    if (!txIdSetByApiRef.current) {
+      setTxIdStatus('extracting');
+      setTxIdLocked(false);
+      setTxIdAutoDetected(false);
+    }
 
     const extracted = isPdf
       ? await extractTransactionIdFromPDF(file)
       : await extractTransactionIdFromImage(file);
 
+    // If the API already set the TX ID while Tesseract was running, don't override it
+    if (txIdSetByApiRef.current) return;
+
     if (!extracted) {
-      // Could not find any valid hex ID → let user type manually
       setTxIdStatus('manual');
       setVerifyTransactionId('');
       return;
@@ -590,13 +614,133 @@ const PDFDialogContent = ({
       setTxIdStatus('verified');
       setTxIdLocked(true);
     } else {
-      // Extracted ID doesn't match → old/wrong copy warning
       setTxIdStatus('mismatch');
       setTxIdLocked(false);
     }
   };
 
   // --- End Quality Check Helpers ---
+
+  // ── OCR API: primary quality check ───────────────────────────
+  /**
+   * callOcrApiAndSetQuality — the authoritative document quality decision.
+   *
+   * Called AFTER the local pre-filter (canvas/pdfjs) passes.
+   * handleFileChange AWAITS this function, so qualityStatus stays 'checking'
+   * (spinner visible) until the API responds.
+   *
+   * API success:
+   *   quality_acceptable=true  → qualityStatus='passed'
+   *   quality_acceptable=false → qualityStatus='failed' + bilingual issues
+   *   transaction_id present   → fills Verify TX ID field (always, regardless
+   *                              of quality result; same verified/mismatch logic)
+   *                              Sets txIdSetByApiRef=true so Tesseract won't override.
+   *
+   * API unavailable (503 / network error / timeout):
+   *   qualityStatus='fallback' — user sees amber warning, may still submit.
+   *   Tesseract extraction continues as the txId fallback.
+   */
+  const callOcrApiAndSetQuality = async (file: File, isPdf: boolean): Promise<void> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 s
+
+      let resp: Response;
+      try {
+        resp = await fetch('/api/ocr-validate', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      // 503 = service not configured → graceful fallback
+      if (resp.status === 503) {
+        setQualityStatus('fallback');
+        runTransactionIdExtraction(file, isPdf);
+        return;
+      }
+
+      if (!resp.ok) {
+        // Any other upstream error → fallback (don't block the user)
+        console.error(`OCR API proxy returned ${resp.status}`);
+        setQualityStatus('fallback');
+        runTransactionIdExtraction(file, isPdf);
+        return;
+      }
+
+      const data = await resp.json();
+
+      // ── Quality verdict ──────────────────────────────────────────────
+      // document_acceptable = combined result (quality + content checks).
+      // Falls back to quality_acceptable if not present.
+      const acceptable: boolean =
+        data.document_acceptable ?? data.quality_acceptable ?? true;
+
+      // Build the bilingual issue lists.
+      // Preferred: split message / message_hindi by ' | ' → gives ALL issues
+      //            (image quality issues + content issues like dispatch missing)
+      // Fallback:  quality_issues / quality_issues_hindi arrays (image only)
+      const issuesEn: string[] = data.message
+        ? (data.message as string).split(' | ').map((s: string) => s.trim()).filter(Boolean)
+        : (data.quality_issues ?? data.issues_en ?? []);
+
+      const issuesHi: string[] = data.message_hindi
+        ? (data.message_hindi as string).split(' | ').map((s: string) => s.trim()).filter(Boolean)
+        : (data.quality_issues_hindi ?? data.issues_hi ?? []);
+
+      if (acceptable) {
+        setQualityStatus('passed');
+        setQualityIssuesEn([]);
+        setQualityIssuesHi([]);
+      } else {
+        setQualityStatus('failed');
+        setQualityIssuesEn(issuesEn);
+        setQualityIssuesHi(issuesHi);
+      }
+
+      // ── Transaction ID (always fill, regardless of quality) ──────────
+      // API returns it as transaction_id_extracted; fallback to other names.
+      const apiTxId: string | null =
+        data.transaction_id_extracted ??
+        data.transaction_id ??
+        data.content_checks?.transaction_id ??
+        null;
+
+      if (apiTxId) {
+        const cleaned = apiTxId.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+        if (cleaned.length >= 6) { // at least 6 chars = plausible TX ID
+          txIdSetByApiRef.current = true; // prevent Tesseract from overriding
+          setVerifyTransactionId(cleaned);
+          setTxIdAutoDetected(true);
+          const systemId = report.transactionId?.toUpperCase() ?? '';
+          if (cleaned === systemId) {
+            setTxIdStatus('verified');
+            setTxIdLocked(true);
+          } else {
+            setTxIdStatus('mismatch');
+            setTxIdLocked(false);
+          }
+          return; // Successfully got ID from API, no need for local extraction
+        }
+      }
+
+      // If API succeeded but didn't provide a valid Transaction ID, fallback to local
+      runTransactionIdExtraction(file, isPdf);
+
+    } catch (err: any) {
+      // AbortError (55 s timeout) or network failure → fallback gracefully
+      console.warn('OCR API unavailable, falling back to local result:', err?.message ?? err);
+      setQualityStatus('fallback');
+      runTransactionIdExtraction(file, isPdf);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────
 
   // Function to process image files (resize and compress)
   const processImageFile = async (file: File): Promise<File | null> => {
@@ -655,106 +799,98 @@ const PDFDialogContent = ({
   // Handler for file input changes
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
+    // ── Reset all state on every new file selection ──────────────
     setSelectedFile(file || null);
     setProcessedFile(null);
     setQualityStatus('idle');
     setQualityError('');
     setQualityStep('');
-    // Reset transaction ID state on new file selection
+    setQualityIssuesEn([]);
+    setQualityIssuesHi([]);
     setTxIdStatus('idle');
     setTxIdLocked(false);
     setTxIdAutoDetected(false);
     setVerifyTransactionId('');
+    setManualConfirmed(false);
+    txIdSetByApiRef.current = false;
+    // ─────────────────────────────────────────────────────────────
+
     if (!file) return;
 
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isPdf = file.type === 'application/pdf' || fileExtension === 'pdf';
+    const isImage = file.type.startsWith('image/');
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     const isAllowedType = allowedTypes.includes(file.type) || fileExtension === 'pdf';
 
+    // ── Step 1: File type / size guard ───────────────────────────
     if (!isAllowedType) {
-      toast({
-        variant: "destructive",
-        title: "Invalid File Type",
-        description: "Please select a PDF or an image file (JPEG/PNG)."
-      });
-      if (fileInputRef.current) fileInputRef.current.value = ''; // Clear the input
+      toast({ variant: 'destructive', title: 'Invalid File Type', description: 'Please select a PDF or an image file (JPEG/PNG).' });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setSelectedFile(null);
+      return;
+    }
+    if (isPdf && file.size > 5 * 1024 * 1024) {
+      toast({ variant: 'destructive', title: 'File Too Large', description: 'PDF file size must be less than 5MB.' });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setSelectedFile(null);
+      return;
+    }
+    if (isImage && file.size > 2 * 1024 * 1024) {
+      toast({ variant: 'destructive', title: 'File Too Large', description: 'Image file size must be less than 2MB.' });
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setSelectedFile(null);
       return;
     }
 
-    if (file.type === 'application/pdf' || fileExtension === 'pdf') {
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          variant: "destructive",
-          title: "File Too Large",
-          description: "PDF file size must be less than 5MB."
-        });
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        setSelectedFile(null);
-        return;
-      }
-      // PDF quality check
-      setQualityStatus('checking');
-      setQualityError('');
+    // ── Step 2: Local pre-filter (basic readability only) ────────
+    // Catches truly bad files: blank pages, corrupt PDFs, extremely dark images.
+    // Does NOT determine quality pass/fail — that is the OCR API's job.
+    setQualityStatus('checking');
+    setQualityStep('Verifying file readability...');
+
+    let preFilterPassed = true;
+    if (isPdf) {
       const pdfResult = await checkPDFQuality(file);
       if (!pdfResult.pass) {
-        rejectFile(pdfResult.reason || 'PDF quality check failed.');
+        rejectFile(pdfResult.reason || 'PDF could not be read. Please check the file and try again.');
         return;
       }
-      setQualityStatus('passed');
-      setQualityStep('');
-      // Extract Transaction ID from PDF text layer (runs asynchronously, fast)
-      runTransactionIdExtraction(file, true);
-
-    } else if (file.type.startsWith('image/')) {
-      // Reject if image size is greater than 2MB
-      if (file.size > 2 * 1024 * 1024) {
-        toast({ variant: 'destructive', title: 'File Too Large', description: 'Image file size must be less than 2MB.' });
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        setSelectedFile(null);
+    } else if (isImage) {
+      const imgResult = await checkImageQuality(file);
+      if (!imgResult.pass) {
+        rejectFile(imgResult.reason || 'Image could not be read. Please try a different file.');
         return;
       }
+    } else {
+      preFilterPassed = false;
+    }
+    if (!preFilterPassed) return;
 
-      // --- Run quality check on original image first ---
-      setQualityStatus('checking');
-      setQualityError('');
-      setProcessedFile(null);
-      const qResult = await checkImageQuality(file);
-      if (!qResult.pass) {
-        rejectFile(qResult.reason || 'Document quality check failed.');
-        return;
-      }
-      setQualityStatus('passed');
-      setQualityStep('');
-      // Extract Transaction ID from image header/footer via Tesseract (runs asynchronously)
-      runTransactionIdExtraction(file, false);
-
-      // Compress only if size is greater than 500KB
+    // ── Step 3: Image compression (start in background, non-blocking) ─
+    if (isImage) {
       if (file.size <= 500 * 1024) {
         setProcessedFile(file);
-        return;
-      }
-
-      setIsProcessing(true);
-      toast({ title: 'Processing Image', description: 'Compressing and resizing...', duration: 2000 });
-      try {
-        const result = await processImageFile(file);
-        if (result) {
-          setProcessedFile(result);
-          toast({ title: 'Processing Complete', description: `Image compressed to ${Math.round(result.size / 1024)} KB.` });
-        } else {
-          throw new Error('Processing returned null');
-        }
-      } catch (error) {
-        console.error('Image processing error:', error);
-        toast({ variant: 'destructive', title: 'Processing Failed', description: 'Could not process the image file. Please try another one.' });
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        setSelectedFile(null);
-        setQualityStatus('idle');
-      } finally {
-        setIsProcessing(false);
+      } else {
+        setIsProcessing(true);
+        // Fire-and-forget; compression completes while OCR API runs
+        processImageFile(file)
+          .then((result) => {
+            if (result) setProcessedFile(result);
+            else setProcessedFile(file); // fallback: use original
+          })
+          .catch(() => setProcessedFile(file))
+          .finally(() => setIsProcessing(false));
       }
     }
+
+    // ── Step 4: OCR API — PRIMARY quality check (awaited) ────────
+    // The form stays in 'checking' state (submit disabled) until this resolves.
+    // Sets qualityStatus → 'passed' | 'failed' | 'fallback'
+    // Transaction ID will be extracted from API, or fallback to Tesseract if missing/failed.
+    setQualityStep('Running deep document analysis...');
+    await callOcrApiAndSetQuality(file, isPdf);
   };
 
   React.useEffect(() => {
@@ -935,7 +1071,9 @@ const PDFDialogContent = ({
                 className="cursor-pointer"
                 onChange={handleFileChange}
               />
-              {/* Quality check progress */}
+              {/* ── Quality status block ────────────────────────────────── */}
+
+              {/* Checking: pre-filter or OCR API in progress */}
               {qualityStatus === 'checking' && (
                 <div className="mt-3 p-3 rounded-md bg-blue-50 border border-blue-200">
                   <div className="flex items-center gap-2 text-blue-700 text-sm font-medium">
@@ -944,41 +1082,82 @@ const PDFDialogContent = ({
                   </div>
                   <p className="text-xs text-blue-600 mt-1">{qualityStep}</p>
                   <div className="mt-2 h-1.5 w-full bg-blue-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: qualityStep.includes('2/2') ? '85%' : '40%' }} />
+                    <div
+                      className="h-full bg-blue-500 rounded-full animate-pulse"
+                      style={{ width: qualityStep.includes('OCR') ? '65%' : '25%' }}
+                    />
                   </div>
                 </div>
               )}
-              {/* Quality check passed */}
-              {qualityStatus === 'passed' && !isProcessing && (
+
+              {/* Passed: API confirmed quality_acceptable = true */}
+              {qualityStatus === 'passed' && (
                 <div className="mt-3 p-3 rounded-md bg-green-50 border border-green-200 flex items-center gap-2">
                   <FileCheck className="h-4 w-4 text-green-600" />
                   <span className="text-sm text-green-700 font-medium">Document quality check passed.</span>
                 </div>
               )}
-              {/* Quality check failed */}
+
+              {/* Failed: API confirmed quality_acceptable = false — show bilingual reasons */}
               {qualityStatus === 'failed' && (
-                <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-300">
-                  <div className="flex items-center gap-2 text-red-700 text-sm font-semibold">
-                    <AlertTriangle className="h-4 w-4" />
-                    Quality Check Failed
+                <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-400">
+                  <div className="flex items-center gap-2 text-red-800 text-sm font-bold mb-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    Document Quality Check Failed
                   </div>
-                  <p className="text-xs text-red-600 mt-1">{qualityError}</p>
-                  <p className="text-xs text-red-500 mt-1">Please select a different, higher quality file.</p>
+                  {qualityIssuesEn.length > 0 ? (
+                    <ul className="list-disc pl-5 space-y-2">
+                      {qualityIssuesEn.map((issue, i) => (
+                        <li key={i} className="text-xs text-red-700 font-semibold">
+                          {issue}
+                          {qualityIssuesHi[i] && (
+                            <span
+                              className="block text-red-600 font-normal mt-0.5"
+                              style={{ fontFamily: 'Noto Sans Devanagari, Arial, sans-serif' }}
+                            >
+                              {qualityIssuesHi[i]}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-red-700">The document did not meet quality requirements.</p>
+                  )}
+                  <p className="text-xs text-red-500 mt-2 font-medium">
+                    Please fix the above issues and upload the corrected document.
+                  </p>
                 </div>
               )}
-              {/* Compression info */}
+
+              {/* Fallback: API unavailable — local pre-filter passed, proceed with caution */}
+              {qualityStatus === 'fallback' && (
+                <div className="mt-3 p-3 rounded-md bg-amber-50 border border-amber-400">
+                  <div className="flex items-center gap-2 text-amber-800 text-sm font-semibold">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    Basic Check Passed — Deep Analysis Unavailable
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1">
+                    The deep OCR quality check is currently unavailable. Please ensure the signed document
+                    has a <strong>dispatch number</strong>, <strong>dispatch date</strong>, and the correct
+                    <strong> Transaction ID</strong> written on it before submitting.
+                  </p>
+                </div>
+              )}
+
+              {/* ── Compression / file-ready info ─────────────────────────── */}
               {isProcessing && (
                 <div className="flex items-center text-sm text-muted-foreground mt-2">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Compressing image...
                 </div>
               )}
-              {processedFile && qualityStatus === 'passed' && (
+              {processedFile && (qualityStatus === 'passed' || qualityStatus === 'fallback') && (
                 <div className="text-sm text-green-600 mt-2">
                   Ready: {processedFile.name} ({Math.round(processedFile.size / 1024)} KB)
                 </div>
               )}
-              {!processedFile && selectedFile && selectedFile.type.startsWith('application/pdf') && qualityStatus === 'passed' && (
+              {!processedFile && selectedFile && selectedFile.type.startsWith('application/pdf') && (qualityStatus === 'passed' || qualityStatus === 'fallback') && (
                 <div className="text-sm text-blue-600 mt-2">
                   PDF Ready: {selectedFile.name}
                 </div>
@@ -1071,7 +1250,7 @@ const PDFDialogContent = ({
             )}
 
             {/* 3. Despatch Details - Only show when quality is passed AND ID is verified */}
-            {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && qualityStatus === 'passed' && (
+            {(txIdStatus === 'verified' || txIdStatus === 'manual_verified') && (qualityStatus === 'passed' || qualityStatus === 'fallback') && (
               <>
                 <div className="space-y-2 border-t pt-4 mt-2">
                   <h3 className="text-sm font-medium text-foreground">Despatch Details</h3>
@@ -1098,7 +1277,7 @@ const PDFDialogContent = ({
             )}
 
             {/* 4. Verify Transaction ID — moved to bottom, just above Submit/Cancel */}
-            {(txIdStatus !== 'idle' || qualityStatus === 'passed') && (
+            {(txIdStatus !== 'idle' || qualityStatus === 'passed' || qualityStatus === 'failed' || qualityStatus === 'fallback') && (
               <div className="space-y-1.5 border-t pt-4 mt-2">
                 <label htmlFor="verifyTransactionId" className="text-sm font-medium text-amber-900 flex items-center gap-1">
                   Verify Transaction ID <span className="text-red-500">*</span>
@@ -1178,10 +1357,15 @@ const PDFDialogContent = ({
             <Button
               type="button"
               disabled={
+                // Block while OCR API is still running
                 qualityStatus === 'checking' ||
+                // Block when API confirmed document is unacceptable
                 qualityStatus === 'failed' ||
+                // Block while image is compressing (processedFile not ready yet)
                 isProcessing ||
-                txIdStatus === 'extracting' ||
+                // Block while Tesseract is still extracting (and API hasn't provided TX ID yet)
+                (txIdStatus === 'extracting' && !txIdSetByApiRef.current) ||
+                // Block when TX ID doesn't match (user must correct it)
                 txIdStatus === 'mismatch'
               }
               onClick={async (e) => {

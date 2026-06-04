@@ -1717,7 +1717,60 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Add endpoint to delete a file
+  // ──────────────────────────────────────────────────────────────
+  // OCR & Document Quality Validation Proxy
+  // Forwards the uploaded file to the external FastAPI OCR service.
+  // The bearer token is kept server-side (never exposed to the client).
+  // If the OCR service is unavailable the endpoint returns 503 so the
+  // frontend can fall back gracefully to its existing local checks.
+  // ──────────────────────────────────────────────────────────────
+  const ocrUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+  app.post("/api/ocr-validate", ocrUpload.single("file"), async (req: any, res) => {
+    const ocrApiUrl = process.env.OCR_API_URL;
+    const ocrApiToken = process.env.OCR_API_TOKEN;
+
+    if (!ocrApiUrl || !ocrApiToken || ocrApiToken === "CHANGE_ME") {
+      return res.status(503).json({ error: "OCR service not configured" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file provided" });
+    }
+
+    try {
+      // Build multipart/form-data body using Node 18+ native FormData
+      const form = new FormData();
+      form.append(
+        "file",
+        new Blob([req.file.buffer], { type: req.file.mimetype }),
+        req.file.originalname
+      );
+
+      const upstream = await fetch(ocrApiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ocrApiToken}`,
+          // Note: do NOT set Content-Type manually — fetch sets it with boundary automatically
+        },
+        body: form as any,
+      });
+
+      if (!upstream.ok) {
+        const text = await upstream.text().catch(() => "");
+        console.error(`OCR API returned ${upstream.status}: ${text}`);
+        return res.status(502).json({ error: "OCR service error", detail: text });
+      }
+
+      const data = await upstream.json();
+      return res.json(data);
+    } catch (err: any) {
+      console.error("OCR validate proxy error:", err);
+      return res.status(503).json({ error: "OCR service unreachable", detail: err?.message });
+    }
+  });
+
+
   app.delete("/api/upload", async (req, res) => {
     try {
 
