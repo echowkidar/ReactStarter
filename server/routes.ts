@@ -3439,6 +3439,61 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Direct Cancellation (Department side) — No admin approval needed
+  // Department user initiates this after 60-second countdown confirmation.
+  // Immediately cancels a 'sent' report: deletes entries, sets status = cancelled.
+  app.post("/api/attendance/:id/direct-cancel", async (req, res) => {
+    try {
+      const reportId = Number(req.params.id);
+      const report = await storage.getAttendanceReport(reportId);
+
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      if (report.status !== 'sent') {
+        return res.status(400).json({
+          message: "Only sent reports can be directly cancelled. Current status: " + report.status
+        });
+      }
+
+      // Delete all attendance entries (keep PDF and receipt info intact)
+      await storage.deleteEntriesForReport(reportId);
+
+      // Update status to cancelled
+      const updatedReport = await storage.updateAttendanceReport(reportId, {
+        status: 'cancelled',
+        cancelledAt: new Date()
+      });
+
+      try {
+        const department = await storage.getDepartment(report.departmentId);
+        if (department?.email) {
+          const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const emailResponse = await sendAttendanceNotification(
+            department.email,
+            department.name,
+            'cancel_approved',
+            {
+              reportId: report.id,
+              monthName: monthNames[report.month],
+              year: report.year
+            },
+            req.body.remarks
+          );
+          return res.json({ ...updatedReport, emailStatus: emailResponse.success ? 'sent' : 'failed', emailError: emailResponse.error, emailMessage: emailResponse.message });
+        }
+      } catch (err) {
+        console.error('Email error on direct cancel:', err);
+      }
+
+      res.json(updatedReport);
+    } catch (error) {
+      console.error('Error on direct cancel:', error);
+      res.status(500).json({ message: "Failed to cancel report" });
+    }
+  });
+
   // Request Recall (Department side) - NEW
   app.post("/api/attendance/:id/request-recall", async (req, res) => {
     try {

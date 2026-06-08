@@ -1225,7 +1225,7 @@ const PDFDialogContent = ({
                   Please ensure the file is clear, readable, and printable; otherwise, the system may reject it during deep analysis.
                 </p>
                 <p className="font-bold text-amber-700 mb-3" style={{ fontFamily: 'Noto Sans Devanagari, Arial, sans-serif' }}>
-                  कृपया सुनिश्चित करें कि फ़ाइल स्पष्ट, पठनीय और प्रिंट होने योग्य हो; अन्यथा सिस्टम गहरे विश्लेषण के दौरान इसे अस्वीकार कर सकता है।
+                  à¤•à¥ƒà¤ªà¤¯à¤¾ à¤¸à¥à¤¨à¤¿à¤¶à¥à¤šà¤¿à¤¤ à¤•à¤°à¥‡à¤‚ à¤•à¤¿ à¤«à¤¼à¤¾à¤‡à¤² à¤¸à¥à¤ªà¤·à¥à¤Ÿ, à¤ªà¤ à¤¨à¥€à¤¯ à¤”à¤° à¤ªà¥à¤°à¤¿à¤‚à¤Ÿ à¤¹à¥‹à¤¨à¥‡ à¤¯à¥‹à¤—à¥à¤¯ à¤¹à¥‹; à¤…à¤¨à¥à¤¯à¤¥à¤¾ à¤¸à¤¿à¤¸à¥à¤Ÿà¤® à¤—à¤¹à¤°à¥‡ à¤µà¤¿à¤¶à¥à¤²à¥‡à¤·à¤£ à¤•à¥‡ à¤¦à¥Œà¤°à¤¾à¤¨ à¤‡à¤¸à¥‡ à¤…à¤¸à¥à¤µà¥€à¤•à¤¾à¤° à¤•à¤° à¤¸à¤•à¤¤à¤¾ à¤¹à¥ˆà¥¤
                 </p>
 
                 {/* Confirmation checkbox */}
@@ -1410,7 +1410,7 @@ const PDFDialogContent = ({
 
                     const button = e.currentTarget;
                     const originalText = button.innerHTML;
-                    button.innerHTML = '<span class="animate-spin mr-2">⏳</span> Uploading...';
+                    button.innerHTML = '<span class="animate-spin mr-2">â³</span> Uploading...';
                     button.disabled = true;
 
                     try {
@@ -1465,103 +1465,103 @@ const PDFDialogContent = ({
 const POSITIVE_REMARKS = [
   {
     en: "The Attendance Management System has significantly simplified the reporting process for our department. In my opinion, this system should continue permanently.",
-    hi: "इस उपस्थिति प्रबंधन प्रणाली ने हमारे विभाग के लिए रिपोर्टिंग प्रक्रिया को काफी सरल बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤•à¤¾à¤«à¥€ à¤¸à¤°à¤² à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance System has been very helpful for our department. It has simplified the attendance submission process, reduced paperwork, saved time and resources, and improved efficiency. In my opinion, this system should continue permanently.",
-    hi: "उपस्थिति प्रणाली हमारे विभाग के लिए बहुत उपयोगी रही है। इसने उपस्थिति जमा करने की प्रक्रिया को सरल बनाया है, कागजी काम कम किया है, समय और संसाधनों की बचत की है, और कार्यकुशलता में सुधार किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤¬à¤¹à¥à¤¤ à¤‰à¤ªà¤¯à¥‹à¤—à¥€ à¤°à¤¹à¥€ à¤¹à¥ˆà¥¤ à¤‡à¤¸à¤¨à¥‡ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤œà¤®à¤¾ à¤•à¤°à¤¨à¥‡ à¤•à¥€ à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤¸à¤°à¤² à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆ, à¤•à¤¾à¤—à¤œà¥€ à¤•à¤¾à¤® à¤•à¤® à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆ, à¤¸à¤®à¤¯ à¤”à¤° à¤¸à¤‚à¤¸à¤¾à¤§à¤¨à¥‹à¤‚ à¤•à¥€ à¤¬à¤šà¤¤ à¤•à¥€ à¤¹à¥ˆ, à¤”à¤° à¤•à¤¾à¤°à¥à¤¯à¤•à¥à¤¶à¤²à¤¤à¤¾ à¤®à¥‡à¤‚ à¤¸à¥à¤§à¤¾à¤° à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "This system has improved efficiency and reduced manual workload. In my opinion, this system should continue permanently.",
-    hi: "इस प्रणाली ने कार्यक्षमता में सुधार किया है और मैन्युअल कार्यभार को कम किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤•à¤¾à¤°à¥à¤¯à¤•à¥à¤·à¤®à¤¤à¤¾ à¤®à¥‡à¤‚ à¤¸à¥à¤§à¤¾à¤° à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆ à¤”à¤° à¤®à¥ˆà¤¨à¥à¤¯à¥à¤…à¤² à¤•à¤¾à¤°à¥à¤¯à¤­à¤¾à¤° à¤•à¥‹ à¤•à¤® à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The digital attendance reporting system is very helpful. In my opinion, this system should continue permanently.",
-    hi: "डिजिटल उपस्थिति रिपोर्टिंग प्रणाली बहुत उपयोगी है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤¡à¤¿à¤œà¤¿à¤Ÿà¤² à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¬à¤¹à¥à¤¤ à¤‰à¤ªà¤¯à¥‹à¤—à¥€ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The system has saved time, resources, and improved administrative workflow. In my opinion, this system should continue permanently.",
-    hi: "प्रणाली ने समय और संसाधनों की बचत की है, और प्रशासनिक कार्यप्रवाह में सुधार किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¸à¤®à¤¯ à¤”à¤° à¤¸à¤‚à¤¸à¤¾à¤§à¤¨à¥‹à¤‚ à¤•à¥€ à¤¬à¤šà¤¤ à¤•à¥€ à¤¹à¥ˆ, à¤”à¤° à¤ªà¥à¤°à¤¶à¤¾à¤¸à¤¨à¤¿à¤• à¤•à¤¾à¤°à¥à¤¯à¤ªà¥à¤°à¤µà¤¾à¤¹ à¤®à¥‡à¤‚ à¤¸à¥à¤§à¤¾à¤° à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance Management System has made the submission and monitoring of attendance reports much easier for our department. In my view, this system should be continued permanently.",
-    hi: "उपस्थिति प्रबंधन प्रणाली ने हमारे विभाग के लिए उपस्थिति रिपोर्ट जमा करना और उनकी निगरानी करना काफी आसान बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤œà¤®à¤¾ à¤•à¤°à¤¨à¤¾ à¤”à¤° à¤‰à¤¨à¤•à¥€ à¤¨à¤¿à¤—à¤°à¤¾à¤¨à¥€ à¤•à¤°à¤¨à¤¾ à¤•à¤¾à¤«à¥€ à¤†à¤¸à¤¾à¤¨ à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The implementation of this Attendance System has streamlined our departmental work and reduced unnecessary delays. In my opinion, this system should remain in operation permanently.",
-    hi: "इस उपस्थिति प्रणाली के लागू होने से हमारे विभाग का कार्य सुव्यवस्थित हुआ है और अनावश्यक देरी कम हुई है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‡ à¤²à¤¾à¤—à¥‚ à¤¹à¥‹à¤¨à¥‡ à¤¸à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¤¾ à¤•à¤¾à¤°à¥à¤¯ à¤¸à¥à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¿à¤¤ à¤¹à¥à¤† à¤¹à¥ˆ à¤”à¤° à¤…à¤¨à¤¾à¤µà¤¶à¥à¤¯à¤• à¤¦à¥‡à¤°à¥€ à¤•à¤® à¤¹à¥à¤ˆ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The system has made the process of attendance reporting more transparent and efficient for our department. I strongly recommend that this system should continue permanently.",
-    hi: "इस प्रणाली ने हमारे विभाग के लिए उपस्थिति रिपोर्टिंग की प्रक्रिया को अधिक पारदर्शी और प्रभावी बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤•à¥€ à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤…à¤§à¤¿à¤• à¤ªà¤¾à¤°à¤¦à¤°à¥à¤¶à¥€ à¤”à¤° à¤ªà¥à¤°à¤­à¤¾à¤µà¥€ à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance System has reduced manual errors and simplified record keeping in our department. In my view, this system should be maintained as a permanent solution.",
-    hi: "उपस्थिति प्रणाली ने मैन्युअल त्रुटियों को कम किया है और हमारे विभाग में रिकॉर्ड रखने की प्रक्रिया को सरल बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤®à¥ˆà¤¨à¥à¤¯à¥à¤…à¤² à¤¤à¥à¤°à¥à¤Ÿà¤¿à¤¯à¥‹à¤‚ à¤•à¥‹ à¤•à¤® à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆ à¤”à¤° à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤®à¥‡à¤‚ à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ à¤°à¤–à¤¨à¥‡ à¤•à¥€ à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤¸à¤°à¤² à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The digital approach of this Attendance System has improved accuracy and efficiency in managing attendance reports. In my opinion, this system deserves to be continued permanently.",
-    hi: "इस उपस्थिति प्रणाली के डिजिटल तरीके ने उपस्थिति रिपोर्ट प्रबंधन में सटीकता और कार्यकुशलता को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‡ à¤¡à¤¿à¤œà¤¿à¤Ÿà¤² à¤¤à¤°à¥€à¤•à¥‡ à¤¨à¥‡ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨ à¤®à¥‡à¤‚ à¤¸à¤Ÿà¥€à¤•à¤¤à¤¾ à¤”à¤° à¤•à¤¾à¤°à¥à¤¯à¤•à¥à¤¶à¤²à¤¤à¤¾ à¤•à¥‹ à¤¬à¥‡à¤¹à¤¤à¤° à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance Management System has made coordination between our department and the Salary Section more convenient. I believe this system should remain in use on a permanent basis.",
-    hi: "उपस्थिति प्रबंधन प्रणाली ने हमारे विभाग और सैलरी सेक्शन के बीच समन्वय को अधिक सुविधाजनक बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤”à¤° à¤¸à¥ˆà¤²à¤°à¥€ à¤¸à¥‡à¤•à¥à¤¶à¤¨ à¤•à¥‡ à¤¬à¥€à¤š à¤¸à¤®à¤¨à¥à¤µà¤¯ à¤•à¥‹ à¤…à¤§à¤¿à¤• à¤¸à¥à¤µà¤¿à¤§à¤¾à¤œà¤¨à¤• à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The system has reduced the dependency on manual paperwork and improved overall administrative efficiency. In my opinion, this system should be adopted permanently.",
-    hi: "इस प्रणाली ने मैन्युअल कागजी कार्य पर निर्भरता कम की है और समग्र प्रशासनिक कार्यकुशलता में सुधार किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤®à¥ˆà¤¨à¥à¤¯à¥à¤…à¤² à¤•à¤¾à¤—à¤œà¥€ à¤•à¤¾à¤°à¥à¤¯ à¤ªà¤° à¤¨à¤¿à¤°à¥à¤­à¤°à¤¤à¤¾ à¤•à¤® à¤•à¥€ à¤¹à¥ˆ à¤”à¤° à¤¸à¤®à¤—à¥à¤° à¤ªà¥à¤°à¤¶à¤¾à¤¸à¤¨à¤¿à¤• à¤•à¤¾à¤°à¥à¤¯à¤•à¥à¤¶à¤²à¤¤à¤¾ à¤®à¥‡à¤‚ à¤¸à¥à¤§à¤¾à¤° à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance System has made the reporting process faster and more organized for our department. I recommend that this system be continued permanently for future use.",
-    hi: "उपस्थिति प्रणाली ने हमारे विभाग के लिए रिपोर्टिंग प्रक्रिया को अधिक तेज और व्यवस्थित बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤…à¤§à¤¿à¤• à¤¤à¥‡à¤œ à¤”à¤° à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¿à¤¤ à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "This system has brought better organization and clarity in attendance reporting within our department. In my view, the continuation of this system on a permanent basis would be beneficial.",
-    hi: "इस प्रणाली ने हमारे विभाग में उपस्थिति रिपोर्टिंग को अधिक व्यवस्थित और स्पष्ट बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤®à¥‡à¤‚ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤•à¥‹ à¤…à¤§à¤¿à¤• à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¿à¤¤ à¤”à¤° à¤¸à¥à¤ªà¤·à¥à¤Ÿ à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance System has minimized paperwork and improved the efficiency of administrative tasks in our department. I am of the opinion that this system should continue permanently.",
-    hi: "उपस्थिति प्रणाली ने कागजी कार्य को कम किया है और हमारे विभाग में प्रशासनिक कार्यों की कार्यकुशलता को बढ़ाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤•à¤¾à¤—à¤œà¥€ à¤•à¤¾à¤°à¥à¤¯ à¤•à¥‹ à¤•à¤® à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆ à¤”à¤° à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤®à¥‡à¤‚ à¤ªà¥à¤°à¤¶à¤¾à¤¸à¤¨à¤¿à¤• à¤•à¤¾à¤°à¥à¤¯à¥‹à¤‚ à¤•à¥€ à¤•à¤¾à¤°à¥à¤¯à¤•à¥à¤¶à¤²à¤¤à¤¾ à¤•à¥‹ à¤¬à¤¢à¤¼à¤¾à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The system has made the preparation and submission of attendance reports much more convenient. In my opinion, this system should be retained permanently.",
-    hi: "इस प्रणाली ने उपस्थिति रिपोर्ट तैयार करने और जमा करने की प्रक्रिया को काफी अधिक सुविधाजनक बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤°à¤¨à¥‡ à¤”à¤° à¤œà¤®à¤¾ à¤•à¤°à¤¨à¥‡ à¤•à¥€ à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤•à¤¾à¤«à¥€ à¤…à¤§à¤¿à¤• à¤¸à¥à¤µà¤¿à¤§à¤¾à¤œà¤¨à¤• à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "This Attendance System has improved the speed and reliability of attendance reporting in our department. I strongly believe this system should continue as a permanent arrangement.",
-    hi: "इस उपस्थिति प्रणाली ने हमारे विभाग में उपस्थिति रिपोर्टिंग की गति और विश्वसनीयता को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤®à¥‡à¤‚ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤•à¥€ à¤—à¤¤à¤¿ à¤”à¤° à¤µà¤¿à¤¶à¥à¤µà¤¸à¤¨à¥€à¤¯à¤¤à¤¾ à¤•à¥‹ à¤¬à¥‡à¤¹à¤¤à¤° à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The digital attendance reporting process has been beneficial and user friendly for our department. In my view, this system should remain a permanent part of the process.",
-    hi: "डिजिटल उपस्थिति रिपोर्टिंग प्रक्रिया हमारे विभाग के लिए लाभदायक और उपयोगकर्ता अनुकूल रही है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤¡à¤¿à¤œà¤¿à¤Ÿà¤² à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤²à¤¾à¤­à¤¦à¤¾à¤¯à¤• à¤”à¤° à¤‰à¤ªà¤¯à¥‹à¤—à¤•à¤°à¥à¤¤à¤¾ à¤…à¤¨à¥à¤•à¥‚à¤² à¤°à¤¹à¥€ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance Management System has improved administrative workflow and reduced unnecessary workload. I recommend that this system be implemented on a permanent basis.",
-    hi: "उपस्थिति प्रबंधन प्रणाली ने प्रशासनिक कार्यप्रवाह को बेहतर बनाया है और अनावश्यक कार्यभार को कम किया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤ªà¥à¤°à¤¶à¤¾à¤¸à¤¨à¤¿à¤• à¤•à¤¾à¤°à¥à¤¯à¤ªà¥à¤°à¤µà¤¾à¤¹ à¤•à¥‹ à¤¬à¥‡à¤¹à¤¤à¤° à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆ à¤”à¤° à¤…à¤¨à¤¾à¤µà¤¶à¥à¤¯à¤• à¤•à¤¾à¤°à¥à¤¯à¤­à¤¾à¤° à¤•à¥‹ à¤•à¤® à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "This system has made attendance documentation more systematic and efficient for our department. In my opinion, the system should continue to operate permanently.",
-    hi: "इस प्रणाली ने हमारे विभाग के लिए उपस्थिति दस्तावेजीकरण को अधिक व्यवस्थित और प्रभावी बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤¦à¤¸à¥à¤¤à¤¾à¤µà¥‡à¤œà¥€à¤•à¤°à¤£ à¤•à¥‹ à¤…à¤§à¤¿à¤• à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¿à¤¤ à¤”à¤° à¤ªà¥à¤°à¤­à¤¾à¤µà¥€ à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance System has enhanced transparency and improved the reporting structure in our department. I believe this system should be continued indefinitely.",
-    hi: "उपस्थिति प्रणाली ने पारदर्शिता बढ़ाई है और हमारे विभाग में रिपोर्टिंग संरचना को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤ªà¤¾à¤°à¤¦à¤°à¥à¤¶à¤¿à¤¤à¤¾ à¤¬à¤¢à¤¼à¤¾à¤ˆ à¤¹à¥ˆ à¤”à¤° à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤®à¥‡à¤‚ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤¸à¤‚à¤°à¤šà¤¨à¤¾ à¤•à¥‹ à¤¬à¥‡à¤¹à¤¤à¤° à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The system has helped our department manage attendance records more efficiently and with less effort. In my view, the system should remain permanently in use.",
-    hi: "इस प्रणाली ने हमारे विभाग को उपस्थिति रिकॉर्ड अधिक कुशलता और कम प्रयास के साथ प्रबंधित करने में मदद की है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤•à¥‹ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ à¤…à¤§à¤¿à¤• à¤•à¥à¤¶à¤²à¤¤à¤¾ à¤”à¤° à¤•à¤® à¤ªà¥à¤°à¤¯à¤¾à¤¸ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¿à¤¤ à¤•à¤°à¤¨à¥‡ à¤®à¥‡à¤‚ à¤®à¤¦à¤¦ à¤•à¥€ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The digital attendance submission system has made the process smoother and more reliable. I strongly support the permanent continuation of this system.",
-    hi: "डिजिटल उपस्थिति जमा प्रणाली ने प्रक्रिया को अधिक सुचारु और विश्वसनीय बना दिया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤¡à¤¿à¤œà¤¿à¤Ÿà¤² à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤œà¤®à¤¾ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤…à¤§à¤¿à¤• à¤¸à¥à¤šà¤¾à¤°à¥ à¤”à¤° à¤µà¤¿à¤¶à¥à¤µà¤¸à¤¨à¥€à¤¯ à¤¬à¤¨à¤¾ à¤¦à¤¿à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "This Attendance System has reduced complexity and improved the overall reporting process in our department. In my opinion, this system should be continued for the long term.",
-    hi: "इस उपस्थिति प्रणाली ने जटिलता को कम किया है और हमारे विभाग में समग्र रिपोर्टिंग प्रक्रिया को बेहतर बनाया है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‡à¤¸ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤¨à¥‡ à¤œà¤Ÿà¤¿à¤²à¤¤à¤¾ à¤•à¥‹ à¤•à¤® à¤•à¤¿à¤¯à¤¾ à¤¹à¥ˆ à¤”à¤° à¤¹à¤®à¤¾à¤°à¥‡ à¤µà¤¿à¤­à¤¾à¤— à¤®à¥‡à¤‚ à¤¸à¤®à¤—à¥à¤° à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‹ à¤¬à¥‡à¤¹à¤¤à¤° à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   },
   {
     en: "The Attendance Management System has proven to be a practical and efficient solution for attendance reporting. I recommend that this system remain permanently in place.",
-    hi: "उपस्थिति प्रबंधन प्रणाली उपस्थिति रिपोर्टिंग के लिए एक व्यावहारिक और प्रभावी समाधान साबित हुई है। मेरी राय में, इस प्रणाली को स्थायी रूप से जारी रखा जाना चाहिए।"
+    hi: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿà¤¿à¤‚à¤— à¤•à¥‡ à¤²à¤¿à¤ à¤à¤• à¤µà¥à¤¯à¤¾à¤µà¤¹à¤¾à¤°à¤¿à¤• à¤”à¤° à¤ªà¥à¤°à¤­à¤¾à¤µà¥€ à¤¸à¤®à¤¾à¤§à¤¾à¤¨ à¤¸à¤¾à¤¬à¤¿à¤¤ à¤¹à¥à¤ˆ à¤¹à¥ˆà¥¤ à¤®à¥‡à¤°à¥€ à¤°à¤¾à¤¯ à¤®à¥‡à¤‚, à¤‡à¤¸ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€ à¤•à¥‹ à¤¸à¥à¤¥à¤¾à¤¯à¥€ à¤°à¥‚à¤ª à¤¸à¥‡ à¤œà¤¾à¤°à¥€ à¤°à¤–à¤¾ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
   }
 ];
 
@@ -1592,14 +1592,17 @@ export default function Attendance() {
   const [recallCountdown, setRecallCountdown] = useState<number>(15);
   const recallCancelledRef = useRef<boolean>(false);
 
+  // Direct Cancel countdown state (sent report → 60s countdown → auto cancel)
+  const [cancelCountdownReportId, setCancelCountdownReportId] = useState<number | null>(null);
+  const [cancelCountdown, setCancelCountdown] = useState<number>(60);
+  const cancelAbortedRef = useRef<boolean>(false);
+
   const [feedbackReport, setFeedbackReport] = useState<AttendanceReport | null>(null);
   const [feedbackSelection, setFeedbackSelection] = useState<'positive' | 'negative' | null>(null);
   const [finalizeReport, setFinalizeReport] = useState<AttendanceReport | null>(null);
   const [randomFeedbackIndex, setRandomFeedbackIndex] = useState<number>(0);
 
-  // Check if cancellation is allowed (only before 23rd of each month)
-  const today = new Date();
-  const canRequestCancellation = today.getDate() <= 23;
+
 
   // Check attendance status for deadline alert (MOVED FROM BELOW)
   const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean }>({
@@ -1619,6 +1622,7 @@ export default function Attendance() {
     }
   }, [attendanceStatus, loadingStatus]);
 
+  const today = new Date();
   const currentMonthName = today.toLocaleString('default', { month: 'long' });
   const currentYear = today.getFullYear();
 
@@ -1987,6 +1991,56 @@ export default function Attendance() {
     return () => clearInterval(interval);
   }, [recallCountdownReportId]);
 
+  // Direct Cancel mutation — no admin approval, department calls directly after 60s countdown
+  const directCancel = useMutation({
+    mutationFn: async (reportId: number) => {
+      const res = await apiRequest("POST", `/api/attendance/${reportId}/direct-cancel`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/departments/${department?.id}/attendance`] });
+      toast({
+        title: "✅ Attendance Report Cancelled",
+        description: "The report has been cancelled. Entries deleted. PDF & receipt preserved.",
+        duration: 6000,
+      });
+      if (data) handleEmailResponse(data);
+      setTimeout(() => window.location.reload(), 2000);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Cancellation Failed",
+        description: error.message || "Failed to cancel report. Please try again.",
+      });
+    },
+  });
+
+  // 60-second countdown effect — triggers directCancel when countdown reaches 0
+  useEffect(() => {
+    if (cancelCountdownReportId === null) return;
+
+    setCancelCountdown(60);
+    cancelAbortedRef.current = false;
+    const capturedReportId = cancelCountdownReportId;
+
+    let remaining = 60;
+    const interval = setInterval(() => {
+      remaining -= 1;
+      setCancelCountdown(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(interval);
+        if (!cancelAbortedRef.current) {
+          setCancelCountdownReportId(null);
+          directCancel.mutate(capturedReportId);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [cancelCountdownReportId]);
+
   const [editingReportData, setEditingReportData] = useState<any>(null);
   const [editingReportId, setEditingReportId] = useState<number | null>(null);
 
@@ -2120,10 +2174,11 @@ export default function Attendance() {
       ? false  // Explicitly NOT permitted: always disable
       : (!isPastDeadline && (!existingReport || attendanceStatus?.allowSupplementaryReport));  // Undefined/loading: respect deadline, check existing report OR supp allowed
 
-  // Override canRequestCancellation: allow if permitted OR before 23rd
-  // Note: canRequestCancellation was initially defined above as today.getDate() <= 23
-  // Now we override it to also allow when department has special permission
-  const canRequestCancellationFinal = canRequestCancellation || attendanceStatus?.permitted === true;
+  // "Request to Cancel" button ab sirf Super Admin ke attendance toggle se control hoga
+  // permitted=true  → cancel allow (Super Admin ne Enable kiya)
+  // permitted=false → cancel block (Super Admin ne Disable kiya)
+  // undefined       → cancel block (safe default — data load hone tak)
+  const canRequestCancellationFinal = attendanceStatus?.permitted === true;
 
   if (isLoading || loadingEntries) return <Loading />;
 
@@ -2427,52 +2482,24 @@ export default function Attendance() {
                             </Dialog>
                           </>
                         )}
-                        {/* Request to Cancel button for sent reports - only for CURRENT MONTH and (before 23rd OR with special permission) */}
+                        {/* Request to Cancel button for sent reports - only for CURRENT MONTH and when attendance is enabled by Super Admin */}
                         {report.status === "sent" && canRequestCancellationFinal && report.year === currentMonthYear && report.month === currentMonthIdx && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-orange-600 border-orange-300 hover:bg-orange-50"
-                              onClick={() => setCancelDialogReportId(report.id)}
-                            >
-                              Request to Cancel
-                            </Button>
-                            <Dialog open={cancelDialogReportId === report.id} onOpenChange={(open) => !open && setCancelDialogReportId(null)}>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Request Cancellation</DialogTitle>
-                                  <DialogDescription>
-                                    Are you sure you want to request cancellation of this report?
-                                    This will send a request to the admin for approval.
-                                    The entries will be deleted but the PDF and receipt number will be preserved.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter>
-                                  <Button variant="outline" onClick={() => setCancelDialogReportId(null)}>Cancel</Button>
-                                  <Button
-                                    variant="destructive"
-                                    onClick={() => requestCancellation.mutate(report.id)}
-                                    disabled={requestCancellation.isPending}
-                                  >
-                                    {requestCancellation.isPending ? (
-                                      <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Requesting...
-                                      </>
-                                    ) : (
-                                      "Request Cancellation"
-                                    )}
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          </>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 font-semibold"
+                            onClick={() => {
+                              cancelAbortedRef.current = false;
+                              setCancelCountdownReportId(report.id);
+                            }}
+                          >
+                            🚨 Request to Cancel
+                          </Button>
                         )}
-                        {/* Show when cancellation not allowed (after 23rd AND no special permission) - ONLY for current month */}
+                        {/* Show when cancellation not allowed (attendance disabled by Super Admin) - ONLY for current month */}
                         {report.status === "sent" && !canRequestCancellationFinal && report.year === currentMonthYear && report.month === currentMonthIdx && (
                           <span className="text-xs text-gray-500">
-                            Cancel N/A after 23rd
+                            Cancel N/A
                           </span>
                         )}
                         {/* Request Recall for Submitted reports — instant countdown, no admin approval */}
@@ -2530,47 +2557,43 @@ export default function Attendance() {
       <Dialog open={!!feedbackReport} onOpenChange={(open) => !open && setFeedbackReport(null)}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Department Feedback on Attendance System / उपस्थिति प्रणाली पर विभाग की प्रतिक्रिया</DialogTitle>
+            <DialogTitle>Department Feedback on Attendance System</DialogTitle>
             <DialogDescription asChild>
               <div className="pt-3 text-sm text-foreground space-y-3">
                 <p>
                   This Attendance Management System was introduced on a trial basis to simplify the submission of attendance reports.<br />
-                  Your department's feedback is important to evaluate whether the system should continue in the future.<br />
-                  <span className="text-muted-foreground mt-1 block">यह उपस्थिति प्रबंधन प्रणाली (Attendance Management System) उपस्थिति रिपोर्ट जमा करने की प्रक्रिया को सरल बनाने के लिए परीक्षण (trial) के आधार पर शुरू की गई थी। इस प्रणाली को भविष्य में जारी रखा जाना चाहिए या नहीं, इसका मूल्यांकन करने के लिए आपके विभाग की प्रतिक्रिया (feedback) महत्वपूर्ण है।</span>
+                  Your department feedback is important to evaluate whether the system should continue in the future.
                 </p>
                 <p className="font-medium text-amber-900 mt-4">
-                  Kindly select your department's recommendation regarding this system.<br />
-                  <span className="text-sm font-normal">कृपया इस प्रणाली के संबंध में अपने विभाग की अनुशंसा (recommendation) चुनें।</span>
+                  Kindly select your department recommendation regarding this system.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <div
-                    className={`p-4 border rounded-md cursor-pointer transition-colors ${feedbackSelection === 'positive' ? 'border-green-600 bg-green-50 ring-1 ring-green-600' : 'hover:bg-muted'}`}
-                    onClick={() => setFeedbackSelection('positive')}
+                    className={`p-4 border rounded-md cursor-pointer transition-colors ${feedbackSelection === "positive" ? "border-green-600 bg-green-50 ring-1 ring-green-600" : "hover:bg-muted"}`}
+                    onClick={() => setFeedbackSelection("positive")}
                   >
                     <div className="flex items-start gap-2">
                       <div className="mt-1">
-                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${feedbackSelection === 'positive' ? 'border-green-600 border-4' : 'border-input'}`}></div>
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${feedbackSelection === "positive" ? "border-green-600 border-4" : "border-input"}`}></div>
                       </div>
                       <div>
-                        <p className="font-bold mb-1 text-[15px] text-green-700">Option 1 - Positive Recommendation<br /><span className="text-sm font-medium">विकल्प 1 - सकारात्मक अनुशंसा</span></p>
+                        <p className="font-bold mb-1 text-[15px] text-green-700">Option 1 - Positive Recommendation</p>
                         <p className="text-sm text-muted-foreground mt-2">{POSITIVE_REMARKS[randomFeedbackIndex].en}</p>
                         <p className="text-sm text-muted-foreground mt-2 border-t pt-2">{POSITIVE_REMARKS[randomFeedbackIndex].hi}</p>
                       </div>
                     </div>
                   </div>
-
                   <div
-                    className={`p-4 border rounded-md cursor-pointer transition-colors ${feedbackSelection === 'negative' ? 'border-red-600 bg-red-50 ring-1 ring-red-600' : 'hover:bg-muted'}`}
-                    onClick={() => setFeedbackSelection('negative')}
+                    className={`p-4 border rounded-md cursor-pointer transition-colors ${feedbackSelection === "negative" ? "border-red-600 bg-red-50 ring-1 ring-red-600" : "hover:bg-muted"}`}
+                    onClick={() => setFeedbackSelection("negative")}
                   >
                     <div className="flex items-start gap-2">
                       <div className="mt-1">
-                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${feedbackSelection === 'negative' ? 'border-red-600 border-4' : 'border-input'}`}></div>
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${feedbackSelection === "negative" ? "border-red-600 border-4" : "border-input"}`}></div>
                       </div>
                       <div>
-                        <p className="font-bold mb-1 text-[15px] text-red-700">Option 2 - Negative Recommendation<br /><span className="text-sm font-medium">विकल्प 2 - नकारात्मक अनुशंसा</span></p>
+                        <p className="font-bold mb-1 text-[15px] text-red-700">Option 2 - Negative Recommendation</p>
                         <p className="text-sm text-muted-foreground mt-2">The Attendance System should be discontinued after the trial period and the previous manual system should be continued.</p>
-                        <p className="text-sm text-muted-foreground mt-2 border-t pt-2">परीक्षण अवधि के बाद उपस्थिति प्रणाली को बंद कर दिया जाना चाहिए और पिछली मैन्युअल प्रणाली को जारी रखा जाना चाहिए।</p>
                       </div>
                     </div>
                   </div>
@@ -2584,7 +2607,7 @@ export default function Attendance() {
               disabled={!feedbackSelection}
               onClick={() => {
                 if (feedbackReport) {
-                  if (feedbackSelection === 'positive') {
+                  if (feedbackSelection === "positive") {
                     localStorage.setItem(`feedback_remark_${feedbackReport.id}`, `Positive: ${POSITIVE_REMARKS[randomFeedbackIndex].en}`);
                   } else {
                     localStorage.setItem(`feedback_remark_${feedbackReport.id}`, "Negative: ----");
@@ -2649,7 +2672,7 @@ export default function Attendance() {
           <div className="p-6 space-y-4">
             <div className="text-center space-y-2">
               <h3 className="font-bold text-lg text-gray-900">Aligarh Muslim University</h3>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Salary Section – Attendance Alert</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Salary Section â€“ Attendance Alert</p>
 
               <p className="mx-auto text-gray-700">
                 Attendance submission deadline for <span className="font-bold">{currentMonthName} {currentYear}</span> was <span className="font-bold text-red-600">15 {currentMonthName}</span>. The deadline has now passed.
@@ -2762,6 +2785,171 @@ export default function Attendance() {
               @keyframes fadeInScale {
                 from { opacity: 0; transform: scale(0.88); }
                 to   { opacity: 1; transform: scale(1); }
+              }
+            `}</style>
+          </div>
+        );
+      })()}
+
+      {/* Direct Cancel Countdown Overlay (60s) */}
+      {cancelCountdownReportId !== null && (() => {
+        const cancelReport = reports.find(r => r.id === cancelCountdownReportId);
+        const TOTAL = 60;
+        const cRadius = 56;
+        const cCircumference = 2 * Math.PI * cRadius;
+        const cProgress = cancelCountdown / TOTAL;
+        const cDashOffset = cCircumference * (1 - cProgress);
+        const isUrgent = cancelCountdown <= 10;
+        const cMonthName = cancelReport
+          ? new Date(cancelReport.year, cancelReport.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+          : '';
+
+        return (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.82)' }}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+              style={{ animation: 'cancelSlideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
+            >
+              <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-xl">🚨</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-white font-bold text-base leading-tight">CANCELLATION IN PROGRESS</p>
+                  <p className="text-red-100 text-xs mt-0.5">Sent Attendance Report · Self-Initiated</p>
+                </div>
+                <div className="ml-auto bg-white/20 text-white text-xs font-bold px-2 py-1 rounded-full border border-white/30 flex-shrink-0">
+                  IRREVERSIBLE
+                </div>
+              </div>
+
+              <div className="px-6 pt-5 pb-6">
+                <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-2.5 flex items-center gap-2.5">
+                  <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
+                  <p className="text-amber-800 text-sm font-semibold">This action cannot be undone after the countdown.</p>
+                </div>
+
+                {cancelReport && (
+                  <div className="mb-5 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                    <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Report Being Cancelled</p>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">📄</span>
+                        <span className="font-bold text-gray-800 text-sm">{cMonthName} Attendance Report</span>
+                      </div>
+                      {cancelReport.despatchNo && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>📬</span>
+                          <span>Despatch No: <strong className="text-gray-700">{cancelReport.despatchNo}</strong></span>
+                        </div>
+                      )}
+                      {cancelReport.transactionId && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>🔑</span>
+                          <span>Transaction ID: <strong className="text-gray-700 font-mono">{cancelReport.transactionId}</strong></span>
+                        </div>
+                      )}
+                      {cancelReport.receiptNo && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>🧾</span>
+                          <span>Receipt No: <strong className="text-gray-700">{cancelReport.receiptNo}</strong></span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-center text-xs text-gray-400 font-semibold uppercase tracking-widest mb-3">
+                  — Cancelling in —
+                </p>
+
+                <div className="relative mx-auto mb-5" style={{ width: 150, height: 150 }}>
+                  <svg width="150" height="150" viewBox="0 0 130 130" style={{ transform: 'rotate(-90deg)' }}>
+                    <circle cx="65" cy="65" r={cRadius} fill="none" stroke="#fee2e2" strokeWidth="14" />
+                    <circle
+                      cx="65" cy="65" r={cRadius}
+                      fill="none"
+                      stroke={isUrgent ? '#b91c1c' : '#dc2626'}
+                      strokeWidth="14"
+                      strokeLinecap="round"
+                      strokeDasharray={cCircumference}
+                      strokeDashoffset={cDashOffset}
+                      style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s ease' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span
+                      className="font-black leading-none tabular-nums"
+                      style={{
+                        fontSize: 44,
+                        color: isUrgent ? '#b91c1c' : '#dc2626',
+                        animation: isUrgent ? 'cancelPulse 0.8s ease-in-out infinite' : 'none',
+                        transition: 'color 0.3s ease',
+                      }}
+                    >
+                      {cancelCountdown}
+                    </span>
+                    <span className="text-xs text-gray-400 font-medium mt-0.5">seconds</span>
+                  </div>
+                </div>
+
+                <p className="text-center text-xs mb-5" style={{ color: isUrgent ? '#b91c1c' : '#6b7280' }}>
+                  : '⏳ Countdown running... click Abort to stop.'
+                </p>
+
+                <div className="mb-5 bg-red-50 border border-red-100 rounded-xl px-4 py-3 space-y-2">
+                  <p className="text-xs font-bold text-red-700 uppercase tracking-wider mb-2">What will happen:</p>
+                  <div className="flex items-start gap-2.5 text-xs text-red-700">
+                    <span className="flex-shrink-0 mt-0.5">⚡</span>
+                    <span>All attendance <strong>entries will be permanently deleted</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2.5 text-xs text-red-600">
+                    <span className="flex-shrink-0 mt-0.5">📋</span>
+                    <span>Signed PDF &amp; receipt number will be <strong>preserved</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2.5 text-xs text-red-600">
+                    <span className="flex-shrink-0 mt-0.5">📧</span>
+                    <span>Admin will be <strong>notified automatically</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2.5 text-xs text-red-600">
+                    <span className="flex-shrink-0 mt-0.5">🔓</span>
+                    <span>You can then <strong>create a new report</strong> for this month</span>
+                  </div>
+                </div>
+
+                <button
+                  className="w-full py-3.5 rounded-xl font-bold text-white text-sm tracking-wide flex items-center justify-center gap-2"
+                  style={{
+                    background: isUrgent ? 'linear-gradient(135deg, #7f1d1d, #991b1b)' : 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                    boxShadow: isUrgent ? '0 0 0 4px rgba(185,28,28,0.35)' : '0 4px 14px rgba(220,38,38,0.4)',
+                    animation: isUrgent ? 'cancelPulseBtn 0.8s ease-in-out infinite' : 'none',
+                  }}
+                  onClick={() => {
+                    cancelAbortedRef.current = true;
+                    setCancelCountdownReportId(null);
+                  }}
+                >
+                  <span style={{ fontSize: 18 }}>✋</span>
+                  ABORT CANCELLATION
+                </button>
+              </div>
+            </div>
+
+            <style>{`
+              @keyframes cancelSlideUp {
+                from { opacity: 0; transform: translateY(40px) scale(0.95); }
+                to   { opacity: 1; transform: translateY(0) scale(1); }
+              }
+              @keyframes cancelPulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.18); }
+              }
+              @keyframes cancelPulseBtn {
+                0%, 100% { box-shadow: 0 0 0 3px rgba(185,28,28,0.4); }
+                50% { box-shadow: 0 0 0 8px rgba(185,28,28,0.15); }
               }
             `}</style>
           </div>
