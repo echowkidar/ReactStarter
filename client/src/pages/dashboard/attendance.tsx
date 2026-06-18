@@ -2513,7 +2513,7 @@ export default function Attendance() {
                               setRecallCountdownReportId(report.id);
                             }}
                           >
-                            Request Recall
+                            Revert to Draft
                           </Button>
                         )}
                         {/* Show status for cancel_requested and cancelled */}
