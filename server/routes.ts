@@ -78,7 +78,7 @@ async function checkEmployeeAttendanceBlocksTransfer(
   return { blocked: false };
 }
 import { v4 as uuid } from "uuid";
-import { setupTestEmailAccount, sendPasswordResetEmail, sendAttendanceNotification, sendNoticeEmail } from "./emailService";
+import { setupTestEmailAccount, sendPasswordResetEmail, sendAttendanceNotification, sendNoticeEmail, sendTicketResolutionEmail } from "./emailService";
 
 // Add custom type for Request with session
 interface RequestWithSession extends Request {
@@ -4305,12 +4305,22 @@ export async function registerRoutes(app: Express) {
       const updates: any = {};
       if (status) {
         updates.status = status;
-        if (status === 'resolved') updates.resolvedAt = new Date();
-        if (status === 'closed') updates.closedAt = new Date();
+        if (status === 'Resolved' || status === 'Closed') updates.resolvedAt = new Date();
       }
       if (priority) updates.priority = priority;
 
       const ticket = await storage.updateTicket(id, updates);
+      
+      // If marked as Resolved or Closed and there is a comment, send the notification email
+      if (status && (status === 'Resolved' || status === 'Closed')) {
+        if (ticket.adminResponse) {
+          const department = await storage.getDepartment(ticket.departmentId);
+          if (department && department.email) {
+            await sendTicketResolutionEmail(department.email, department.name, ticket as any);
+          }
+        }
+      }
+
       res.json(ticket);
     } catch (error) {
       console.error("Error updating ticket:", error);
@@ -4328,11 +4338,27 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Message is required" });
       }
 
-      // Update ticket with admin response
+      // Fetch the current ticket to check its status
+      const currentTicket = await storage.getTicket(ticketId);
+      if (!currentTicket) {
+        return res.status(404).json({ message: "Ticket not found" });
+      }
+
+      const isResolvedOrClosed = currentTicket.status === 'Resolved' || currentTicket.status === 'Closed';
+
+      // Update ticket with admin response. Do not force 'In Progress' if already resolved/closed.
       const updatedTicket = await storage.updateTicket(ticketId, {
         adminResponse: message,
-        status: 'In Progress',
+        status: isResolvedOrClosed ? currentTicket.status : 'In Progress',
       });
+
+      // If the ticket is currently resolved or closed, notify the department of the updated response
+      if (isResolvedOrClosed) {
+        const department = await storage.getDepartment(updatedTicket.departmentId);
+        if (department && department.email) {
+          await sendTicketResolutionEmail(department.email, department.name, updatedTicket as any);
+        }
+      }
 
       res.status(201).json(updatedTicket);
     } catch (error) {

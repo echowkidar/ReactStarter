@@ -440,3 +440,57 @@ export async function sendNoticeEmail(
     return { success: false, error: 'send_failed', message: String(error) };
   }
 }
+
+export async function sendTicketResolutionEmail(
+  email: string,
+  departmentName: string,
+  ticket: { id: number; subject: string; description: string; adminResponse: string | null; status: string; }
+) {
+  try {
+    const isValidDomain = await validateEmailDomain(email);
+    if (!isValidDomain) {
+      return { success: false, error: 'wrong_email', message: 'Email domain does not exist' };
+    }
+
+    const htmlContent = `
+      <h2 style="color: #2563eb;">Support Ticket Update</h2>
+      <p>Dear ${departmentName},</p>
+      <p>Your support ticket <strong>#${ticket.id}</strong> has been updated by the administrator.</p>
+      
+      <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #64748b; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #334155;">Original Ticket</h3>
+        <p><strong>Subject:</strong> ${ticket.subject}</p>
+        <p style="white-space: pre-wrap; font-size: 14px; color: #475569;">${ticket.description}</p>
+      </div>
+
+      <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #16a34a; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #166534;">Administrator Response</h3>
+        <p style="white-space: pre-wrap; font-size: 14px; color: #15803d;">${ticket.adminResponse || "No response provided."}</p>
+      </div>
+      
+      <p><strong>Current Status:</strong> <span style="padding: 4px 8px; background-color: ${ticket.status === 'Resolved' ? '#dcfce7' : '#e2e8f0'}; color: ${ticket.status === 'Resolved' ? '#166534' : '#475569'}; border-radius: 4px; font-weight: bold;">${ticket.status}</span></p>
+      
+      <p>Please log in to the Attendance Portal if you need to review further details.</p>
+    `;
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"AMU Salary Section" <noreply@amu.ac.in>',
+      to: email,
+      subject: `Support Ticket #${ticket.id} ${ticket.status} - AMU Salary Section`,
+      html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+            ${htmlContent}
+            <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+            <p style="color: #666; font-size: 12px; text-align: center;">This is an automated notification from the AMU Salary Section.</p>
+          </div>
+        `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Ticket resolution email sent to ${email}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error(`Failed to send ticket resolution email to ${email}:`, error);
+    return { success: false, error: 'send_failed', message: String(error) };
+  }
+}
