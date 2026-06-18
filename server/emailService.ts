@@ -409,7 +409,7 @@ export async function sendNoticeEmail(
 
     const htmlContent = `
       <h2 style="color: #2563eb;">New Notice from Admin</h2>
-      <p>Dear ${departmentName},</p>
+      <p>The ${departmentName},</p>
       <p>A new notice has been issued by <strong>${notice.createdBy}</strong>.</p>
       <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0;">
         <h3 style="margin-top: 0;">${notice.subject}</h3>
@@ -455,7 +455,7 @@ export async function sendTicketResolutionEmail(
     const htmlContent = `
       <h2 style="color: #2563eb;">Support Ticket Update</h2>
       <p>Dear ${departmentName},</p>
-      <p>Your support ticket <strong>#${ticket.id}</strong> has been updated by the administrator.</p>
+      <p>Your support ticket <strong>#${ticket.id}</strong> has been updated by the Salary Section.</p>
       
       <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #64748b; margin: 20px 0;">
         <h3 style="margin-top: 0; color: #334155;">Original Ticket</h3>
@@ -470,7 +470,7 @@ export async function sendTicketResolutionEmail(
       
       <p><strong>Current Status:</strong> <span style="padding: 4px 8px; background-color: ${ticket.status === 'Resolved' ? '#dcfce7' : '#e2e8f0'}; color: ${ticket.status === 'Resolved' ? '#166534' : '#475569'}; border-radius: 4px; font-weight: bold;">${ticket.status}</span></p>
       
-      <p>Please log in to the Attendance Portal if you need to review further details.</p>
+      <p>Thanks!</p>
     `;
 
     const mailOptions = {
@@ -493,4 +493,4 @@ export async function sendTicketResolutionEmail(
     console.error(`Failed to send ticket resolution email to ${email}:`, error);
     return { success: false, error: 'send_failed', message: String(error) };
   }
-}
+}
