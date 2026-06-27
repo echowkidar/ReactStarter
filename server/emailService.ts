@@ -454,7 +454,7 @@ export async function sendTicketResolutionEmail(
 
     const htmlContent = `
       <h2 style="color: #2563eb;">Support Ticket Update</h2>
-      <p>Dear ${departmentName},</p>
+      <p>The ${departmentName},</p>
       <p>Your support ticket <strong>#${ticket.id}</strong> has been updated by the Salary Section.</p>
       
       <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #64748b; margin: 20px 0;">
@@ -464,7 +464,7 @@ export async function sendTicketResolutionEmail(
       </div>
 
       <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #16a34a; margin: 20px 0;">
-        <h3 style="margin-top: 0; color: #166534;">Administrator Response</h3>
+        <h3 style="margin-top: 0; color: #166534;">Salary Section Response</h3>
         <p style="white-space: pre-wrap; font-size: 14px; color: #15803d;">${ticket.adminResponse || "No response provided."}</p>
       </div>
       
