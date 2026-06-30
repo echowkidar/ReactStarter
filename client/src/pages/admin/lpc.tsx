@@ -683,24 +683,26 @@ export default function AdminLPC() {
                         )}
                       </div>
                     </td>
-                    {canManageLPC && <td className="px-3 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEditForm(r)} className="p-1.5 rounded hover:bg-indigo-100 text-indigo-600" title="Edit">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        {r.pdfUrl && (
-                          <button onClick={() => handleGeneratePdf(r.id)} disabled={generatingPdf === r.id}
-                            className="p-1.5 rounded hover:bg-purple-100 text-purple-600" title="Re-sign PDF">
-                            {generatingPdf === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {canManageLPC && (
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEditForm(r)} className="p-1.5 rounded hover:bg-indigo-100 text-indigo-600" title="Edit">
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
-                        )}
-                        {r.emailStatus !== "sent" && (
-                          <button onClick={() => setDeleteId(r.id)} className="p-1.5 rounded hover:bg-red-100 text-red-500" title="Delete">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                          {r.pdfUrl && (
+                            <button onClick={() => handleGeneratePdf(r.id)} disabled={generatingPdf === r.id}
+                              className="p-1.5 rounded hover:bg-purple-100 text-purple-600" title="Re-sign PDF">
+                              {generatingPdf === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
+                          {r.emailStatus !== "sent" && (
+                            <button onClick={() => setDeleteId(r.id)} className="p-1.5 rounded hover:bg-red-100 text-red-500" title="Delete">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
