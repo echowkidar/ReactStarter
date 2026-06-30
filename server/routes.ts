@@ -5808,9 +5808,18 @@ export async function registerRoutes(app: Express) {
     } catch (error) { res.status(500).json({ message: "Failed to verify LPC PDF" }); }
   });
 
-  app.get("/api/public/lpc/:id/verify", async (req, res) => {
+  app.get("/api/public/lpc/:idParam/verify", async (req, res) => {
     try {
-      const id = Number(req.params.id);
+      const idParam = req.params.idParam;
+      const [idStr, token] = idParam.split('-');
+      const id = Number(idStr);
+      
+      if (!token) return res.status(403).json({ message: "Secure verification token is required. Please re-generate the PDF to get a valid QR code." });
+      
+      const crypto = await import('crypto');
+      const expectedToken = crypto.createHmac('sha256', process.env.EXTERNAL_API_KEY || 'amu-secret-dept-key-2026').update(String(id)).digest('hex').substring(0, 16);
+      if (token !== expectedToken) return res.status(403).json({ message: "Invalid verification token. This QR code may be forged or tampered with." });
+
       const { lpcRecords } = await import("../shared/schema");
       const { eq } = await import("drizzle-orm");
       const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));

@@ -229,7 +229,8 @@ export async function generateAndSignLPC(
     // Add Verification QR Code
     try {
       const QRCode = (await import('qrcode')).default;
-      const verifyUrl = `Verification ID: LPC-${lpcId}\nEPID: ${data.epid}\nVerify at: https://salarysection.com/lpc/verify/${lpcId}`;
+      const verifyToken = crypto.createHmac('sha256', process.env.EXTERNAL_API_KEY || 'amu-secret-dept-key-2026').update(String(lpcId)).digest('hex').substring(0, 16);
+      const verifyUrl = `Verification ID: LPC-${lpcId}\nEPID: ${data.epid}\nVerify at: https://salarysection.com/lpc/verify/${lpcId}-${verifyToken}`;
       const qrDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 1 });
       const qrImage = await pdfDoc.embedPng(qrDataUrl);
       firstPage.drawImage(qrImage, {
