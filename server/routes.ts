@@ -5843,7 +5843,10 @@ export async function registerRoutes(app: Express) {
       const { eq } = await import("drizzle-orm");
       const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));
       if (!record) return res.status(404).json({ message: "LPC record not found" });
-      const recipientEmail = "kunwarzafar@gmail.com";
+      
+      // Read recipient emails from .env, fallback to test email if missing
+      const recipientEmail = process.env.LPC_DISPATCH_EMAILS || "kunwarzafar@gmail.com";
+      
       if (!record.pdfUrl) return res.status(400).json({ message: "Generate PDF first." });
       const pdfPath = path.join(process.cwd(), record.pdfUrl);
       if (!fs.existsSync(pdfPath)) return res.status(400).json({ message: "PDF missing. Regenerate." });
