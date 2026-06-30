@@ -436,3 +436,71 @@ export const insertDepartmentContactSchema = createInsertSchema(departmentContac
 
 export type DepartmentContact = typeof departmentContacts.$inferSelect;
 export type InsertDepartmentContact = z.infer<typeof insertDepartmentContactSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LPC Records — Last Pay Certificate
+// ─────────────────────────────────────────────────────────────────────────────
+export const lpcRecords = pgTable("lpc_records", {
+  id: serial("id").primaryKey(),
+
+  // Dispatch info
+  dispatchNumber: text("dispatch_number").notNull(),
+  dispatchDate: date("dispatch_date").notNull(),
+
+  // Employee basic info
+  employeeTitle: text("employee_title").notNull().default("Mr."),  // Dr./Mr./Mrs./Ms.
+  employeeId: integer("employee_id"),                               // FK → employees.id (optional)
+  epid: text("epid").notNull(),
+  name: text("name").notNull(),
+  designation: text("designation").notNull(),
+  department: text("department").notNull(),                         // Department at retirement
+
+  // Retirement info
+  retirementReason: text("retirement_reason").notNull().default("Retired"),
+  lastPaidUpTo: date("last_paid_up_to"),
+  payLevel: text("pay_level"),
+
+  // Pay particulars (amounts in INR)
+  basicPay: integer("basic_pay"),
+  nonPracticeAllowance: integer("non_practice_allowance"),
+  dearnessAllowance: integer("dearness_allowance"),
+  houseRentAllowance: integer("house_rent_allowance"),
+  transportAllowance: integer("transport_allowance"),
+  otherAmount: integer("other_amount"),
+  otherAmountLabel: text("other_amount_label"),  // e.g. "CPFA"
+
+  // No dues reference
+  noDuesReportNo: text("no_dues_report_no"),
+  noDuesReportDate: date("no_dues_report_date"),
+
+  // Recovery details (stored as JSON string)
+  // [{label, departmentDemand, lastSalaryDeduction, balanceToRecover}]
+  recoveries: text("recoveries"),
+
+  // PDF & Digital Signing
+  pdfUrl: text("pdf_url"),             // Relative URL to signed PDF
+  pdfHash: text("pdf_hash"),           // SHA-256 hash for tamper detection
+  certSerial: text("cert_serial"),     // Certificate serial number
+  scannedRawUrl: text("scanned_raw_url"),  // Original scanned file URL
+  ocrRawText: text("ocr_raw_text"),    // Raw OCR output text
+
+  // Email delivery
+  recipientEmail: text("recipient_email"),   // To whom LPC is emailed
+  emailStatus: text("email_status"),         // null | 'sent' | 'failed'
+  emailSentAt: timestamp("email_sent_at"),   // When email was sent
+  emailMessageId: text("email_message_id"),  // Nodemailer messageId
+
+  // Audit trail
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertLpcRecordSchema = createInsertSchema(lpcRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type LpcRecord = typeof lpcRecords.$inferSelect;
+export type InsertLpcRecord = z.infer<typeof insertLpcRecordSchema>;

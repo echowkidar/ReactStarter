@@ -200,7 +200,50 @@ export async function runMigrations() {
       ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS exported_to_oracle_at TIMESTAMP;
     `);
 
+    // ─── LPC (Last Pay Certificate) Records ───────────────────────────────────
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS lpc_records (
+        id SERIAL PRIMARY KEY,
+        dispatch_number TEXT NOT NULL,
+        dispatch_date DATE NOT NULL,
+        employee_title TEXT NOT NULL DEFAULT 'Mr.',
+        employee_id INTEGER,
+        epid TEXT NOT NULL,
+        name TEXT NOT NULL,
+        designation TEXT NOT NULL,
+        department TEXT NOT NULL,
+        posted_dept_name TEXT,
+        retirement_reason TEXT NOT NULL DEFAULT 'Retired',
+        retired_on DATE NOT NULL,
+        last_paid_up_to DATE,
+        pay_level TEXT,
+        basic_pay INTEGER,
+        non_practice_allowance INTEGER,
+        dearness_allowance INTEGER,
+        house_rent_allowance INTEGER,
+        transport_allowance INTEGER,
+        other_amount INTEGER,
+        other_amount_label TEXT,
+        no_dues_report_no TEXT,
+        no_dues_report_date DATE,
+        recoveries TEXT,
+        pdf_url TEXT,
+        pdf_hash TEXT,
+        cert_serial TEXT,
+        scanned_raw_url TEXT,
+        ocr_raw_text TEXT,
+        recipient_email TEXT,
+        email_status TEXT,
+        email_sent_at TIMESTAMP,
+        email_message_id TEXT,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log("Database migrations completed successfully");
+
   } catch (error) {
     console.error("Error running migrations:", error);
     throw error;

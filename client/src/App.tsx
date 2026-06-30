@@ -28,12 +28,14 @@ import MissingEmployees from "@/pages/admin/missing-employees";
 import AdminSettings from "@/pages/admin/settings";
 import AdminEditAttendance from "@/pages/admin/edit-attendance";
 import DepartmentContacts from "@/pages/admin/department-contacts";
+import AdminLPC from "@/pages/admin/lpc";
 import Tickets from "@/pages/dashboard/tickets";
 import GlobalSearch from "@/pages/dashboard/global-search";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import AdminForgotPassword from "@/pages/admin/forgot-password";
 import AdminResetPassword from "@/pages/admin/reset-password";
+import LpcVerify from "@/pages/lpc-verify";
 
 function AppRouter() {
   return (
@@ -66,7 +68,9 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/transfer-requests" component={TransferRequests} />
       <ProtectedAdminRoute path="/admin/settings" component={AdminSettings} />
       <ProtectedAdminRoute path="/admin/department-contacts" component={DepartmentContacts} />
+      <ProtectedAdminRoute path="/admin/lpc" component={AdminLPC} />
       <ProtectedRoute path="/dashboard/tickets" component={Tickets} />
+      <Route path="/lpc/verify/:id" component={LpcVerify} />
       <Route component={NotFound} />
     </Switch>
   );

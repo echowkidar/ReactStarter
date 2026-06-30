@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1068,6 +1068,16 @@ export default function AdminDashboard() {
               <FileImage className="h-4 w-4" />
               <span className="hidden md:inline">Documents</span>
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLocation("/admin/lpc")}
+              className="flex items-center gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+            >
+              <ScrollText className="h-4 w-4" />
+              <span className="hidden md:inline">LPC</span>
+            </Button>
+
             {(() => {
               const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
               if (adminData.userCode === 'VEW') return null;

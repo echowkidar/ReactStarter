@@ -55,6 +55,14 @@ export async function initApp() {
     // Run database migrations
     await runMigrations();
 
+    // Initialize PKI Certificate Authority for LPC PDF signing
+    try {
+      const { initializePKI } = await import('./pki.js');
+      await initializePKI();
+    } catch (pkiError) {
+      console.warn('[PKI] PKI initialization failed (LPC signing may not work):', pkiError);
+    }
+
     const server = await registerRoutes(app);
 
     // Register External API routes

@@ -25,9 +25,9 @@ import { db } from "./db";
 
 // Helper: Check if employee's current-month attendance BLOCKS transfer.
 // Logic:
-//   - If any period covers the ENTIRE month (from 1st to last day) → block transfer.
-//   - If only partial periods exist (e.g. 1st to 7th) → allow transfer.
-//   - If no attendance this month → allow transfer.
+//   - If any period covers the ENTIRE month (from 1st to last day) â†’ block transfer.
+//   - If only partial periods exist (e.g. 1st to 7th) â†’ allow transfer.
+//   - If no attendance this month â†’ allow transfer.
 async function checkEmployeeAttendanceBlocksTransfer(
   storage: DbStorage, employeeId: number
 ): Promise<{ blocked: boolean; message?: string }> {
@@ -277,7 +277,11 @@ export async function registerRoutes(app: Express) {
   // Admins must be manually created in the database 'admins' table
   // Function to verify admin session from header
   const verifyAdminSession = async (req: Request, res: any, next: any) => {
-    const sessionToken = req.headers['x-session-token'];
+    let sessionToken = req.headers['x-session-token'];
+
+    if (!sessionToken && req.query.token) {
+      sessionToken = req.query.token as string;
+    }
 
     if (!sessionToken || typeof sessionToken !== 'string') {
       return res.status(401).json({ message: "Unauthorized: No session token" });
@@ -1403,7 +1407,7 @@ export async function registerRoutes(app: Express) {
 
         // If sent value equals current departments.id, department is NOT changing
         if (sentDeptId !== currentEmployee.departmentId) {
-          // Could be a department_names.id — check if it resolves to the same department
+          // Could be a department_names.id â€” check if it resolves to the same department
           const currentDept = await storage.getDepartment(currentEmployee.departmentId);
           const deptNameResult = await db.execute(sql`
             SELECT dept_name FROM department_names WHERE id = ${sentDeptId} LIMIT 1
@@ -1717,13 +1721,13 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // OCR & Document Quality Validation Proxy
   // Forwards the uploaded file to the external FastAPI OCR service.
   // The bearer token is kept server-side (never exposed to the client).
   // If the OCR service is unavailable the endpoint returns 503 so the
   // frontend can fall back gracefully to its existing local checks.
-  // ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const ocrUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
   app.post("/api/ocr-validate", ocrUpload.single("file"), async (req: any, res) => {
@@ -1751,7 +1755,7 @@ export async function registerRoutes(app: Express) {
         method: "POST",
         headers: {
           Authorization: `Bearer ${ocrApiToken}`,
-          // Note: do NOT set Content-Type manually — fetch sets it with boundary automatically
+          // Note: do NOT set Content-Type manually â€” fetch sets it with boundary automatically
         },
         body: form as any,
       });
@@ -2287,7 +2291,7 @@ export async function registerRoutes(app: Express) {
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
 
-      // Fetch all sent/submitted entries for this department (no month/year filter on report —
+      // Fetch all sent/submitted entries for this department (no month/year filter on report â€”
       // we will filter by actual period dates in JS below)
       const result = await db.execute(sql`
         SELECT ae.employee_id, ae.periods
@@ -2301,7 +2305,7 @@ export async function registerRoutes(app: Express) {
       const targetMonthStart = new Date(year, month - 1, 1);
       const targetMonthEnd   = new Date(year, month, 0); // last day of month
 
-      // Helper: parse DD-MM-YY → Date
+      // Helper: parse DD-MM-YY â†’ Date
       const parseDDMMYY = (dateStr: string): Date | null => {
         if (!dateStr || typeof dateStr !== 'string') return null;
         const parts = dateStr.split('-').map(Number);
@@ -2355,7 +2359,7 @@ export async function registerRoutes(app: Express) {
   // Get list of all reported periods for all employees in a department to prevent overlaps.
   // IMPORTANT: This queries attendance from ALL departments for employees currently in this dept.
   // This ensures that if an employee was transferred, their previous dept's attendance is
-  // also included in the overlap check — preventing the new dept from double-counting periods
+  // also included in the overlap check â€” preventing the new dept from double-counting periods
   // that the previous dept already submitted/sent.
   app.get("/api/departments/:departmentId/attendance/reported-periods", async (req, res) => {
     try {
@@ -2795,7 +2799,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Get distinct export dates (with counts) for a given month — used by Bulk Update dialog
+  // Get distinct export dates (with counts) for a given month â€” used by Bulk Update dialog
   app.get("/api/admin/attendance/export-dates", verifyAdminSession, async (req, res) => {
     try {
       const month = parseInt(req.query.month as string);
@@ -3005,7 +3009,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Admin reports route — OPTIMIZED: batch-load departments & employees
+  // Admin reports route â€” OPTIMIZED: batch-load departments & employees
   app.get("/api/admin/attendance", async (req, res) => {
     try {
       const { month, year } = req.query;
@@ -3114,7 +3118,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Department employee stats for admin dashboard — per department breakdown
+  // Department employee stats for admin dashboard â€” per department breakdown
   app.get("/api/admin/department-employee-stats", async (req, res) => {
     try {
       const month = parseInt(req.query.month as string);
@@ -3253,7 +3257,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Department employees list for popup — filtered by category
+  // Department employees list for popup â€” filtered by category
   app.get("/api/admin/department-employees", async (req, res) => {
     try {
       const departmentId = parseInt(req.query.departmentId as string);
@@ -3439,7 +3443,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Direct Cancellation (Department side) — No admin approval needed
+  // Direct Cancellation (Department side) â€” No admin approval needed
   // Department user initiates this after 60-second countdown confirmation.
   // Immediately cancels a 'sent' report: deletes entries, sets status = cancelled.
   app.post("/api/attendance/:id/direct-cancel", async (req, res) => {
@@ -4621,7 +4625,7 @@ export async function registerRoutes(app: Express) {
         employeeId,
         'transfer',
         'transferStatus',
-        `Transfer initiated: ${fromDepartment?.name || 'Unknown'} → ${toDepartment?.name || 'Unknown'}`,
+        `Transfer initiated: ${fromDepartment?.name || 'Unknown'} â†’ ${toDepartment?.name || 'Unknown'}`,
         fromDepartment?.email || 'unknown',
         'department',
         departmentId
@@ -4748,7 +4752,7 @@ export async function registerRoutes(app: Express) {
         request.employeeId,
         'transfer',
         'departmentId',
-        `Transfer completed: ${fromDepartment?.name || 'Unknown'} → ${toDepartment?.name || 'Unknown'}`,
+        `Transfer completed: ${fromDepartment?.name || 'Unknown'} â†’ ${toDepartment?.name || 'Unknown'}`,
         toDepartment?.email || 'unknown',
         'department',
         departmentId
@@ -5026,7 +5030,7 @@ export async function registerRoutes(app: Express) {
           employee.id,
           'transfer',
           'departmentId',
-          `Auto-Transfer (Inactive Pull): ${fromDepartment?.name} → ${toDepartment?.name}`,
+          `Auto-Transfer (Inactive Pull): ${fromDepartment?.name} â†’ ${toDepartment?.name}`,
           toDepartment?.email || 'unknown',
           'department',
           departmentId
@@ -5130,7 +5134,7 @@ export async function registerRoutes(app: Express) {
         request.employeeId,
         'transfer',
         'departmentId',
-        `Release Approved: ${fromDepartment?.name} → ${toDepartment?.name}`,
+        `Release Approved: ${fromDepartment?.name} â†’ ${toDepartment?.name}`,
         fromDepartment?.email || 'unknown',
         'department',
         departmentId
@@ -5537,6 +5541,329 @@ export async function registerRoutes(app: Express) {
       console.error("Error deleting department contact:", error);
       res.status(500).json({ message: "Failed to delete department contact" });
     }
+  });
+
+
+  // LPC ROUTES - Static before parameterized
+  const lpcUploadDir = path.join(process.cwd(), 'uploads', 'lpc');
+  if (!fs.existsSync(lpcUploadDir)) fs.mkdirSync(lpcUploadDir, { recursive: true });
+  const lpcScannedStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, lpcUploadDir),
+    filename: (_req, file, cb) => cb(null, `scan-${Date.now()}-${file.originalname}`),
+  });
+  const lpcUpload = multer({
+    storage: lpcScannedStorage,
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+      cb(null, allowed.includes(file.mimetype));
+    },
+  });
+
+  app.get("/api/admin/lpc", verifyAdminSession, async (req, res) => {
+    try {
+      const { lpcRecords } = await import("../shared/schema");
+      const { desc } = await import("drizzle-orm");
+      const records = await db.select().from(lpcRecords).orderBy(desc(lpcRecords.dispatchDate));
+      res.json(records);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch LPC records" });
+    }
+  });
+
+  app.post("/api/admin/lpc", verifyAdminSession, async (req, res) => {
+    try {
+      const { lpcRecords } = await import("../shared/schema");
+      const adminEmail = (req as any).adminUser?.email || 'admin';
+      const [created] = await db.insert(lpcRecords).values({ ...req.body, createdBy: adminEmail }).returning();
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Failed to create LPC record:", error);
+      res.status(500).json({ message: "Failed to create LPC record" });
+    }
+  });
+
+  app.get("/api/admin/lpc/ca-certificate", verifyAdminSession, async (_req, res) => {
+    try {
+      const { getCACertPath } = await import('./pki.js');
+      const certPath = getCACertPath();
+      if (!fs.existsSync(certPath)) return res.status(404).json({ message: "CA cert not found" });
+      res.setHeader('Content-Type', 'application/x-x509-ca-cert');
+      res.setHeader('Content-Disposition', 'attachment; filename="AMU_LPC_CA.crt"');
+      res.sendFile(certPath);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to download CA cert" });
+    }
+  });
+
+  app.post("/api/admin/lpc/ocr", verifyAdminSession, lpcUpload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const filePath = req.file.path;
+      const mimeType = req.file.mimetype;
+      let imageBuffer: Buffer;
+      if (mimeType === 'application/pdf') {
+        try {
+          const pdf2picModule = await import('pdf2pic');
+          const fromPath = (pdf2picModule as any).fromPath ?? (pdf2picModule as any).default?.fromPath;
+          if (fromPath) {
+            const convert = fromPath(filePath, { density: 200, saveFilename: 'ocr-tmp', savePath: lpcUploadDir, format: 'png', width: 1700, height: 2200 });
+            const result = await convert(1);
+            const rp = (result as any).path ?? (result as any).name;
+            imageBuffer = rp ? fs.readFileSync(rp) : fs.readFileSync(filePath);
+          } else { imageBuffer = fs.readFileSync(filePath); }
+        } catch { imageBuffer = fs.readFileSync(filePath); }
+      } else { imageBuffer = fs.readFileSync(filePath); }
+      let text = "";
+      const ocrApiUrl = process.env.OCR_API_URL;
+      const ocrApiToken = process.env.OCR_API_TOKEN;
+      if (ocrApiUrl && ocrApiToken) {
+         try {
+            const formData = new FormData();
+            const blob = new Blob([imageBuffer], { type: 'image/png' });
+            formData.append('file', blob, 'image.png');
+            const response = await fetch(ocrApiUrl, {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${ocrApiToken}` },
+               body: formData
+            });
+            const data = await response.json();
+            if (data.success && data.text) {
+               text = data.text;
+            } else {
+               console.error("PaddleOCR API error:", data.error);
+            }
+         } catch(e) {
+            console.error("PaddleOCR API request failed:", e);
+         }
+      }
+      
+      if (!text) {
+         const Tesseract = await import('tesseract.js');
+         const recognize = Tesseract.recognize ?? (Tesseract as any).default?.recognize;
+         const { data: { text: tesseractText } } = await recognize(imageBuffer, 'eng', { logger: () => {} });
+         text = tesseractText;
+      }
+      const extracted: Record<string, string> = {};
+      const fullText = text.split('\n').map((l: string) => l.trim()).filter(Boolean).join(' ');
+      
+      const parseDate = (d: string) => {
+        const str = d.replace(/\s+/g, '');
+        const parts = str.replace(/[\/\.]/g, '-').split('-');
+        if (parts.length === 3) {
+          let y = '', m = '', day = '';
+          if (parts[2].length === 4) { y = parts[2]; m = parts[1].padStart(2, '0'); day = parts[0].padStart(2, '0'); }
+          else if (parts[0].length === 4) { y = parts[0]; m = parts[1].padStart(2, '0'); day = parts[2].padStart(2, '0'); }
+          
+          if (y && m && day) {
+            // Validate month and day bounds to ensure input type="date" accepts it
+            const mi = parseInt(m, 10);
+            const di = parseInt(day, 10);
+            if (mi >= 1 && mi <= 12 && di >= 1 && di <= 31) {
+              return `${y}-${m}-${day}`;
+            }
+          }
+        }
+        return d;
+      };
+
+      const em = fullText.match(/[I|1\|L]\.?\s*D\.?\s*No\.?\s*(\d{4,6})/i); if (em) extracted.epid = em[1];
+      const nm = fullText.match(/certificate\s+of\s+(?:Dr\.\/?Mr\.\/?Mrs\.\s*|Dr\.|Mr\.|Mrs\.|Ms\.|Prof\.)?\s*([A-Z][A-Z\s]{3,50}?)(?:\s+[I|1\|L]\.\s*D|\s+EPID|,|\n)/i);
+      if (nm) { extracted.name = nm[1].trim(); }
+      const tm = fullText.match(/\b(Dr\.|Mr\.|Mrs\.|Ms\.|Prof\.)\b/); if (tm) extracted.employeeTitle = tm[1];
+      
+      const desPats = [/Designation\s*[:\-]?\s*([A-Z][A-Z\s\-\/]{2,40}?)(?:\s*\n|\s+Department|$)/i, /working\s+as\s+([A-Z][A-Z\s\-\/]{2,40}?)(?:\s+in|\s+at|,|\n)/i];
+      for (const p of desPats) { const m = fullText.match(p); if (m) { extracted.designation = m[1].trim(); break; } }
+      
+      const deptPats = [/Department\s+of\s+([A-Z&\s]{3,50}?)(?:\s*&\s*posted|ceased|\n|\.)/i, /(?:working in|posted in)\s+([A-Z][A-Z\s&\-\/]{2,40}?)(?:\s*\n|,|\.)/i];
+      for (const p of deptPats) { const m = fullText.match(p); if (m) { extracted.department = m[1].trim(); break; } }
+      
+      const ptm = fullText.match(/posted\s+in\s+([A-Z][A-Z\s&\-\/\(\)]+?)(?:\s+ceased|\n|,)/i);
+      if (ptm) extracted.postedDeptName = ptm[1].trim();
+
+      const rm = fullText.match(/(?:Retired|resigned|died|ceased).+?(?:on|w\.?e\.?f\.?)\s+(\d{1,2}\s*[-\/\.]\s*\d{1,2}\s*[-\/\.]\s*\d{2,4})/i);
+      if (rm) extracted.retiredOn = parseDate(rm[1]);
+      
+      // Dispatch No and Date are handwritten at the bottom
+      // We take the last 500 chars to avoid picking up earlier dates like 'Retired on' or 'No Dues Report dated'
+      // This is much safer than searching for 'D.No' since OCR completely mangles it sometimes (e.g. 'D-No' or 'No. ')
+      const footerText = fullText.slice(-500);
+      
+      const dm = footerText.match(/(?:D[\.\-]?\s*No\.?|Dispatch\s*No\.?|No\.)\s*([A-Z0-9'"‘|l\\]+)/i); 
+      if (dm) {
+        let num = dm[1].replace(/['"‘|lI\\]/g, '1').replace(/[^a-zA-Z0-9]/g, '');
+        if (num.length > 0) {
+           extracted.dispatchNumber = num + "/SS";
+        }
+      }
+      
+      const dtm = footerText.match(/(?:Dated?|Date|dt|Oated|Dote|Datad)\s*[:\-\.,]?\s*(\d{1,2})\s*[-\/\.\s]\s*(\d{1,2})\s*[-\/\.\s]\s*(\d{2,4})/i); 
+      if (dtm) {
+        let y = dtm[3];
+        if (y.length === 2) y = '20' + y;
+        extracted.dispatchDate = `${y}-${dtm[2].padStart(2, '0')}-${dtm[1].padStart(2, '0')}`;
+      }
+      res.json({ success: true, extracted, rawText: text, scannedRawUrl: `/uploads/lpc/${req.file.filename}` });
+    } catch (error) {
+      console.error("OCR error:", error);
+      res.status(500).json({ message: "OCR processing failed", error: String(error) });
+    }
+  });
+
+  app.get("/api/admin/scanners", verifyAdminSession, (_req, res) => {
+    res.json({ note: "Connect to ws://localhost:8765 for scanner list" });
+  });
+
+
+  // STATIC: Download scanner helper (must be before /:id)
+  app.get("/api/admin/lpc/download-scanner-helper", verifyAdminSession, async (_req, res) => {
+    try {
+      const scannerHelperDir = path.join(process.cwd(), 'server', 'scanner-helper');
+      const exePath = path.join(scannerHelperDir, 'AMU_Scanner_Helper.exe');
+
+      if (!fs.existsSync(exePath)) {
+        return res.status(404).json({ message: "Scanner helper executable not found on server." });
+      }
+
+      res.download(exePath, 'AMU_Scanner_Helper.exe', (err) => {
+        if (err) {
+          console.error("Error sending scanner helper exe:", err);
+          if (!res.headersSent) res.status(500).json({ message: "Failed to download executable" });
+        }
+      });
+    } catch (error) {
+      console.error("Scanner helper download error:", error);
+      if (!res.headersSent) res.status(500).json({ message: "Download failed" });
+    }
+  });
+  app.get("/api/admin/lpc/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const { lpcRecords } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));
+      if (!record) return res.status(404).json({ message: "LPC record not found" });
+      res.json(record);
+    } catch (error) { res.status(500).json({ message: "Failed to fetch LPC record" }); }
+  });
+
+  app.put("/api/admin/lpc/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { lpcRecords } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const updateData = { ...req.body, updatedAt: new Date() };
+      delete updateData.id; delete updateData.createdAt;
+      const [updated] = await db.update(lpcRecords).set(updateData).where(eq(lpcRecords.id, id)).returning();
+      if (!updated) return res.status(404).json({ message: "LPC record not found" });
+      res.json(updated);
+    } catch (error) { res.status(500).json({ message: "Failed to update LPC record" }); }
+  });
+
+  app.delete("/api/admin/lpc/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { lpcRecords } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));
+      if (!record) return res.status(404).json({ message: "LPC record not found" });
+      if (record.pdfUrl) { const fp = path.join(process.cwd(), record.pdfUrl); if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (e) { console.error("Error deleting PDF:", e); } } }
+      if (record.scannedRawUrl) { const fp = path.join(process.cwd(), record.scannedRawUrl); if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (e) { console.error("Error deleting scan:", e); } } }
+      await db.delete(lpcRecords).where(eq(lpcRecords.id, id));
+      res.json({ message: "Deleted" });
+    } catch (error) { res.status(500).json({ message: "Failed to delete LPC record" }); }
+  });
+
+  app.post("/api/admin/lpc/:id/generate-pdf", verifyAdminSession, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { lpcRecords } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));
+      if (!record) return res.status(404).json({ message: "LPC record not found" });
+      const { generateAndSignLPC } = await import('./lpcPdf.js');
+      const fmt = (d: string | null) => { if (!d) return ''; const dt = new Date(d); return `${dt.getDate().toString().padStart(2,'0')}-${(dt.getMonth()+1).toString().padStart(2,'0')}-${dt.getFullYear()}`; };
+      const lpcData = { dispatchNumber: record.dispatchNumber, dispatchDate: fmt(record.dispatchDate), employeeTitle: record.employeeTitle ?? 'Mr.', name: record.name, epid: record.epid, designation: record.designation, department: record.department, retirementReason: record.retirementReason ?? 'Retired', lastPaidUpTo: record.lastPaidUpTo ? fmt(record.lastPaidUpTo) : undefined, payLevel: record.payLevel ?? undefined, basicPay: record.basicPay ?? undefined, nonPracticeAllowance: record.nonPracticeAllowance ?? undefined, dearnessAllowance: record.dearnessAllowance ?? undefined, houseRentAllowance: record.houseRentAllowance ?? undefined, transportAllowance: record.transportAllowance ?? undefined, otherAmount: record.otherAmount ?? undefined, otherAmountLabel: record.otherAmountLabel ?? undefined, noDuesReportNo: record.noDuesReportNo ?? undefined, noDuesReportDate: record.noDuesReportDate ? fmt(record.noDuesReportDate) : undefined, recoveries: record.recoveries ? JSON.parse(record.recoveries) : [], scannedRawUrl: record.scannedRawUrl ?? undefined };
+      const { pdfPath, hash, certSerial } = await generateAndSignLPC(lpcData, id);
+      const [updated] = await db.update(lpcRecords).set({ pdfUrl: pdfPath, pdfHash: hash, certSerial, updatedAt: new Date() }).where(eq(lpcRecords.id, id)).returning();
+      res.json({ success: true, pdfUrl: pdfPath, hash, certSerial, record: updated });
+    } catch (error) {
+      console.error("PDF gen error:", error);
+      res.status(500).json({ message: "Failed to generate LPC PDF", error: String(error) });
+    }
+  });
+
+  app.get("/api/admin/lpc/:id/verify", verifyAdminSession, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { lpcRecords } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));
+      if (!record) return res.status(404).json({ message: "LPC record not found" });
+      if (!record.pdfUrl || !record.pdfHash) return res.json({ status: 'no_pdf', message: 'No PDF generated yet' });
+      const { verifyLPCPdf } = await import('./lpcPdf.js');
+      const result = verifyLPCPdf(path.join(process.cwd(), record.pdfUrl), record.pdfHash);
+      res.json({ status: result, message: result === 'verified' ? '✔ VERIFIED — Document is original' : result === 'modified' ? '⚠ MODIFIED — Document has been tampered with' : '❌ MISSING — PDF not found on server' });
+    } catch (error) { res.status(500).json({ message: "Failed to verify LPC PDF" }); }
+  });
+
+  app.get("/api/public/lpc/:id/verify", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { lpcRecords } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));
+      if (!record) return res.status(404).json({ message: "LPC record not found" });
+      if (!record.pdfUrl || !record.pdfHash) return res.json({ status: 'no_pdf', message: 'No PDF generated yet' });
+      const { verifyLPCPdf } = await import('./lpcPdf.js');
+      const result = verifyLPCPdf(path.join(process.cwd(), record.pdfUrl), record.pdfHash);
+      
+      // Return safe metadata to the public verifier
+      res.json({ 
+        status: result, 
+        message: result === 'verified' ? '✔ VERIFIED — Document is original' : result === 'modified' ? '⚠ MODIFIED — Document has been tampered with' : '❌ MISSING — PDF not found on server',
+        data: {
+          name: record.name,
+          employeeTitle: record.employeeTitle,
+          epid: record.epid,
+          designation: record.designation,
+          department: record.department,
+          dispatchNumber: record.dispatchNumber,
+          dispatchDate: record.dispatchDate
+        }
+      });
+    } catch (error) { res.status(500).json({ message: "Failed to verify LPC PDF" }); }
+  });
+
+  app.post("/api/admin/lpc/:id/send-email", verifyAdminSession, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { lpcRecords } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [record] = await db.select().from(lpcRecords).where(eq(lpcRecords.id, id));
+      if (!record) return res.status(404).json({ message: "LPC record not found" });
+      const recipientEmail = "kunwarzafar@gmail.com";
+      if (!record.pdfUrl) return res.status(400).json({ message: "Generate PDF first." });
+      const pdfPath = path.join(process.cwd(), record.pdfUrl);
+      if (!fs.existsSync(pdfPath)) return res.status(400).json({ message: "PDF missing. Regenerate." });
+      const fmt = (d: string | null) => { if (!d) return ''; const dt = new Date(d); return `${dt.getDate().toString().padStart(2,'0')}-${(dt.getMonth()+1).toString().padStart(2,'0')}-${dt.getFullYear()}`; };
+      const { sendLpcEmail } = await import('./emailService.js');
+      const emailResult = await sendLpcEmail(recipientEmail, { employeeName: record.name, employeeTitle: record.employeeTitle ?? 'Mr.', epid: record.epid, designation: record.designation, department: record.department, dispatchNumber: record.dispatchNumber, dispatchDate: fmt(record.dispatchDate), retirementReason: record.retirementReason ?? 'Retired' }, pdfPath);
+      const [updated] = await db.update(lpcRecords).set({ emailStatus: emailResult.success ? 'sent' : 'failed', emailSentAt: emailResult.success ? new Date() : undefined, emailMessageId: emailResult.messageId ?? null, recipientEmail, updatedAt: new Date() }).where(eq(lpcRecords.id, id)).returning();
+      if (emailResult.success) res.json({ success: true, message: `LPC emailed to FO sections`, record: updated });
+      else res.status(422).json({ success: false, message: emailResult.error === 'wrong_email' ? 'Invalid email address' : `Email failed: ${emailResult.message}`, record: updated });
+    } catch (error) {
+      console.error("Email error:", error);
+      res.status(500).json({ message: "Failed to send LPC email", error: String(error) });
+    }
+  });
+
+  app.get("/uploads/lpc/:filename", verifyAdminSession, (req, res) => {
+    const filePath = path.join(lpcUploadDir, req.params.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found" });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.sendFile(path.resolve(filePath));
   });
 
   return httpServer;

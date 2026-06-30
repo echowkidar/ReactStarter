@@ -494,3 +494,164 @@ export async function sendTicketResolutionEmail(
     return { success: false, error: 'send_failed', message: String(error) };
   }
 }
+
+/**
+ * Send LPC (Last Pay Certificate) via email with PDF attachment.
+ */
+export async function sendLpcEmail(
+  recipientEmail: string,
+  lpcData: {
+    employeeName: string;
+    employeeTitle: string;
+    epid: string;
+    designation: string;
+    department: string;
+    dispatchNumber: string;
+    dispatchDate: string;
+    retirementReason: string;
+  },
+  pdfAbsolutePath: string
+): Promise<{ success: boolean; messageId?: string; error?: string; message?: string }> {
+  try {
+    const isValidDomain = await validateEmailDomain(recipientEmail);
+    if (!isValidDomain) {
+      return { success: false, error: 'wrong_email', message: 'Email domain does not exist or is invalid' };
+    }
+
+    const subject = `Last Pay Certificate — ${lpcData.employeeTitle} ${lpcData.employeeName} (ID: ${lpcData.epid})`;
+
+    const htmlContent = `
+      <div style="font-family: 'Times New Roman', Times, serif; max-width: 650px; margin: 0 auto; padding: 0; border: 2px solid #1e3a5f;">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); padding: 20px 24px; text-align: center;">
+          <h1 style="color: #ffffff; font-size: 16px; margin: 0; letter-spacing: 1px;">
+            ALIGARH MUSLIM UNIVERSITY
+          </h1>
+          <p style="color: #bfdbfe; font-size: 12px; margin: 4px 0 0;">
+            Finance &amp; Accounts Department — Salary Section
+          </p>
+        </div>
+
+        <!-- Title Band -->
+        <div style="background: #f0f4ff; border-bottom: 1px solid #c7d2fe; padding: 12px 24px; text-align: center;">
+          <h2 style="color: #1e3a5f; font-size: 18px; margin: 0; text-decoration: underline; letter-spacing: 2px;">
+            LAST PAY CERTIFICATE
+          </h2>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 24px; background: #fff;">
+          <p style="font-size: 14px; color: #374151; line-height: 1.8; margin-bottom: 16px;">
+            Dear Sir/Madam,
+          </p>
+          <p style="font-size: 14px; color: #374151; line-height: 1.8; margin-bottom: 20px;">
+            Please find attached the <strong>Last Pay Certificate</strong> for:
+          </p>
+
+          <!-- Employee Details Table -->
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+            <tr style="background: #f0f4ff;">
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; font-weight: bold; color: #1e3a5f; width: 40%;">Employee Name</td>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; color: #111827;">${lpcData.employeeTitle} ${lpcData.employeeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; font-weight: bold; color: #1e3a5f;">Employee ID (EPID)</td>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; color: #111827;">${lpcData.epid}</td>
+            </tr>
+            <tr style="background: #f0f4ff;">
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; font-weight: bold; color: #1e3a5f;">Designation</td>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; color: #111827;">${lpcData.designation}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; font-weight: bold; color: #1e3a5f;">Department</td>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; color: #111827;">${lpcData.department}</td>
+            </tr>
+            <tr style="background: #f0f4ff;">
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; font-weight: bold; color: #1e3a5f;">Retirement Reason</td>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; color: #111827;">${lpcData.retirementReason}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; font-weight: bold; color: #1e3a5f;">Dispatch No.</td>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; color: #111827;">${lpcData.dispatchNumber}</td>
+            </tr>
+            <tr style="background: #f0f4ff;">
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; font-weight: bold; color: #1e3a5f;">Dispatch Date</td>
+              <td style="padding: 8px 12px; border: 1px solid #c7d2fe; color: #111827;">${lpcData.dispatchDate}</td>
+            </tr>
+          </table>
+
+          <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin-bottom: 20px; border-radius: 0 4px 4px 0;">
+            <p style="margin: 0; font-size: 13px; color: #92400e;">
+              <strong>🔒 Password Protected:</strong> The attached PDF is encrypted for security. 
+              Please enter the <strong>Employee ID (EPID)</strong> to open the file.<br/><br/>
+              <strong>⚠ Note:</strong> This LPC PDF is digitally signed. The document contains a tamper-evident digital signature. 
+              If the document has been modified after signing, the signature will show as invalid in Adobe Acrobat.
+            </p>
+          </div>
+
+          <p style="font-size: 14px; color: #374151; line-height: 1.8;">
+            The LPC document is attached as a PDF file. Please retain it for your records.
+          </p>
+
+          <p style="font-size: 14px; color: #374151; line-height: 1.8; margin-top: 20px;">
+            Yours faithfully,<br/>
+            <strong>Assistant Finance Officer (Salary)</strong><br/>
+            Finance &amp; Accounts Department<br/>
+            Aligarh Muslim University, Aligarh
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 12px 24px; text-align: center;">
+          <p style="color: #94a3b8; font-size: 11px; margin: 0;">
+            This is an official communication from the AMU Salary Section. Do not reply to this email.
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Build mail options with PDF attachment
+    const mailOptions: any = {
+      from: process.env.SMTP_FROM || '"AMU Salary Section" <noreply@amu.ac.in>',
+      to: recipientEmail,
+      subject,
+      html: `<div style="font-family: Arial, sans-serif; padding: 0;">${htmlContent}</div>`,
+    };
+
+    // Attach PDF if file exists
+    const fs = await import('fs');
+    const path = await import('path');
+    if (fs.default.existsSync(pdfAbsolutePath)) {
+      const fileName = path.default.basename(pdfAbsolutePath);
+      mailOptions.attachments = [
+        {
+          filename: `LPC_${lpcData.epid}_${lpcData.employeeName.replace(/\s+/g, '_')}.pdf`,
+          path: pdfAbsolutePath,
+          contentType: 'application/pdf',
+        },
+      ];
+    } else {
+      console.warn(`[LPC Email] PDF file not found at: ${pdfAbsolutePath}`);
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[LPC Email] Sent to ${recipientEmail}: ${info.messageId}`);
+
+    return { success: true, messageId: info.messageId };
+
+  } catch (error: any) {
+    console.error(`[LPC Email] Failed to send to ${recipientEmail}:`, error);
+    const isWrongEmail =
+      error.responseCode === 550 ||
+      error.code === 'EENVELOPE' ||
+      String(error).includes('Invalid email') ||
+      String(error).includes('rejected');
+    return {
+      success: false,
+      error: isWrongEmail ? 'wrong_email' : 'send_failed',
+      message: String(error),
+    };
+  }
+}
+
