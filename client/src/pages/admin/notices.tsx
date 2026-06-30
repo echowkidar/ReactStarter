@@ -47,6 +47,8 @@ interface Department {
 export default function AdminNotices() {
     const [, setLocation] = useLocation();
     const { toast } = useToast();
+    const adminType = localStorage.getItem("adminType");
+    const isSalaryAdmin = adminType === "salary";
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
     const [isGlobal, setIsGlobal] = useState(true);
@@ -206,14 +208,16 @@ export default function AdminNotices() {
                                             >
                                                 <Eye className="h-4 w-4" />
                                             </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => deleteNotice.mutate(notice.id)}
-                                                className="text-red-500 hover:text-red-700"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                            {!isSalaryAdmin && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => deleteNotice.mutate(notice.id)}
+                                                    className="text-red-500 hover:text-red-700"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 </CardHeader>

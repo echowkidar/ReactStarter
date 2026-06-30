@@ -981,15 +981,17 @@ export default function AdminDashboard() {
               className={`w-3 h-3 rounded-full mr-2 shadow-sm border border-white ring-1 ring-gray-100 ${isAllEnabled ? 'bg-green-500' : 'bg-red-500'}`}
               title={isAllEnabled ? "Attendance Enabled for All Departments" : "Attendance Restrictions Active"}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/admin/attendance-reports")}
-              className="flex items-center gap-1"
-            >
-              <FileCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Detailed View</span>
-            </Button>
+            {!isSalaryAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation("/admin/attendance-reports")}
+                className="flex items-center gap-1"
+              >
+                <FileCheck className="h-4 w-4" />
+                <span className="hidden sm:inline">Detailed View</span>
+              </Button>
+            )}
             {!isSalaryAdmin && (
               <Button
                 variant="outline"
@@ -1080,7 +1082,7 @@ export default function AdminDashboard() {
 
             {(() => {
               const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-              if (adminData.userCode === 'VEW') return null;
+              if (adminData.userCode === 'VEW' || isSalaryAdmin) return null;
               return (
                 <Button
                   variant="outline"

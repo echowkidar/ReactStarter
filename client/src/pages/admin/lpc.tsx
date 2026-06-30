@@ -170,6 +170,8 @@ export default function AdminLPC() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const adminInfo = JSON.parse(localStorage.getItem("admin") || "{}");
+  const adminType = localStorage.getItem("adminType");
+  const canManageLPC = adminType === "super" || adminType === "salary_admin";
 
   const [search, setSearch] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -529,6 +531,7 @@ export default function AdminLPC() {
         </div>
 
         {/* Primary Action — SCAN */}
+        {canManageLPC && (
         <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 rounded-2xl p-6 mb-6 shadow-lg text-white relative overflow-hidden">
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 70% 50%, white 0%, transparent 60%)" }} />
           <div className="relative flex flex-col md:flex-row items-center justify-between gap-4">
@@ -577,9 +580,12 @@ export default function AdminLPC() {
             </div>
           )}
         </div>
+        )}
 
-        <input ref={scanFileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
-          onChange={e => { if (e.target.files?.[0]) handleOcrFile(e.target.files[0]); }} />
+        {canManageLPC && (
+          <input ref={scanFileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
+            onChange={e => { if (e.target.files?.[0]) handleOcrFile(e.target.files[0]); }} />
+        )}
 
         {/* Search */}
         <div className="flex items-center gap-3 mb-4">
@@ -597,7 +603,7 @@ export default function AdminLPC() {
           <div className="text-center py-20 bg-white/50 rounded-2xl border-2 border-dashed border-slate-200">
             <ScanLine className="h-14 w-14 mx-auto mb-3 text-slate-300" />
             <p className="text-lg font-semibold text-slate-500">No LPC Records</p>
-            <p className="text-sm text-slate-400 mt-1">Click "SCAN LPC" to scan a physical LPC and dispatch it.</p>
+            {canManageLPC && <p className="text-sm text-slate-400 mt-1">Click "SCAN LPC" to scan a physical LPC and dispatch it.</p>}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
@@ -613,7 +619,7 @@ export default function AdminLPC() {
                   <th className="px-3 py-3 text-left text-xs font-semibold">Department</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold whitespace-nowrap">Signed PDF</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold min-w-[210px]">Email Dispatch</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold">Actions</th>
+                  {canManageLPC && <th className="px-3 py-3 text-left text-xs font-semibold">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -642,12 +648,17 @@ export default function AdminLPC() {
                             <div className="text-[9px] text-blue-500 underline">View PDF</div>
                           </div>
                         </button>
-                      ) : (
-                        <button onClick={() => handleGeneratePdf(r.id)} disabled={generatingPdf === r.id}
-                          className="text-[10px] text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded px-2 py-1 flex items-center gap-1">
-                          {generatingPdf === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Shield className="h-3 w-3" />}
-                          Sign PDF
                         </button>
+                      ) : (
+                        canManageLPC ? (
+                          <button onClick={() => handleGeneratePdf(r.id)} disabled={generatingPdf === r.id}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded px-2 py-1 flex items-center gap-1">
+                            {generatingPdf === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Shield className="h-3 w-3" />}
+                            Sign PDF
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Not Signed</span>
+                        )
                       )}
                     </td>
                     <td className="px-3 py-3">
@@ -664,14 +675,16 @@ export default function AdminLPC() {
                             <span className="text-[10px] text-red-500">Failed</span>
                           </div>
                         )}
-                        <button onClick={() => handleSendEmail(r)} disabled={emailSending === r.id}
-                          className="flex justify-center items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded px-3 py-1.5 mt-1 w-full shadow-sm">
-                          {emailSending === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                          {r.emailStatus === "sent" ? "Resend Email" : "Send Email"}
-                        </button>
+                        {canManageLPC && (
+                          <button onClick={() => handleSendEmail(r)} disabled={emailSending === r.id}
+                            className="flex justify-center items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded px-3 py-1.5 mt-1 w-full shadow-sm">
+                            {emailSending === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                            {r.emailStatus === "sent" ? "Resend Email" : "Send Email"}
+                          </button>
+                        )}
                       </div>
                     </td>
-                    <td className="px-3 py-3">
+                    {canManageLPC && <td className="px-3 py-3">
                       <div className="flex items-center gap-1">
                         <button onClick={() => openEditForm(r)} className="p-1.5 rounded hover:bg-indigo-100 text-indigo-600" title="Edit">
                           <Pencil className="h-3.5 w-3.5" />
