@@ -648,7 +648,6 @@ export default function AdminLPC() {
                             <div className="text-[9px] text-blue-500 underline">View PDF</div>
                           </div>
                         </button>
-                        </button>
                       ) : (
                         canManageLPC ? (
                           <button onClick={() => handleGeneratePdf(r.id)} disabled={generatingPdf === r.id}
