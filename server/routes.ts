@@ -5564,7 +5564,7 @@ export async function registerRoutes(app: Express) {
     try {
       const { lpcRecords } = await import("../shared/schema");
       const { desc } = await import("drizzle-orm");
-      const records = await db.select().from(lpcRecords).orderBy(desc(lpcRecords.dispatchDate));
+      const records = await db.select().from(lpcRecords).orderBy(desc(lpcRecords.id));
       res.json(records);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch LPC records" });
