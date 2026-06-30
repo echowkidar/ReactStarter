@@ -171,7 +171,7 @@ export default function AdminLPC() {
   const { toast } = useToast();
   const adminInfo = JSON.parse(localStorage.getItem("admin") || "{}");
   const adminType = localStorage.getItem("adminType");
-  const canManageLPC = adminType === "super" || adminType === "salary_admin";
+  const canManageLPC = adminType === "super" || adminType === "salary_admin" || adminInfo.email === "qasim@amu.ac.in";
 
   const [search, setSearch] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
