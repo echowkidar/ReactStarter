@@ -15,7 +15,7 @@ const exePath = process.execPath;
 const appDataDir = path.join(os.homedir(), 'AppData', 'Roaming', 'AMU-ScannerHelper');
 const targetExePath = path.join(appDataDir, 'AMU_Scanner_Helper.exe');
 const startupDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-const shortcutBat = path.join(startupDir, 'AMU_Scanner_Helper.bat');
+const shortcutVbs = path.join(startupDir, 'AMU_Scanner_Helper.vbs');
 
 if (isExe && exePath.toLowerCase() !== targetExePath.toLowerCase()) {
   console.log("Installing AMU Scanner Helper...");
@@ -27,9 +27,9 @@ if (isExe && exePath.toLowerCase() !== targetExePath.toLowerCase()) {
     fs.copyFileSync(exePath, targetExePath);
     console.log("Copied to", targetExePath);
 
-    // Create a batch file in Startup folder to launch it silently
-    const batContent = `@echo off\nstart "" "${targetExePath}"\n`;
-    fs.writeFileSync(shortcutBat, batContent);
+    // Create a VBScript in Startup folder to launch it completely silently
+    const vbsContent = `Set WshShell = CreateObject("WScript.Shell")\nWshShell.Run chr(34) & "${targetExePath}" & Chr(34), 0, False\n`;
+    fs.writeFileSync(shortcutVbs, vbsContent);
     console.log("Added to Startup folder.");
 
     // Launch the installed version
@@ -76,11 +76,10 @@ try {
   $list = @()
   for ($i = 1; $i -le $devices.Count; $i++) {
     $d = $devices.Item($i)
-    if ($d.Type -eq 1) {  # 1 = Scanner
-      $list += [PSCustomObject]@{
-        id   = $d.DeviceID
-        name = $d.Properties.Item("Name").Value
-      }
+    # Removed Type check to allow all WIA devices (including MFPs that might report as Type 2/3)
+    $list += [PSCustomObject]@{
+      id   = $d.DeviceID
+      name = $d.Properties.Item("Name").Value
     }
   }
   if ($list.Count -eq 0) {
@@ -89,7 +88,12 @@ try {
     $list | ConvertTo-Json -Compress
   }
 } catch {
-  Write-Output '[]'
+  $list = @()
+  $list += [PSCustomObject]@{
+    id = "error"
+    name = "Error: " + $_.Exception.Message
+  }
+  $list | ConvertTo-Json -Compress
 }
 `;
 
