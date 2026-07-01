@@ -76,24 +76,26 @@ try {
   $list = @()
   for ($i = 1; $i -le $devices.Count; $i++) {
     $d = $devices.Item($i)
-    # Removed Type check to allow all WIA devices (including MFPs that might report as Type 2/3)
     $list += [PSCustomObject]@{
       id   = $d.DeviceID
       name = $d.Properties.Item("Name").Value
     }
   }
-  if ($list.Count -eq 0) {
+  
+  $arr = @($list)
+  if ($arr.Count -eq 0) {
     Write-Output '[]'
   } else {
-    $list | ConvertTo-Json -Compress
+    ConvertTo-Json -InputObject $arr -Compress
   }
 } catch {
-  $list = @()
-  $list += [PSCustomObject]@{
-    id = "error"
-    name = "Error: " + $_.Exception.Message
-  }
-  $list | ConvertTo-Json -Compress
+  $errList = @(
+    [PSCustomObject]@{
+      id = "error"
+      name = "Error: " + $_.Exception.Message
+    }
+  )
+  ConvertTo-Json -InputObject $errList -Compress
 }
 `;
 
