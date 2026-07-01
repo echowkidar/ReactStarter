@@ -142,16 +142,17 @@ wss.on('connection', (ws) => {
     if (msg.action === 'list-scanners') {
       console.log('[AMU Scanner Helper] Listing WIA scanners...');
       try {
-        const tmpPsList = path.join(os.tmpdir(), `amu-list-${Date.now()}.ps1`);
-        fs.writeFileSync(tmpPsList, LIST_SCANNERS_PS, 'utf8');
-
+        const b64List = Buffer.from(LIST_SCANNERS_PS, 'utf16le').toString('base64');
         let result = '';
+        let lastError = '';
         try {
           result = execSync(
-            `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPsList}"`,
+            `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${b64List}`,
             { timeout: 15000, encoding: 'utf8', windowsHide: true }
           ).trim();
-        } catch (e) {}
+        } catch (e) {
+          lastError = (e.stderr || e.stdout || e.message || '').toString();
+        }
 
         let scanners = [];
         try { scanners = JSON.parse(result); } catch {}
@@ -164,7 +165,7 @@ wss.on('connection', (ws) => {
             console.log('[AMU Scanner Helper] 64-bit failed/empty, trying 32-bit PowerShell...');
             try {
               const res32 = execSync(
-                `"${wow64Ps}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPsList}"`,
+                `"${wow64Ps}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${b64List}`,
                 { timeout: 15000, encoding: 'utf8', windowsHide: true }
               ).trim();
               let sc32 = [];
@@ -174,11 +175,15 @@ wss.on('connection', (ws) => {
               } else if (Array.isArray(sc32) && sc32.length > 0) {
                 scanners = sc32; // keep the 32-bit error if it's all we have
               }
-            } catch (e) {}
+            } catch (e) {
+              lastError = (e.stderr || e.stdout || e.message || '').toString();
+            }
           }
         }
 
-        try { fs.unlinkSync(tmpPsList); } catch {}
+        if (scanners.length === 0 && lastError) {
+          scanners = [{ id: "error", name: "ExecError: " + lastError.substring(0, 100) }];
+        }
 
         if (scanners.length > 0 && scanners[0].id !== "error") scanners[0].isDefault = true;
         ws.send(JSON.stringify({ type: 'scanners', scanners }));
@@ -194,13 +199,11 @@ wss.on('connection', (ws) => {
       const tmpFile = path.join(os.tmpdir(), `amu-scan-${Date.now()}.png`);
       const psScript = buildScanPS(scannerId, tmpFile);
 
-      const tmpPs = path.join(os.tmpdir(), `amu-scan-${Date.now()}.ps1`);
-      fs.writeFileSync(tmpPs, psScript, 'utf8');
-
+      const b64Scan = Buffer.from(psScript, 'utf16le').toString('base64');
       const wow64Ps = 'C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe';
       const tryScan = (psExe, isFallbackAllowed) => {
         exec(
-          `"${psExe}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPs}"`,
+          `"${psExe}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${b64Scan}`,
           { timeout: 60000, windowsHide: true },
           (err, stdout, stderr) => {
             if (err && isFallbackAllowed && fs.existsSync(wow64Ps)) {
@@ -209,11 +212,9 @@ wss.on('connection', (ws) => {
               return;
             }
 
-            try { fs.unlinkSync(tmpPs); } catch {}
-
             if (err) {
               console.error('[AMU Scanner Helper] Scan error:', stderr || err.message);
-              ws.send(JSON.stringify({ type: 'error', message: stderr || err.message }));
+              ws.send(JSON.stringify({ type: 'error', message: (stderr || err.message).substring(0, 200) }));
               return;
             }
 
