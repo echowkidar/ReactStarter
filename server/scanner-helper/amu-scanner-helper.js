@@ -145,18 +145,42 @@ wss.on('connection', (ws) => {
         const tmpPsList = path.join(os.tmpdir(), `amu-list-${Date.now()}.ps1`);
         fs.writeFileSync(tmpPsList, LIST_SCANNERS_PS, 'utf8');
 
-        const result = execSync(
-          `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPsList}"`,
-          { timeout: 15000, encoding: 'utf8', windowsHide: true }
-        ).trim();
-
-        try { fs.unlinkSync(tmpPsList); } catch {}
+        let result = '';
+        try {
+          result = execSync(
+            `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPsList}"`,
+            { timeout: 15000, encoding: 'utf8', windowsHide: true }
+          ).trim();
+        } catch (e) {}
 
         let scanners = [];
         try { scanners = JSON.parse(result); } catch {}
         if (!Array.isArray(scanners)) scanners = [];
 
-        if (scanners.length > 0) scanners[0].isDefault = true;
+        // Fallback to 32-bit PowerShell (fixes Samsung and older drivers on 64-bit Windows)
+        if (scanners.length === 0 || (scanners.length === 1 && scanners[0].id === "error")) {
+          const wow64Ps = 'C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe';
+          if (fs.existsSync(wow64Ps)) {
+            console.log('[AMU Scanner Helper] 64-bit failed/empty, trying 32-bit PowerShell...');
+            try {
+              const res32 = execSync(
+                `"${wow64Ps}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPsList}"`,
+                { timeout: 15000, encoding: 'utf8', windowsHide: true }
+              ).trim();
+              let sc32 = [];
+              try { sc32 = JSON.parse(res32); } catch {}
+              if (Array.isArray(sc32) && sc32.length > 0 && sc32[0].id !== "error") {
+                scanners = sc32;
+              } else if (Array.isArray(sc32) && sc32.length > 0) {
+                scanners = sc32; // keep the 32-bit error if it's all we have
+              }
+            } catch (e) {}
+          }
+        }
+
+        try { fs.unlinkSync(tmpPsList); } catch {}
+
+        if (scanners.length > 0 && scanners[0].id !== "error") scanners[0].isDefault = true;
         ws.send(JSON.stringify({ type: 'scanners', scanners }));
       } catch (err) {
         console.error('[AMU Scanner Helper] Error listing scanners:', err.message);
@@ -173,29 +197,40 @@ wss.on('connection', (ws) => {
       const tmpPs = path.join(os.tmpdir(), `amu-scan-${Date.now()}.ps1`);
       fs.writeFileSync(tmpPs, psScript, 'utf8');
 
-      exec(
-        `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPs}"`,
-        { timeout: 60000, windowsHide: true },
-        (err, stdout, stderr) => {
-          try { fs.unlinkSync(tmpPs); } catch {}
+      const wow64Ps = 'C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe';
+      const tryScan = (psExe, isFallbackAllowed) => {
+        exec(
+          `"${psExe}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${tmpPs}"`,
+          { timeout: 60000, windowsHide: true },
+          (err, stdout, stderr) => {
+            if (err && isFallbackAllowed && fs.existsSync(wow64Ps)) {
+              console.log("[AMU Scanner Helper] 64-bit scan failed, falling back to 32-bit PowerShell...");
+              tryScan(wow64Ps, false);
+              return;
+            }
 
-          if (err) {
-            console.error('[AMU Scanner Helper] Scan error:', stderr || err.message);
-            ws.send(JSON.stringify({ type: 'error', message: stderr || err.message }));
-            return;
-          }
+            try { fs.unlinkSync(tmpPs); } catch {}
 
-          try {
-            const imgData = fs.readFileSync(tmpFile);
-            const base64 = imgData.toString('base64');
-            try { fs.unlinkSync(tmpFile); } catch {}
-            console.log(`[AMU Scanner Helper] Scan complete, size: ${imgData.length} bytes`);
-            ws.send(JSON.stringify({ type: 'scan-result', data: base64, format: 'png' }));
-          } catch (readErr) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Failed to read scanned file' }));
+            if (err) {
+              console.error('[AMU Scanner Helper] Scan error:', stderr || err.message);
+              ws.send(JSON.stringify({ type: 'error', message: stderr || err.message }));
+              return;
+            }
+
+            try {
+              const imgData = fs.readFileSync(tmpFile);
+              const base64 = imgData.toString('base64');
+              ws.send(JSON.stringify({ type: 'scan-result', data: base64 }));
+              fs.unlinkSync(tmpFile);
+            } catch (fsErr) {
+              console.error('[AMU Scanner Helper] Error reading scanned image:', fsErr.message);
+              ws.send(JSON.stringify({ type: 'error', message: 'Failed to read scanned image file.' }));
+            }
           }
-        }
-      );
+        );
+      };
+      
+      tryScan('powershell', true);
     }
   });
 
