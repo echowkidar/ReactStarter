@@ -1634,8 +1634,13 @@ export default function Attendance() {
       if (!Array.isArray(data)) return [];
       // Sort a shallow copy to avoid potential mutation issues
       return [...data].sort((a, b) => {
-        const aValue = a.receiptNo ?? -Infinity; // Treat null/undefined as lowest
-        const bValue = b.receiptNo ?? -Infinity;
+        const aValue = a.receiptNo ?? Infinity; // Treat null/undefined as highest so they appear at top
+        const bValue = b.receiptNo ?? Infinity;
+        
+        if (aValue === Infinity && bValue === Infinity) {
+          return (b.id || 0) - (a.id || 0); // Sort by id descending if neither has receiptNo
+        }
+        
         return bValue - aValue; // Descending order
       });
     },
