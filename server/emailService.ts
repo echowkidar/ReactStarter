@@ -513,9 +513,12 @@ export async function sendLpcEmail(
   pdfAbsolutePath: string
 ): Promise<{ success: boolean; messageId?: string; error?: string; message?: string }> {
   try {
-    const isValidDomain = await validateEmailDomain(recipientEmail);
-    if (!isValidDomain) {
-      return { success: false, error: 'wrong_email', message: 'Email domain does not exist or is invalid' };
+    const emails = recipientEmail.split(',').map(e => e.trim()).filter(e => e);
+    for (const em of emails) {
+      const isValidDomain = await validateEmailDomain(em);
+      if (!isValidDomain) {
+        return { success: false, error: 'wrong_email', message: `Email domain does not exist or is invalid for: ${em}` };
+      }
     }
 
     const subject = `Last Pay Certificate — ${lpcData.employeeTitle} ${lpcData.employeeName} (ID: ${lpcData.epid})`;
