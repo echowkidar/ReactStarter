@@ -1097,7 +1097,7 @@ export default function AdminEmployees() {
             <div className="flex items-center gap-4">
               {(() => {
                 const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                if (adminData.userCode === 'VEW') return null;
+                if (adminData.userCode === 'VEW' || adminData.email === 'qasim@amu.ac.in') return null;
                 return (
                   <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
