@@ -5943,20 +5943,70 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/email/message/:uid", async (req, res) => {
+  app.get("/api/email/sent", async (req, res) => {
     try {
       const { userId, userType } = req.query as { userId: string, userType: string };
+      if (!userId || !userType) return res.status(400).json({ message: "Missing credentials identifier" });
+      
+      const { getSentMail } = await import("./email-client.js");
+      const messages = await getSentMail(userId, userType);
+      res.json({ success: true, messages });
+    } catch (error: any) {
+      console.error("Sent mail fetch error:", error);
+      res.status(500).json({ success: false, message: error.message || "Failed to fetch sent mail" });
+    }
+  });
+
+  app.get("/api/email/message/:uid", async (req, res) => {
+    try {
+      const { userId, userType, folder } = req.query as { userId: string, userType: string, folder?: string };
       const uid = parseInt(req.params.uid);
       if (!userId || !userType || isNaN(uid)) return res.status(400).json({ message: "Invalid parameters" });
 
       const { getMessage } = await import("./email-client.js");
-      const messageData = await getMessage(userId, userType, uid);
+      const messageData = await getMessage(userId, userType, uid, folder || 'INBOX');
       if (!messageData) return res.status(404).json({ message: "Message not found" });
 
       res.json({ success: true, message: messageData });
     } catch (error: any) {
       console.error("Message fetch error:", error);
       res.status(500).json({ success: false, message: error.message || "Failed to fetch message" });
+    }
+  });
+
+  app.patch("/api/email/message/:uid/flag", async (req, res) => {
+    try {
+      const { userId, userType, folder, flag, value } = req.body;
+      const uid = parseInt(req.params.uid);
+      if (!userId || !userType || !folder || !flag || value === undefined || isNaN(uid)) {
+        return res.status(400).json({ message: "Invalid parameters" });
+      }
+      
+      let imapFlag = flag === 'read' ? '\\Seen' : flag === 'starred' ? '\\Flagged' : null;
+      if (!imapFlag) return res.status(400).json({ message: "Invalid flag" });
+
+      const { toggleEmailFlag } = await import("./email-client.js");
+      await toggleEmailFlag(userId, userType, uid, folder, imapFlag, value);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Flag toggle error:", error);
+      res.status(500).json({ success: false, message: error.message || "Failed to toggle flag" });
+    }
+  });
+
+  app.delete("/api/email/message/:uid", async (req, res) => {
+    try {
+      const { userId, userType, folder } = req.query as { userId: string, userType: string, folder?: string };
+      const uid = parseInt(req.params.uid);
+      if (!userId || !userType || isNaN(uid)) return res.status(400).json({ message: "Invalid parameters" });
+
+      const { deleteMessage } = await import("./email-client.js");
+      await deleteMessage(userId, userType, uid, folder || 'INBOX');
+
+      res.json({ success: true, message: "Deleted successfully" });
+    } catch (error: any) {
+      console.error("Message delete error:", error);
+      res.status(500).json({ success: false, message: error.message || "Failed to delete message" });
     }
   });
 

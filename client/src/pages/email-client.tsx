@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Mail, Send, ArrowLeft, RefreshCw, Inbox, Settings, ChevronDown, ChevronUp, Paperclip, Download } from "lucide-react";
+import { Loader2, Mail, Send, ArrowLeft, RefreshCw, Inbox, Settings, ChevronDown, ChevronUp, Paperclip, Download, Trash2, Send as SentIcon, Forward, Star } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 
@@ -27,6 +27,7 @@ export default function EmailClient() {
     }
   })();
 
+  const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
   const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
   const [isToExpanded, setIsToExpanded] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -51,7 +52,7 @@ export default function EmailClient() {
     }
   };
 
-  const { data: inboxResponse, isLoading: isLoadingInbox, refetch, isError, error } = useQuery({
+  const { data: inboxResponse, isLoading: isLoadingInbox, isFetching: isFetchingInbox, refetch, isError, error } = useQuery({
     queryKey: ["/api/email/inbox", userInfo.type, userInfo.id],
     queryFn: async () => {
       const url = `/api/email/inbox?userId=${encodeURIComponent(userInfo.id)}&userType=${encodeURIComponent(userInfo.type)}`;
@@ -67,14 +68,56 @@ export default function EmailClient() {
     }
   }, [isError, error, setLocation, isAdmin]);
 
-  const { data: activeMessageResponse, isLoading: isLoadingMessage } = useQuery({
-    queryKey: ["/api/email/message", userInfo.type, userInfo.id, selectedMessageId],
+  const { data: sentResponse, isLoading: isLoadingSent, isFetching: isFetchingSent, refetch: refetchSent } = useQuery({
+    queryKey: ["/api/email/sent", userInfo.type, userInfo.id],
     queryFn: async () => {
-      const url = `/api/email/message/${selectedMessageId}?userId=${encodeURIComponent(userInfo.id)}&userType=${encodeURIComponent(userInfo.type)}`;
+      const url = `/api/email/sent?userId=${encodeURIComponent(userInfo.id)}&userType=${encodeURIComponent(userInfo.type)}`;
+      const res = await apiRequest("GET", url);
+      return res.json();
+    },
+    enabled: !!userInfo.id && activeTab === 'sent',
+  });
+
+  const { data: activeMessageResponse, isLoading: isLoadingMessage } = useQuery({
+    queryKey: ["/api/email/message", userInfo.type, userInfo.id, selectedMessageId, activeTab],
+    queryFn: async () => {
+      const folder = activeTab === 'inbox' ? 'INBOX' : '[Gmail]/Sent Mail';
+      const url = `/api/email/message/${selectedMessageId}?userId=${encodeURIComponent(userInfo.id)}&userType=${encodeURIComponent(userInfo.type)}&folder=${encodeURIComponent(folder)}`;
       const res = await apiRequest("GET", url);
       return res.json();
     },
     enabled: !!selectedMessageId,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const folder = activeTab === 'inbox' ? 'INBOX' : '[Gmail]/Sent Mail';
+      const url = `/api/email/message/${selectedMessageId}?userId=${encodeURIComponent(userInfo.id)}&userType=${encodeURIComponent(userInfo.type)}&folder=${encodeURIComponent(folder)}`;
+      const res = await apiRequest("DELETE", url);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Email deleted successfully" });
+      setSelectedMessageId(null);
+      if (activeTab === 'inbox') refetch();
+      else refetchSent();
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to delete email", variant: "destructive" });
+    }
+  });
+
+  const toggleFlagMutation = useMutation({
+    mutationFn: async ({ uid, flag, value }: { uid: number, flag: 'read' | 'starred', value: boolean }) => {
+      const folder = activeTab === 'inbox' ? 'INBOX' : '[Gmail]/Sent Mail';
+      const url = `/api/email/message/${uid}/flag`;
+      const res = await apiRequest("PATCH", url, { userId: userInfo.id, userType: userInfo.type, folder, flag, value });
+      return res.json();
+    },
+    onSuccess: () => {
+      if (activeTab === 'inbox') refetch();
+      else refetchSent();
+    }
   });
 
   const sendMutation = useMutation({
@@ -93,7 +136,36 @@ export default function EmailClient() {
     }
   });
 
-  const messages = inboxResponse?.messages || [];
+  const messages = activeTab === 'inbox' ? (inboxResponse?.messages || []) : (sentResponse?.messages || []);
+
+  const handleForward = () => {
+    const msg = activeMessageResponse?.message;
+    if (!msg) return;
+
+    let forwardedBody = `\n\n---------- Forwarded message ---------\n`;
+    forwardedBody += `From: ${msg.from?.[0]?.name ? `${msg.from[0].name} ` : ''}<${msg.from?.[0]?.address}>\n`;
+    forwardedBody += `Date: ${format(new Date(msg.date), "PPP p")}\n`;
+    forwardedBody += `Subject: ${msg.subject}\n`;
+    
+    if (msg.to && msg.to.length > 0) {
+      const toStr = msg.to.map((t: any) => t.name ? `${t.name} <${t.address}>` : t.address || t).join(', ');
+      forwardedBody += `To: ${toStr}\n`;
+    }
+    forwardedBody += `\n${msg.body || '(No readable text in original message)'}`;
+
+    const initialAttachments = (msg.attachments || []).map((att: any) => ({
+      filename: att.filename,
+      content: att.content
+    }));
+
+    setComposeData({
+      to: "",
+      subject: `Fwd: ${msg.subject}`,
+      text: forwardedBody,
+      attachments: initialAttachments
+    });
+    setIsComposeOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center">
@@ -109,8 +181,8 @@ export default function EmailClient() {
             Email Settings
           </Button>
 
-          <Button variant="outline" onClick={() => refetch()} disabled={isLoadingInbox}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingInbox ? 'animate-spin' : ''}`} />
+          <Button variant="outline" onClick={() => activeTab === 'inbox' ? refetch() : refetchSent()} disabled={isLoadingInbox || isLoadingSent || isFetchingInbox || isFetchingSent}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${(isLoadingInbox || isLoadingSent || isFetchingInbox || isFetchingSent) ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
 
@@ -180,13 +252,25 @@ export default function EmailClient() {
       </div>
 
       <div className="w-full max-w-6xl grid md:grid-cols-3 gap-6 h-[75vh]">
-        {/* Inbox List */}
+        {/* Inbox/Sent List */}
         <Card className="col-span-1 flex flex-col h-full overflow-hidden shadow-sm">
-          <CardHeader className="py-4 border-b bg-white">
-            <CardTitle className="text-lg flex items-center">
-              <Inbox className="h-5 w-5 mr-2 text-indigo-600" />
-              Inbox
-            </CardTitle>
+          <CardHeader className="py-0 px-0 border-b bg-white">
+            <div className="flex w-full h-full">
+              <button 
+                onClick={() => { setActiveTab('inbox'); setSelectedMessageId(null); }}
+                className={`flex-1 py-4 flex items-center justify-center font-medium transition-colors ${activeTab === 'inbox' ? 'border-b-2 border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'text-gray-500 hover:bg-slate-50'}`}
+              >
+                <Inbox className="h-4 w-4 mr-2" />
+                Inbox
+              </button>
+              <button 
+                onClick={() => { setActiveTab('sent'); setSelectedMessageId(null); }}
+                className={`flex-1 py-4 flex items-center justify-center font-medium transition-colors ${activeTab === 'sent' ? 'border-b-2 border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'text-gray-500 hover:bg-slate-50'}`}
+              >
+                <SentIcon className="h-4 w-4 mr-2" />
+                Sent
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="p-0 overflow-y-auto bg-white flex-1">
             {isLoadingInbox ? (
@@ -198,12 +282,27 @@ export default function EmailClient() {
                 {messages.map((msg: any) => (
                   <div 
                     key={msg.id} 
-                    className={`px-3 py-2 cursor-pointer hover:bg-slate-50 transition-colors ${selectedMessageId === msg.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''}`}
-                    onClick={() => { setSelectedMessageId(msg.id); setIsToExpanded(false); }}
+                    className={`px-3 py-2 cursor-pointer transition-colors flex gap-2 items-start ${selectedMessageId === msg.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : 'hover:bg-slate-50 border-l-4 border-transparent'} ${!msg.read ? 'bg-white' : 'bg-slate-50'}`}
+                    onClick={() => { 
+                      setSelectedMessageId(msg.id); 
+                      setIsToExpanded(false);
+                      if (!msg.read) toggleFlagMutation.mutate({ uid: msg.id, flag: 'read', value: true });
+                    }}
                   >
-                    <div className="font-semibold text-sm truncate">{msg.from?.[0]?.name || msg.from?.[0]?.address || 'Unknown'}</div>
-                    <div className="text-sm text-gray-700 truncate">{msg.subject || '(No Subject)'}</div>
-                    <div className="text-xs text-gray-400 mt-1">{format(new Date(msg.date), "MMM d, h:mm a")}</div>
+                    <button 
+                      className={`mt-0.5 shrink-0 hover:scale-110 transition-transform ${msg.starred ? 'text-yellow-400' : 'text-gray-300'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFlagMutation.mutate({ uid: msg.id, flag: 'starred', value: !msg.starred });
+                      }}
+                    >
+                      <Star className={`h-4 w-4 ${msg.starred ? 'fill-current' : ''}`} />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm truncate ${!msg.read ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>{msg.from?.[0]?.name || msg.from?.[0]?.address || 'Unknown'}</div>
+                      <div className={`text-sm truncate ${!msg.read ? 'font-bold text-gray-800' : 'text-gray-600'}`}>{msg.subject || '(No Subject)'}</div>
+                      <div className={`text-xs mt-1 ${!msg.read ? 'font-medium text-indigo-600' : 'text-gray-400'}`}>{format(new Date(msg.date), "MMM d, h:mm a")}</div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -226,7 +325,30 @@ export default function EmailClient() {
             ) : activeMessageResponse?.message ? (
               <div className="flex flex-col h-full min-h-0">
                 <div className="p-6 border-b shrink-0">
-                  <h2 className="text-2xl font-bold mb-2">{activeMessageResponse.message.subject}</h2>
+                  <div className="flex justify-between items-start mb-2">
+                    <h2 className="text-2xl font-bold mr-4">{activeMessageResponse.message.subject}</h2>
+                    <div className="flex gap-2 shrink-0">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleForward}
+                        className="text-gray-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        title="Forward Email"
+                      >
+                        <Forward className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => deleteMutation.mutate()} 
+                        disabled={deleteMutation.isPending}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        title="Delete Email"
+                      >
+                        {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
                   <div className="flex flex-col gap-2 text-sm text-gray-600">
                     <div className="flex justify-between items-start">
                       <div>

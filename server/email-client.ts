@@ -57,13 +57,18 @@ export async function getInbox(userId: string, userType: string) {
         const totalMessages = status.messages;
         const start = Math.max(1, totalMessages - 49); 
 
-        for await (let message of client.fetch(`${start}:*`, { envelope: true })) {
+        for await (let message of client.fetch(`${start}:*`, { envelope: true, flags: true })) {
+          if (message.flags && message.flags.has('\\Deleted')) {
+            continue;
+          }
           messages.push({
             id: message.uid,
             seq: message.seq,
             subject: message.envelope.subject,
             from: message.envelope.from,
             date: message.envelope.date,
+            read: message.flags ? message.flags.has('\\Seen') : false,
+            starred: message.flags ? message.flags.has('\\Flagged') : false,
           });
         }
       }
@@ -77,13 +82,13 @@ export async function getInbox(userId: string, userType: string) {
   return messages.reverse(); // Newest first
 }
 
-export async function getMessage(userId: string, userType: string, uid: number) {
+export async function getMessage(userId: string, userType: string, uid: number, folder: string = 'INBOX') {
   const { client } = await getImapClient(userId, userType);
   await client.connect();
 
   let messageData = null;
   try {
-    const lock = await client.getMailboxLock('INBOX');
+    const lock = await client.getMailboxLock(folder);
     try {
       const msg = await client.fetchOne(uid.toString(), { source: true, envelope: true }, { uid: true });
       if (msg) {
@@ -133,4 +138,99 @@ export async function getMessage(userId: string, userType: string, uid: number) 
   }
 
   return messageData;
+}
+
+export async function getSentMail(userId: string, userType: string) {
+  const { client } = await getImapClient(userId, userType);
+  await client.connect();
+
+  const messages: any[] = [];
+  try {
+    const lock = await client.getMailboxLock('[Gmail]/Sent Mail');
+    try {
+      const status = await client.status('[Gmail]/Sent Mail', { messages: true });
+      if (status && status.messages > 0) {
+        const totalMessages = status.messages;
+        const start = Math.max(1, totalMessages - 49); 
+
+        for await (let message of client.fetch(`${start}:*`, { envelope: true, flags: true })) {
+          if (message.flags && message.flags.has('\\Deleted')) {
+            continue;
+          }
+          messages.push({
+            id: message.uid,
+            seq: message.seq,
+            subject: message.envelope.subject,
+            from: message.envelope.from,
+            to: message.envelope.to,
+            date: message.envelope.date,
+            folder: '[Gmail]/Sent Mail',
+            read: message.flags ? message.flags.has('\\Seen') : false,
+            starred: message.flags ? message.flags.has('\\Flagged') : false,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch sent mail. Folder might be named differently.", e);
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
+  
+  return messages.reverse();
+}
+
+export async function deleteMessage(userId: string, userType: string, uid: number, folder: string = 'INBOX') {
+  const { client } = await getImapClient(userId, userType);
+  await client.connect();
+
+  try {
+    const lock = await client.getMailboxLock(folder);
+    try {
+      await client.messageFlagsAdd(uid.toString(), ['\\Deleted'], { uid: true });
+      
+      let trashPath = '[Gmail]/Trash';
+      try {
+        const mailboxes = await client.list();
+        const trashBox = mailboxes.find(mb => mb.specialUse === '\\Trash' || mb.name.toLowerCase().includes('trash') || mb.name.toLowerCase().includes('bin'));
+        if (trashBox) {
+          trashPath = trashBox.path;
+        }
+      } catch (e) {
+        // ignore list error
+      }
+
+      try {
+        await client.messageMove(uid.toString(), trashPath, { uid: true });
+      } catch (e) {
+        console.error("Message move to trash failed", e);
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
+}
+
+export async function toggleEmailFlag(userId: string, userType: string, uid: number, folder: string, flag: string, value: boolean) {
+  const { client } = await getImapClient(userId, userType);
+  await client.connect();
+
+  try {
+    const lock = await client.getMailboxLock(folder);
+    try {
+      if (value) {
+        await client.messageFlagsAdd(uid.toString(), [flag], { uid: true });
+      } else {
+        await client.messageFlagsRemove(uid.toString(), [flag], { uid: true });
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
 }
