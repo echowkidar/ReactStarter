@@ -15,6 +15,8 @@ import {
   Megaphone,
   Search,
   DownloadCloud,
+  Mail,
+  Inbox,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -109,6 +111,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Employees", href: "/dashboard/employees", icon: Users },
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
+  { name: "Email", href: "/dashboard/mailbox", icon: Mail },
   { name: "Global Search", href: "/dashboard/global-search", icon: Search },
   { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
   { name: "Useful Downloads", href: "/dashboard/downloads", icon: DownloadCloud },

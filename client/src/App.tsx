@@ -36,6 +36,8 @@ import ResetPassword from "@/pages/reset-password";
 import AdminForgotPassword from "@/pages/admin/forgot-password";
 import AdminResetPassword from "@/pages/admin/reset-password";
 import LpcVerify from "@/pages/lpc-verify";
+import EmailManagement from "@/pages/email-management";
+import EmailClient from "@/pages/email-client";
 
 function AppRouter() {
   return (
@@ -70,6 +72,10 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/department-contacts" component={DepartmentContacts} />
       <ProtectedAdminRoute path="/admin/lpc" component={AdminLPC} />
       <ProtectedRoute path="/dashboard/tickets" component={Tickets} />
+      <ProtectedRoute path="/dashboard/email" component={EmailManagement} />
+      <ProtectedRoute path="/dashboard/mailbox" component={EmailClient} />
+      <ProtectedAdminRoute path="/admin/email" component={EmailManagement} />
+      <ProtectedAdminRoute path="/admin/mailbox" component={EmailClient} />
       <Route path="/lpc/verify/:id" component={LpcVerify} />
       <Route component={NotFound} />
     </Switch>

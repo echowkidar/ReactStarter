@@ -5878,5 +5878,119 @@ export async function registerRoutes(app: Express) {
     res.sendFile(path.resolve(filePath));
   });
 
+  // --- User Email Management ---
+  app.get("/api/user-email", async (req, res) => {
+    try {
+      const userId = req.query.userId as string;
+      const userType = req.query.userType as string;
+      if (!userId || !userType) {
+        return res.status(400).json({ message: "Missing userId or userType" });
+      }
+      const { userEmails } = await import("../shared/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const [record] = await db.select().from(userEmails)
+        .where(and(eq(userEmails.userId, userId), eq(userEmails.userType, userType)));
+      
+      if (record) {
+        res.json({ email: record.email, appPassword: record.appPassword });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      console.error("Error fetching user email:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.post("/api/user-email", async (req, res) => {
+    try {
+      const { userId, userType, email, appPassword } = req.body;
+      if (!userId || !userType || !email || !appPassword) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      const { userEmails } = await import("../shared/schema");
+      const { eq, and } = await import("drizzle-orm");
+      
+      const [existing] = await db.select().from(userEmails)
+        .where(and(eq(userEmails.userId, userId), eq(userEmails.userType, userType)));
+        
+      if (existing) {
+        await db.update(userEmails)
+          .set({ email, appPassword, updatedAt: new Date() })
+          .where(eq(userEmails.id, existing.id));
+      } else {
+        await db.insert(userEmails)
+          .values({ userId, userType, email, appPassword });
+      }
+      res.json({ success: true, message: "Email configuration saved" });
+    } catch (error) {
+      console.error("Error saving user email:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.get("/api/email/inbox", async (req, res) => {
+    try {
+      const { userId, userType } = req.query as { userId: string, userType: string };
+      if (!userId || !userType) return res.status(400).json({ message: "Missing credentials identifier" });
+      
+      const { getInbox } = await import("./email-client.js");
+      const messages = await getInbox(userId, userType);
+      res.json({ success: true, messages });
+    } catch (error: any) {
+      console.error("Inbox fetch error:", error);
+      res.status(500).json({ success: false, message: error.message || "Failed to fetch inbox" });
+    }
+  });
+
+  app.get("/api/email/message/:uid", async (req, res) => {
+    try {
+      const { userId, userType } = req.query as { userId: string, userType: string };
+      const uid = parseInt(req.params.uid);
+      if (!userId || !userType || isNaN(uid)) return res.status(400).json({ message: "Invalid parameters" });
+
+      const { getMessage } = await import("./email-client.js");
+      const messageData = await getMessage(userId, userType, uid);
+      if (!messageData) return res.status(404).json({ message: "Message not found" });
+
+      res.json({ success: true, message: messageData });
+    } catch (error: any) {
+      console.error("Message fetch error:", error);
+      res.status(500).json({ success: false, message: error.message || "Failed to fetch message" });
+    }
+  });
+
+  app.post("/api/email/send", async (req, res) => {
+    try {
+      const { userId, userType, to, subject, text, attachments } = req.body;
+      if (!userId || !userType || !to || !subject || !text) return res.status(400).json({ message: "Missing fields" });
+
+      const { getSmtpTransporter } = await import("./email-client.js");
+      const { transporter, record } = await getSmtpTransporter(userId, userType);
+      
+      const mailOptions: any = {
+        from: record.email,
+        to,
+        subject,
+        text
+      };
+
+      if (attachments && Array.isArray(attachments)) {
+        mailOptions.attachments = attachments.map((att: any) => ({
+          filename: att.filename,
+          content: att.content.split('base64,')[1] || att.content,
+          encoding: 'base64'
+        }));
+      }
+
+      const info = await transporter.sendMail(mailOptions);
+      
+      res.json({ success: true, messageId: info.messageId });
+    } catch (error: any) {
+      console.error("Email send error:", error);
+      res.status(500).json({ success: false, message: error.message || "Failed to send email" });
+    }
+  });
+
   return httpServer;
 }

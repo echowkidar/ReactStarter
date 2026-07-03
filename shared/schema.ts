@@ -504,3 +504,24 @@ export const insertLpcRecordSchema = createInsertSchema(lpcRecords).omit({
 
 export type LpcRecord = typeof lpcRecords.$inferSelect;
 export type InsertLpcRecord = z.infer<typeof insertLpcRecordSchema>;
+
+// User Emails - for managing user gmail app passwords
+export const userEmails = pgTable("user_emails", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),     // Department email, or super admin email
+  userType: text("user_type").notNull(), // 'admin' or 'department'
+  email: text("email").notNull(),        // The configured Gmail address
+  appPassword: text("app_password").notNull(), // App password
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertUserEmailSchema = createInsertSchema(userEmails).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserEmail = typeof userEmails.$inferSelect;
+export type InsertUserEmail = z.infer<typeof insertUserEmailSchema>;
+
