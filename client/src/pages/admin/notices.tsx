@@ -49,6 +49,7 @@ export default function AdminNotices() {
     const { toast } = useToast();
     const adminType = localStorage.getItem("adminType");
     const isSalaryAdmin = adminType === "salary";
+    const adminInfo = JSON.parse(localStorage.getItem("admin") || "{}");
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
     const [isGlobal, setIsGlobal] = useState(true);
@@ -208,7 +209,7 @@ export default function AdminNotices() {
                                             >
                                                 <Eye className="h-4 w-4" />
                                             </Button>
-                                            {!isSalaryAdmin && (
+                                            {adminInfo.email !== "qasim@amu.ac.in" && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"

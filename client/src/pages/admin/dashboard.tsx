@@ -981,7 +981,7 @@ export default function AdminDashboard() {
               className={`w-3 h-3 rounded-full mr-2 shadow-sm border border-white ring-1 ring-gray-100 ${isAllEnabled ? 'bg-green-500' : 'bg-red-500'}`}
               title={isAllEnabled ? "Attendance Enabled for All Departments" : "Attendance Restrictions Active"}
             />
-            {!isSalaryAdmin && (
+            {adminInfo.email !== "qasim@amu.ac.in" && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1082,7 +1082,7 @@ export default function AdminDashboard() {
 
             {(() => {
               const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-              if (adminData.userCode === 'VEW' || isSalaryAdmin) return null;
+              if (adminData.userCode === 'VEW' || adminData.email === "qasim@amu.ac.in") return null;
               return (
                 <Button
                   variant="outline"
