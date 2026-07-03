@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Mail, Send, ArrowLeft, RefreshCw, Inbox, Settings, ChevronDown, ChevronUp, Paperclip, Download, Trash2, Send as SentIcon, Forward, Star } from "lucide-react";
+import { Loader2, Mail, Send, ArrowLeft, RefreshCw, Inbox, Settings, ChevronDown, ChevronUp, Paperclip, Download, Trash2, Send as SentIcon, Forward, Star, Users, Search, Scan } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
+import ScannerModal from "@/components/ScannerModal";
 
 export default function EmailClient() {
   const [, setLocation] = useLocation();
@@ -29,9 +30,42 @@ export default function EmailClient() {
 
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
   const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<any>(null);
   const [isToExpanded, setIsToExpanded] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeData, setComposeData] = useState<{to: string, subject: string, text: string, attachments: any[]}>({ to: "", subject: "", text: "", attachments: [] });
+
+  const [searchEmailTerm, setSearchEmailTerm] = useState("");
+  const [searchEmailResults, setSearchEmailResults] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!searchEmailTerm || searchEmailTerm.length < 2) {
+      setSearchEmailResults([]);
+      return;
+    }
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const [empRes, deptRes] = await Promise.all([
+          apiRequest("GET", `/api/employees/global-search?query=${encodeURIComponent(searchEmailTerm)}`),
+          apiRequest("GET", `/api/departments?registeredOnly=true`)
+        ]);
+        const emps = await empRes.json();
+        const depts = await deptRes.json();
+        
+        const matchingDepts = depts.filter((d: any) => d.name.toLowerCase().includes(searchEmailTerm.toLowerCase()));
+        
+        const results = [
+          ...matchingDepts.map((d: any) => ({ ...d, entityType: 'department' })),
+          ...emps.map((e: any) => ({ ...e, entityType: 'employee' }))
+        ];
+        setSearchEmailResults(results.slice(0, 10)); // limit to 10
+      } catch (e) {
+        console.error(e);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchEmailTerm]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -50,6 +84,18 @@ export default function EmailClient() {
       }));
       setComposeData(prev => ({ ...prev, attachments: [...prev.attachments, ...newAttachments] }));
     }
+  };
+
+  const handleScanComplete = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64String = reader.result as string;
+      setComposeData(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, { filename: file.name, content: base64String }]
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const { data: inboxResponse, isLoading: isLoadingInbox, isFetching: isFetchingInbox, refetch, isError, error } = useQuery({
@@ -87,6 +133,56 @@ export default function EmailClient() {
       return res.json();
     },
     enabled: !!selectedMessageId,
+  });
+
+  const { data: departmentEmployees } = useQuery({
+    queryKey: [`/api/departments/${userInfo.id}/employees`],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/departments/${userInfo.id}/employees`);
+      return res.json();
+    },
+    enabled: userInfo.type === 'department' && !!userInfo.id,
+  });
+
+  const { data: departmentGroups } = useQuery({
+    queryKey: [`/api/departments/${userInfo.id}/groups`],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/departments/${userInfo.id}/groups`);
+      return res.json();
+    },
+    enabled: userInfo.type === 'department' && !!userInfo.id,
+  });
+
+  const { data: adminGroups } = useQuery({
+    queryKey: [`/api/admin/groups`],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/admin/groups`);
+      return res.json();
+    },
+    enabled: userInfo.type === 'admin',
+  });
+
+  const { data: allDepartments } = useQuery({
+    queryKey: ["/api/departments?registeredOnly=true"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/departments?registeredOnly=true`);
+      return res.json();
+    },
+    enabled: userInfo.type === 'admin',
+  });
+
+  const salaryDept = allDepartments?.find((d: any) => 
+    d.email?.toLowerCase() === 'salary.fo@amu.ac.in' || 
+    d.name?.toLowerCase().includes('salary section')
+  );
+
+  const { data: adminSalaryEmployees } = useQuery({
+    queryKey: [`/api/departments/${salaryDept?.id}/employees`],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/departments/${salaryDept?.id}/employees`);
+      return res.json();
+    },
+    enabled: !!salaryDept?.id && userInfo.type === 'admin',
   });
 
   const deleteMutation = useMutation({
@@ -198,11 +294,140 @@ export default function EmailClient() {
                 <DialogTitle>New Message</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <Input
-                  placeholder="To (e.g. user@example.com)"
-                  value={composeData.to}
-                  onChange={(e) => setComposeData({ ...composeData, to: e.target.value })}
-                />
+                
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <Input 
+                    placeholder="Search any employee or department globally..." 
+                    className="pl-9"
+                    value={searchEmailTerm}
+                    onChange={(e) => setSearchEmailTerm(e.target.value)}
+                  />
+                  {searchEmailResults.length > 0 && searchEmailTerm.length >= 2 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border shadow-lg rounded-md z-10 max-h-48 overflow-y-auto">
+                      {searchEmailResults.map((res: any, idx) => (
+                        <div 
+                          key={`search-${idx}`} 
+                          className="p-2 hover:bg-slate-50 cursor-pointer border-b last:border-0 flex flex-col"
+                          onClick={() => {
+                            let newEmail = "";
+                            if (res.entityType === 'department') {
+                              newEmail = `${res.name} <${res.email}>`;
+                            } else {
+                              newEmail = `${res.name} <0${res.epid}@amu.ac.in>`;
+                            }
+                            
+                            const currentTo = composeData.to.trim();
+                            const appendedTo = currentTo 
+                              ? (currentTo.endsWith(',') ? `${currentTo} ${newEmail}` : `${currentTo}, ${newEmail}`)
+                              : newEmail;
+                            setComposeData({ ...composeData, to: appendedTo });
+                            setSearchEmailTerm("");
+                            setSearchEmailResults([]);
+                          }}
+                        >
+                          <span className="font-medium text-sm text-gray-900">{res.name}</span>
+                          <span className="text-xs text-gray-500">
+                            {res.entityType === 'department' ? 'Department' : `${res.designation} (${res.epid})`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Textarea
+                    placeholder="To (e.g. user@example.com)"
+                    value={composeData.to}
+                    onChange={(e) => setComposeData({ ...composeData, to: e.target.value })}
+                    className="min-h-[60px] max-h-[120px] pr-20"
+                  />
+                  {composeData.to && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setComposeData({ ...composeData, to: "" })}
+                      className="absolute right-2 top-2 h-7 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                
+                {(departmentEmployees?.length > 0 || departmentGroups?.length > 0 || adminGroups?.length > 0 || adminSalaryEmployees?.length > 0) && (
+                  <div className="flex flex-col gap-1 -mt-2 w-full min-w-0">
+                    <span className="text-xs font-medium text-gray-500">Quick Select Groups & Employees:</span>
+                    <div className="flex gap-2 overflow-x-auto pb-2 w-full">
+                      {(userInfo.type === 'admin' ? adminGroups : departmentGroups)?.map((group: any) => (
+                        <button
+                          key={`group-${group.id}`}
+                          type="button"
+                          onClick={() => {
+                            let newEmails = "";
+                            if (userInfo.type === 'admin') {
+                              newEmails = group.members.map((m: any) => {
+                                if (m.type === 'department') return `${m.name} <${m.email || 'dept@amu.ac.in'}>`; // Note: Ideally we have department email here, for now it relies on department search logic
+                                return `${m.name} <0${m.epid || m.id}@amu.ac.in>`;
+                              }).join(', ');
+                            } else {
+                              if (!departmentEmployees) return;
+                              const groupMembers = departmentEmployees.filter((emp: any) => group.memberIds?.includes(emp.id));
+                              newEmails = groupMembers.map((emp: any) => `${emp.name} <0${emp.epid}@amu.ac.in>`).join(', ');
+                            }
+                            
+                            if (!newEmails) return;
+
+                            const currentTo = composeData.to.trim();
+                            const appendedTo = currentTo 
+                              ? (currentTo.endsWith(',') ? `${currentTo} ${newEmails}` : `${currentTo}, ${newEmails}`)
+                              : newEmails;
+                            setComposeData({ ...composeData, to: appendedTo });
+                          }}
+                          className="shrink-0 flex items-center gap-1 text-xs px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-md border border-purple-200 transition-colors font-medium"
+                        >
+                          <Users className="h-3 w-3" />
+                          {group.name}
+                        </button>
+                      ))}
+                      {userInfo.type === 'department' && departmentEmployees?.map((emp: any) => (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          onClick={() => {
+                            const newEmail = `${emp.name} <0${emp.epid}@amu.ac.in>`;
+                            const currentTo = composeData.to.trim();
+                            const appendedTo = currentTo 
+                              ? (currentTo.endsWith(',') ? `${currentTo} ${newEmail}` : `${currentTo}, ${newEmail}`)
+                              : newEmail;
+                            setComposeData({ ...composeData, to: appendedTo });
+                          }}
+                          className="shrink-0 text-xs px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded-md border border-slate-200 transition-colors"
+                        >
+                          {emp.name}
+                        </button>
+                      ))}
+                      {userInfo.type === 'admin' && adminSalaryEmployees?.map((emp: any) => (
+                        <button
+                          key={`admin-salary-emp-${emp.id}`}
+                          type="button"
+                          onClick={() => {
+                            const newEmail = `${emp.name} <0${emp.epid}@amu.ac.in>`;
+                            const currentTo = composeData.to.trim();
+                            const appendedTo = currentTo 
+                              ? (currentTo.endsWith(',') ? `${currentTo} ${newEmail}` : `${currentTo}, ${newEmail}`)
+                              : newEmail;
+                            setComposeData({ ...composeData, to: appendedTo });
+                          }}
+                          className="shrink-0 text-xs px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded-md border border-slate-200 transition-colors"
+                        >
+                          {emp.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Input
                   placeholder="Subject"
                   value={composeData.subject}
@@ -215,18 +440,34 @@ export default function EmailClient() {
                   onChange={(e) => setComposeData({ ...composeData, text: e.target.value })}
                 />
                 <div className="flex flex-col gap-2">
-                  <Input 
-                    type="file" 
-                    multiple 
-                    onChange={handleFileChange}
-                    className="cursor-pointer file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                  />
+                  <div className="flex gap-2 items-center">
+                    <Input 
+                      type="file" 
+                      multiple 
+                      onChange={handleFileChange}
+                      className="cursor-pointer file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 flex-1"
+                    />
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      className="gap-2 shrink-0 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      onClick={() => setIsScannerOpen(true)}
+                    >
+                      <Scan className="w-4 h-4" /> Scan Document
+                    </Button>
+                  </div>
                   {composeData.attachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-1">
                       {composeData.attachments.map((att, i) => (
                         <div key={i} className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
                           <Paperclip className="h-3 w-3" />
-                          <span className="truncate max-w-[150px]">{att.filename}</span>
+                          <span 
+                            className="truncate max-w-[150px] cursor-pointer hover:underline text-indigo-700 font-medium" 
+                            onClick={() => setPreviewAttachment(att)}
+                            title="Click to preview"
+                          >
+                            {att.filename}
+                          </span>
                           <button 
                             onClick={() => setComposeData(prev => ({...prev, attachments: prev.attachments.filter((_, idx) => idx !== i)}))}
                             className="text-red-500 hover:text-red-700 ml-1 font-bold"
@@ -241,10 +482,34 @@ export default function EmailClient() {
                 <Button 
                   onClick={() => sendMutation.mutate(composeData)} 
                   disabled={sendMutation.isPending || !composeData.to || !composeData.text}
+                  className="w-full mt-2"
                 >
                   {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
                   Send Email
                 </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <ScannerModal
+            open={isScannerOpen}
+            onOpenChange={setIsScannerOpen}
+            onScanComplete={handleScanComplete}
+            downloadUrl="/api/public/download-scanner-helper"
+          />
+
+          <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
+            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Preview: {previewAttachment?.filename}</DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-slate-100 rounded-md">
+                {previewAttachment?.content?.startsWith('data:image/') ? (
+                  <img src={previewAttachment.content} alt="Attachment" className="max-w-full max-h-[70vh] object-contain shadow-sm" />
+                ) : previewAttachment?.content?.startsWith('data:application/pdf') ? (
+                  <iframe src={previewAttachment.content} className="w-full h-[70vh] bg-white shadow-sm" title="PDF Preview" />
+                ) : (
+                  <p className="text-slate-500">Preview not available for this file type.</p>
+                )}
               </div>
             </DialogContent>
           </Dialog>

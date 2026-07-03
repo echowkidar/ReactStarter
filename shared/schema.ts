@@ -525,3 +525,29 @@ export const insertUserEmailSchema = createInsertSchema(userEmails).omit({
 export type UserEmail = typeof userEmails.$inferSelect;
 export type InsertUserEmail = z.infer<typeof insertUserEmailSchema>;
 
+export const employeeGroups = pgTable("employee_groups", {
+  id: serial("id").primaryKey(),
+  departmentId: integer("department_id"), // Nullable for admin groups
+  isAdmin: boolean("is_admin").default(false),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const employeeGroupMembers = pgTable("employee_group_members", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull(),
+  employeeId: integer("employee_id"), // Nullable if it's a department
+  departmentId: integer("department_id"), // Nullable if it's an employee
+});
+
+export const insertEmployeeGroupSchema = createInsertSchema(employeeGroups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmployeeGroupMemberSchema = createInsertSchema(employeeGroupMembers).omit({
+  id: true,
+});
+
+export type EmployeeGroup = typeof employeeGroups.$inferSelect;
+export type EmployeeGroupMember = typeof employeeGroupMembers.$inferSelect;

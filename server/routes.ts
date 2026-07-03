@@ -17,7 +17,10 @@ import {
   InsertDepartment,
   InsertDepartmentName,
   attendanceEntries,
-  departments
+  departments,
+  employeeGroups,
+  employeeGroupMembers,
+  employees
 } from "../shared/schema";
 import fs from "fs";
 import { sql, eq, and, isNotNull, inArray } from "drizzle-orm";
@@ -1195,7 +1198,7 @@ export async function registerRoutes(app: Express) {
   app.get("/api/departments", async (req, res) => {
 
     try {
-      let departmentList: Array<{ id: number; name: string; code?: string | null; attendancePermitted?: boolean; employeeCount?: number; lastLogin?: Date | string | null }> = [];
+      let departmentList: Array<{ id: number; name: string; code?: string | null; email?: string | null; attendancePermitted?: boolean; employeeCount?: number; lastLogin?: Date | string | null }> = [];
 
       if (req.query.registeredOnly === 'true') {
         const registeredDepartments = await storage.getAllDepartments();
@@ -1205,6 +1208,7 @@ export async function registerRoutes(app: Express) {
           id: dept.id,
           name: dept.name,
           code: null,
+          email: dept.email,
           attendancePermitted: dept.attendancePermitted,
           allowSupplementaryReport: dept.allowSupplementaryReport,
           employeeCount: employeeCounts.get(dept.id) || 0,
@@ -5736,6 +5740,28 @@ export async function registerRoutes(app: Express) {
       if (!res.headersSent) res.status(500).json({ message: "Download failed" });
     }
   });
+
+  // Public endpoint for downloading scanner helper (for department users)
+  app.get("/api/public/download-scanner-helper", async (_req, res) => {
+    try {
+      const scannerHelperDir = path.join(process.cwd(), 'server', 'scanner-helper');
+      const exePath = path.join(scannerHelperDir, 'AMU_Scanner_Helper.exe');
+
+      if (!fs.existsSync(exePath)) {
+        return res.status(404).json({ message: "Scanner helper executable not found on server." });
+      }
+
+      res.download(exePath, 'AMU_Scanner_Helper.exe', (err) => {
+        if (err) {
+          console.error("Error sending scanner helper exe:", err);
+          if (!res.headersSent) res.status(500).json({ message: "Failed to download executable" });
+        }
+      });
+    } catch (error) {
+      console.error("Scanner helper download error:", error);
+      if (!res.headersSent) res.status(500).json({ message: "Download failed" });
+    }
+  });
   app.get("/api/admin/lpc/:id", verifyAdminSession, async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -6039,6 +6065,188 @@ export async function registerRoutes(app: Express) {
     } catch (error: any) {
       console.error("Email send error:", error);
       res.status(500).json({ success: false, message: error.message || "Failed to send email" });
+    }
+  });
+
+  app.get("/api/departments/:departmentId/groups", async (req, res) => {
+    try {
+      const departmentId = parseInt(req.params.departmentId);
+      if (isNaN(departmentId)) return res.status(400).json({ message: "Invalid department ID" });
+
+      const groups = await db.select().from(employeeGroups).where(eq(employeeGroups.departmentId, departmentId));
+      const groupIds = groups.map(g => g.id);
+      let groupMembers: any[] = [];
+      if (groupIds.length > 0) {
+        groupMembers = await db.select().from(employeeGroupMembers).where(inArray(employeeGroupMembers.groupId, groupIds));
+      }
+      const result = groups.map(g => {
+        const members = groupMembers.filter(gm => gm.groupId === g.id).map(gm => gm.employeeId);
+        return { ...g, memberIds: members };
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error("Fetch groups error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/departments/:departmentId/groups", async (req, res) => {
+    try {
+      const departmentId = parseInt(req.params.departmentId);
+      const { name, memberIds } = req.body;
+      if (isNaN(departmentId) || !name) return res.status(400).json({ message: "Invalid payload" });
+
+      const [newGroup] = await db.insert(employeeGroups).values({ departmentId, name }).returning();
+      if (memberIds && Array.isArray(memberIds) && memberIds.length > 0) {
+        await db.insert(employeeGroupMembers).values(
+          memberIds.map((employeeId: number) => ({ groupId: newGroup.id, employeeId }))
+        );
+      }
+      res.json({ success: true, group: newGroup });
+    } catch (error: any) {
+      console.error("Create group error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/departments/:departmentId/groups/:groupId", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+
+      await db.delete(employeeGroupMembers).where(eq(employeeGroupMembers.groupId, groupId));
+      await db.delete(employeeGroups).where(eq(employeeGroups.id, groupId));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete group error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/departments/:departmentId/groups/:groupId", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const { name, memberIds } = req.body;
+      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+
+      if (name) {
+        await db.update(employeeGroups).set({ name }).where(eq(employeeGroups.id, groupId));
+      }
+      
+      if (memberIds && Array.isArray(memberIds)) {
+        await db.delete(employeeGroupMembers).where(eq(employeeGroupMembers.groupId, groupId));
+        if (memberIds.length > 0) {
+          await db.insert(employeeGroupMembers).values(
+            memberIds.map((employeeId: number) => ({ groupId, employeeId }))
+          );
+        }
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Update group error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/groups", async (req, res) => {
+    try {
+      const groups = await db.select().from(employeeGroups).where(eq(employeeGroups.isAdmin, true));
+      const groupIds = groups.map(g => g.id);
+      let groupMembers: any[] = [];
+      if (groupIds.length > 0) {
+        groupMembers = await db.select().from(employeeGroupMembers).where(inArray(employeeGroupMembers.groupId, groupIds));
+      }
+      const result = await Promise.all(groups.map(async (g) => {
+        const members = await Promise.all(groupMembers.filter(gm => gm.groupId === g.id).map(async (gm) => {
+          if (gm.departmentId) {
+            const dept = await db.select().from(departments).where(eq(departments.id, gm.departmentId)).limit(1);
+            return { 
+              type: 'department', 
+              id: gm.departmentId, 
+              name: dept[0]?.name || 'Unknown Department', 
+              email: dept[0]?.email 
+            };
+          } else {
+            const emp = await db.select().from(employees).where(eq(employees.id, gm.employeeId)).limit(1);
+            return { 
+              type: 'employee', 
+              id: gm.employeeId, 
+              name: emp[0]?.name || 'Unknown Employee', 
+              epid: emp[0]?.epid 
+            };
+          }
+        }));
+        return { ...g, members };
+      }));
+      res.json(result);
+    } catch (error: any) {
+      console.error("Fetch admin groups error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/groups", async (req, res) => {
+    try {
+      const { name, members } = req.body;
+      if (!name) return res.status(400).json({ message: "Invalid payload" });
+
+      const [newGroup] = await db.insert(employeeGroups).values({ isAdmin: true, name }).returning();
+      if (members && Array.isArray(members) && members.length > 0) {
+        await db.insert(employeeGroupMembers).values(
+          members.map((m: any) => ({
+            groupId: newGroup.id,
+            employeeId: m.type === 'employee' ? m.id : null,
+            departmentId: m.type === 'department' ? m.id : null
+          }))
+        );
+      }
+      res.json({ success: true, group: newGroup });
+    } catch (error: any) {
+      console.error("Create admin group error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/groups/:groupId", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+
+      await db.delete(employeeGroupMembers).where(eq(employeeGroupMembers.groupId, groupId));
+      await db.delete(employeeGroups).where(and(eq(employeeGroups.id, groupId), eq(employeeGroups.isAdmin, true)));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete admin group error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/admin/groups/:groupId", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const { name, members } = req.body;
+      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+
+      if (name) {
+        await db.update(employeeGroups).set({ name }).where(and(eq(employeeGroups.id, groupId), eq(employeeGroups.isAdmin, true)));
+      }
+      
+      if (members && Array.isArray(members)) {
+        await db.delete(employeeGroupMembers).where(eq(employeeGroupMembers.groupId, groupId));
+        if (members.length > 0) {
+          await db.insert(employeeGroupMembers).values(
+            members.map((m: any) => ({
+              groupId,
+              employeeId: m.type === 'employee' ? m.id : null,
+              departmentId: m.type === 'department' ? m.id : null
+            }))
+          );
+        }
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Update admin group error:", error);
+      res.status(500).json({ message: error.message });
     }
   });
 

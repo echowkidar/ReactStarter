@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Mail, Key, Loader2, ArrowLeft, ShieldCheck, Info } from "lucide-react";
 import { useLocation } from "wouter";
+import { GroupManager } from "@/components/GroupManager";
 
 export default function EmailManagement() {
   const [, setLocation] = useLocation();
@@ -224,6 +225,11 @@ export default function EmailManagement() {
               </ol>
             </CardContent>
           </Card>
+        </div>
+        
+        {/* Email Groups Management */}
+        <div className="space-y-6">
+          <GroupManager userInfo={userInfo} />
         </div>
       </div>
     </div>
