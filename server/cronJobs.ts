@@ -16,13 +16,9 @@ export function setupCronJobs() {
             const currentMonth = today.getMonth() + 1; // 1-12
             const currentYear = today.getFullYear();
 
-            // Target month is previous month
-            let targetMonth = currentMonth - 1;
+            // Target month is current month
+            let targetMonth = currentMonth;
             let targetYear = currentYear;
-            if (targetMonth === 0) {
-                targetMonth = 12;
-                targetYear = currentYear - 1;
-            }
 
             const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
