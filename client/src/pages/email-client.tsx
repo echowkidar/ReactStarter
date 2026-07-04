@@ -358,7 +358,21 @@ export default function EmailClient() {
                 
                 {(departmentEmployees?.length > 0 || departmentGroups?.length > 0 || adminGroups?.length > 0 || adminSalaryEmployees?.length > 0) && (
                   <div className="flex flex-col gap-1 -mt-2 w-full min-w-0">
-                    <span className="text-xs font-medium text-gray-500">Quick Select Groups & Employees:</span>
+                    <div className="flex justify-between items-center w-full">
+                      <span className="text-xs font-medium text-gray-500">Quick Select Groups & Employees:</span>
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs text-indigo-600 hover:text-indigo-800"
+                        onClick={() => {
+                          setIsComposeOpen(false);
+                          setLocation(isAdmin ? "/admin/email" : "/dashboard/email");
+                        }}
+                      >
+                        + Create Group
+                      </Button>
+                    </div>
                     <div className="flex gap-2 overflow-x-auto pb-2 w-full">
                       {(userInfo.type === 'admin' ? adminGroups : departmentGroups)?.map((group: any) => (
                         <button

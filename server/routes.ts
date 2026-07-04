@@ -5969,6 +5969,20 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  app.get("/api/email/unread-count", async (req, res) => {
+    try {
+      const { userId, userType } = req.query as { userId: string, userType: string };
+      if (!userId || !userType) return res.status(400).json({ message: "Missing credentials identifier" });
+      
+      const { getUnreadCount } = await import("./email-client.js");
+      const count = await getUnreadCount(userId, userType);
+      res.json({ success: true, count });
+    } catch (error: any) {
+      console.error("Unread count fetch error:", error);
+      res.status(500).json({ success: false, message: error.message || "Failed to fetch unread count" });
+    }
+  });
+
   app.get("/api/email/sent", async (req, res) => {
     try {
       const { userId, userType } = req.query as { userId: string, userType: string };

@@ -158,6 +158,19 @@ export default function Sidebar({ className }: SidebarProps) {
     enabled: !!department?.id,
   });
 
+  // Fetch unread email count
+  const { data: unreadEmailData } = useQuery<{ success: boolean, count: number }>({
+    queryKey: [`/api/email/unread-count`, department?.id, 'department'],
+    queryFn: async () => {
+      const res = await fetch(`/api/email/unread-count?userId=${department?.id}&userType=department`);
+      if (!res.ok) throw new Error("Network error");
+      return res.json();
+    },
+    enabled: !!department?.id,
+    refetchInterval: 60000, // Refresh every 1 minute
+  });
+  const unreadEmailCount = unreadEmailData?.count || 0;
+
   // Send heartbeat for active user tracking
   useHeartbeat({
     type: 'department',
@@ -189,11 +202,16 @@ export default function Sidebar({ className }: SidebarProps) {
             <Link key={item.name} href={item.href}>
               <Button
                 variant={location === item.href ? "secondary" : "ghost"}
-                className="w-full justify-start h-8 text-sm"
+                className="w-full justify-start h-8 text-sm relative"
                 onClick={() => setOpen(false)}
               >
                 <item.icon className="mr-2 h-4 w-4" />
                 {item.name}
+                {item.name === "Email" && unreadEmailCount > 0 && (
+                  <span className="absolute right-2 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                    {unreadEmailCount > 99 ? '99+' : unreadEmailCount}
+                  </span>
+                )}
               </Button>
             </Link>
           ))}

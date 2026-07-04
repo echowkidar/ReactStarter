@@ -117,25 +117,31 @@ export default function EmailManagement() {
         })()}
       </div>
 
-      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Email Settings</h1>
-            <p className="text-gray-500 mt-2 text-lg">Configure your personal Gmail for app integrations.</p>
-          </div>
+      <div className="w-full max-w-4xl space-y-8">
+        <div>
+          <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Email Settings</h1>
+          <p className="text-gray-500 mt-2 text-lg">Configure your email groups and personal Gmail for app integrations.</p>
+        </div>
 
-          <Card className="border-0 shadow-xl shadow-indigo-100/50 bg-white/80 backdrop-blur-xl">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-indigo-100 rounded-xl">
-                  <ShieldCheck className="h-6 w-6 text-indigo-600" />
+        {/* Email Groups Management */}
+        <div className="w-full">
+          <GroupManager userInfo={userInfo} />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="space-y-6">
+            <Card className="border-0 shadow-xl shadow-indigo-100/50 bg-white/80 backdrop-blur-xl">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-indigo-100 rounded-xl">
+                    <ShieldCheck className="h-6 w-6 text-indigo-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl">Authentication</CardTitle>
+                    <CardDescription>We use App Passwords for enhanced security</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-xl">Authentication</CardTitle>
-                  <CardDescription>We use App Passwords for enhanced security</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
+              </CardHeader>
             <CardContent>
               <form onSubmit={handleSave} className="space-y-6">
                 <div className="space-y-2">
@@ -226,12 +232,8 @@ export default function EmailManagement() {
             </CardContent>
           </Card>
         </div>
-        
-        {/* Email Groups Management */}
-        <div className="space-y-6">
-          <GroupManager userInfo={userInfo} />
-        </div>
       </div>
     </div>
+  </div>
   );
 }

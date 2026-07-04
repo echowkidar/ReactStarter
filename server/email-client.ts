@@ -82,6 +82,28 @@ export async function getInbox(userId: string, userType: string) {
   return messages.reverse(); // Newest first
 }
 
+export async function getUnreadCount(userId: string, userType: string) {
+  const { client } = await getImapClient(userId, userType);
+  await client.connect();
+
+  let unreadCount = 0;
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const status = await client.status('INBOX', { unseen: true });
+      if (status && typeof status.unseen === 'number') {
+        unreadCount = status.unseen;
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
+  
+  return unreadCount;
+}
+
 export async function getMessage(userId: string, userType: string, uid: number, folder: string = 'INBOX') {
   const { client } = await getImapClient(userId, userType);
   await client.connect();

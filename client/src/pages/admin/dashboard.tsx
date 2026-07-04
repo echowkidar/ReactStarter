@@ -202,6 +202,20 @@ export default function AdminDashboard() {
     refetchInterval: 120000,
   });
 
+  // Fetch unread email count for admin
+  const { data: unreadEmailData } = useQuery<{ success: boolean, count: number }>({
+    queryKey: ['/api/email/unread-count', adminInfo.email, 'admin'],
+    queryFn: async () => {
+      if (!adminInfo.email) return { success: false, count: 0 };
+      const res = await fetch(`/api/email/unread-count?userId=${encodeURIComponent(adminInfo.email)}&userType=admin`);
+      if (!res.ok) throw new Error("Network error");
+      return res.json();
+    },
+    enabled: !!adminInfo.email && adminInfo.email !== "qasim@amu.ac.in",
+    refetchInterval: 60000, // Refresh every 1 minute
+  });
+  const unreadEmailCount = unreadEmailData?.count || 0;
+
   // Fetch ticket stats
   const { data: ticketStats = { open: 0, inProgress: 0, resolved: 0, closed: 0 } } = useQuery<{
     open: number;
@@ -1065,10 +1079,15 @@ export default function AdminDashboard() {
               variant="outline"
               size="sm"
               onClick={() => setLocation("/admin/mailbox")}
-              className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200"
+              className="relative flex items-center gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200"
             >
               <Mail className="h-4 w-4" />
               <span className="hidden md:inline">Email</span>
+              {unreadEmailCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center border-2 border-white shadow-sm">
+                  {unreadEmailCount > 99 ? '99+' : unreadEmailCount}
+                </span>
+              )}
             </Button>
             <Button
               variant="outline"
