@@ -1303,7 +1303,7 @@ export default function AttendanceReports() {
     }).filter(entry => {
       if (entry.period === "MISSING") {
         const desig = (entry.designation || "").toUpperCase();
-        if (desig.includes("DAILY WAGE")) {
+        if (desig.includes("DAILY WAGE") && desig !== "DAILY WAGER (FIXED)") {
           return false;
         }
         return true;
