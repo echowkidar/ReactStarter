@@ -6,7 +6,7 @@ import { Employee, AttendanceReport, Ticket } from "@shared/schema";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
-import { Users, ClipboardCheck, Ticket as TicketIcon, AlertCircle, Clock, CheckCircle, ArrowRightLeft, Bell } from "lucide-react";
+import { Users, ClipboardCheck, Ticket as TicketIcon, AlertCircle, Clock, CheckCircle, ArrowRightLeft, Bell, Send, Inbox } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
@@ -181,6 +181,18 @@ export default function Dashboard() {
     total: tickets.length,
   };
 
+  // Fetch dispatch stats
+  const { data: dispatchStats } = useQuery<{sent: number; received: number; unread: number}>({
+    queryKey: [`/api/dispatch/stats/${department?.id}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/dispatch/stats/${department?.id}`);
+      if (!res.ok) throw new Error("Network error");
+      return res.json();
+    },
+    enabled: !!department?.id,
+    refetchInterval: 60000,
+  });
+
   // Check attendance status for deadline alert
   const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; isPastDeadline: boolean }>({
     queryKey: [`/api/departments/${department?.id}/attendance-status`],
@@ -313,6 +325,39 @@ export default function Dashboard() {
                     <CheckCircle className="h-3 w-3 text-gray-400" />
                     <span className="text-muted-foreground">Closed:</span>
                     <span className="font-medium">{ticketStats.closed}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Dak Receive/Dispatch Card */}
+            <Card
+              className={`cursor-pointer hover:shadow-md transition-shadow ${(dispatchStats?.unread || 0) > 0 ? 'border-blue-300 bg-blue-50' : ''}`}
+              onClick={() => setLocation("/dashboard/dispatch")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Dak Receive/Dispatch
+                </CardTitle>
+                <Send className={`h-4 w-4 ${(dispatchStats?.unread || 0) > 0 ? 'text-blue-500' : 'text-muted-foreground'}`} />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold mb-3">{(dispatchStats?.received || 0) + (dispatchStats?.sent || 0)}</div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="flex items-center gap-1">
+                    <Send className="h-3 w-3 text-blue-500" />
+                    <span className="text-muted-foreground">Sent:</span>
+                    <span className="font-medium">{dispatchStats?.sent || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Inbox className="h-3 w-3 text-green-500" />
+                    <span className="text-muted-foreground">Received:</span>
+                    <span className="font-medium">{dispatchStats?.received || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 text-orange-500" />
+                    <span className="text-muted-foreground">Unread:</span>
+                    <span className={`font-medium ${(dispatchStats?.unread || 0) > 0 ? 'text-orange-600' : ''}`}>{dispatchStats?.unread || 0}</span>
                   </div>
                 </div>
               </CardContent>

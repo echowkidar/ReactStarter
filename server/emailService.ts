@@ -658,3 +658,78 @@ export async function sendLpcEmail(
   }
 }
 
+// ─── Dispatch Notification Email ──────────────────────────────────────────
+// Used by dispatchRoutes.ts to notify recipients of new dispatches
+export async function sendDispatchNotificationEmail(
+  recipientEmail: string,
+  subject: string,
+  senderDepartment: string,
+  documentType: string,
+  dispatchNumber: string,
+  isConfidential: boolean,
+  fileUrl?: string | null
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const transporter = createTransporter();
+    const baseUrl = process.env.APP_URL || "https://www.salarysection.com";
+    const fullFileUrl = fileUrl ? (fileUrl.startsWith('http') ? fileUrl : `${baseUrl}${fileUrl}`) : null;
+
+    const htmlBody = isConfidential
+      ? `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
+          <div style="background: #dc2626; color: white; padding: 15px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h2 style="margin: 0;">🔒 CONFIDENTIAL Document Received</h2>
+          </div>
+          <div style="border: 1px solid #e5e7eb; border-top: none; padding: 20px; border-radius: 0 0 8px 8px;">
+            <p>You have received a <strong>confidential</strong> document dispatch.</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+              <tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">From:</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${senderDepartment}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">Type:</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${documentType}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">Dispatch No:</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${dispatchNumber}</td></tr>
+            </table>
+            <p style="color: #dc2626; font-weight: bold;">⚠️ This document is confidential. Please login to the Dispatch System to view its contents.</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">This is an automated notification from the AMU Document Dispatch System.</p>
+          </div>
+        </div>
+      `
+      : `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
+          <div style="background: #2563eb; color: white; padding: 15px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h2 style="margin: 0;">📨 New Document Dispatched to You</h2>
+          </div>
+          <div style="border: 1px solid #e5e7eb; border-top: none; padding: 20px; border-radius: 0 0 8px 8px;">
+            <p>A new document has been dispatched to your department.</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+              <tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">From:</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${senderDepartment}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">Subject:</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${subject}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">Type:</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${documentType}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">Dispatch No:</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${dispatchNumber}</td></tr>
+            </table>
+            ${fullFileUrl ? `
+            <div style="text-align: center; margin: 25px 0;">
+              <a href="${fullFileUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Document</a>
+            </div>
+            ` : ''}
+            <p>Please login to the Dispatch System to view more details and acknowledge receipt.</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">This is an automated notification from the AMU Document Dispatch System.</p>
+          </div>
+        </div>
+      `;
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"AMU Dispatch System" <dispatch@salarysection.com>',
+      to: recipientEmail,
+      subject: isConfidential
+        ? `[DISPATCH] CONFIDENTIAL - ${dispatchNumber}`
+        : `[DISPATCH] ${dispatchNumber} - ${subject}`,
+      html: htmlBody,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[Dispatch Email] Sent to ${recipientEmail}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error(`[Dispatch Email] Failed to send to ${recipientEmail}:`, error);
+    return { success: false, error: String(error) };
+  }
+}

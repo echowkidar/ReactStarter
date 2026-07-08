@@ -17,6 +17,7 @@ import {
   DownloadCloud,
   Mail,
   Inbox,
+  Send,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -112,6 +113,7 @@ const navigation = [
   { name: "Employees", href: "/dashboard/employees", icon: Users },
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
   { name: "Email", href: "/dashboard/mailbox", icon: Mail },
+  { name: "Dak Receive/Dispatch", href: "/dashboard/dispatch", icon: Send },
   { name: "Global Search", href: "/dashboard/global-search", icon: Search },
   { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
   { name: "Useful Downloads", href: "/dashboard/downloads", icon: DownloadCloud },
@@ -171,6 +173,19 @@ export default function Sidebar({ className }: SidebarProps) {
   });
   const unreadEmailCount = unreadEmailData?.count || 0;
 
+  // Fetch unread dispatch count
+  const { data: unreadDispatchData } = useQuery<{ count: number }>({
+    queryKey: [`/api/dispatch/inbox-count/${department?.id}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/dispatch/inbox-count/${department?.id}`);
+      if (!res.ok) throw new Error("Network error");
+      return res.json();
+    },
+    enabled: !!department?.id,
+    refetchInterval: 60000,
+  });
+  const unreadDispatchCount = unreadDispatchData?.count || 0;
+
   // Send heartbeat for active user tracking
   useHeartbeat({
     type: 'department',
@@ -210,6 +225,11 @@ export default function Sidebar({ className }: SidebarProps) {
                 {item.name === "Email" && unreadEmailCount > 0 && (
                   <span className="absolute right-2 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
                     {unreadEmailCount > 99 ? '99+' : unreadEmailCount}
+                  </span>
+                )}
+                {item.name === "Dak Receive/Dispatch" && unreadDispatchCount > 0 && (
+                  <span className="absolute right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                    {unreadDispatchCount > 99 ? '99+' : unreadDispatchCount}
                   </span>
                 )}
               </Button>

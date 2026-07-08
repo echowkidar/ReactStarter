@@ -5619,8 +5619,8 @@ export async function registerRoutes(app: Express) {
         } catch { imageBuffer = fs.readFileSync(filePath); }
       } else { imageBuffer = fs.readFileSync(filePath); }
       let text = "";
-      const ocrApiUrl = process.env.OCR_API_URL;
-      const ocrApiToken = process.env.OCR_API_TOKEN;
+      const ocrApiUrl = process.env.LPC_OCR_API_URL || process.env.OCR_API_URL;
+      const ocrApiToken = process.env.LPC_OCR_API_TOKEN || process.env.OCR_API_TOKEN;
       if (ocrApiUrl && ocrApiToken) {
          try {
             const formData = new FormData();

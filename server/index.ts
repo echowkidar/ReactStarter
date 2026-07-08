@@ -69,6 +69,10 @@ export async function initApp() {
     const { registerExternalRoutes } = await import("./external-api");
     registerExternalRoutes(app);
 
+    // Register Document Dispatch routes
+    const { registerDispatchRoutes } = await import("./dispatchRoutes");
+    registerDispatchRoutes(app);
+
     // Setup Cron Jobs
     setupCronJobs();
 

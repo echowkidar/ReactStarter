@@ -12,6 +12,7 @@ import Attendance from "@/pages/dashboard/attendance";
 import ReportDetails from "@/pages/dashboard/report-details";
 import Settings from "@/pages/dashboard/settings";
 import Documents from "@/pages/dashboard/documents";
+import Dispatch from "@/pages/dashboard/dispatch";
 import Downloads from "@/pages/dashboard/downloads";
 import Help from "@/pages/help";
 import AdminLogin from "@/pages/admin/login";
@@ -29,6 +30,7 @@ import AdminSettings from "@/pages/admin/settings";
 import AdminEditAttendance from "@/pages/admin/edit-attendance";
 import DepartmentContacts from "@/pages/admin/department-contacts";
 import AdminLPC from "@/pages/admin/lpc";
+import AdminDispatch from "@/pages/admin/dispatch";
 import Tickets from "@/pages/dashboard/tickets";
 import GlobalSearch from "@/pages/dashboard/global-search";
 import ForgotPassword from "@/pages/forgot-password";
@@ -50,6 +52,7 @@ function AppRouter() {
       <ProtectedRoute path="/dashboard/attendance" component={Attendance} />
       <ProtectedRoute path="/dashboard/settings" component={Settings} />
       <ProtectedRoute path="/dashboard/documents" component={Documents} />
+      <ProtectedRoute path="/dashboard/dispatch" component={Dispatch} />
       <ProtectedRoute path="/dashboard/downloads" component={Downloads} />
       <ProtectedRoute path="/dashboard/reports/:id" component={ReportDetails} />
       <ProtectedRoute path="/dashboard/help" component={Help} />
@@ -71,6 +74,7 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/settings" component={AdminSettings} />
       <ProtectedAdminRoute path="/admin/department-contacts" component={DepartmentContacts} />
       <ProtectedAdminRoute path="/admin/lpc" component={AdminLPC} />
+      <ProtectedAdminRoute path="/admin/dispatch" component={AdminDispatch} />
       <ProtectedRoute path="/dashboard/tickets" component={Tickets} />
       <ProtectedRoute path="/dashboard/email" component={EmailManagement} />
       <ProtectedRoute path="/dashboard/mailbox" component={EmailClient} />

@@ -6,8 +6,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Scan, Download, CheckCircle, AlertCircle, RefreshCw, FileImage, FileText, Check, Plus } from "lucide-react";
+import { Scan, Download, CheckCircle, AlertCircle, RefreshCw, FileImage, FileText, Check, Plus, FileUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export type ScannerStatus = "idle" | "connecting" | "connected" | "no-helper" | "no-scanner" | "offline" | "scanning" | "done";
@@ -35,6 +36,7 @@ export default function ScannerModal({ open, onOpenChange, onScanComplete, downl
   const wsRef = useRef<WebSocket | null>(null);
   const scanFormatRef = useRef<"image" | "pdf">("pdf");
   const scannedPagesRef = useRef<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
 
@@ -214,6 +216,22 @@ export default function ScannerModal({ open, onOpenChange, onScanComplete, downl
     }
   }
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onScanComplete(file);
+      onOpenChange(false);
+    }
+    // Reset the input value so the same file can be selected again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   function downloadHelper() {
     toast({ title: "✅ Download Started", description: "After downloading, double-click AMU_Scanner_Helper.exe to install and run it." });
     window.location.href = downloadUrl;
@@ -372,8 +390,20 @@ export default function ScannerModal({ open, onOpenChange, onScanComplete, downl
             </div>
           )}
         </div>
-        
-        <div className="flex justify-end pt-2 border-t mt-2">
+        <div className="flex items-center justify-between pt-3 border-t mt-3">
+          <div className="flex items-center">
+            <Button variant="outline" size="sm" onClick={handleUploadClick} className="text-gray-600 border-gray-300">
+              <FileUp className="w-4 h-4 mr-2" />
+              Upload Instead
+            </Button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*,.pdf"
+              onChange={handleFileUpload} 
+            />
+          </div>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
         </div>
       </DialogContent>

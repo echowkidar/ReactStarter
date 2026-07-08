@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, date, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, date, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -551,3 +551,153 @@ export const insertEmployeeGroupMemberSchema = createInsertSchema(employeeGroupM
 
 export type EmployeeGroup = typeof employeeGroups.$inferSelect;
 export type EmployeeGroupMember = typeof employeeGroupMembers.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document Dispatch System Tables
+// ─────────────────────────────────────────────────────────────────────────────
+
+// External Contacts — for non-department recipients
+export const externalContacts = pgTable("external_contacts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  contactType: text("contact_type").notNull().default("person"),
+  designation: text("designation"),
+  organization: text("organization"),
+  address: text("address"),
+  email: text("email"),
+  phone: text("phone"),
+  city: text("city"),
+  state: text("state"),
+  pinCode: text("pin_code"),
+  notes: text("notes"),
+  isGlobal: boolean("is_global").notNull().default(true),
+  createdByDepartmentId: integer("created_by_department_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertExternalContactSchema = createInsertSchema(externalContacts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExternalContact = typeof externalContacts.$inferSelect;
+export type InsertExternalContact = z.infer<typeof insertExternalContactSchema>;
+
+// Dispatch Documents — core dispatch records
+export const dispatchDocuments = pgTable("dispatch_documents", {
+  id: serial("id").primaryKey(),
+  senderDepartmentId: integer("sender_department_id").notNull(),
+  senderName: text("sender_name").notNull(),
+  documentType: text("document_type").notNull(),
+  subject: text("subject").notNull(),
+  dispatchNumber: text("dispatch_number"),
+  dispatchDate: date("dispatch_date"),
+  referenceNumber: text("reference_number"),
+  inwardNumber: text("inward_number"),
+  outwardNumber: text("outward_number"),
+  fileUrl: text("file_url").notNull(),
+  fileType: text("file_type").notNull().default("image"),
+  pageCount: integer("page_count").default(1),
+  isConfidential: boolean("is_confidential").notNull().default(false),
+  priority: text("priority").notNull().default("normal"),
+  aiExtractedData: jsonb("ai_extracted_data"),
+  aiConfidence: text("ai_confidence"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertDispatchDocumentSchema = createInsertSchema(dispatchDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DispatchDocument = typeof dispatchDocuments.$inferSelect;
+export type InsertDispatchDocument = z.infer<typeof insertDispatchDocumentSchema>;
+
+// Dispatch Recipients — many-to-many dispatch → departments/external
+export const dispatchRecipients = pgTable("dispatch_recipients", {
+  id: serial("id").primaryKey(),
+  dispatchId: integer("dispatch_id").notNull(),
+  recipientType: text("recipient_type").notNull().default("department"),
+  departmentId: integer("department_id"),
+  externalContactId: integer("external_contact_id"),
+  status: text("status").notNull().default("dispatched"),
+  receivedAt: timestamp("received_at"),
+  readAt: timestamp("read_at"),
+  emailSent: boolean("email_sent").default(false),
+  emailSentAt: timestamp("email_sent_at"),
+  inwardNumber: text("inward_number"),
+  markedToStaff: text("marked_to_staff"),
+  markedToEmployeeId: integer("marked_to_employee_id"),
+  markedAt: timestamp("marked_at"),
+  markedBy: text("marked_by"),
+  staffRemarks: text("staff_remarks"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDispatchRecipientSchema = createInsertSchema(dispatchRecipients).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DispatchRecipient = typeof dispatchRecipients.$inferSelect;
+export type InsertDispatchRecipient = z.infer<typeof insertDispatchRecipientSchema>;
+
+// Dispatch Tracking — full audit trail
+export const dispatchTracking = pgTable("dispatch_tracking", {
+  id: serial("id").primaryKey(),
+  dispatchId: integer("dispatch_id").notNull(),
+  action: text("action").notNull(),
+  actionByDepartmentId: integer("action_by_department_id"),
+  actionByName: text("action_by_name").notNull(),
+  details: text("details"),
+  recipientDepartmentId: integer("recipient_department_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDispatchTrackingSchema = createInsertSchema(dispatchTracking).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DispatchTracking = typeof dispatchTracking.$inferSelect;
+export type InsertDispatchTracking = z.infer<typeof insertDispatchTrackingSchema>;
+
+// Department Groups — for dispatch group selection
+export const departmentGroups = pgTable("department_groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  shortName: text("short_name"),
+  description: text("description"),
+  isSystem: boolean("is_system").notNull().default(false),
+  isGlobal: boolean("is_global").notNull().default(true),
+  createdByDepartmentId: integer("created_by_department_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertDepartmentGroupSchema = createInsertSchema(departmentGroups).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DepartmentGroup = typeof departmentGroups.$inferSelect;
+export type InsertDepartmentGroup = z.infer<typeof insertDepartmentGroupSchema>;
+
+// Department Group Members — group → department mapping
+export const departmentGroupMembers = pgTable("department_group_members", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull(),
+  departmentId: integer("department_id").notNull(),
+});
+
+export const insertDepartmentGroupMemberSchema = createInsertSchema(departmentGroupMembers).omit({
+  id: true,
+});
+
+export type DepartmentGroupMember = typeof departmentGroupMembers.$inferSelect;
+export type InsertDepartmentGroupMember = z.infer<typeof insertDepartmentGroupMemberSchema>;
