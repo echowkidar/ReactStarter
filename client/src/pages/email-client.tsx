@@ -32,6 +32,73 @@ export default function EmailClient() {
   const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<any>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [parsedEml, setParsedEml] = useState<any>(null);
+  const [isParsingEml, setIsParsingEml] = useState(false);
+
+  useEffect(() => {
+    setParsedEml(null);
+    if (previewAttachment && previewAttachment.content) {
+      if (previewAttachment.filename?.endsWith('.eml') || previewAttachment.contentType === 'message/rfc822') {
+        setIsParsingEml(true);
+        fetch("/api/email/parse-eml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: previewAttachment.content })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setParsedEml(data);
+          setIsParsingEml(false);
+        })
+        .catch(() => setIsParsingEml(false));
+      } else {
+        try {
+          const byteCharacters = atob(previewAttachment.content);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: previewAttachment.contentType || 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+          
+          return () => URL.revokeObjectURL(url);
+        } catch (err) {
+           console.error('Preview error', err);
+        }
+      }
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [previewAttachment]);
+
+  const handleDownloadAttachment = (att: any) => {
+    if (!att.content) return;
+    try {
+      const byteCharacters = atob(att.content);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: att.contentType || 'application/octet-stream' });
+      
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = att.filename || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast({ title: "Error", description: "Failed to download attachment", variant: "destructive" });
+    }
+  };
+
   const [isToExpanded, setIsToExpanded] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeData, setComposeData] = useState<{to: string, subject: string, text: string, attachments: any[]}>({ to: "", subject: "", text: "", attachments: [] });
@@ -106,7 +173,31 @@ export default function EmailClient() {
       return res.json();
     },
     enabled: !!userInfo.id,
+    staleTime: 2 * 60 * 1000, // 2 minutes - matches server cache TTL
   });
+
+  // Prefetch top 30 emails into React Query cache on the frontend
+  useEffect(() => {
+    if (inboxResponse?.messages && activeTab === 'inbox') {
+      const topMessages = inboxResponse.messages.slice(0, 30);
+      topMessages.forEach((msg: any) => {
+        const queryKey = ["/api/email/message", userInfo.type, userInfo.id, msg.id, 'inbox'];
+        // Only prefetch if not already in cache
+        if (!queryClient.getQueryData(queryKey)) {
+          const url = `/api/email/message/${msg.id}?userId=${encodeURIComponent(userInfo.id)}&userType=${encodeURIComponent(userInfo.type)}&folder=INBOX`;
+          queryClient.prefetchQuery({
+            queryKey,
+            queryFn: async () => {
+              const res = await apiRequest("GET", url);
+              return res.json();
+            },
+            staleTime: 10 * 60 * 1000,
+          });
+        }
+      });
+    }
+  }, [inboxResponse, activeTab, userInfo.type, userInfo.id]);
+
 
   useEffect(() => {
     if (isError && error?.message?.toLowerCase().includes("not found")) {
@@ -122,6 +213,7 @@ export default function EmailClient() {
       return res.json();
     },
     enabled: !!userInfo.id && activeTab === 'sent',
+    staleTime: 2 * 60 * 1000, // 2 minutes - matches server cache TTL
   });
 
   const { data: activeMessageResponse, isLoading: isLoadingMessage } = useQuery({
@@ -133,6 +225,7 @@ export default function EmailClient() {
       return res.json();
     },
     enabled: !!selectedMessageId,
+    staleTime: 10 * 60 * 1000, // 10 minutes - matches server cache TTL
   });
 
   const { data: departmentEmployees } = useQuery({
@@ -660,23 +753,33 @@ export default function EmailClient() {
                   {activeMessageResponse.message.attachments && activeMessageResponse.message.attachments.length > 0 && (
                     <div className="mt-4 pt-4 border-t flex flex-wrap gap-2">
                       {activeMessageResponse.message.attachments.map((att: any, idx: number) => (
-                        <a 
-                          key={idx} 
-                          href={att.content ? `data:${att.contentType};base64,${att.content}` : '#'}
-                          download={att.filename || 'attachment'}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100 transition-colors text-sm text-gray-700 shadow-sm"
-                        >
-                          <Paperclip className="h-4 w-4 text-gray-400" />
-                          <span className="truncate max-w-[200px] font-medium">{att.filename || 'Unnamed Attachment'}</span>
-                          <span className="text-xs text-gray-400">({Math.round((att.size || 0) / 1024)} KB)</span>
-                          <Download className="h-3 w-3 ml-1 text-gray-400 opacity-50 hover:opacity-100" />
-                        </a>
+                        <div key={idx} className="flex items-center bg-slate-50 border border-slate-200 rounded-md shadow-sm overflow-hidden hover:bg-slate-100 transition-colors">
+                          <button 
+                            onClick={() => setPreviewAttachment(att)}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 cursor-pointer border-r border-slate-200"
+                            title="Preview Attachment"
+                          >
+                            <Paperclip className="h-4 w-4 text-gray-400" />
+                            <span className="truncate max-w-[200px] font-medium">{att.filename || 'Unnamed Attachment'}</span>
+                            <span className="text-xs text-gray-400">({Math.round((att.size || 0) / 1024)} KB)</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadAttachment(att);
+                            }}
+                            className="px-2 py-1.5 text-gray-500 hover:text-indigo-600 cursor-pointer transition-colors"
+                            title="Download Attachment"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
                 </div>
                 <div className="flex-1 relative overflow-hidden bg-white">
-                  {activeMessageResponse.message.html ? (
+                  {activeMessageResponse.message.html && activeMessageResponse.message.html.trim().length > 15 ? (
                     <iframe 
                       title="Email Content"
                       srcDoc={activeMessageResponse.message.html}
@@ -685,7 +788,14 @@ export default function EmailClient() {
                     />
                   ) : (
                     <div className="p-6 h-full overflow-y-auto whitespace-pre-wrap font-sans text-gray-800">
-                      {activeMessageResponse.message.body || <span className="italic text-gray-400">Message has no readable text content.</span>}
+                      {(activeMessageResponse.message.body && activeMessageResponse.message.body.trim().length > 0) 
+                        ? activeMessageResponse.message.body 
+                        : <div className="flex flex-col items-center justify-center h-full text-gray-400 italic space-y-2">
+                            <span className="text-4xl block mb-2">📭</span>
+                            <span>Message has no readable text content.</span>
+                            <span className="text-sm">(Sender only attached the file without writing any message)</span>
+                          </div>
+                      }
                     </div>
                   )}
                 </div>
@@ -698,6 +808,72 @@ export default function EmailClient() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 overflow-hidden sm:max-w-4xl">
+          <DialogHeader className="p-4 border-b shrink-0 flex flex-row items-center justify-between">
+            <DialogTitle className="text-lg truncate pr-8">{previewAttachment?.filename || 'Attachment Preview'}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto bg-slate-50 relative">
+            {previewAttachment?.filename?.endsWith('.eml') || previewAttachment?.contentType === 'message/rfc822' ? (
+              <div className="w-full h-full p-6 bg-white overflow-y-auto">
+                {isParsingEml ? (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                    <Loader2 className="h-8 w-8 animate-spin mb-4" />
+                    <p>Parsing email content...</p>
+                  </div>
+                ) : parsedEml ? (
+                  <div className="max-w-3xl mx-auto">
+                    <div className="mb-6 border-b pb-4">
+                      <h2 className="text-2xl font-bold mb-2">{parsedEml.subject || '(No Subject)'}</h2>
+                      <div className="flex justify-between text-sm text-slate-600">
+                        <div><span className="font-semibold text-slate-700">From:</span> {parsedEml.from}</div>
+                        <div>{parsedEml.date ? format(new Date(parsedEml.date), "PPP p") : ''}</div>
+                      </div>
+                    </div>
+                    {parsedEml.html ? (
+                      <iframe 
+                        title="EML Content"
+                        srcDoc={parsedEml.html}
+                        className="w-full h-[60vh] border-0"
+                        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+                      />
+                    ) : (
+                      <pre className="whitespace-pre-wrap font-sans text-slate-800">{parsedEml.text}</pre>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-red-500">
+                    <p>Failed to parse email.</p>
+                  </div>
+                )}
+              </div>
+            ) : previewUrl ? (
+              previewAttachment?.contentType?.startsWith('image/') ? (
+                <div className="w-full h-full p-4 flex items-center justify-center">
+                  <img src={previewUrl} alt={previewAttachment?.filename} className="max-w-full max-h-full object-contain shadow-sm border rounded" />
+                </div>
+              ) : previewAttachment?.contentType === 'application/pdf' ? (
+                <iframe src={previewUrl} className="w-full h-full border-0" title="PDF Preview" />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
+                  <div className="p-4 bg-slate-100 rounded-full">
+                    <Paperclip className="h-12 w-12 text-slate-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-medium text-slate-700">Preview not available</p>
+                    <p className="text-sm mt-1">This file type cannot be previewed directly.</p>
+                  </div>
+                  <Button onClick={() => handleDownloadAttachment(previewAttachment)} className="mt-2">
+                    <Download className="h-4 w-4 mr-2" />
+                    Download File
+                  </Button>
+                </div>
+              )
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,6 +2,8 @@ import nodemailer from 'nodemailer';
 import { TransportOptions } from 'nodemailer';
 import dns from 'dns';
 import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
 
 const resolveMx = promisify(dns.resolveMx);
 
@@ -659,7 +661,6 @@ export async function sendLpcEmail(
 }
 
 // ─── Dispatch Notification Email ──────────────────────────────────────────
-// Used by dispatchRoutes.ts to notify recipients of new dispatches
 export async function sendDispatchNotificationEmail(
   recipientEmail: string,
   subject: string,
@@ -667,10 +668,16 @@ export async function sendDispatchNotificationEmail(
   documentType: string,
   dispatchNumber: string,
   isConfidential: boolean,
-  fileUrl?: string | null
+  fileUrl?: string | null,
+  senderOfficialEmail?: string | null
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const transporter = createTransporter();
+    
+    // Always use globalFrom for the 'From' address to prevent SMTP spoofing rejection by Gmail
+    const globalFrom = process.env.SMTP_FROM || '"AMU Dispatch System" <dispatch@salarysection.com>';
+    const fromAddress = globalFrom;
+    
     const baseUrl = process.env.APP_URL || "https://www.salarysection.com";
     const fullFileUrl = fileUrl ? (fileUrl.startsWith('http') ? fileUrl : `${baseUrl}${fileUrl}`) : null;
 
@@ -716,14 +723,35 @@ export async function sendDispatchNotificationEmail(
         </div>
       `;
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM || '"AMU Dispatch System" <dispatch@salarysection.com>',
+    const mailOptions: any = {
+      from: fromAddress,
       to: recipientEmail,
       subject: isConfidential
         ? `[DISPATCH] CONFIDENTIAL - ${dispatchNumber}`
         : `[DISPATCH] ${dispatchNumber} - ${subject}`,
       html: htmlBody,
     };
+    
+    // Add Reply-To just in case SMTP provider overwrites the From address
+    if (senderOfficialEmail) {
+      mailOptions.replyTo = senderOfficialEmail;
+    }
+
+    // Attach the file if it exists and is not confidential
+    if (fileUrl && !isConfidential) {
+      // fileUrl is something like /uploads/dispatch/1720516590216-document.pdf
+      const localPath = path.join(process.cwd(), fileUrl);
+      if (fs.existsSync(localPath)) {
+        mailOptions.attachments = [
+          {
+            filename: path.basename(fileUrl),
+            path: localPath
+          }
+        ];
+      } else {
+        console.warn(`[Dispatch Email] Attachment not found at ${localPath}`);
+      }
+    }
 
     const info = await transporter.sendMail(mailOptions);
     console.log(`[Dispatch Email] Sent to ${recipientEmail}: ${info.messageId}`);

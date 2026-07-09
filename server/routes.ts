@@ -5955,6 +5955,48 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Background email prefetch — called immediately after login.
+  // Responds instantly, fetches in the background to populate server cache.
+  app.post("/api/email/prefetch", async (req, res) => {
+    const { userId, userType } = req.body;
+    if (!userId || !userType) return res.status(400).json({ message: "Missing userId/userType" });
+
+    // Respond immediately — don't make the client wait
+    res.json({ success: true, message: "Prefetch started" });
+
+    // Fire-and-forget background prefetch
+    try {
+      const { prefetchEmails } = await import("./email-client.js");
+      await prefetchEmails(userId, userType);
+    } catch (error) {
+      console.error("[Prefetch API] Error:", error);
+    }
+  });
+
+  // Parse raw EML content from frontend
+  app.post("/api/email/parse-eml", async (req, res) => {
+    try {
+      const { content } = req.body;
+      if (!content) return res.status(400).json({ message: "No content provided" });
+      
+      const { simpleParser } = await import("mailparser");
+      const buffer = Buffer.from(content, 'base64');
+      const parsed = await simpleParser(buffer);
+      
+      res.json({
+        success: true,
+        subject: parsed.subject,
+        from: parsed.from?.text,
+        date: parsed.date,
+        html: parsed.html || "",
+        text: parsed.text || "",
+      });
+    } catch (error: any) {
+      console.error("EML Parse error:", error);
+      res.status(500).json({ success: false, message: "Failed to parse EML" });
+    }
+  });
+
   app.get("/api/email/inbox", async (req, res) => {
     try {
       const { userId, userType } = req.query as { userId: string, userType: string };

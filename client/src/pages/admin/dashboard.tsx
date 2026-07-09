@@ -216,6 +216,20 @@ export default function AdminDashboard() {
   });
   const unreadEmailCount = unreadEmailData?.count || 0;
 
+  // Background email prefetch — runs once per session on admin login
+  useEffect(() => {
+    if (!adminInfo.email || adminInfo.email === "qasim@amu.ac.in") return;
+    const prefetchKey = `email_prefetched_admin_${adminInfo.email}`;
+    if (sessionStorage.getItem(prefetchKey)) return;
+    sessionStorage.setItem(prefetchKey, '1');
+
+    fetch('/api/email/prefetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: adminInfo.email, userType: 'admin' }),
+    }).catch(() => {});
+  }, [adminInfo.email]);
+
   // Fetch ticket stats
   const { data: ticketStats = { open: 0, inProgress: 0, resolved: 0, closed: 0 } } = useQuery<{
     open: number;

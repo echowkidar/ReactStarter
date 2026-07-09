@@ -173,6 +173,21 @@ export default function Sidebar({ className }: SidebarProps) {
   });
   const unreadEmailCount = unreadEmailData?.count || 0;
 
+  // Background email prefetch — runs once per session on login
+  useEffect(() => {
+    if (!department?.id) return;
+    const prefetchKey = `email_prefetched_dept_${department.id}`;
+    if (sessionStorage.getItem(prefetchKey)) return; // Already prefetched this session
+    sessionStorage.setItem(prefetchKey, '1');
+
+    // Fire-and-forget — don't await
+    fetch('/api/email/prefetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: department.id.toString(), userType: 'department' }),
+    }).catch(() => { }); // Silently ignore errors
+  }, [department?.id]);
+
   // Fetch unread dispatch count
   const { data: unreadDispatchData } = useQuery<{ count: number }>({
     queryKey: [`/api/dispatch/inbox-count/${department?.id}`],
@@ -258,13 +273,13 @@ export default function Sidebar({ className }: SidebarProps) {
                   className="h-10 w-10 rounded-full object-cover ring-2 ring-blue-200 group-hover:ring-blue-400 transition-all"
                 />
                 <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{backgroundColor: '#f59e0b'}}></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3" style={{backgroundColor: '#d97706'}}></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: '#f59e0b' }}></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: '#d97706' }}></span>
                 </span>
               </div>
               <div className="flex flex-col items-start">
                 <span className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">AMU AI</span>
-                <span className="text-[11px] font-medium" style={{color: '#b45309'}}>✦ Active · Ask me anything</span>
+                <span className="text-[11px] font-medium" style={{ color: '#b45309' }}>✦ Active · Ask me anything</span>
               </div>
             </button>
           </div>

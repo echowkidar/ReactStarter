@@ -435,10 +435,18 @@ export function registerDispatchRoutes(app: Express) {
           details: `Dispatched to ${parsedRecipients.length} recipient(s). Outward No: ${outwardNumber}`,
         });
 
-        // Send email notifications if requested
         if (sendEmail === "true" || sendEmail === true) {
           try {
+            // Fetch sender's official email from departments table
+            const [senderDeptRecord] = await db
+              .select({ email: departments.email })
+              .from(departments)
+              .where(eq(departments.id, parseInt(senderDepartmentId)));
+            const senderOfficialEmail = senderDeptRecord?.email;
+
             const { sendDispatchNotificationEmail } = await import("./emailService");
+            let emailsSentCount = 0;
+            
             for (const r of parsedRecipients) {
               if (r.type === "department") {
                 const [dept] = await db
@@ -447,38 +455,55 @@ export function registerDispatchRoutes(app: Express) {
                   .where(eq(departments.id, r.id));
                 if (dept?.email && !dept.email.includes("example.com")) {
                   try {
-                    await sendDispatchNotificationEmail(
+                    const result = await sendDispatchNotificationEmail(
                       dept.email,
                       dispatch.isConfidential ? "CONFIDENTIAL" : subject,
                       senderName,
                       documentType,
                       dispatchNumber || outwardNumber,
                       dispatch.isConfidential,
-                      dispatch.fileUrl
+                      dispatch.fileUrl,
+                      senderOfficialEmail
                     );
-                    await db
-                      .update(dispatchRecipients)
-                      .set({ emailSent: true, emailSentAt: new Date() })
-                      .where(
-                        and(
-                          eq(dispatchRecipients.dispatchId, dispatch.id),
-                          eq(dispatchRecipients.departmentId, r.id)
-                        )
-                      );
+                    
+                    if (result.success) {
+                      emailsSentCount++;
+                      await db
+                        .update(dispatchRecipients)
+                        .set({ emailSent: true, emailSentAt: new Date() })
+                        .where(
+                          and(
+                            eq(dispatchRecipients.dispatchId, dispatch.id),
+                            eq(dispatchRecipients.departmentId, r.id)
+                          )
+                        );
+                    } else {
+                      console.error(`[Dispatch] Email failed for ${dept.email}:`, result.error);
+                    }
                   } catch (emailErr) {
-                    console.error(`[Dispatch] Email failed for ${dept.email}:`, emailErr);
+                    console.error(`[Dispatch] Email exception for ${dept.email}:`, emailErr);
                   }
                 }
               }
             }
 
-            await db.insert(dispatchTracking).values({
-              dispatchId: dispatch.id,
-              action: "email_sent",
-              actionByDepartmentId: parseInt(senderDepartmentId),
-              actionByName: senderName,
-              details: `Email notifications sent`,
-            });
+            if (emailsSentCount > 0) {
+              await db.insert(dispatchTracking).values({
+                dispatchId: dispatch.id,
+                action: "email_sent",
+                actionByDepartmentId: parseInt(senderDepartmentId),
+                actionByName: senderName,
+                details: `Email notifications sent to ${emailsSentCount} recipient(s)`,
+              });
+            } else {
+              await db.insert(dispatchTracking).values({
+                dispatchId: dispatch.id,
+                action: "email_sent",
+                actionByDepartmentId: parseInt(senderDepartmentId),
+                actionByName: senderName,
+                details: `Email notifications failed to send`,
+              });
+            }
           } catch (emailError) {
             console.error("[Dispatch] Email notification error:", emailError);
           }
