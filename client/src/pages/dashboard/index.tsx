@@ -227,7 +227,10 @@ export default function Dashboard() {
         <main className="flex-1 p-6">
           <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
+            <Card
+              className="cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setLocation("/dashboard/employees")}
+            >
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">
                   Total Active Employees
@@ -238,7 +241,10 @@ export default function Dashboard() {
                 <div className="text-2xl font-bold">{employees?.filter(emp => emp.isActive === "active")?.length || 0}</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card
+              className="cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setLocation("/dashboard/attendance")}
+            >
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">
                   Attendance Reports

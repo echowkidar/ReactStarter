@@ -68,7 +68,7 @@ interface TrackingEntry {
 const DOCUMENT_TYPES = [
   "Letter", "Office Memo", "Office Order", "Application", "Notification",
   "Circular", "Notice", "File", "Note", "Report", "Minutes", "Resolution",
-  "Endorsement", "Certificate", "Invoice", "Quotation", "Tender", "Other",
+  "Endorsement", "Certificate", "Last Pay Certificate", "Invoice", "Quotation", "Tender", "Other",
 ];
 
 // ─── Main Component ──────────────────────────────────────────────────────
@@ -79,6 +79,16 @@ export default function Dispatch() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DispatchDoc[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Pagination & Year Filter
+  const [selectedFy, setSelectedFy] = useState<string>(() => {
+    const now = new Date();
+    const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${year}-${year + 1}`;
+  });
+  const [rowsPerPage, setRowsPerPage] = useState<number | "all">(20);
+  const [currentPageInbox, setCurrentPageInbox] = useState(1);
+  const [currentPageOutbox, setCurrentPageOutbox] = useState(1);
 
   // ─── New Dispatch State ─────────────────────────────────────────────
   const [showNewDispatch, setShowNewDispatch] = useState(false);
@@ -103,7 +113,7 @@ export default function Dispatch() {
   const [formSendEmail, setFormSendEmail] = useState(false);
 
   // Recipients
-  const [selectedRecipients, setSelectedRecipients] = useState<Array<{type: string; id: number; name: string}>>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<Array<{ type: string; id: number; name: string }>>([]);
   const [deptSearchQuery, setDeptSearchQuery] = useState("");
   const [deptSearchResults, setDeptSearchResults] = useState<any[]>([]);
   const [showGroupSelector, setShowGroupSelector] = useState(false);
@@ -161,13 +171,27 @@ export default function Dispatch() {
 
   // ─── Data Queries ───────────────────────────────────────────────────
   const { data: inbox = [], isLoading: inboxLoading, refetch: refetchInbox } = useQuery<DispatchDoc[]>({
-    queryKey: [`/api/dispatch/inbox/${department?.id}`],
+    queryKey: [`/api/dispatch/inbox/${department?.id}`, selectedFy],
+    queryFn: async () => {
+      const url = new URL(`/api/dispatch/inbox/${department?.id}`, window.location.origin);
+      if (selectedFy !== "all") url.searchParams.append("fy", selectedFy);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
     enabled: !!department?.id,
     refetchInterval: 30000,
   });
 
   const { data: outbox = [], isLoading: outboxLoading, refetch: refetchOutbox } = useQuery<DispatchDoc[]>({
-    queryKey: [`/api/dispatch/outbox/${department?.id}`],
+    queryKey: [`/api/dispatch/outbox/${department?.id}`, selectedFy],
+    queryFn: async () => {
+      const url = new URL(`/api/dispatch/outbox/${department?.id}`, window.location.origin);
+      if (selectedFy !== "all") url.searchParams.append("fy", selectedFy);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
     enabled: !!department?.id,
   });
 
@@ -176,7 +200,7 @@ export default function Dispatch() {
     enabled: !!department?.id,
   });
 
-  const { data: stats } = useQuery<{sent: number; received: number; unread: number}>({
+  const { data: stats } = useQuery<{ sent: number; received: number; unread: number }>({
     queryKey: [`/api/dispatch/stats/${department?.id}`],
     enabled: !!department?.id,
     refetchInterval: 30000,
@@ -285,6 +309,8 @@ export default function Dispatch() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("type", "dispatch");
+    if (department?.name) formData.append("currentDepartment", department.name);
 
     try {
       const response = await fetch("/api/dispatch/extract", {
@@ -319,8 +345,8 @@ export default function Dispatch() {
             const [dd, mm, yyyy] = r.dispatch_date.split("/");
             formattedDate = `${yyyy}-${mm}-${dd}`;
           } else if (r.dispatch_date.match(/^\d{2}-\d{2}-\d{4}$/)) {
-             const [dd, mm, yyyy] = r.dispatch_date.split("-");
-             formattedDate = `${yyyy}-${mm}-${dd}`;
+            const [dd, mm, yyyy] = r.dispatch_date.split("-");
+            formattedDate = `${yyyy}-${mm}-${dd}`;
           }
           setFormDispatchDate(formattedDate);
         }
@@ -400,10 +426,12 @@ export default function Dispatch() {
       setRecvIsManualMode(false);
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("type", "receive");
+      if (department?.name) formData.append("currentDepartment", department.name);
       try {
         const response = await fetch("/api/dispatch/extract", { method: "POST", body: formData });
         const data = await response.json();
-        
+
         setRecvFileUrl(data.uploadedFileUrl || "");
         setRecvFileType(data.uploadedFileType || "image");
 
@@ -414,7 +442,7 @@ export default function Dispatch() {
           const r = data.result;
           if (r.document_type) setRecvDocType(r.document_type);
           if (r.subject) setRecvSubject(r.subject);
-          if (r.dispatch_number) setRecvDispatchNo(r.dispatch_number);
+          if (r.dispatch_number) setRecvRefNo(r.dispatch_number);
           if (r.sender_department) setRecvSenderInfo(r.sender_department);
           if (r.dispatch_date) {
             let formattedDate = r.dispatch_date;
@@ -422,10 +450,21 @@ export default function Dispatch() {
               const [dd, mm, yyyy] = r.dispatch_date.split("/");
               formattedDate = `${yyyy}-${mm}-${dd}`;
             } else if (r.dispatch_date.match(/^\d{2}-\d{2}-\d{4}$/)) {
-               const [dd, mm, yyyy] = r.dispatch_date.split("-");
-               formattedDate = `${yyyy}-${mm}-${dd}`;
+              const [dd, mm, yyyy] = r.dispatch_date.split("-");
+              formattedDate = `${yyyy}-${mm}-${dd}`;
+            } else {
+              const d = new Date(r.dispatch_date);
+              if (!isNaN(d.getTime())) {
+                formattedDate = format(d, "yyyy-MM-dd");
+              }
             }
-            setRecvDispatchDate(formattedDate);
+            if (formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              setRecvDispatchDate(formattedDate);
+            } else {
+              setRecvDispatchDate(format(new Date(), "yyyy-MM-dd"));
+            }
+          } else {
+            setRecvDispatchDate(format(new Date(), "yyyy-MM-dd"));
           }
           if (r.reference_number) setRecvRefNo(r.reference_number);
           toast({ title: "✅ Scanned & Extracted", description: `AI Confidence: ${data.result.confidence || "N/A"}` });
@@ -446,6 +485,8 @@ export default function Dispatch() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("type", "dispatch");
+    if (department?.name) formData.append("currentDepartment", department.name);
 
     try {
       const response = await fetch("/api/dispatch/extract", { method: "POST", body: formData });
@@ -472,10 +513,21 @@ export default function Dispatch() {
             const [dd, mm, yyyy] = r.dispatch_date.split("/");
             formattedDate = `${yyyy}-${mm}-${dd}`;
           } else if (r.dispatch_date.match(/^\d{2}-\d{2}-\d{4}$/)) {
-             const [dd, mm, yyyy] = r.dispatch_date.split("-");
-             formattedDate = `${yyyy}-${mm}-${dd}`;
+            const [dd, mm, yyyy] = r.dispatch_date.split("-");
+            formattedDate = `${yyyy}-${mm}-${dd}`;
+          } else {
+            const d = new Date(r.dispatch_date);
+            if (!isNaN(d.getTime())) {
+              formattedDate = format(d, "yyyy-MM-dd");
+            }
           }
-          setFormDispatchDate(formattedDate);
+          if (formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            setFormDispatchDate(formattedDate);
+          } else {
+            setFormDispatchDate(format(new Date(), "yyyy-MM-dd"));
+          }
+        } else {
+          setFormDispatchDate(format(new Date(), "yyyy-MM-dd"));
         }
         if (r.reference_number) setFormRefNo(r.reference_number);
         toast({
@@ -583,12 +635,12 @@ export default function Dispatch() {
       });
       return res.json();
     },
-    onSuccess: () => { 
-      refetchInbox(); 
+    onSuccess: () => {
+      refetchInbox();
       if (selectedDispatch) {
         queryClient.invalidateQueries({ queryKey: [`/api/dispatch/${selectedDispatch.id}`, department?.id] });
       }
-      toast({ title: "Marked as Received" }); 
+      toast({ title: "Marked as Received" });
     },
   });
 
@@ -678,6 +730,8 @@ export default function Dispatch() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("type", "receive");
+    if (department?.name) formData.append("currentDepartment", department.name);
 
     try {
       const response = await fetch("/api/dispatch/extract", { method: "POST", body: formData });
@@ -704,8 +758,8 @@ export default function Dispatch() {
             const [dd, mm, yyyy] = r.dispatch_date.split("/");
             formattedDate = `${yyyy}-${mm}-${dd}`;
           } else if (r.dispatch_date.match(/^\d{2}-\d{2}-\d{4}$/)) {
-             const [dd, mm, yyyy] = r.dispatch_date.split("-");
-             formattedDate = `${yyyy}-${mm}-${dd}`;
+            const [dd, mm, yyyy] = r.dispatch_date.split("-");
+            formattedDate = `${yyyy}-${mm}-${dd}`;
           }
           // We can optionally use the AI extracted date as Receipt Date or keep it as today.
           // setRecvReceiptDate(formattedDate);
@@ -739,7 +793,7 @@ export default function Dispatch() {
     toDate.setHours(23, 59, 59, 999);
 
     const sourceData = exportType === "inbox" ? inbox : outbox;
-    
+
     const filteredData = sourceData.filter(item => {
       const itemDate = new Date(item.createdAt);
       return itemDate >= fromDate && itemDate <= toDate;
@@ -777,7 +831,7 @@ export default function Dispatch() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, exportType === "inbox" ? "Received Documents" : "Dispatched Documents");
     XLSX.writeFile(wb, `amu_dak_${exportType}_${format(fromDate, "yyyyMMdd")}_to_${format(toDate, "yyyyMMdd")}.xlsx`);
-    
+
     setShowExportDialog(false);
   };
 
@@ -847,15 +901,15 @@ export default function Dispatch() {
   // ─── Status Badge ──────────────────────────────────────────────────
   const StatusBadge = ({ status }: { status: string }) => {
     const colors: Record<string, string> = {
-      dispatched: "bg-blue-100 text-blue-700",
+      dispatched: "bg-orange-500 text-white",
       received: "bg-yellow-100 text-yellow-700",
       read: "bg-green-100 text-green-700",
       forwarded: "bg-purple-100 text-purple-700",
       marked: "bg-indigo-100 text-indigo-700",
     };
     return (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${colors[status] || "bg-gray-100 text-gray-700"}`}>
-        {status}
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${colors[status] || "bg-gray-100 text-gray-700"}`}>
+        {status === "dispatched" ? "Unreceived" : status}
       </span>
     );
   };
@@ -874,6 +928,33 @@ export default function Dispatch() {
   };
 
   if (!department) return null;
+
+  const getSortedItems = (items: DispatchDoc[], type: 'inbox' | 'outbox') => {
+    return [...items].sort((a, b) => {
+      if (type === 'inbox') {
+        if (a.inwardNumber && b.inwardNumber) {
+          const numA = parseInt(a.inwardNumber.split('/')[0]) || 0;
+          const numB = parseInt(b.inwardNumber.split('/')[0]) || 0;
+          if (numA !== numB) return numB - numA;
+        }
+        if (!a.inwardNumber && b.inwardNumber) return -1; // Unreceived at top
+        if (a.inwardNumber && !b.inwardNumber) return 1;
+      } else {
+        if (a.outwardNumber && b.outwardNumber) {
+          const numA = parseInt(a.outwardNumber.split('/')[0]) || 0;
+          const numB = parseInt(b.outwardNumber.split('/')[0]) || 0;
+          if (numA !== numB) return numB - numA;
+        }
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  };
+
+  const currentInboxItems = getSortedItems(searchResults !== null ? searchResults : inbox, 'inbox');
+  const currentOutboxItems = getSortedItems(searchResults !== null ? searchResults : outbox, 'outbox');
+
+  const paginatedInboxItems = rowsPerPage === "all" ? currentInboxItems : currentInboxItems.slice((currentPageInbox - 1) * rowsPerPage, currentPageInbox * rowsPerPage);
+  const paginatedOutboxItems = rowsPerPage === "all" ? currentOutboxItems : currentOutboxItems.slice((currentPageOutbox - 1) * rowsPerPage, currentPageOutbox * rowsPerPage);
 
   // ═══════════════════════════════════════════════════════════════════════
   // RENDER
@@ -951,11 +1032,11 @@ export default function Dispatch() {
                     Outbox
                   </TabsTrigger>
                 </TabsList>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   className="bg-white"
-                  onClick={() => { refetchInbox(); refetchOutbox(); queryClient.invalidateQueries({ queryKey: [`/api/dispatch/stats/${department?.id}`]}); }} 
+                  onClick={() => { refetchInbox(); refetchOutbox(); queryClient.invalidateQueries({ queryKey: [`/api/dispatch/stats/${department?.id}`] }); }}
                   title="Refresh Data"
                 >
                   <RefreshCw className="h-4 w-4 text-gray-600" />
@@ -963,31 +1044,47 @@ export default function Dispatch() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button 
-                  variant="outline" 
-                  className="text-green-700 border-green-200 bg-green-50 hover:bg-green-100 whitespace-nowrap" 
+                <Button
+                  variant="outline"
+                  className="text-green-700 border-green-200 bg-green-50 hover:bg-green-100 whitespace-nowrap"
                   onClick={() => { setExportType(activeTab as "inbox" | "outbox"); setShowExportDialog(true); }}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export to Excel
                 </Button>
-                <div className="relative w-72 sm:w-80">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  className="pl-9 pr-9"
-                  placeholder="Search by R.No., D.No., Subject, Department..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setSearchQuery(""); setSearchResults(null); }}>
-                    <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
-                  </button>
-                )}
-                {isSearching && (
-                  <Loader2 className="absolute right-8 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-500" />
-                )}
-              </div>
+
+                <div className="flex items-center gap-2">
+                  <Select value={selectedFy} onValueChange={(v) => { setSelectedFy(v); setCurrentPageInbox(1); setCurrentPageOutbox(1); }}>
+                    <SelectTrigger className="w-32 bg-white h-9">
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Years</SelectItem>
+                      <SelectItem value="2027-2028">2027-2028</SelectItem>
+                      <SelectItem value="2026-2027">2026-2027</SelectItem>
+                      <SelectItem value="2025-2026">2025-2026</SelectItem>
+                      <SelectItem value="2024-2025">2024-2025</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="relative w-64 sm:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    className="pl-9 pr-9"
+                    placeholder="Search by R.No., D.No., Subject, Department..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setSearchQuery(""); setSearchResults(null); }}>
+                      <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                    </button>
+                  )}
+                  {isSearching && (
+                    <Loader2 className="absolute right-8 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-500" />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -997,7 +1094,7 @@ export default function Dispatch() {
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                 </div>
-              ) : (searchResults !== null ? searchResults : inbox).length === 0 ? (
+              ) : currentInboxItems.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center text-gray-500">
                     <Inbox className="h-12 w-12 mx-auto mb-3 text-gray-300" />
@@ -1007,9 +1104,24 @@ export default function Dispatch() {
                 </Card>
               ) : (
                 <div>
-                  {searchResults !== null && (
-                    <div className="text-xs text-gray-500 mb-2 px-1">Found {searchResults.length} result(s) for "{searchQuery}"</div>
-                  )}
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <div className="text-xs text-gray-500">
+                      {searchResults !== null && (
+                        <span>Found {searchResults.length} result(s) for "{searchQuery}"</span>
+                      )}
+                    </div>
+                    {rowsPerPage !== "all" && currentInboxItems.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span>
+                          {Math.min((currentPageInbox - 1) * (rowsPerPage as number) + 1, currentInboxItems.length)} - {Math.min(currentPageInbox * (rowsPerPage as number), currentInboxItems.length)} of {currentInboxItems.length}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" className="h-6 w-6 p-0" onClick={() => setCurrentPageInbox(p => Math.max(1, p - 1))} disabled={currentPageInbox === 1}>{"<"}</Button>
+                          <Button variant="outline" className="h-6 w-6 p-0" onClick={() => setCurrentPageInbox(p => p + 1)} disabled={currentPageInbox * (rowsPerPage as number) >= currentInboxItems.length}>{">"}</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="bg-white rounded-lg border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
@@ -1025,12 +1137,11 @@ export default function Dispatch() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(searchResults !== null ? searchResults : inbox).map((item) => (
+                        {paginatedInboxItems.map((item) => (
                           <tr
                             key={`inbox-${item.id}-${item.recipientId}`}
-                            className={`border-b last:border-b-0 cursor-pointer hover:bg-blue-50/50 transition-colors ${
-                              item.recipientStatus === "dispatched" ? "bg-blue-50/30 font-medium" : ""
-                            }`}
+                            className={`border-b last:border-b-0 cursor-pointer hover:bg-blue-50/50 transition-colors ${item.recipientStatus === "dispatched" ? "bg-blue-50/30 font-medium" : ""
+                              }`}
                             onClick={() => openDetail(item)}
                           >
                             <td className="px-3 py-2.5">
@@ -1089,6 +1200,33 @@ export default function Dispatch() {
                       </tbody>
                     </table>
                   </div>
+                  {rowsPerPage !== "all" && currentInboxItems.length > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-x rounded-b-lg">
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>Rows per page:</span>
+                        <Select value={rowsPerPage.toString()} onValueChange={(v) => { setRowsPerPage(v === "all" ? "all" : parseInt(v)); setCurrentPageInbox(1); setCurrentPageOutbox(1); }}>
+                          <SelectTrigger className="w-[70px] h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                            <SelectItem value="200">200</SelectItem>
+                            <SelectItem value="500">500</SelectItem>
+                            <SelectItem value="all">All</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <span className="ml-2">
+                          Showing {Math.min((currentPageInbox - 1) * (rowsPerPage as number) + 1, currentInboxItems.length)} - {Math.min(currentPageInbox * (rowsPerPage as number), currentInboxItems.length)} of {currentInboxItems.length}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" onClick={() => setCurrentPageInbox(p => Math.max(1, p - 1))} disabled={currentPageInbox === 1}>Prev</Button>
+                        <Button variant="outline" size="sm" onClick={() => setCurrentPageInbox(p => p + 1)} disabled={currentPageInbox * (rowsPerPage as number) >= currentInboxItems.length}>Next</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -1099,7 +1237,7 @@ export default function Dispatch() {
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                 </div>
-              ) : (searchResults !== null ? searchResults : outbox).length === 0 ? (
+              ) : currentOutboxItems.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center text-gray-500">
                     <Send className="h-12 w-12 mx-auto mb-3 text-gray-300" />
@@ -1109,9 +1247,24 @@ export default function Dispatch() {
                 </Card>
               ) : (
                 <div>
-                  {searchResults !== null && (
-                    <div className="text-xs text-gray-500 mb-2 px-1">Found {searchResults.length} result(s) for "{searchQuery}"</div>
-                  )}
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <div className="text-xs text-gray-500">
+                      {searchResults !== null && (
+                        <span>Found {searchResults.length} result(s) for "{searchQuery}"</span>
+                      )}
+                    </div>
+                    {rowsPerPage !== "all" && currentOutboxItems.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span>
+                          {Math.min((currentPageOutbox - 1) * (rowsPerPage as number) + 1, currentOutboxItems.length)} - {Math.min(currentPageOutbox * (rowsPerPage as number), currentOutboxItems.length)} of {currentOutboxItems.length}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" className="h-6 w-6 p-0" onClick={() => setCurrentPageOutbox(p => Math.max(1, p - 1))} disabled={currentPageOutbox === 1}>{"<"}</Button>
+                          <Button variant="outline" className="h-6 w-6 p-0" onClick={() => setCurrentPageOutbox(p => p + 1)} disabled={currentPageOutbox * (rowsPerPage as number) >= currentOutboxItems.length}>{">"}</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="bg-white rounded-lg border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
@@ -1125,7 +1278,7 @@ export default function Dispatch() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(searchResults !== null ? searchResults : outbox).map((item) => (
+                        {paginatedOutboxItems.map((item) => (
                           <tr
                             key={`outbox-${item.id}`}
                             className="border-b last:border-b-0 cursor-pointer hover:bg-blue-50/50 transition-colors"
@@ -1184,6 +1337,33 @@ export default function Dispatch() {
                       </tbody>
                     </table>
                   </div>
+                  {rowsPerPage !== "all" && currentOutboxItems.length > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-x rounded-b-lg">
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>Rows per page:</span>
+                        <Select value={rowsPerPage.toString()} onValueChange={(v) => { setRowsPerPage(v === "all" ? "all" : parseInt(v)); setCurrentPageInbox(1); setCurrentPageOutbox(1); }}>
+                          <SelectTrigger className="w-[70px] h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                            <SelectItem value="200">200</SelectItem>
+                            <SelectItem value="500">500</SelectItem>
+                            <SelectItem value="all">All</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <span className="ml-2">
+                          Showing {Math.min((currentPageOutbox - 1) * (rowsPerPage as number) + 1, currentOutboxItems.length)} - {Math.min(currentPageOutbox * (rowsPerPage as number), currentOutboxItems.length)} of {currentOutboxItems.length}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" onClick={() => setCurrentPageOutbox(p => Math.max(1, p - 1))} disabled={currentPageOutbox === 1}>Prev</Button>
+                        <Button variant="outline" size="sm" onClick={() => setCurrentPageOutbox(p => p + 1)} disabled={currentPageOutbox * (rowsPerPage as number) >= currentOutboxItems.length}>Next</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -1232,8 +1412,8 @@ export default function Dispatch() {
                   </div>
 
                   {/* Upload Only (Manual) - Smaller Button */}
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full border-gray-300 text-gray-700"
                     onClick={() => {
                       const input = document.createElement("input");
@@ -1251,7 +1431,7 @@ export default function Dispatch() {
                 {isExtracting && (
                   <div className="flex items-center justify-center py-6 gap-3">
                     <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                    <span className="text-gray-600">Extracting document details with AI...</span>
+                    <span className="text-gray-600">Extracting details with AMU AI...</span>
                   </div>
                 )}
               </div>
@@ -1412,9 +1592,8 @@ export default function Dispatch() {
                   ) : (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {selectedRecipients.map((r, i) => (
-                        <span key={i} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                          r.type === "group" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-                        }`}>
+                        <span key={i} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${r.type === "group" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                          }`}>
                           {r.type === "group" ? <Users className="h-3 w-3" /> : <Building2 className="h-3 w-3" />}
                           {r.name}
                           <button onClick={() => removeRecipient(r.type, r.id)}>
@@ -1493,8 +1672,8 @@ export default function Dispatch() {
                   </div>
 
                   {/* Manual Receive */}
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full border-gray-300 text-gray-700"
                     onClick={() => {
                       const input = document.createElement("input");
@@ -1546,7 +1725,7 @@ export default function Dispatch() {
                         </div>
                       </div>
                     )}
-                    
+
                     {recvIsManualMode && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
                         <Upload className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
@@ -1570,15 +1749,15 @@ export default function Dispatch() {
                     <div>
                       <Label className="text-xs">Sender / Source *</Label>
                       <div className="relative">
-                        <Input 
-                          value={recvSenderInfo} 
+                        <Input
+                          value={recvSenderInfo}
                           onChange={e => setRecvSenderInfo(e.target.value)}
                           onFocus={() => setIsSenderFocused(true)}
                           onBlur={() => {
                             // slight delay to allow click on dropdown to process
                             setTimeout(() => setIsSenderFocused(false), 200);
                           }}
-                          placeholder="Type to search departments or enter name..." 
+                          placeholder="Type to search departments or enter name..."
                         />
                         {isSenderFocused && allDepartments.length > 0 && !allDepartments.some((d: any) => d.name === recvSenderInfo) && (
                           (() => {
@@ -1940,15 +2119,15 @@ export default function Dispatch() {
               </p>
               <div>
                 <Label className="text-xs">Remarks / Reason (Required)</Label>
-                <Textarea 
-                  value={rioRemarks} 
+                <Textarea
+                  value={rioRemarks}
                   onChange={e => setRioRemarks(e.target.value)}
-                  rows={3} 
-                  placeholder="Enter reason for returning" 
+                  rows={3}
+                  placeholder="Enter reason for returning"
                 />
               </div>
-              <Button 
-                className="w-full bg-destructive hover:bg-destructive/90 text-white" 
+              <Button
+                className="w-full bg-destructive hover:bg-destructive/90 text-white"
                 disabled={!rioRemarks || rioDispatch.isPending}
                 onClick={() => rioDispatch.mutate()}
               >
@@ -1970,7 +2149,7 @@ export default function Dispatch() {
             <div className="space-y-4 pt-2">
               <div>
                 <Label className="text-xs">Export Data Type</Label>
-                <Select value={exportType} onValueChange={(v: "inbox"|"outbox") => setExportType(v)}>
+                <Select value={exportType} onValueChange={(v: "inbox" | "outbox") => setExportType(v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="inbox">Received Documents (Inbox)</SelectItem>

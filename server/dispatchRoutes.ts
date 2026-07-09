@@ -192,9 +192,8 @@ export function registerDispatchRoutes(app: Express) {
           return res.status(400).json({ message: "No file uploaded" });
         }
 
-        const apiUrl = process.env.DISPATCH_API_URL || "https://dispatch-api.salarysection.com/v1/dispatch/extract";
-        const apiKey = process.env.DISPATCH_API_KEY || "test-1234";
-        const model = (req.query.model as string) || "gemma4:cloud";
+        const reqType = req.body.type || "dispatch";
+        
         const originalFileUrl = `/uploads/dispatch/${path.basename(req.file.path)}`;
         const isPdf = req.file.mimetype === "application/pdf" || req.file.originalname.toLowerCase().endsWith(".pdf");
 
@@ -223,61 +222,216 @@ export function registerDispatchRoutes(app: Express) {
           // Optimize image for API
           imageBufferForApi = await optimizeImageForApi(req.file.path);
         }
+        const ollamaApiUrl = reqType === "receive" ? process.env.RECEIVE_OLLAMA_API_URL : process.env.DISPATCH_OLLAMA_API_URL;
+        const ollamaApiKey = reqType === "receive" ? process.env.RECEIVE_OLLAMA_API_KEY : process.env.DISPATCH_OLLAMA_API_KEY;
+        const ollamaModel = reqType === "receive" ? process.env.RECEIVE_OLLAMA_MODEL : process.env.DISPATCH_OLLAMA_MODEL;
 
-        // Call AI API
-        try {
-          const formData = new FormData();
-          formData.append(
-            "file",
-            new Blob([imageBufferForApi], { type: "image/jpeg" }),
-            imageFilenameForApi.replace(/\.[^.]+$/, ".jpg")
-          );
-          if (req.body.prompt) {
-            formData.append("prompt", req.body.prompt);
-          }
+        const fallbackApiUrl = process.env.DISPATCH_API_URL || "https://dispatch-api.salarysection.com/v1/dispatch/extract";
+        const fallbackApiKey = process.env.DISPATCH_API_KEY || "test-1234";
 
-          const apiResponse = await fetch(`${apiUrl}?model=${encodeURIComponent(model)}`, {
-            method: "POST",
-            headers: { "x-api-key": apiKey },
-            body: formData,
-          });
+        // Try Ollama first if configured
+        let aiResult: any = null;
+        let aiSuccess = false;
+        let aiError = "";
 
-          if (!apiResponse.ok) {
-            const errorText = await apiResponse.text();
-            console.error("[Dispatch] AI API error:", apiResponse.status, errorText);
-            // Return file info without AI extraction — frontend shows manual form
-            return res.json({
-              result: null,
-              extractionFailed: true,
-              failureReason: `AI API returned ${apiResponse.status}: ${errorText}`,
-              uploadedFileUrl: originalFileUrl,
-              uploadedFileType: isPdf ? "pdf" : "image",
-              uploadedFileName: req.file.originalname,
+        const basePrompt = `You are AMU Dispatch AI. You work like an experienced dispatch clerk in a Central Government University office. You read official documents (printed, handwritten, stamped, scanned, skewed, cropped, English/Hindi/Urdu/mixed) and extract information for a Dispatch Register. Your output directly auto-fills a Dispatch Form. Accuracy > completeness. You are a Document Understanding AI, not a plain OCR engine: first understand the document's purpose, then extract fields.
+
+OUTPUT RULES (STRICT)
+- Output ONLY one valid JSON object. No markdown, no code fences, no explanation, no OCR dump, no notes, before or after.
+- Double quotes only, no trailing commas, no comments.
+- If information cannot be safely determined, use JSON null — never "Unknown", "N/A", "None", "-", "", or "?".
+
+JSON SCHEMA (exact fields)
+{
+"document_type": null,
+"recipient_department": null,
+"sender_department": null,
+"subject": null,
+"dispatch_number": null,
+"dispatch_date": null,
+"employee_related": false,
+"employees": [{"name": null, "employee_id": null, "designation": null, "department": null}],
+"attachments": [],
+"confidence": "HIGH"
+}
+(employees/attachments = [] if none found)
+
+FIELD CATEGORIES
+A. Direct extraction (clearly written) — e.g. dispatch no., memo no., date, employee ID, department name. Extract exactly.
+B. Guided inference (not written but confidently inferable from strong evidence) — allowed ONLY for: document_type, subject (if missing), recipient_department (from routing/forwarding). Never fabricate; base only on document content.
+C. Unknown — if not extractable or inferable with confidence, return null. Never guess.
+
+HALLUCINATION POLICY — never invent: employee IDs, dispatch numbers, memo numbers, dates, department names, reference numbers. If unreadable, null. Only subject and document_type may be intelligently generated, and only from facts actually present.
+
+READ EVERYTHING: printed/typed text, rubber stamps, handwritten notes, margin notes, forwarding notes, endorsements, initials, routing slips, headers/footers, tables, serial numbers, seals, reference numbers, dates. Never assume the first visible info is correct — scan the whole page/all pages first.
+
+HANDWRITING & ROUTING (important)
+- Handwritten notes are equally important as print; never ignore them.
+- If a document has multiple routing markings, priority order for "current recipient": (1) handwritten forwarding note, e.g. "Send to Salary Section", (2) official "To:" address block, (3) dispatch endorsement, (4) rubber stamp, (5) CC section.
+- Example: typed "To: Chairman, Dept. of Physics" but handwritten "Send to Salary Section" -> recipient_department = "Salary Section".
+- Recipient is the FINAL intended office, never confuse with sender. Verify recipient != sender before finalizing.
+- Common handwritten office markings to watch for: "Send to X", "Urgent", "Immediate", "Verified", "Please process", "Finance", "Accounts", short names like SO/AFO/JFO/FO.
+
+RECIPIENT DEPARTMENT (most important field) — search entire document (To:, address block, forwarding note, handwritten note, margin, endorsement, stamp, dispatch seal, routing slip, CC). Return full department name (e.g. "Department of Physics", "Registrar Office", "Finance Office", "Salary Section"), never just "AMU"/"University"/"Office"/"Administration" alone unless that literally is the complete name.
+
+SENDER DEPARTMENT — the name and designation of the person or office issuing the document. Prioritize the name/designation of the person who signed it at the bottom (e.g., "Mohd Naim Khan", "Registrar").
+
+SUBJECT
+- If an explicit Subject/Sub:/Re: line exists, extract it exactly (strip only the label).
+- If missing, generate one: factual, professional, office-style, max 15 words, based only on document contents, no invented names/dates/departments. Style like: "Forwarding of Last Pay Certificate", "Grant of Child Care Leave", "Submission of Attendance Report".
+- If document concerns 1–5 named employees, append them in brackets, e.g. "Forwarding of Last Pay Certificate (Mohammad Asif [10235])". If more than 5 employees, do not list names in subject.
+
+DISPATCH NUMBER — look for Dispatch No./D.No./Diary No./Memo No./Admin/LD/NT/T/Letter No./Office Memo No./Reference No./Ref No./R.No./File No./Outward No. (printed, typed, handwritten, or stamped). Return only the value, e.g. "D.No. 142/2026" -> "142/2026". Must NOT be an employee ID, phone number, cheque number, bill number, account number, or file number unless explicitly labelled as dispatch/memo/reference/letter/diary number.
+
+DISPATCH DATE — look for Date/Dated/Dt./Date:/Dispatch Date. Convert to DD/MM/YYYY if possible, else keep original format. Must NOT be joining date, birth date, attendance month, retirement date, medical date, or salary month — unless explicitly the document's own date. If multiple dates exist, extract only the letter/dispatch date nearby dispatch number.
+
+EMPLOYEE_RELATED — true only if the document concerns specific individual employee(s). False for circulars, general notices, and office orders affecting everyone.
+
+EMPLOYEES — extract every clearly readable employee as {name, employee_id, designation, department}. Names must exactly match document text — never abbreviate, expand initials, correct spelling, or translate. If employee ID not visible, null (never invent). If many employees, still list all clearly readable ones in the array, but do not name them in the subject.
+
+ATTACHMENTS — only documents explicitly referenced as enclosed/attached/annexed/forwarded (Encl, Enclosure, Attached, Annexure, Enclosed herewith, Copy enclosed). Return as an array of names, e.g. ["Attendance Report", "LPC"]. Never invent attachments. If a forwarding letter encloses another document, document_type = "Forwarding Letter" and the enclosed document goes into attachments (not document_type).
+
+CONFIDENCE — one of HIGH (clearly visible/certain), MEDIUM (readable but partially unclear), LOW (heavy blur, uncertain handwriting, poor image, missing page, or an important field could not be safely determined). If confidence is LOW and inference is unsafe, prefer null over guessing.
+
+DOCUMENT TYPE — decide using heading + subject + layout + opening/closing paragraph + terminology + attachments + signature block together, not heading alone. Allowed values: Office Memo, Office Order, Letter, Forwarding Letter, Application, Forwarded Application, Notice, Circular, Reminder, Attendance Report, Attendance Statement, Salary Bill, Pay Fixation, Increment Order, Promotion Order, Transfer Order, Joining Report, Relieving Report, Last Pay Certificate, Medical Reimbursement, Leave Application, Leave Sanction, Experience Certificate, No Objection Certificate, Pension Case, Arrear Bill, Other. If evidence is inconsistent or uncertain, return "Other".
+
+UNIVERSITY CONTEXT — documents originate from offices like Registrar, Finance & Accounts, Salary Section, Controller of Examinations, Dean/Chairman/Principal offices, department offices, Proctor, Library, T&P, Computer Centre, Hostel, Purchase/Store, Estate, Audit, Accounts, Legal Cell, Personnel/Establishment/Academic/Research/Admission/Scholarship sections, etc. Ignore signatures, initials, decorative handwriting, logos, emblems, and borders unless they contain routing/department/instruction info.
+
+MULTI-PAGE DOCUMENTS — analyze every page, return one combined JSON. Use page 1 for document_type, dispatch_number, dispatch_date. Use all pages for subject, employees, attachments, departments.
+
+SELF-CHECK BEFORE OUTPUT (internal, do not print): Did I read the whole page/all pages? Did I check handwriting, stamps, margins, forwarding remarks? Did I confuse sender with recipient, or reference number with employee ID? Did I invent anything? Is JSON valid (no trailing commas, double quotes only)? Are there duplicate employees/attachments? If any check fails, fix it before producing the final JSON.
+
+EXAMPLES
+
+1) Office Memo, To: Chairman/Dept of Physics, Subject: "Grant of Child Care Leave", Memo No. F.15/2026, Date 05/07/2026 ->
+{"document_type":"Office Memo","recipient_department":"Department of Physics","sender_department":null,"subject":"Grant of Child Care Leave","dispatch_number":"F.15/2026","dispatch_date":"05/07/2026","employee_related":false,"employees":[],"attachments":[],"confidence":"HIGH"}
+
+2) Forwarding Letter enclosing Attendance Report, To: Salary Section, D.No. 225/2026, Date 06/07/2026 ->
+{"document_type":"Forwarding Letter","recipient_department":"Salary Section","sender_department":null,"subject":"Forwarding of Attendance Report","dispatch_number":"225/2026","dispatch_date":"06/07/2026","employee_related":false,"employees":[],"attachments":["Attendance Report"],"confidence":"HIGH"}
+
+3) No subject; body forwards LPC of Mohammad Asif, ID 10235 ->
+{"document_type":"Forwarding Letter","recipient_department":null,"sender_department":null,"subject":"Forwarding of Last Pay Certificate (Mohammad Asif [10235])","dispatch_number":null,"dispatch_date":null,"employee_related":true,"employees":[{"name":"Mohammad Asif","employee_id":"10235","designation":null,"department":null}],"attachments":["Last Pay Certificate"],"confidence":"MEDIUM"}
+
+4) Typed "To: Registrar" but handwritten "Forward to Finance Office" ->
+{"document_type":"Letter","recipient_department":"Finance Office","sender_department":null,"subject":null,"dispatch_number":null,"dispatch_date":null,"employee_related":false,"employees":[],"attachments":[],"confidence":"HIGH"}
+
+5) Unreadable / blurred / partially cropped document ->
+{"document_type":"Other","recipient_department":null,"sender_department":null,"subject":null,"dispatch_number":null,"dispatch_date":null,"employee_related":false,"employees":[],"attachments":[],"confidence":"LOW"}`;
+
+        const currDept = req.body.currentDepartment;
+        let useCaseInstruction = "";
+        if (reqType === "receive") {
+          useCaseInstruction = currDept 
+            ? `\n\nCRITICAL CONTEXT: You are processing a RECEIVE DOCUMENT ENTRY for our department: "${currDept}". The RECIPIENT DEPARTMENT is "${currDept}". Pay extra attention to accurately identifying the SENDER DEPARTMENT (who sent this to us, usually someone else).`
+            : `\n\nCRITICAL CONTEXT: You are processing a RECEIVE DOCUMENT ENTRY. Pay extra attention to accurately identifying the SENDER DEPARTMENT (who sent this to us).`;
+        } else {
+          useCaseInstruction = currDept
+            ? `\n\nCRITICAL CONTEXT: You are processing a NEW DISPATCH from our department: "${currDept}". The SENDER DEPARTMENT is "${currDept}". Pay extra attention to accurately identifying the RECIPIENT DEPARTMENT (who we are sending this to).`
+            : `\n\nCRITICAL CONTEXT: You are processing a NEW DISPATCH. Pay extra attention to accurately identifying the RECIPIENT DEPARTMENT (who we are sending this to).`;
+        }
+        
+        const finalPrompt = basePrompt + useCaseInstruction;
+
+        if (ollamaApiUrl && ollamaModel) {
+          try {
+            const base64Image = imageBufferForApi.toString("base64");
+            const ollamaPayload = {
+              model: ollamaModel,
+              messages: [{
+                role: "user",
+                content: req.body.prompt || finalPrompt,
+                images: [base64Image]
+              }],
+              stream: false
+            };
+
+            const ollamaHeaders: Record<string, string> = { "Content-Type": "application/json" };
+            if (ollamaApiKey) {
+              ollamaHeaders["Authorization"] = `Bearer ${ollamaApiKey}`;
+            }
+
+            const ollamaResponse = await fetch(ollamaApiUrl, {
+              method: "POST",
+              headers: ollamaHeaders,
+              body: JSON.stringify(ollamaPayload)
             });
+
+            if (ollamaResponse.ok) {
+              const ollamaData = await ollamaResponse.json();
+              let content = ollamaData.message?.content || "";
+              content = content.replace(/```json/gi, "").replace(/```/g, "").trim();
+              
+              const parsedResult = JSON.parse(content);
+              aiResult = { result: parsedResult };
+              aiSuccess = true;
+            } else {
+              aiError = `Ollama returned ${ollamaResponse.status}: ${await ollamaResponse.text()}`;
+            }
+          } catch (e: any) {
+             aiError = "Ollama connection/parsing failed: " + e.message;
+             console.error("[Dispatch] Ollama error:", e);
           }
+        }
 
-          const aiResult = await apiResponse.json();
+        // Fallback to legacy OCR API if Ollama failed or is not configured
+        if (!aiSuccess && fallbackApiUrl) {
+          console.log("[Dispatch] Falling back to legacy OCR API...", fallbackApiUrl);
+          try {
+            const formData = new FormData();
+            formData.append(
+              "file",
+              new Blob([imageBufferForApi], { type: "image/jpeg" }),
+              imageFilenameForApi.replace(/\.[^.]+$/, ".jpg")
+            );
+            if (req.body.prompt || finalPrompt) formData.append("prompt", req.body.prompt || finalPrompt);
 
-          // Success: return AI result + uploaded file info
-          res.json({
-            ...aiResult,
-            extractionFailed: false,
-            uploadedFileUrl: originalFileUrl,
-            uploadedFileType: isPdf ? "pdf" : "image",
-            uploadedFileName: req.file.originalname,
-          });
-        } catch (apiError: any) {
-          console.error("[Dispatch] AI API call failed:", apiError);
-          // Network/timeout error — frontend shows manual form
+            const fallbackHeaders: Record<string, string> = {};
+            if (fallbackApiKey) {
+              fallbackHeaders["Authorization"] = `Bearer ${fallbackApiKey}`;
+              fallbackHeaders["x-api-key"] = fallbackApiKey;
+            }
+
+            const fallbackModel = (req.query.model as string) || "gemma4:cloud";
+            const fallbackResponse = await fetch(`${fallbackApiUrl}?model=${encodeURIComponent(fallbackModel)}`, {
+              method: "POST",
+              headers: fallbackHeaders,
+              body: formData,
+            });
+
+            if (fallbackResponse.ok) {
+              const fallbackData = await fallbackResponse.json();
+              // Wrap the response in 'result' if the API returned it flatly
+              aiResult = fallbackData.result ? fallbackData : { result: fallbackData };
+              aiSuccess = true;
+            } else {
+              aiError += ` | Fallback API returned ${fallbackResponse.status}: ${await fallbackResponse.text()}`;
+            }
+          } catch (e: any) {
+             aiError += ` | Fallback connection failed: ${e.message}`;
+             console.error("[Dispatch] Fallback API error:", e);
+          }
+        }
+
+        if (!aiSuccess) {
           return res.json({
             result: null,
             extractionFailed: true,
-            failureReason: "AI API connection failed: " + apiError.message,
+            failureReason: aiError || "No extraction APIs available",
             uploadedFileUrl: originalFileUrl,
             uploadedFileType: isPdf ? "pdf" : "image",
             uploadedFileName: req.file.originalname,
           });
         }
+
+        // Success: return AI result + uploaded file info
+        res.json({
+          ...aiResult,
+          extractionFailed: false,
+          uploadedFileUrl: originalFileUrl,
+          uploadedFileType: isPdf ? "pdf" : "image",
+          uploadedFileName: req.file.originalname,
+        });
+
       } catch (error: any) {
         console.error("[Dispatch] Extract error:", error);
         res.status(500).json({ message: "Failed to process document", error: error.message });
@@ -658,10 +812,23 @@ export function registerDispatchRoutes(app: Express) {
       const departmentId = parseInt(req.params.departmentId);
       if (isNaN(departmentId)) return res.status(400).json({ message: "Invalid department ID" });
 
+      const fy = req.query.fy as string;
+      const conditions = [eq(dispatchDocuments.senderDepartmentId, departmentId)];
+
+      if (fy && fy !== "all") {
+        const year = parseInt(fy.split("-")[0]);
+        if (!isNaN(year)) {
+          const start = new Date(year, 3, 1).toISOString();
+          const end = new Date(year + 1, 2, 31, 23, 59, 59, 999).toISOString();
+          conditions.push(sql`${dispatchDocuments.createdAt} >= ${start}`);
+          conditions.push(sql`${dispatchDocuments.createdAt} <= ${end}`);
+        }
+      }
+
       const dispatches = await db
         .select()
         .from(dispatchDocuments)
-        .where(eq(dispatchDocuments.senderDepartmentId, departmentId))
+        .where(and(...conditions))
         .orderBy(desc(dispatchDocuments.createdAt));
 
       const results = await Promise.all(
@@ -674,6 +841,7 @@ export function registerDispatchRoutes(app: Express) {
               externalContactId: dispatchRecipients.externalContactId,
               status: dispatchRecipients.status,
               emailSent: dispatchRecipients.emailSent,
+              readAt: dispatchRecipients.readAt,
             })
             .from(dispatchRecipients)
             .where(eq(dispatchRecipients.dispatchId, d.id));
@@ -707,7 +875,7 @@ export function registerDispatchRoutes(app: Express) {
             subject: actualSubject,
             recipients: recipientDetails,
             recipientCount: recipients.length,
-            readCount: recipients.filter((r) => r.status === "read" || r.status === "forwarded" || r.status === "marked").length,
+            readCount: recipients.filter((r) => r.readAt !== null && r.readAt !== undefined).length,
           };
         })
       );
@@ -725,15 +893,26 @@ export function registerDispatchRoutes(app: Express) {
       const departmentId = parseInt(req.params.departmentId);
       if (isNaN(departmentId)) return res.status(400).json({ message: "Invalid department ID" });
 
+      const fy = req.query.fy as string;
+      const conditions = [
+        eq(dispatchRecipients.departmentId, departmentId),
+        eq(dispatchRecipients.recipientType, "department")
+      ];
+
+      if (fy && fy !== "all") {
+        const year = parseInt(fy.split("-")[0]);
+        if (!isNaN(year)) {
+          const start = new Date(year, 3, 1).toISOString();
+          const end = new Date(year + 1, 2, 31, 23, 59, 59, 999).toISOString();
+          conditions.push(sql`${dispatchRecipients.createdAt} >= ${start}`);
+          conditions.push(sql`${dispatchRecipients.createdAt} <= ${end}`);
+        }
+      }
+
       const recipientRecords = await db
         .select()
         .from(dispatchRecipients)
-        .where(
-          and(
-            eq(dispatchRecipients.departmentId, departmentId),
-            eq(dispatchRecipients.recipientType, "department")
-          )
-        )
+        .where(and(...conditions))
         .orderBy(desc(dispatchRecipients.createdAt));
 
       const results = await Promise.all(
@@ -983,7 +1162,17 @@ export function registerDispatchRoutes(app: Express) {
         ? new Date(now.getFullYear(), 3, 1)
         : new Date(now.getFullYear() - 1, 3, 1);
 
-      const inwardCount = await db
+      const inwardCount1 = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(dispatchDocuments)
+        .where(
+          and(
+            sql`${dispatchDocuments.aiExtractedData}->>'_receivedByDepartmentId' = ${departmentId.toString()}`,
+            sql`${dispatchDocuments.createdAt} >= ${fyStart.toISOString()}`
+          )
+        );
+
+      const inwardCount2 = await db
         .select({ count: sql<number>`count(*)` })
         .from(dispatchRecipients)
         .where(
@@ -994,7 +1183,8 @@ export function registerDispatchRoutes(app: Express) {
           )
         );
 
-      const inwardNumber = `${Number(inwardCount[0]?.count || 0) + 1}/${generateShortName(departmentName || "DEPT")}`;
+      const totalInward = Number(inwardCount1[0]?.count || 0) + Number(inwardCount2[0]?.count || 0) + 1;
+      const inwardNumber = `${totalInward}/${generateShortName(departmentName || "DEPT")}`;
 
       const newStatus = (recipientRow.status === "dispatched" || recipientRow.status === "read") 
         ? "received" 
@@ -1043,28 +1233,47 @@ export function registerDispatchRoutes(app: Express) {
       const dispatchId = parseInt(req.params.id);
       const { departmentId, departmentName } = req.body;
 
-      await db
-        .update(dispatchRecipients)
-        .set({ status: "read", readAt: new Date() })
+      const [recipient] = await db
+        .select()
+        .from(dispatchRecipients)
         .where(
           and(
             eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, departmentId),
-            or(
-              eq(dispatchRecipients.status, "dispatched"),
-              eq(dispatchRecipients.status, "received")
-            )
+            eq(dispatchRecipients.departmentId, departmentId)
           )
         );
 
-      await db.insert(dispatchTracking).values({
-        dispatchId,
-        action: "read",
-        actionByDepartmentId: departmentId,
-        actionByName: departmentName || "Department",
-        details: `Document viewed`,
-        recipientDepartmentId: departmentId,
-      });
+      if (recipient) {
+        const updateData: any = {};
+        let isFirstRead = false;
+
+        if (!recipient.readAt) {
+          updateData.readAt = new Date();
+          isFirstRead = true;
+        }
+
+        if (recipient.status === "received") {
+          updateData.status = "read";
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await db
+            .update(dispatchRecipients)
+            .set(updateData)
+            .where(eq(dispatchRecipients.id, recipient.id));
+
+          if (isFirstRead) {
+            await db.insert(dispatchTracking).values({
+              dispatchId,
+              action: "read",
+              actionByDepartmentId: departmentId,
+              actionByName: departmentName || "Department",
+              details: `Document viewed`,
+              recipientDepartmentId: departmentId,
+            });
+          }
+        }
+      }
 
       res.json({ success: true });
     } catch (error: any) {
