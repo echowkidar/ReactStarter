@@ -147,11 +147,12 @@ async function convertPdfToImage(pdfPath: string): Promise<string> {
             return outputPath;
           }
         }
-      } catch (picError) {
+      } catch (picError: any) {
         console.error("[Dispatch] pdf-img-convert fallback also failed:", picError);
+        throw new Error(`PDF conversion failed. Missing Ghostscript? Fallback error: ${picError.message || String(picError)}`);
       }
       
-      throw new Error("Could not convert PDF to image");
+      throw new Error(`Could not convert PDF to image. Please install ghostscript on server.`);
     }
   }
 }

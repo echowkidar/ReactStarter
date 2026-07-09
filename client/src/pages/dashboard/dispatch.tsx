@@ -23,6 +23,7 @@ import ScannerModal from "@/components/ScannerModal";
 import { getCurrentDepartment } from "@/lib/auth";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface DispatchDoc {
@@ -122,7 +123,7 @@ export default function Dispatch() {
   const [recvRefNo, setRecvRefNo] = useState("");
   const [recvPriority, setRecvPriority] = useState("normal");
   const [recvConfidential, setRecvConfidential] = useState(false);
-  const [recvMarkToStaff, setRecvMarkToStaff] = useState("");
+  const [recvMarkToStaff, setRecvMarkToStaff] = useState<string[]>([]);
   const [recvMarkToStaffRemarks, setRecvMarkToStaffRemarks] = useState("");
   const [recvFileUrl, setRecvFileUrl] = useState("");
   const [recvFileType, setRecvFileType] = useState("image");
@@ -552,7 +553,7 @@ export default function Dispatch() {
       if (recvRefNo) formData.append("referenceNumber", recvRefNo);
       formData.append("priority", recvPriority);
       formData.append("isConfidential", recvConfidential.toString());
-      if (recvMarkToStaff && recvMarkToStaff !== "none") formData.append("markedToStaff", recvMarkToStaff);
+      if (recvMarkToStaff && recvMarkToStaff.length > 0) formData.append("markedToStaff", recvMarkToStaff.join(", "));
       if (recvMarkToStaffRemarks) formData.append("staffRemarks", recvMarkToStaffRemarks);
 
       const res = await fetch("/api/dispatch/receive-external", { method: "POST", body: formData });
@@ -817,7 +818,7 @@ export default function Dispatch() {
     setRecvPriority("normal");
     setRecvConfidential(false);
     setRecvFileUrl("");
-    setRecvMarkToStaff("");
+    setRecvMarkToStaff([]);
     setRecvMarkToStaffRemarks("");
   };
 
@@ -1641,17 +1642,12 @@ export default function Dispatch() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Mark to Staff (Optional)</Label>
-                        <Select value={recvMarkToStaff} onValueChange={setRecvMarkToStaff}>
-                          <SelectTrigger className={!recvMarkToStaff ? "text-gray-500" : ""}>
-                            <SelectValue placeholder="Select staff..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {departmentEmployees.map((emp: any) => (
-                              <SelectItem key={emp.id} value={emp.name}>{emp.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <MultiSelect
+                          options={departmentEmployees.map((emp: any) => ({ label: emp.name, value: emp.name }))}
+                          selected={recvMarkToStaff}
+                          onChange={setRecvMarkToStaff}
+                          placeholder="Select staff..."
+                        />
                       </div>
                       <div>
                         <Label className="text-xs">Staff Remarks (Optional)</Label>
