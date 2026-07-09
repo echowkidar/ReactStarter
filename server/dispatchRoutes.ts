@@ -1057,6 +1057,55 @@ EXAMPLES
     }
   });
 
+  // ─── Search Departments for recipient selection ─────────────────────────
+  app.get("/api/dispatch/search-departments", async (req: Request, res: Response) => {
+    try {
+      const query = (req.query.q as string) || "";
+      if (query.length < 1) return res.json([]);
+
+      const results = await db
+        .select({
+          id: departments.id,
+          name: departments.name,
+          email: departments.email,
+          hodTitle: departments.hodTitle,
+          hodName: departments.hodName,
+        })
+        .from(departments)
+        .where(ilike(departments.name, `%${query}%`))
+        .orderBy(asc(departments.name))
+        .limit(20);
+
+      res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ─── All Dispatches (Admin Overview) ────────────────────────────────────
+  app.get("/api/dispatch/all-dispatches", async (req: Request, res: Response) => {
+    try {
+      const dispatches = await db
+        .select({
+          id: dispatchDocuments.id,
+          senderName: dispatchDocuments.senderName,
+          documentType: dispatchDocuments.documentType,
+          subject: dispatchDocuments.subject,
+          outwardNumber: dispatchDocuments.outwardNumber,
+          priority: dispatchDocuments.priority,
+          createdAt: dispatchDocuments.createdAt,
+          recipientCount: sql<number>`(SELECT count(*) FROM dispatch_recipients WHERE dispatch_id = ${dispatchDocuments.id})`,
+        })
+        .from(dispatchDocuments)
+        .orderBy(desc(dispatchDocuments.createdAt))
+        .limit(100);
+
+      res.json(dispatches);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ─── Get Dispatch Detail ────────────────────────────────────────────────
   app.get("/api/dispatch/:id", async (req: Request, res: Response) => {
     try {
@@ -1738,54 +1787,7 @@ EXAMPLES
     }
   });
 
-  // ─── Search Departments for recipient selection ─────────────────────────
-  app.get("/api/dispatch/search-departments", async (req: Request, res: Response) => {
-    try {
-      const query = (req.query.q as string) || "";
-      if (query.length < 1) return res.json([]);
 
-      const results = await db
-        .select({
-          id: departments.id,
-          name: departments.name,
-          email: departments.email,
-          hodTitle: departments.hodTitle,
-          hodName: departments.hodName,
-        })
-        .from(departments)
-        .where(ilike(departments.name, `%${query}%`))
-        .orderBy(asc(departments.name))
-        .limit(20);
-
-      res.json(results);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // ─── All Dispatches (Admin Overview) ────────────────────────────────────
-  app.get("/api/dispatch/all-dispatches", async (req: Request, res: Response) => {
-    try {
-      const dispatches = await db
-        .select({
-          id: dispatchDocuments.id,
-          senderName: dispatchDocuments.senderName,
-          documentType: dispatchDocuments.documentType,
-          subject: dispatchDocuments.subject,
-          outwardNumber: dispatchDocuments.outwardNumber,
-          priority: dispatchDocuments.priority,
-          createdAt: dispatchDocuments.createdAt,
-          recipientCount: sql<number>`(SELECT count(*) FROM dispatch_recipients WHERE dispatch_id = ${dispatchDocuments.id})`,
-        })
-        .from(dispatchDocuments)
-        .orderBy(desc(dispatchDocuments.createdAt))
-        .limit(100);
-
-      res.json(dispatches);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
 
   // ─── Add member to group ───────────────────────────────────────────────
   app.post("/api/dispatch-groups/:id/members", async (req: Request, res: Response) => {
