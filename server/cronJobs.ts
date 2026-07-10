@@ -7,8 +7,8 @@ import { sendAttendanceReminder } from './emailService';
 export function setupCronJobs() {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-    // Run every day at 10:00 AM IST
-    cron.schedule('0 10 * * *', async () => {
+    // Run every day at 11:32 AM IST
+    cron.schedule('32 11 * * *', async () => {
         console.log('Running daily attendance reminders cron...');
 
         try {
@@ -44,10 +44,14 @@ export function setupCronJobs() {
                     });
 
                     if (reports.length === 0) {
-                        await sendAttendanceReminder(dept.email, dept.name, 'not_created', {
-                            monthName: monthNames[targetMonth],
-                            year: targetYear
-                        });
+                        try {
+                            await sendAttendanceReminder(dept.email, dept.name, 'not_created', {
+                                monthName: monthNames[targetMonth],
+                                year: targetYear
+                            });
+                        } catch (e) {
+                            console.error(`Cron error sending not_created to ${dept.email}:`, e);
+                        }
                         await delay(2000); // Wait 2 seconds between emails
                     }
                 }
@@ -71,11 +75,15 @@ export function setupCronJobs() {
                         if (report) {
                             currentStatus = report.status;
                         }
-                        await sendAttendanceReminder(dept.email, dept.name, 'deadline_warning', {
-                            monthName: monthNames[targetMonth],
-                            year: targetYear,
-                            currentStatus: currentStatus
-                        });
+                        try {
+                            await sendAttendanceReminder(dept.email, dept.name, 'deadline_warning', {
+                                monthName: monthNames[targetMonth],
+                                year: targetYear,
+                                currentStatus: currentStatus
+                            });
+                        } catch (e) {
+                            console.error(`Cron error sending deadline_warning to ${dept.email}:`, e);
+                        }
                         await delay(2000); // Wait 2 seconds between emails
                     }
                 }
@@ -104,10 +112,14 @@ export function setupCronJobs() {
             for (const report of draftReports) {
                 const dept = permittedDepts.find(d => d.id === report.departmentId);
                 if (dept?.email) {
-                    await sendAttendanceReminder(dept.email, dept.name, 'not_finalized', {
-                        monthName: monthNames[report.month],
-                        year: report.year
-                    });
+                    try {
+                        await sendAttendanceReminder(dept.email, dept.name, 'not_finalized', {
+                            monthName: monthNames[report.month],
+                            year: report.year
+                        });
+                    } catch (e) {
+                        console.error(`Cron error sending not_finalized to ${dept.email}:`, e);
+                    }
                     await delay(2000); // Wait 2 seconds
                 }
             }
@@ -124,10 +136,14 @@ export function setupCronJobs() {
             for (const report of submittedReports) {
                 const dept = permittedDepts.find(d => d.id === report.departmentId);
                 if (dept?.email) {
-                    await sendAttendanceReminder(dept.email, dept.name, 'not_sent', {
-                        monthName: monthNames[report.month],
-                        year: report.year
-                    });
+                    try {
+                        await sendAttendanceReminder(dept.email, dept.name, 'not_sent', {
+                            monthName: monthNames[report.month],
+                            year: report.year
+                        });
+                    } catch (e) {
+                        console.error(`Cron error sending not_sent to ${dept.email}:`, e);
+                    }
                     await delay(2000); // Wait 2 seconds
                 }
             }
