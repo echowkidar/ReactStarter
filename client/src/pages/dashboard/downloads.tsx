@@ -84,14 +84,17 @@ export default function Downloads() {
                                                             <FileText className="w-12 h-12 mb-2" />
                                                             <span className="text-[10px] font-medium uppercase tracking-wider">Preview Unavailable</span>
                                                         </div>
-                                                        <iframe
-                                                            src={`/api/downloads/${item.id}/access#toolbar=0&navpanes=0&scrollbar=0&view=FitH,top`}
+                                                        <object
+                                                            data={`/api/downloads/${item.id}/access#toolbar=0&navpanes=0&scrollbar=0&view=FitH,top`}
                                                             className="absolute top-0 left-0 border-0 pointer-events-none origin-top-left z-10 bg-transparent"
                                                             style={{ width: '150%', height: '150%', transform: 'scale(0.666)' }}
                                                             title={item.title}
-                                                            scrolling="no"
-                                                            sandbox="allow-same-origin allow-scripts"
-                                                        />
+                                                        >
+                                                            {/* Fallback for when object cannot render */}
+                                                            <div className="absolute inset-0 bg-slate-50 flex items-center justify-center text-slate-400 z-10">
+                                                                <FileText className="w-12 h-12 mb-2" />
+                                                            </div>
+                                                        </object>
                                                         {/* Overlay to catch all clicks and prevent interacting with the iframe */}
                                                         <div className="absolute inset-0 bg-transparent z-20" />
                                                     </div>
