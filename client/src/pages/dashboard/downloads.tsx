@@ -3,6 +3,7 @@ import { DownloadCloud, ArrowRight, FileText, Globe } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FileText } from "lucide-react";
 
 type UsefulDownload = {
     id: number;
@@ -61,22 +62,42 @@ export default function Downloads() {
                                     </div>
                                 ) : (
                                     <div className="aspect-video w-full bg-white border-b relative overflow-hidden group-hover:bg-slate-50 transition-colors">
-                                        {(item.fileUrl && item.fileUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i)) ||
-                                            (item.externalLink && item.externalLink.match(/\.(jpg|jpeg|png|webp|gif)$/i)) ? (
-                                            <img src={item.fileUrl || item.externalLink || ""} alt="File Preview" className="h-full w-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full relative overflow-hidden bg-white flex items-start justify-center">
-                                                <iframe
-                                                    src={`/api/downloads/${item.id}/access#toolbar=0&navpanes=0&scrollbar=0&view=FitH,top`}
-                                                    className="absolute top-0 left-0 border-0 pointer-events-none origin-top-left"
-                                                    style={{ width: '150%', height: '150%', transform: 'scale(0.666)' }}
-                                                    title={item.title}
-                                                    scrolling="no"
-                                                />
-                                                {/* Overlay to catch all clicks and prevent interacting with the iframe */}
-                                                <div className="absolute inset-0 bg-transparent z-10" />
-                                            </div>
-                                        )}
+                                        {(() => {
+                                            const url = (item.fileUrl || item.externalLink || "").toLowerCase();
+                                            const isImage = url.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+                                            const isOfficeFile = url.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
+
+                                            if (isImage) {
+                                                return <img src={item.fileUrl || item.externalLink || ""} alt="File Preview" className="h-full w-full object-cover" />;
+                                            } else if (isOfficeFile) {
+                                                return (
+                                                    <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 text-slate-400">
+                                                        <FileText className="w-12 h-12 mb-2 text-slate-300" />
+                                                        <span className="text-xs font-medium uppercase tracking-wider">Document File</span>
+                                                    </div>
+                                                );
+                                            } else {
+                                                return (
+                                                    <div className="w-full h-full relative overflow-hidden bg-slate-50 flex items-start justify-center">
+                                                        {/* Fallback background icon in case iframe is blank */}
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 z-0">
+                                                            <FileText className="w-12 h-12 mb-2" />
+                                                            <span className="text-[10px] font-medium uppercase tracking-wider">Preview Unavailable</span>
+                                                        </div>
+                                                        <iframe
+                                                            src={`/api/downloads/${item.id}/access#toolbar=0&navpanes=0&scrollbar=0&view=FitH,top`}
+                                                            className="absolute top-0 left-0 border-0 pointer-events-none origin-top-left z-10 bg-transparent"
+                                                            style={{ width: '150%', height: '150%', transform: 'scale(0.666)' }}
+                                                            title={item.title}
+                                                            scrolling="no"
+                                                            sandbox="allow-same-origin allow-scripts"
+                                                        />
+                                                        {/* Overlay to catch all clicks and prevent interacting with the iframe */}
+                                                        <div className="absolute inset-0 bg-transparent z-20" />
+                                                    </div>
+                                                );
+                                            }
+                                        })()}
                                     </div>
                                 )}
 
