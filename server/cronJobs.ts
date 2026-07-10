@@ -7,8 +7,8 @@ import { sendAttendanceReminder } from './emailService';
 export function setupCronJobs() {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-    // Run every day at 11:32 AM IST
-    cron.schedule('32 11 * * *', async () => {
+    // Run every day at 09:00 AM IST
+    cron.schedule('0 9 * * *', async () => {
         console.log('Running daily attendance reminders cron...');
 
         try {
