@@ -3,7 +3,7 @@ import { DownloadCloud, ArrowRight, FileText, Globe } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
+
 
 type UsefulDownload = {
     id: number;

@@ -548,7 +548,7 @@ export default function Dispatch() {
   // ─── Create Dispatch Mutation ───────────────────────────────────────
   const createDispatch = useMutation({
     mutationFn: async () => {
-      if (!formDocType || !formSubject || !uploadedFileUrl || selectedRecipients.length === 0) {
+      if (!formDocType || !formSubject || selectedRecipients.length === 0) {
         throw new Error("Please fill all required fields and select at least one recipient");
       }
 
@@ -1411,20 +1411,20 @@ export default function Dispatch() {
                     <div className="h-px bg-gray-200 flex-1"></div>
                   </div>
 
-                  {/* Upload Only (Manual) - Smaller Button */}
+                  {/* Manual Entry Without Upload - Smaller Button */}
                   <Button
                     variant="outline"
                     className="w-full border-gray-300 text-gray-700"
                     onClick={() => {
-                      const input = document.createElement("input");
-                      input.type = "file";
-                      input.accept = "image/*,.pdf";
-                      input.onchange = (e: any) => handleUploadOnly(e);
-                      input.click();
+                      setUploadedFileUrl("");
+                      setUploadedFileType("");
+                      setExtractionFailed(true);
+                      setIsAiAttempted(false);
+                      setDispatchStep("form");
                     }}
                   >
-                    <Upload className="h-4 w-4 mr-2 text-gray-500" />
-                    Upload (Manual Dispatch)
+                    <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                    Manual Dispatch
                   </Button>
                 </div>
 
@@ -1671,20 +1671,20 @@ export default function Dispatch() {
                     <div className="h-px bg-gray-200 flex-1"></div>
                   </div>
 
-                  {/* Manual Receive */}
+                  {/* Manual Receive Without Upload */}
                   <Button
                     variant="outline"
                     className="w-full border-gray-300 text-gray-700"
                     onClick={() => {
-                      const input = document.createElement("input");
-                      input.type = "file";
-                      input.accept = "image/*,.pdf";
-                      input.onchange = (e: any) => handleRecvUploadOnly(e);
-                      input.click();
+                      setRecvFileUrl("");
+                      setRecvFileType("");
+                      setRecvIsManualMode(true);
+                      setRecvExtractionFailed(false);
+                      setRecvStep("form");
                     }}
                   >
-                    <Upload className="h-4 w-4 mr-2 text-gray-500" />
-                    Upload (Manual Receive)
+                    <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                    Manual Received
                   </Button>
                 </div>
 

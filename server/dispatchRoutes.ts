@@ -496,7 +496,7 @@ EXAMPLES
           fileType = req.file.mimetype.includes("pdf") ? "pdf" : "image";
         }
         if (!fileUrl) {
-          return res.status(400).json({ message: "No document file provided" });
+          fileUrl = ""; // Use empty string instead of throwing error for manual dispatch
         }
 
         // Generate outward number
