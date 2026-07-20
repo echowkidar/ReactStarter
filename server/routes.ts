@@ -2590,6 +2590,19 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid periods data" });
       }
 
+      // Duplicate guard: ek hi report mein ek hi employee ki entry do baar nahi honi chahiye
+      const existingEntryCheck = await db.execute(sql`
+        SELECT id FROM attendance_entries
+        WHERE report_id = ${reportId} AND employee_id = ${Number(employeeId)}
+        LIMIT 1
+      `);
+      if (existingEntryCheck.rows.length > 0) {
+        console.warn(`[Duplicate blocked] Employee ${employeeId} already exists in report ${reportId}`);
+        return res.status(409).json({
+          message: `Employee ID ${employeeId} already has an entry in this report. Duplicate entry blocked.`
+        });
+      }
+
       // Calculate total days and combine remarks
       const totalDays = periods.reduce((sum, period) => sum + (period.days || 0), 0);
       const remarks = periods.map(p => p.remarks).filter(Boolean).join("; ");
@@ -2597,8 +2610,6 @@ export async function registerRoutes(app: Express) {
       // Get the first and last period dates
       const firstPeriod = periods[0];
       const lastPeriod = periods[periods.length - 1];
-
-      // Log the received data for debugging
 
       // Get report to store departmentId on entry
       const report = await storage.getAttendanceReport(reportId);
