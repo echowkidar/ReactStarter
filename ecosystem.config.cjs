@@ -3,10 +3,10 @@ module.exports = {
     name: "reactstarter",
     script: "dist/index.js",
     instances: 1,
-    exec_mode: "cluster",
+    exec_mode: "fork",
     autorestart: true,
     watch: false,
-    max_memory_restart: "1G",
+    max_memory_restart: "400M",
     env: {
       NODE_ENV: "production",
       DATABASE_URL: "postgresql://postgres:salary@167.71.230.230:5432/postgres",
