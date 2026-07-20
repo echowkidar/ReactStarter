@@ -17,9 +17,11 @@ interface CachedItem<T> {
 const inboxCache = new Map<string, CachedItem<any[]>>();
 const sentCache = new Map<string, CachedItem<any[]>>();
 const messageCache = new Map<string, CachedItem<any>>();
+const unreadCountCache = new Map<string, CachedItem<number>>(); // ✅ NEW: unread count cache
 
 const INBOX_CACHE_TTL = 2 * 60 * 1000;   // 2 minutes
 const MESSAGE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const UNREAD_CACHE_TTL = 2 * 60 * 1000;  // 2 minutes — matches frontend poll interval
 
 function getCacheKey(userId: string, userType: string, extra?: string) {
   return `${userType}:${userId}${extra ? ':' + extra : ''}`;
@@ -121,6 +123,14 @@ export async function getInbox(userId: string, userType: string) {
 // ─── Unread Count ───────────────────────────────────────────────────────────
 
 export async function getUnreadCount(userId: string, userType: string) {
+  const cacheKey = getCacheKey(userId, userType, 'unread');
+
+  // ✅ Return cached result if still fresh — avoids IMAP connection on every poll
+  const cached = unreadCountCache.get(cacheKey);
+  if (isCacheValid(cached, UNREAD_CACHE_TTL)) {
+    return cached.data;
+  }
+
   const { client } = await getImapClient(userId, userType);
   await client.connect();
 
@@ -138,7 +148,9 @@ export async function getUnreadCount(userId: string, userType: string) {
   } finally {
     await client.logout();
   }
-  
+
+  // ✅ Store result in cache
+  unreadCountCache.set(cacheKey, { data: unreadCount, timestamp: Date.now() });
   return unreadCount;
 }
 

@@ -6020,6 +6020,11 @@ export async function registerRoutes(app: Express) {
       const count = await getUnreadCount(userId, userType);
       res.json({ success: true, count });
     } catch (error: any) {
+      // ✅ "Email not configured" is not a server error — return 200 with count 0
+      // This prevents constant 500 log spam and aggressive frontend retries
+      if (error.message === "Email configuration not found.") {
+        return res.json({ success: true, count: 0, configured: false });
+      }
       console.error("Unread count fetch error:", error);
       res.status(500).json({ success: false, message: error.message || "Failed to fetch unread count" });
     }
