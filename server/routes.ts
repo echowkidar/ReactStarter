@@ -3283,11 +3283,28 @@ export async function registerRoutes(app: Express) {
           ORDER BY epid
         `);
         employees = result.rows;
+      } else if (category === 'report_entries') {
+        const reportId = parseInt(req.query.reportId as string);
+        if (!isNaN(reportId)) {
+          const result = await db.execute(sql`
+            SELECT e.id, e.epid, e.name, e.designation, e.employment_status, 
+                   e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active,
+                   COALESCE(ae.days, 0)::int as days_count,
+                   ae.from_date, ae.to_date
+            FROM employees e
+            JOIN attendance_entries ae ON ae.employee_id = e.id
+            WHERE ae.report_id = ${reportId}
+            ORDER BY e.epid
+          `);
+          employees = result.rows;
+        }
       } else if (category === 'reported' && !isNaN(month) && !isNaN(year)) {
         const result = await db.execute(sql`
           SELECT e.id, e.epid, e.name, e.designation, e.employment_status, 
                  e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active,
-                 COALESCE(SUM(ae.days), 0)::int as days_count
+                 COALESCE(SUM(ae.days), 0)::int as days_count,
+                 MIN(ae.from_date) as from_date,
+                 MAX(ae.to_date) as to_date
           FROM employees e
           JOIN attendance_entries ae ON ae.employee_id = e.id
           JOIN attendance_reports ar ON ae.report_id = ar.id

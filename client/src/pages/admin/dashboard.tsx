@@ -426,6 +426,7 @@ export default function AdminDashboard() {
     departmentName: string;
     category: string;
     categoryLabel: string;
+    reportId?: number;
   } | null>(null);
   const [popupSearch, setPopupSearch] = useState("");
   const [popupShowConfirmed, setPopupShowConfirmed] = useState(false);
@@ -449,11 +450,14 @@ export default function AdminDashboard() {
 
   // Lazy-fetch employee list for popup
   const { data: popupEmployees = [], isLoading: popupLoading } = useQuery<any[]>({
-    queryKey: ["/api/admin/department-employees", employeePopup?.departmentId, employeePopup?.category, apiMonth, filterYear],
+    queryKey: ["/api/admin/department-employees", employeePopup?.departmentId, employeePopup?.category, apiMonth, filterYear, employeePopup?.reportId],
     queryFn: async () => {
       if (!employeePopup) return [];
-      const response = await apiRequest("GET",
-        `/api/admin/department-employees?departmentId=${employeePopup.departmentId}&category=${employeePopup.category}&month=${apiMonth}&year=${filterYear}`);
+      let url = `/api/admin/department-employees?departmentId=${employeePopup.departmentId}&category=${employeePopup.category}&month=${apiMonth}&year=${filterYear}`;
+      if (employeePopup.reportId) {
+        url += `&reportId=${employeePopup.reportId}`;
+      }
+      const response = await apiRequest("GET", url);
       return response.json();
     },
     enabled: !!employeePopup?.open,
@@ -1908,8 +1912,9 @@ export default function AdminDashboard() {
                                   open: true,
                                   departmentId: deptId,
                                   departmentName: deptName,
-                                  category: 'reported',
-                                  categoryLabel: 'Attendance Reported (Month)'
+                                  category: 'report_entries',
+                                  categoryLabel: `Attendance Reported (Receipt ${report.receiptNo || 'Draft'})`,
+                                  reportId: report.id
                                 })}
                               >
                                 {(report as any).employeeCount ?? st?.reported ?? '—'} Reported
@@ -2262,9 +2267,12 @@ export default function AdminDashboard() {
                     size="sm"
                     className="flex items-center gap-2"
                     onClick={() => {
-                      const isReported = employeePopup?.category === 'reported';
+                      const isReported = employeePopup?.category === 'reported' || employeePopup?.category === 'report_entries';
                       const headers = ['EPID', 'Name', 'Designation', 'Status', 'Term Expiry', 'Salary Asst.', 'Reg. No.'];
-                      if (isReported) headers.push('Days');
+                      if (isReported) {
+                        headers.push('Period');
+                        headers.push('Days');
+                      }
 
                       const rows = filteredPopupEmployees.map((emp: any) => {
                         const row = [
@@ -2276,7 +2284,10 @@ export default function AdminDashboard() {
                           emp.salary_asstt || '',
                           emp.salary_register_no || ''
                         ];
-                        if (isReported) row.push(String(emp.days_count || 0));
+                        if (isReported) {
+                          row.push(emp.from_date && emp.to_date ? `${emp.from_date} to ${emp.to_date}` : '—');
+                          row.push(String(emp.days_count || 0));
+                        }
                         return row;
                       });
 
@@ -2314,7 +2325,12 @@ export default function AdminDashboard() {
                         <TableHead>Term Expiry</TableHead>
                         <TableHead>Salary Asst.</TableHead>
                         <TableHead>Reg. No.</TableHead>
-                        {employeePopup?.category === 'reported' && <TableHead className="w-[60px]">Days</TableHead>}
+                        {(employeePopup?.category === 'reported' || employeePopup?.category === 'report_entries') && (
+                          <>
+                            <TableHead className="w-[150px]">Period</TableHead>
+                            <TableHead className="w-[60px]">Days</TableHead>
+                          </>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2342,8 +2358,13 @@ export default function AdminDashboard() {
                             <TableCell className="text-sm">{emp.term_expiry || '—'}</TableCell>
                             <TableCell className="text-sm">{emp.salary_asstt || '—'}</TableCell>
                             <TableCell className="text-sm">{emp.salary_register_no || '—'}</TableCell>
-                            {employeePopup?.category === 'reported' && (
-                              <TableCell className="text-sm font-semibold text-center">{emp.days_count || 0}</TableCell>
+                            {(employeePopup?.category === 'reported' || employeePopup?.category === 'report_entries') && (
+                              <>
+                                <TableCell className="text-sm whitespace-nowrap">
+                                  {emp.from_date && emp.to_date ? `${emp.from_date} to ${emp.to_date}` : '—'}
+                                </TableCell>
+                                <TableCell className="text-sm font-semibold text-center">{emp.days_count || 0}</TableCell>
+                              </>
                             )}
                           </TableRow>
                         );
