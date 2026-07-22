@@ -1664,8 +1664,14 @@ export default function AttendanceReports() {
   };
 
   const [isBulkVerifying, setIsBulkVerifying] = useState(false);
+  const [bulkVerifyDialogOpen, setBulkVerifyDialogOpen] = useState(false);
+  const [bulkVerifyPendingData, setBulkVerifyPendingData] = useState<{
+    targetVerified: boolean;
+    entryIds: number[];
+    count: number;
+  } | null>(null);
 
-  const handleBulkVerify = async () => {
+  const handleBulkVerify = () => {
     const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
     if (adminData.userCode === 'VEW') {
       toast({
@@ -1701,22 +1707,27 @@ export default function AttendanceReports() {
       return;
     }
 
-    const confirmText = targetVerified
-      ? `Are you sure you want to verify attendance for all ${entriesToUpdate.length} records on this page?`
-      : `Are you sure you want to unverify attendance for all ${entriesToUpdate.length} records on this page?`;
+    setBulkVerifyPendingData({
+      targetVerified,
+      entryIds: entriesToUpdate.map(e => e.entryId),
+      count: entriesToUpdate.length,
+    });
+    setBulkVerifyDialogOpen(true);
+  };
 
-    const confirm = window.confirm(confirmText);
-    if (!confirm) return;
-
+  const confirmBulkVerify = async () => {
+    if (!bulkVerifyPendingData) return;
     setIsBulkVerifying(true);
 
     try {
-      const entryIds = entriesToUpdate.map(e => e.entryId);
+      const { entryIds, targetVerified, count } = bulkVerifyPendingData;
       await bulkVerify.mutateAsync({ entryIds, verified: targetVerified });
       toast({
         title: "Success",
-        description: `Successfully ${targetVerified ? 'verified' : 'unverified'} ${entryIds.length} records.`
+        description: `Successfully ${targetVerified ? 'verified' : 'unverified'} ${count} records.`
       });
+      setBulkVerifyDialogOpen(false);
+      setBulkVerifyPendingData(null);
     } catch (error) {
       console.error("Bulk verification error:", error);
       toast({
@@ -2508,6 +2519,60 @@ export default function AttendanceReports() {
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Replacing...</>
               ) : (
                 <><RefreshCw className="h-4 w-4 mr-2" /> Replace File</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Verification Dialog */}
+      <Dialog
+        open={bulkVerifyDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !isBulkVerifying) {
+            setBulkVerifyDialogOpen(false);
+            setBulkVerifyPendingData(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {bulkVerifyPendingData?.targetVerified ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 text-amber-600" />
+              )}
+              {bulkVerifyPendingData?.targetVerified ? 'Confirm Bulk Verification' : 'Confirm Bulk Unverification'}
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-base text-foreground">
+              Are you sure you want to {bulkVerifyPendingData?.targetVerified ? 'verify' : 'unverify'} attendance for all <span className="font-bold text-foreground">{bulkVerifyPendingData?.count}</span> records on this page?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkVerifyDialogOpen(false);
+                setBulkVerifyPendingData(null);
+              }}
+              disabled={isBulkVerifying}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmBulkVerify}
+              disabled={isBulkVerifying}
+              className={
+                bulkVerifyPendingData?.targetVerified
+                  ? "bg-green-600 hover:bg-green-700 text-white font-medium"
+                  : "bg-amber-600 hover:bg-amber-700 text-white font-medium"
+              }
+            >
+              {isBulkVerifying ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</>
+              ) : (
+                bulkVerifyPendingData?.targetVerified ? "Verify All" : "Unverify All"
               )}
             </Button>
           </DialogFooter>
