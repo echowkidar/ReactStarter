@@ -2693,6 +2693,34 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Bulk verify/unverify attendance entries
+  app.post("/api/attendance/entries/bulk-verify", verifyAdminSession, async (req, res) => {
+    try {
+      const { entryIds, verified = true } = req.body;
+      if (!Array.isArray(entryIds) || entryIds.length === 0) {
+        return res.status(400).json({ message: "No entryIds provided" });
+      }
+
+      const validIds = entryIds.map(Number).filter(id => !isNaN(id) && id > 0);
+      if (validIds.length === 0) {
+        return res.status(400).json({ message: "No valid entryIds provided" });
+      }
+
+      const { db } = await import("./db");
+      const { inArray } = await import("drizzle-orm");
+      const { attendanceEntries } = await import("@shared/schema");
+
+      await db.update(attendanceEntries)
+        .set({ verified: Boolean(verified) })
+        .where(inArray(attendanceEntries.id, validIds));
+
+      res.json({ success: true, count: validIds.length });
+    } catch (error) {
+      console.error("Error bulk verifying attendance entries:", error);
+      res.status(500).json({ message: "Failed to bulk verify entries" });
+    }
+  });
+
   // Save admin noting for attendance entry (auto-save on blur)
   app.patch("/api/attendance/entries/:entryId/noting", verifyAdminSession, async (req, res) => {
     try {

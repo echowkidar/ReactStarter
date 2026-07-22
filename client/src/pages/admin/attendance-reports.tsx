@@ -386,6 +386,36 @@ export default function AttendanceReports() {
     }
   });
 
+  // Bulk toggle verification mutation with optimistic update
+  const bulkVerify = useMutation({
+    mutationFn: async ({ entryIds, verified }: { entryIds: number[]; verified: boolean }) => {
+      await apiRequest('POST', '/api/attendance/entries/bulk-verify', { entryIds, verified });
+    },
+    onMutate: async ({ entryIds, verified }) => {
+      const idSet = new Set(entryIds);
+      await queryClient.cancelQueries({ queryKey: ["/api/admin/attendance", monthFilter] });
+      const previousData = queryClient.getQueryData(["/api/admin/attendance", monthFilter]);
+      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
+        if (!old) return old;
+        return old.map((report: any) => ({
+          ...report,
+          entries: report.entries?.map((entry: any) =>
+            idSet.has(entry.id) ? { ...entry, verified } : entry
+          ),
+        }));
+      });
+      return { previousData };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["/api/admin/attendance", monthFilter], context.previousData);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+    }
+  });
+
   useEffect(() => {
     // Check if user is salary admin
     const adminType = localStorage.getItem("adminType");
@@ -1633,27 +1663,64 @@ export default function AttendanceReports() {
   const [isBulkVerifying, setIsBulkVerifying] = useState(false);
 
   const handleBulkVerify = async () => {
-    const unverifiedEntries = paginatedEntries.filter(e => !e.verified && e.entryId > 0);
-
-    if (unverifiedEntries.length === 0) {
-      toast({ title: "Info", description: "All displayed records are already verified." });
+    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+    if (adminData.userCode === 'VEW') {
+      toast({
+        variant: "destructive",
+        title: "Access Denied",
+        description: "You do not have permission to verify entries."
+      });
+      return;
+    }
+    if (adminData.role === 'salary' && adminData.userCode === 'ALL') {
+      toast({
+        variant: "destructive",
+        title: "Access Denied",
+        description: "Global Salary Admin cannot verify individual entries."
+      });
       return;
     }
 
-    const confirm = window.confirm("Are you sure you want to verify attendance for all filtered employees? This action cannot be undone.");
+    const validEntries = paginatedEntries.filter(e => e.entryId > 0);
+    if (validEntries.length === 0) {
+      toast({ title: "Info", description: "No valid records available on this page." });
+      return;
+    }
+
+    const targetVerified = !allVerifiedOnPage;
+    const entriesToUpdate = validEntries.filter(e => e.verified !== targetVerified);
+
+    if (entriesToUpdate.length === 0) {
+      toast({
+        title: "Info",
+        description: targetVerified ? "All displayed records are already verified." : "All displayed records are already pending verification."
+      });
+      return;
+    }
+
+    const confirmText = targetVerified
+      ? `Are you sure you want to verify attendance for all ${entriesToUpdate.length} records on this page?`
+      : `Are you sure you want to unverify attendance for all ${entriesToUpdate.length} records on this page?`;
+
+    const confirm = window.confirm(confirmText);
     if (!confirm) return;
 
     setIsBulkVerifying(true);
-    let successCount = 0;
 
     try {
-      for (const entry of unverifiedEntries) {
-        await toggleVerify.mutateAsync(entry.entryId);
-        successCount++;
-      }
-      toast({ title: "Success", description: `Successfully verified ${successCount} records.` });
+      const entryIds = entriesToUpdate.map(e => e.entryId);
+      await bulkVerify.mutateAsync({ entryIds, verified: targetVerified });
+      toast({
+        title: "Success",
+        description: `Successfully ${targetVerified ? 'verified' : 'unverified'} ${entryIds.length} records.`
+      });
     } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "An error occurred during bulk verification." });
+      console.error("Bulk verification error:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An error occurred during bulk verification."
+      });
     } finally {
       setIsBulkVerifying(false);
     }
@@ -2099,16 +2166,14 @@ export default function AttendanceReports() {
                     <TableHead className="min-w-[140px]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          {salaryRegisterFilter.length > 0 && (
+                          {paginatedEntries.length > 0 && (
                             <input
                               type="checkbox"
                               className="h-4 w-4 cursor-pointer accent-green-600"
-                              title="Verify all on this page"
-                              disabled={isBulkVerifying || allVerifiedOnPage}
+                              title={allVerifiedOnPage ? "Unverify all on this page" : "Verify all on this page"}
+                              disabled={isBulkVerifying}
                               checked={allVerifiedOnPage}
-                              onChange={() => {
-                                if (!allVerifiedOnPage) handleBulkVerify();
-                              }}
+                              onChange={handleBulkVerify}
                             />
                           )}
                           <span>Actions</span>
