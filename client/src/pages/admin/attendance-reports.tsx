@@ -629,19 +629,8 @@ export default function AttendanceReports() {
       const [, filters] = queryKey;
       let url = "/api/admin/attendance";
 
-      // We only support single month filter for the API optimization
-      // If multiple selected (UI allows it), we might just fetch all or fetch for the first one
-      // For now, let's take the first one if available
-      const selectedMonth = Array.isArray(filters) && filters.length > 0 ? filters[0] : null;
-
-      if (selectedMonth) {
-        const [monthName, yearStr] = selectedMonth.split(' ');
-        if (monthName && yearStr) {
-          // Parse month name to number (0-11) -> (1-12)
-          const monthDate = new Date(`${monthName} 1, 2000`);
-          const monthNum = monthDate.getMonth() + 1;
-          url += `?month=${monthNum}&year=${yearStr}`;
-        }
+      if (Array.isArray(filters) && filters.length > 0) {
+        url += `?months=${encodeURIComponent((filters as string[]).join(','))}`;
       }
 
       const res = await apiRequest("GET", url);
@@ -1117,6 +1106,9 @@ export default function AttendanceReports() {
   const processedEntries = useMemo(() => {
     // Sort entries by department first to group them together
     const sorted = [...filteredEntries].sort((a, b) => {
+      // Helper: convert year and month number into comparable integer (e.g. 202607)
+      const getMonthVal = (e: typeof a) => ((e.yearNum || 0) * 100) + (e.monthNum || 0);
+
       // If sorting by Employee ID is active
       if (sortConfig && sortConfig.key === 'employeeId') {
         const empIdA = a.employeeId || "";
@@ -1133,7 +1125,20 @@ export default function AttendanceReports() {
           comparison = empIdA.localeCompare(empIdB);
         }
 
-        return sortConfig.direction === 'asc' ? comparison : -comparison;
+        if (comparison !== 0) return sortConfig.direction === 'asc' ? comparison : -comparison;
+
+        // Secondary sort when Employee IDs are equal: sort Month DESCENDING (newest month first)
+        return getMonthVal(b) - getMonthVal(a);
+      }
+
+      // If sorting by Month is explicitly active
+      if (sortConfig && sortConfig.key === 'month') {
+        const monthCompare = getMonthVal(b) - getMonthVal(a); // Default: newest month first
+        if (monthCompare !== 0) return sortConfig.direction === 'asc' ? -monthCompare : monthCompare;
+
+        const deptCompare = a.departmentName.localeCompare(b.departmentName);
+        if (deptCompare !== 0) return deptCompare;
+        return a.employeeName.localeCompare(b.employeeName);
       }
 
       // If sorting by Noting is active
@@ -1143,20 +1148,16 @@ export default function AttendanceReports() {
 
         // Both have notes or both don't have notes, fallback to default sorting
         if (hasNoteA === hasNoteB) {
-          // Fallback Default sorting: Department -> Month -> Employee Name
           const deptCompare = a.departmentName.localeCompare(b.departmentName);
           if (deptCompare !== 0) return sortConfig.direction === 'asc' ? deptCompare : -deptCompare;
 
-          const monthCompare = a.month.localeCompare(b.month);
-          if (monthCompare !== 0) return sortConfig.direction === 'asc' ? monthCompare : -monthCompare;
+          const monthCompare = getMonthVal(b) - getMonthVal(a);
+          if (monthCompare !== 0) return sortConfig.direction === 'asc' ? -monthCompare : monthCompare;
 
           const nameCompare = a.employeeName.localeCompare(b.employeeName);
           return sortConfig.direction === 'asc' ? nameCompare : -nameCompare;
         }
 
-        // One has a note, the other doesn't. 
-        // In 'asc' (first click), we want notes to appear at the TOP (so hasNote should be "less than" no note)
-        // In 'desc', we want notes to appear at the BOTTOM
         if (sortConfig.direction === 'asc') {
           return hasNoteA ? -1 : 1;
         } else {
@@ -1190,8 +1191,8 @@ export default function AttendanceReports() {
         const deptCompare = a.departmentName.localeCompare(b.departmentName);
         if (deptCompare !== 0) return sortConfig.direction === 'asc' ? deptCompare : -deptCompare;
 
-        const monthCompare = a.month.localeCompare(b.month);
-        if (monthCompare !== 0) return sortConfig.direction === 'asc' ? monthCompare : -monthCompare;
+        const monthCompare = getMonthVal(b) - getMonthVal(a);
+        if (monthCompare !== 0) return sortConfig.direction === 'asc' ? -monthCompare : monthCompare;
 
         const nameCompare = a.employeeName.localeCompare(b.employeeName);
         return sortConfig.direction === 'asc' ? nameCompare : -nameCompare;
@@ -1217,14 +1218,16 @@ export default function AttendanceReports() {
         return a.employeeName.localeCompare(b.employeeName);
       }
 
-      // Default sorting: Department -> Month -> Employee Name
-      // First sort by department name
+      // Default sorting: Department -> Month (Descending: newest month first) -> Employee Name
       const deptCompare = a.departmentName.localeCompare(b.departmentName);
       if (deptCompare !== 0) return deptCompare;
 
-      // If same department, sort by month
-      const monthCompare = a.month.localeCompare(b.month);
+      // If same department, sort by month (newest month first)
+      const monthCompare = getMonthVal(b) - getMonthVal(a);
       if (monthCompare !== 0) return monthCompare;
+
+      // Further sort by employee name
+      return a.employeeName.localeCompare(b.employeeName);
 
       // Further sort by employee name
       return a.employeeName.localeCompare(b.employeeName);
@@ -2086,152 +2089,169 @@ export default function AttendanceReports() {
               </div>
             )}
 
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {/* Month column removed as per request */}
-                    <TableHead>Department Name</TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('employeeId')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Employee ID
-                        <ArrowUpDown className="h-3 w-3" />
-                      </div>
-                    </TableHead>
-                    <TableHead>Employee Name</TableHead>
-                    <TableHead>Designation</TableHead>
-                    <TableHead>Salary Assistant</TableHead>
-                    <TableHead>Salary Register No</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Days</TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('remarks')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Remarks
-                        <ArrowUpDown className="h-3 w-3" />
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="min-w-[180px] cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('noting')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Noting
-                        <ArrowUpDown className="h-3 w-3" />
-                      </div>
-                    </TableHead>
-                    <TableHead className="min-w-[170px]">
-                      <div className="flex items-center justify-between">
-                        <div
-                          className="cursor-pointer hover:bg-muted/50 flex items-center gap-1"
-                          onClick={() => handleSort('exportedAt')}
+            {(() => {
+              const isMultiMonth = monthFilter.length === 0 || monthFilter.length > 1;
+              return (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {isMultiMonth && (
+                          <TableHead
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => handleSort('month')}
+                          >
+                            <div className="flex items-center gap-1">
+                              Month
+                              <ArrowUpDown className="h-3 w-3" />
+                            </div>
+                          </TableHead>
+                        )}
+                        <TableHead>Department Name</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('employeeId')}
                         >
-                          Export to Oracle
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="-mr-3 h-8 w-8 p-0" title="Filter by Export Status">
-                              <Filter className={`h-4 w-4 ${exportFilter !== 'all' ? 'text-green-600 fill-green-100' : ''}`} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setExportFilter('all')}>
-                              <div className="flex items-center">
-                                {exportFilter === 'all' && <Check className="mr-2 h-4 w-4" />}
-                                <span className={exportFilter !== 'all' ? 'ml-6' : ''}>All</span>
-                              </div>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setExportFilter('exported')}>
-                              <div className="flex items-center text-green-600">
-                                {exportFilter === 'exported' && <Check className="mr-2 h-4 w-4" />}
-                                <span className={exportFilter !== 'exported' ? 'ml-6' : ''}>Exported</span>
-                              </div>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setExportFilter('not_exported')}>
-                              <div className="flex items-center text-gray-600">
-                                {exportFilter === 'not_exported' && <Check className="mr-2 h-4 w-4" />}
-                                <span className={exportFilter !== 'not_exported' ? 'ml-6' : ''}>Not Exported</span>
-                              </div>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableHead>
-                    <TableHead className="min-w-[140px]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {paginatedEntries.length > 0 && (
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 cursor-pointer accent-green-600"
-                              title={allVerifiedOnPage ? "Unverify all on this page" : "Verify all on this page"}
-                              disabled={isBulkVerifying}
-                              checked={allVerifiedOnPage}
-                              onChange={handleBulkVerify}
-                            />
-                          )}
-                          <span>Actions</span>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="-mr-3 h-8 w-8 p-0" title="Filter by Verification Status">
-                              <Filter className={`h-4 w-4 ${verifiedFilter !== 'all' ? 'text-orange-600 fill-orange-100' : ''}`} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setVerifiedFilter('all')}>
-                              <div className="flex items-center">
-                                {verifiedFilter === 'all' && <Check className="mr-2 h-4 w-4" />}
-                                <span className={verifiedFilter !== 'all' ? 'ml-6' : ''}>All</span>
-                              </div>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setVerifiedFilter('verified')}>
-                              <div className="flex items-center text-green-600">
-                                {verifiedFilter === 'verified' && <Check className="mr-2 h-4 w-4" />}
-                                <span className={verifiedFilter !== 'verified' ? 'ml-6' : ''}>Verified</span>
-                              </div>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setVerifiedFilter('unverified')}>
-                              <div className="flex items-center text-orange-600">
-                                {verifiedFilter === 'unverified' && <Check className="mr-2 h-4 w-4" />}
-                                <span className={verifiedFilter !== 'unverified' ? 'ml-6' : ''}>Pending Verification</span>
-                              </div>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedEntries.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={12} className="text-center py-8">
-                        {searchTerm || departmentFilter.length > 0 || monthFilter.length > 0 || salaryRegisterFilter.length > 0
-                          ? "No attendance entries found matching your search criteria."
-                          : "No attendance entries found."}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedEntries.map((entry, index) => (
-                      <TableRow key={index} className={entry.exportedToOracleAt ? 'bg-green-50' : ''}>
-                        {/* <TableCell>{entry.showMonth ? entry.month : ""}</TableCell> */}
-                        <TableCell className="font-medium">
-                          {entry.showDepartment ? entry.departmentName : ""}
-                        </TableCell>
-                        <TableCell>{entry.employeeId}</TableCell>
-                        <TableCell>{entry.employeeName}</TableCell>
-                        <TableCell>{entry.designation}</TableCell>
-                        <TableCell>{entry.salaryAsstt}</TableCell>
-                        <TableCell>{entry.salaryRegisterNo}</TableCell>
-                        <TableCell>{entry.period}</TableCell>
-                        <TableCell>{entry.days}</TableCell>
+                          <div className="flex items-center gap-1">
+                            Employee ID
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead>Employee Name</TableHead>
+                        <TableHead>Designation</TableHead>
+                        <TableHead>Salary Assistant</TableHead>
+                        <TableHead>Salary Register No</TableHead>
+                        <TableHead>Period</TableHead>
+                        <TableHead>Days</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('remarks')}
+                        >
+                          <div className="flex items-center gap-1">
+                            Remarks
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead
+                          className="min-w-[180px] cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleSort('noting')}
+                        >
+                          <div className="flex items-center gap-1">
+                            Noting
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[170px]">
+                          <div className="flex items-center justify-between">
+                            <div
+                              className="cursor-pointer hover:bg-muted/50 flex items-center gap-1"
+                              onClick={() => handleSort('exportedAt')}
+                            >
+                              Export to Oracle
+                              <ArrowUpDown className="h-3 w-3" />
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="-mr-3 h-8 w-8 p-0" title="Filter by Export Status">
+                                  <Filter className={`h-4 w-4 ${exportFilter !== 'all' ? 'text-green-600 fill-green-100' : ''}`} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setExportFilter('all')}>
+                                  <div className="flex items-center">
+                                    {exportFilter === 'all' && <Check className="mr-2 h-4 w-4" />}
+                                    <span className={exportFilter !== 'all' ? 'ml-6' : ''}>All</span>
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setExportFilter('exported')}>
+                                  <div className="flex items-center text-green-600">
+                                    {exportFilter === 'exported' && <Check className="mr-2 h-4 w-4" />}
+                                    <span className={exportFilter !== 'exported' ? 'ml-6' : ''}>Exported</span>
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setExportFilter('not_exported')}>
+                                  <div className="flex items-center text-gray-600">
+                                    {exportFilter === 'not_exported' && <Check className="mr-2 h-4 w-4" />}
+                                    <span className={exportFilter !== 'not_exported' ? 'ml-6' : ''}>Not Exported</span>
+                                  </div>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[140px]">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {paginatedEntries.length > 0 && (
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 cursor-pointer accent-green-600"
+                                  title={allVerifiedOnPage ? "Unverify all on this page" : "Verify all on this page"}
+                                  disabled={isBulkVerifying}
+                                  checked={allVerifiedOnPage}
+                                  onChange={handleBulkVerify}
+                                />
+                              )}
+                              <span>Actions</span>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="-mr-3 h-8 w-8 p-0" title="Filter by Verification Status">
+                                  <Filter className={`h-4 w-4 ${verifiedFilter !== 'all' ? 'text-orange-600 fill-orange-100' : ''}`} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setVerifiedFilter('all')}>
+                                  <div className="flex items-center">
+                                    {verifiedFilter === 'all' && <Check className="mr-2 h-4 w-4" />}
+                                    <span className={verifiedFilter !== 'all' ? 'ml-6' : ''}>All</span>
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setVerifiedFilter('verified')}>
+                                  <div className="flex items-center text-green-600">
+                                    {verifiedFilter === 'verified' && <Check className="mr-2 h-4 w-4" />}
+                                    <span className={verifiedFilter !== 'verified' ? 'ml-6' : ''}>Verified</span>
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setVerifiedFilter('unverified')}>
+                                  <div className="flex items-center text-orange-600">
+                                    {verifiedFilter === 'unverified' && <Check className="mr-2 h-4 w-4" />}
+                                    <span className={verifiedFilter !== 'unverified' ? 'ml-6' : ''}>Pending Verification</span>
+                                  </div>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedEntries.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={isMultiMonth ? 13 : 12} className="text-center py-8">
+                            {searchTerm || departmentFilter.length > 0 || monthFilter.length > 0 || salaryRegisterFilter.length > 0
+                              ? "No attendance entries found matching your search criteria."
+                              : "No attendance entries found."}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        paginatedEntries.map((entry, index) => (
+                          <TableRow key={index} className={entry.exportedToOracleAt ? 'bg-green-50' : ''}>
+                            {isMultiMonth && (
+                              <TableCell className="font-medium text-xs text-blue-900 bg-blue-50/40">
+                                {entry.month}
+                              </TableCell>
+                            )}
+                            <TableCell className="font-medium">
+                              {entry.showDepartment ? entry.departmentName : ""}
+                            </TableCell>
+                            <TableCell>{entry.employeeId}</TableCell>
+                            <TableCell>{entry.employeeName}</TableCell>
+                            <TableCell>{entry.designation}</TableCell>
+                            <TableCell>{entry.salaryAsstt}</TableCell>
+                            <TableCell>{entry.salaryRegisterNo}</TableCell>
+                            <TableCell>{entry.period}</TableCell>
+                            <TableCell>{entry.days}</TableCell>
                         <TableCell>{entry.remarks || "-"}</TableCell>
                         <TableCell>
                           <NotingCell
@@ -2413,6 +2433,8 @@ export default function AttendanceReports() {
                 </TableBody>
               </Table>
             </div>
+          );
+        })()}
 
             {/* Bottom pagination */}
             {!isLoading && processedEntries.length > 0 && (

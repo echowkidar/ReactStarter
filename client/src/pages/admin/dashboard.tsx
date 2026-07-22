@@ -134,7 +134,8 @@ export default function AdminDashboard() {
   }, []);
 
   // Default to current month
-  const [monthFilter, setMonthFilter] = useState<string>(`${new Date().getFullYear()}-${new Date().getMonth()}`);
+  const defaultMonthVal = `${new Date().getFullYear()}-${new Date().getMonth()}`;
+  const [monthFilter, setMonthFilter] = useState<string[]>([defaultMonthVal]);
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "receiptNo", direction: "desc" });
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
@@ -166,17 +167,26 @@ export default function AdminDashboard() {
     email: adminEmail
   });
 
-  // Parse month filter for API query
-  const [filterYear, filterMonth] = (monthFilter || `${new Date().getFullYear()}-${new Date().getMonth()}`).split('-').map(Number);
+  // Fetch available attendance months from database
+  const { data: dbMonths = [] } = useQuery<{ month: number; year: number }[]>({
+    queryKey: ["/api/admin/attendance/months"],
+  });
+
+  // Parse primary month filter for API query
+  const primaryMonthKey = monthFilter.length > 0 ? monthFilter[0] : defaultMonthVal;
+  const [filterYear, filterMonth] = primaryMonthKey.split('-').map(Number);
 
   // API expects 1-based month
   const apiMonth = filterMonth + 1;
 
-  const { data: reports, isLoading } = useQuery<ReportWithDepartment[]>({
-    queryKey: ["/api/admin/attendance", apiMonth, filterYear],
+  const { data: reports = [], isLoading } = useQuery<ReportWithDepartment[]>({
+    queryKey: ["/api/admin/attendance", monthFilter],
     queryFn: async () => {
-      // Add query params if filter is set
-      const url = `/api/admin/attendance?month=${apiMonth}&year=${filterYear}`;
+      let url = "/api/admin/attendance";
+      if (monthFilter.length === 1) {
+        const [y, mIdx] = monthFilter[0].split('-').map(Number);
+        url = `/api/admin/attendance?month=${mIdx + 1}&year=${y}`;
+      }
       const response = await apiRequest("GET", url);
       return response.json();
     },
@@ -610,32 +620,34 @@ export default function AdminDashboard() {
     return `${day}-${month}-${year}`;
   };
 
-  // Get unique months from reports
+  // Get all available months (from DB + last 12 calendar months + current month)
   const availableMonths = useMemo(() => {
-    if (!reports) return [];
-    const uniqueMonths = new Set();
-    reports.forEach(report => {
-      const date = new Date(report.year, report.month - 1);
-      const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
-      uniqueMonths.add(monthKey);
+    const optionsMap = new Map<string, { value: string; label: string; dateObj: Date }>();
+
+    // 1. Add months from DB
+    dbMonths.forEach(m => {
+      const d = new Date(m.year, m.month - 1);
+      const val = `${m.year}-${m.month - 1}`;
+      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      optionsMap.set(val, { value: val, label, dateObj: d });
     });
 
-    // Ensure current month is always available
+    // 2. Add current month and past 12 calendar months
     const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
-    uniqueMonths.add(currentMonthKey);
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = `${d.getFullYear()}-${d.getMonth()}`;
+      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      if (!optionsMap.has(val)) {
+        optionsMap.set(val, { value: val, label, dateObj: d });
+      }
+    }
 
-    return Array.from(uniqueMonths).map(monthKey => {
-      const [year, month] = (monthKey as string).split('-');
-      return {
-        value: monthKey as string,
-        label: new Date(parseInt(year), parseInt(month)).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long'
-        })
-      };
-    }).sort((a, b) => b.value.localeCompare(a.value)); // Sort in descending order
-  }, [reports]);
+    // Sort descending by date
+    return Array.from(optionsMap.values())
+      .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime())
+      .map(({ value, label }) => ({ value, label }));
+  }, [dbMonths]);
 
   // Get unique departments from reports
   const availableDepartments = useMemo(() => {
@@ -803,8 +815,8 @@ export default function AdminDashboard() {
       const matchesStatus = statusFilter === "all" || report.status === statusFilter;
 
       // Add month filtering
-      const matchesMonth = monthFilter === "all" ||
-        `${report.year}-${report.month - 1}` === monthFilter;
+      const matchesMonth = monthFilter.length === 0 ||
+        monthFilter.includes(`${report.year}-${report.month - 1}`);
 
       // Add department filtering
       const matchesDepartment = departmentFilter.length === 0 ||
@@ -814,8 +826,8 @@ export default function AdminDashboard() {
     });
 
     // Handle "not_received" special filter
-    if (statusFilter === "not_received" && monthFilter !== "all") {
-      const [yearStr, monthIndexStr] = monthFilter.split('-');
+    if (statusFilter === "not_received" && monthFilter.length > 0) {
+      const [yearStr, monthIndexStr] = monthFilter[0].split('-');
       const targetYear = parseInt(yearStr);
       const targetMonth = parseInt(monthIndexStr) + 1; // 1-indexed for comparison
 
@@ -1766,22 +1778,18 @@ export default function AdminDashboard() {
               className="pl-8"
             />
           </div>
-          <Select
-            value={monthFilter}
-            onValueChange={setMonthFilter}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by month" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Months</SelectItem>
-              {availableMonths.map(({ value, label }) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={availableMonths.map(({ value, label }) => ({
+              label,
+              value
+            }))}
+            selected={monthFilter}
+            onChange={(values) => {
+              setMonthFilter(values);
+            }}
+            placeholder="Filter by month (All Months)"
+            className="w-[240px]"
+          />
           <Select
             value={statusFilter}
             onValueChange={setStatusFilter}

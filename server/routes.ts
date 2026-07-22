@@ -3055,14 +3055,21 @@ export async function registerRoutes(app: Express) {
   // Admin reports route â€” OPTIMIZED: batch-load departments & employees
   app.get("/api/admin/attendance", async (req, res) => {
     try {
-      const { month, year } = req.query;
+      const { month, year, months } = req.query;
 
       const reports = await storage.getAllAttendanceReports();
 
       // Filter reports by month/year BEFORE doing any heavy work
       let filteredReports = reports;
 
-      if (month && year) {
+      if (months) {
+        const monthsList = (months as string).split(',').map(m => m.trim());
+        filteredReports = reports.filter(r => {
+          const date = new Date(r.year, r.month - 1);
+          const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+          return monthsList.includes(monthYear);
+        });
+      } else if (month && year) {
         const monthNum = parseInt(month as string);
         const yearNum = parseInt(year as string);
 
@@ -3096,17 +3103,29 @@ export async function registerRoutes(app: Express) {
 
       const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
 
-      // Fetch entries for all "sent" reports in parallel (1 query per report, not per entry)
+      // Fetch entries for all "sent" reports in a SINGLE batch SQL query (prevents connection pool exhaustion)
       const sentReports = filteredReports.filter(r => r.status === "sent");
       const entriesByReport = new Map<number, AttendanceEntry[]>();
 
       if (sentReports.length > 0) {
-        const entriesArrays = await Promise.all(
-          sentReports.map(r => storage.getAttendanceEntriesByReport(r.id))
-        );
-        sentReports.forEach((r, idx) => {
-          entriesByReport.set(r.id, entriesArrays[idx]);
-        });
+        const { db } = await import("./db");
+        const { attendanceEntries } = await import("@shared/schema");
+        const { inArray } = await import("drizzle-orm");
+
+        const sentReportIds = sentReports.map(r => r.id);
+        const allEntries = await db
+          .select()
+          .from(attendanceEntries)
+          .where(inArray(attendanceEntries.reportId, sentReportIds));
+
+        for (const entry of allEntries) {
+          let list = entriesByReport.get(entry.reportId);
+          if (!list) {
+            list = [];
+            entriesByReport.set(entry.reportId, list);
+          }
+          list.push(entry);
+        }
       }
 
       // Count distinct employees per report for all filtered reports
