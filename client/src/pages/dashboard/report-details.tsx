@@ -10,7 +10,7 @@ import { format } from "date-fns";
 import { AttendanceReport, AttendanceEntry, Department, Employee } from "@shared/schema";
 import { Download, Printer, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getPayLevelOrder } from "@/lib/pay-levels";
 
 interface ExtendedAttendanceEntry extends AttendanceEntry {
@@ -59,6 +59,32 @@ export default function ReportDetails() {
     queryKey: [`/api/admin/attendance/${reportId}`],
     enabled: !!reportId,
   });
+
+  const { data: allReports } = useQuery<AttendanceReport[]>({
+    queryKey: [`/api/departments/${report?.departmentId}/attendance`],
+    enabled: !!report?.departmentId,
+  });
+
+  const reportPrefix = useMemo(() => {
+    if (!report || !allReports) return '';
+    
+    const earlierReports = allReports.filter(
+      r => r.month === report.month && 
+           r.year === report.year && 
+           r.id < report.id
+    );
+
+    const hasEarlierValid = earlierReports.some(r => r.status !== 'cancelled');
+    const hasEarlierCancelled = earlierReports.some(r => r.status === 'cancelled');
+
+    if (hasEarlierValid) {
+      return 'Supplementary ';
+    } else if (hasEarlierCancelled) {
+      return 'Revised ';
+    }
+    
+    return '';
+  }, [report, allReports]);
 
   if (isLoadingReport) {
     return <LoadingSkeleton />;
@@ -185,7 +211,7 @@ export default function ReportDetails() {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Attendance Report</title>
+              <title>${reportPrefix}Attendance Report</title>
               <style>${styles}</style>
               <style media="all">
                 @page { 
@@ -437,7 +463,7 @@ export default function ReportDetails() {
     const wb = XLSX.utils.book_new();
 
     const headerData = [
-      ['Attendance Report'],
+      [`${reportPrefix}Attendance Report`],
       [''],
       ['Department:', report.department?.name],
       ['Month/Year:', formatPeriod(report.year, report.month)],
@@ -497,7 +523,7 @@ export default function ReportDetails() {
     ];
     ws['!cols'] = colWidths;
 
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
+    XLSX.utils.book_append_sheet(wb, ws, `${reportPrefix}Attendance Report`.trim());
     XLSX.writeFile(wb, `attendance_report_${report.department?.name}_${report.year}_${report.month}.xlsx`);
   };
 
@@ -669,7 +695,7 @@ export default function ReportDetails() {
       `}</style>
 
       <div className="flex justify-between items-center no-print">
-        <h1 className="text-2xl font-bold">Attendance Report Details</h1>
+        <h1 className="text-2xl font-bold">{reportPrefix}Attendance Report Details</h1>
         <div className="space-x-2">
           {report.fileUrl && (
             <Button variant="outline" onClick={() => setShowPdfPreview(true)}>
@@ -697,7 +723,7 @@ export default function ReportDetails() {
       <div className="print-content space-y-6">
         <Card>
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
-            <CardTitle>{report.status === 'draft' ? 'Draft Attendance Report' : 'Attendance Report'}</CardTitle>
+            <CardTitle>{report.status === 'draft' ? `Draft ${reportPrefix}Attendance Report` : `${reportPrefix}Attendance Report`}</CardTitle>
             {report.status === 'sent' ? (
               /* Sent status: label + value ek line mein, wider box */
               <div className="border border-black rounded flex items-center w-full sm:w-[420px] h-[40px] bg-white mr-2 shrink-0 print:w-[420px] overflow-hidden">
