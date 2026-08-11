@@ -102,8 +102,9 @@ export default function ReportDetails() {
     return `${day}-${month}-${year}`;
   };
 
-  const formatTermExpiry = (dateStr: string | null | undefined): string => {
+  const formatTermExpiry = (dateStr: string | null | undefined, employmentStatus?: string): string => {
     if (!dateStr) return "-";
+    if (employmentStatus && employmentStatus !== "Temporary" && employmentStatus !== "Probation") return "-";
 
     try {
       const date = new Date(dateStr);
@@ -460,7 +461,7 @@ export default function ReportDetails() {
           entry.employee?.epid,
           entry.employee?.name,
           entry.employee?.designation,
-          formatTermExpiry(entry.employee?.termExpiry),
+          formatTermExpiry(entry.employee?.termExpiry, entry.employee?.employmentStatus),
           entry.employee?.salaryRegisterNo || '-',
           isWholeCurrentMonth(period.fromDate, period.toDate, report.month, report.year)
             ? "- "
@@ -819,7 +820,7 @@ export default function ReportDetails() {
                               <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.epid}</TableCell>
                               <TableCell rowSpan={periodCount}>{entry.employee?.name}</TableCell>
                               <TableCell rowSpan={periodCount}>{entry.employee?.designation}</TableCell>
-                              <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{formatTermExpiry(entry.employee?.termExpiry)}</TableCell>
+                              <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{formatTermExpiry(entry.employee?.termExpiry, entry.employee?.employmentStatus)}</TableCell>
                               <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>
                             </>
                           )}

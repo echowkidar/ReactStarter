@@ -605,7 +605,7 @@ export default function AttendanceReports() {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageUrl: replaceOldFileUrl }),
-        }).catch(() => {}); // non-fatal if old file already missing
+        }).catch(() => { }); // non-fatal if old file already missing
       }
 
       // 4. Refresh table
@@ -1290,7 +1290,7 @@ export default function AttendanceReports() {
     const parts = period.split(" to ");
     if (parts.length !== 2) return false;
     const [startStr, endStr] = parts;
-    
+
     const parseDate = (str: string) => {
       const p = str.split('-');
       if (p.length !== 3) return null;
@@ -1307,7 +1307,7 @@ export default function AttendanceReports() {
 
     const startVal = start.year * 10000 + start.month * 100 + start.day;
     const endVal = end.year * 10000 + end.month * 100 + end.day;
-    
+
     const targetStartVal = yearNum * 10000 + monthNum * 100 + 1;
     const lastDayOfTargetMonth = new Date(yearNum, monthNum, 0).getDate();
     const targetEndVal = yearNum * 10000 + monthNum * 100 + lastDayOfTargetMonth;
@@ -1795,7 +1795,7 @@ export default function AttendanceReports() {
                           onClick={() => {
                             setSelectedTargetDates(new Set());
                             setBulkResetMode(false);
-                            setBulkNewDate((() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })());
+                            setBulkNewDate((() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })());
                             setBulkExportDialogOpen(true);
                           }}
                           className="cursor-pointer"
@@ -2263,189 +2263,189 @@ export default function AttendanceReports() {
                             <TableCell>{entry.salaryRegisterNo}</TableCell>
                             <TableCell>{entry.period}</TableCell>
                             <TableCell>{entry.days}</TableCell>
-                        <TableCell>{entry.remarks || "-"}</TableCell>
-                        <TableCell>
-                          <NotingCell
-                            entryId={entry.entryId}
-                            employeeDbId={(entry as any).employeeDbId}
-                            adminNoting={(entry as any).adminNoting || ""}
-                            employeeRemarks={(entry as any).employeeRemarks || ""}
-                            monthFilter={monthFilter}
-                            toast={toast}
-                          />
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {entry.exportedToOracleAt ? (() => {
-                            // Strip trailing 'Z' before parsing — PostgreSQL TIMESTAMP WITHOUT TIME ZONE
-                            // is stored in server local time (IST) but pg driver adds 'Z' suffix,
-                            // wrongly implying UTC. Parsing without Z treats it as local time correctly.
-                            const rawTs = entry.exportedToOracleAt!;
-                            const localStr = rawTs.endsWith('Z') ? rawTs.slice(0, -1) : rawTs;
-                            const d = new Date(localStr);
-                            const formatted = `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
-                            if (isSuperAdmin) {
-                              return (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <button className="text-green-700 font-medium hover:underline cursor-pointer flex items-center gap-1" title="Click to edit date">
-                                      {formatted}
-                                      <CalendarIcon className="h-3 w-3" />
-                                    </button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                      mode="single"
-                                      selected={d}
-                                      onSelect={(date) => {
-                                        if (date) {
-                                          updateExportDate.mutate({ entryId: entry.entryId, exportDate: date.toISOString() });
-                                        }
-                                      }}
-                                      initialFocus
-                                    />
-                                    <div className="p-2 border-t bg-slate-50">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 h-8"
-                                        onClick={() => updateExportDate.mutate({ entryId: entry.entryId, exportDate: null })}
-                                      >
-                                        Remove Date
-                                      </Button>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              );
-                            }
-                            return <span className="text-green-700 font-medium">{formatted}</span>;
-                          })() : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => setLocation(`/admin/reports/${entry.reportId}`)}
-                              title="View Report Details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {JSON.parse(localStorage.getItem("admin") || "{}").role !== 'salary' && (
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => setLocation(`/admin/reports/${entry.reportId}/edit`)}
-                                title="Edit Report"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {entry.fileUrl && (
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className={`h-8 w-8 ${JSON.parse(localStorage.getItem("admin") || "{}").userCode === 'VEW'
-                                  ? 'cursor-not-allowed opacity-50 bg-gray-50'
-                                  : ''
-                                  }`}
-                                onClick={() => {
-                                  const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                                  if (adminData.userCode === 'VEW') {
-                                    toast({
-                                      variant: "destructive",
-                                      title: "Access Denied",
-                                      description: "You do not have permission to view documents."
-                                    });
-                                    return;
-                                  }
-                                  let url = entry.fileUrl!;
-                                  // Normalize URL - handle old domain migration
-                                  if (url.includes('amu.echowkidar.in')) {
-                                    const urlPath = url.replace(/https?:\/\/amu\.echowkidar\.in/, '');
-                                    url = `${window.location.origin}${urlPath}`;
-                                  } else if (url.startsWith('/')) {
-                                    url = `${window.location.origin}${url}`;
-                                  }
-                                  window.open(url, '_blank');
-                                }}
-                                title="View Signed Report"
-                              >
-                                <FileText className="h-4 w-4 text-blue-600" />
-                              </Button>
-                            )}
-                            {isSuperAdmin && entry.fileUrl && (
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 text-orange-600 border-orange-200 hover:bg-orange-50"
-                                onClick={() => {
-                                  setReplaceReportId(entry.reportId);
-                                  setReplaceOldFileUrl(entry.fileUrl!);
-                                  if (replaceFileInputRef.current) replaceFileInputRef.current.value = '';
-                                }}
-                                title="Replace Signed Report (Super Admin)"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                                if (adminData.userCode === 'VEW') {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Access Denied",
-                                    description: "You do not have permission to verify entries."
-                                  });
-                                  return;
+                            <TableCell>{entry.remarks || "-"}</TableCell>
+                            <TableCell>
+                              <NotingCell
+                                entryId={entry.entryId}
+                                employeeDbId={(entry as any).employeeDbId}
+                                adminNoting={(entry as any).adminNoting || ""}
+                                employeeRemarks={(entry as any).employeeRemarks || ""}
+                                monthFilter={monthFilter}
+                                toast={toast}
+                              />
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {entry.exportedToOracleAt ? (() => {
+                                // Strip trailing 'Z' before parsing — PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+                                // is stored in server local time (IST) but pg driver adds 'Z' suffix,
+                                // wrongly implying UTC. Parsing without Z treats it as local time correctly.
+                                const rawTs = entry.exportedToOracleAt!;
+                                const localStr = rawTs.endsWith('Z') ? rawTs.slice(0, -1) : rawTs;
+                                const d = new Date(localStr);
+                                const formatted = `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear().toString().slice(-2)}`;
+                                if (isSuperAdmin) {
+                                  return (
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button className="text-green-700 font-medium hover:underline cursor-pointer flex items-center gap-1" title="Click to edit date">
+                                          {formatted}
+                                          <CalendarIcon className="h-3 w-3" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                          mode="single"
+                                          selected={d}
+                                          onSelect={(date) => {
+                                            if (date) {
+                                              updateExportDate.mutate({ entryId: entry.entryId, exportDate: date.toISOString() });
+                                            }
+                                          }}
+                                          initialFocus
+                                        />
+                                        <div className="p-2 border-t bg-slate-50">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 h-8"
+                                            onClick={() => updateExportDate.mutate({ entryId: entry.entryId, exportDate: null })}
+                                          >
+                                            Remove Date
+                                          </Button>
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+                                  );
                                 }
-                                // Restricted for Salary Admin "ALL" as well
-                                if (adminData.role === 'salary' && adminData.userCode === 'ALL') {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Access Denied",
-                                    description: "Global Salary Admin cannot verify individual entries."
-                                  });
-                                  return;
-                                }
-                                toggleVerify.mutate(entry.entryId);
-                              }}
-                              className={`h-6 w-6 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${entry.verified
-                                ? 'bg-green-500 border-green-500'
-                                : (() => {
-                                  const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                                  if (adminData.userCode === 'VEW' || (adminData.role === 'salary' && adminData.userCode === 'ALL')) {
-                                    return 'border-gray-200 cursor-not-allowed opacity-50';
-                                  }
-                                  return 'border-gray-300 hover:border-green-400';
-                                })()
-                                }`}
-                              title={(() => {
-                                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                                if (adminData.userCode === 'VEW') return 'View Only';
-                                if (adminData.role === 'salary' && adminData.userCode === 'ALL') return 'View Only (Global Admin)';
-                                return entry.verified ? 'Verified ✓' : 'Mark as Verified';
-                              })()}
-                            >
-                              {entry.verified && (
-                                <Check className="h-4 w-4 text-white" />
+                                return <span className="text-green-700 font-medium">{formatted}</span>;
+                              })() : (
+                                <span className="text-muted-foreground">-</span>
                               )}
-                            </button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          );
-        })()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setLocation(`/admin/reports/${entry.reportId}`)}
+                                  title="View Report Details"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                {JSON.parse(localStorage.getItem("admin") || "{}").role !== 'salary' && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => setLocation(`/admin/reports/${entry.reportId}/edit`)}
+                                    title="Edit Report"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {entry.fileUrl && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className={`h-8 w-8 ${JSON.parse(localStorage.getItem("admin") || "{}").userCode === 'VEW'
+                                      ? 'cursor-not-allowed opacity-50 bg-gray-50'
+                                      : ''
+                                      }`}
+                                    onClick={() => {
+                                      const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                      if (adminData.userCode === 'VEW') {
+                                        toast({
+                                          variant: "destructive",
+                                          title: "Access Denied",
+                                          description: "You do not have permission to view documents."
+                                        });
+                                        return;
+                                      }
+                                      let url = entry.fileUrl!;
+                                      // Normalize URL - handle old domain migration
+                                      if (url.includes('amu.echowkidar.in')) {
+                                        const urlPath = url.replace(/https?:\/\/amu\.echowkidar\.in/, '');
+                                        url = `${window.location.origin}${urlPath}`;
+                                      } else if (url.startsWith('/')) {
+                                        url = `${window.location.origin}${url}`;
+                                      }
+                                      window.open(url, '_blank');
+                                    }}
+                                    title="View Signed Report"
+                                  >
+                                    <FileText className="h-4 w-4 text-blue-600" />
+                                  </Button>
+                                )}
+                                {isSuperAdmin && entry.fileUrl && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8 text-orange-600 border-orange-200 hover:bg-orange-50"
+                                    onClick={() => {
+                                      setReplaceReportId(entry.reportId);
+                                      setReplaceOldFileUrl(entry.fileUrl!);
+                                      if (replaceFileInputRef.current) replaceFileInputRef.current.value = '';
+                                    }}
+                                    title="Replace Signed Report (Super Admin)"
+                                  >
+                                    <RefreshCw className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                    if (adminData.userCode === 'VEW') {
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Access Denied",
+                                        description: "You do not have permission to verify entries."
+                                      });
+                                      return;
+                                    }
+                                    // Restricted for Salary Admin "ALL" as well
+                                    if (adminData.role === 'salary' && adminData.userCode === 'ALL') {
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Access Denied",
+                                        description: "Global Salary Admin cannot verify individual entries."
+                                      });
+                                      return;
+                                    }
+                                    toggleVerify.mutate(entry.entryId);
+                                  }}
+                                  className={`h-6 w-6 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${entry.verified
+                                    ? 'bg-green-500 border-green-500'
+                                    : (() => {
+                                      const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                      if (adminData.userCode === 'VEW' || (adminData.role === 'salary' && adminData.userCode === 'ALL')) {
+                                        return 'border-gray-200 cursor-not-allowed opacity-50';
+                                      }
+                                      return 'border-gray-300 hover:border-green-400';
+                                    })()
+                                    }`}
+                                  title={(() => {
+                                    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+                                    if (adminData.userCode === 'VEW') return 'View Only';
+                                    if (adminData.role === 'salary' && adminData.userCode === 'ALL') return 'View Only (Global Admin)';
+                                    return entry.verified ? 'Verified ✓' : 'Mark as Verified';
+                                  })()}
+                                >
+                                  {entry.verified && (
+                                    <Check className="h-4 w-4 text-white" />
+                                  )}
+                                </button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              );
+            })()}
 
             {/* Bottom pagination */}
             {!isLoading && processedEntries.length > 0 && (
@@ -2618,19 +2618,18 @@ export default function AttendanceReports() {
                   // Format date for display: "2026-05-13" → "13-05-26"
                   const displayDate = exportDate
                     ? (() => {
-                        const [y, m, d] = exportDate.split('-');
-                        return `${d}-${m}-${y.slice(2)}`;
-                      })()
+                      const [y, m, d] = exportDate.split('-');
+                      return `${d}-${m}-${y.slice(2)}`;
+                    })()
                     : null;
 
                   return (
                     <label
                       key={exportDate ?? '__null__'}
-                      className={`flex items-center gap-3 p-2 rounded-md border transition-colors ${
-                        isEnabled
+                      className={`flex items-center gap-3 p-2 rounded-md border transition-colors ${isEnabled
                           ? 'cursor-pointer hover:bg-muted/50'
                           : 'cursor-not-allowed opacity-40 bg-gray-50'
-                      } ${isChecked && isEnabled ? 'border-orange-300 bg-orange-50' : 'border-border'}`}
+                        } ${isChecked && isEnabled ? 'border-orange-300 bg-orange-50' : 'border-border'}`}
                     >
                       <input
                         type="checkbox"
@@ -2657,7 +2656,7 @@ export default function AttendanceReports() {
           {/* Nasir notice */}
           {isNasirAdmin && (
             <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-700">
-              ⚠️ You can only update entries exported on today's date ({(() => { const [y,m,d] = todayDateStr.split('-'); return `${d}-${m}-${y.slice(2)}`; })()}).
+              ⚠️ You can only update entries exported on today's date ({(() => { const [y, m, d] = todayDateStr.split('-'); return `${d}-${m}-${y.slice(2)}`; })()}).
             </div>
           )}
 

@@ -2363,7 +2363,7 @@ export default function AdminDashboard() {
                                 {emp.employment_status || '—'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-sm">{emp.term_expiry || '—'}</TableCell>
+                            <TableCell className="text-sm">{(emp.employment_status === 'Temporary' || emp.employment_status === 'Probation') ? (emp.term_expiry || '—') : '—'}</TableCell>
                             <TableCell className="text-sm">{emp.salary_asstt || '—'}</TableCell>
                             <TableCell className="text-sm">{emp.salary_register_no || '—'}</TableCell>
                             {(employeePopup?.category === 'reported' || employeePopup?.category === 'report_entries') && (

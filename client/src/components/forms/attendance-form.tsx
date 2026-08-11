@@ -138,8 +138,9 @@ interface AttendanceFormProps {
 }
 
 // Add the formatTermExpiry function
-const formatTermExpiry = (dateStr: string | null | undefined): string => {
+const formatTermExpiry = (dateStr: string | null | undefined, employmentStatus?: string): string => {
   if (!dateStr) return "-";
+  if (employmentStatus && employmentStatus !== "Temporary" && employmentStatus !== "Probation") return "-";
 
   try {
     const date = new Date(dateStr);
@@ -858,7 +859,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                   <TableCell className="whitespace-nowrap px-1">{employee.epid}</TableCell>
                   <TableCell className="px-2">{employee.name}</TableCell>
                   <TableCell className="px-2">{employee.designation}</TableCell>
-                  <TableCell className="whitespace-nowrap px-1">{formatTermExpiry(employee.termExpiry)}</TableCell>
+                  <TableCell className="whitespace-nowrap px-1">{formatTermExpiry(employee.termExpiry, employee.employmentStatus)}</TableCell>
                   <TableCell className="whitespace-nowrap px-1">{employee.salaryRegisterNo || '-'}</TableCell>
 
                   <TableCell>
