@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
@@ -34,42 +34,45 @@ const formatDateForDisplay = (date: Date): string => {
   return `${day}-${month}-${year}`;
 };
 
-// Utility function to convert DD-MM-YY to YYYY-MM-DD for input type="date"
+// Utility function to convert DD-MM-YY or DD-MM-YYYY to YYYY-MM-DD for input type="date"
 const formatDateForInput = (dateStr: string): string => {
-
   if (!dateStr || typeof dateStr !== 'string' || !dateStr.includes('-')) {
-    console.error("Invalid date string:", dateStr);
     return "";
   }
-
   try {
-    const [day, month, year] = dateStr.split('-').map(Number);
-    const result = `20${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    return result;
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return "";
+    const [d, m, rawYear] = parts;
+    const y = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   } catch (error) {
-    console.error("Error formatting date for input:", error, dateStr);
     return "";
   }
 };
 
 // Utility function to convert YYYY-MM-DD to DD-MM-YY
 const formatDateFromInput = (dateStr: string): string => {
-
+  if (!dateStr || typeof dateStr !== 'string' || !dateStr.includes('-')) {
+    return "";
+  }
   try {
-    const date = new Date(dateStr);
-    const result = formatDateForDisplay(date);
-    return result;
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return "";
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y.slice(-2)}`;
   } catch (error) {
-    console.error("Error formatting date from input:", error, dateStr);
     return "";
   }
 };
 
 const parseDateFromDisplay = (dateStr: string): Date => {
-  if (!dateStr || typeof dateStr !== 'string') return new Date(NaN);
-  const [day, month, year] = dateStr.split('-').map(Number);
-  if (isNaN(day) || isNaN(month) || isNaN(year)) return new Date(NaN);
-  return new Date(2000 + year, month - 1, day);
+  if (!dateStr || typeof dateStr !== 'string' || !dateStr.includes('-')) return new Date(NaN);
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3) return new Date(NaN);
+  const [day, month, rawYear] = parts;
+  if (isNaN(day) || isNaN(month) || isNaN(rawYear)) return new Date(NaN);
+  const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+  return new Date(year, month - 1, day);
 };
 
 const isInvalidDateRange = (fromDate: string, toDate: string): boolean => {
@@ -85,16 +88,9 @@ const isInvalidDateRange = (fromDate: string, toDate: string): boolean => {
 
 const calculateDays = (fromDate: string, toDate: string): number => {
   if (!fromDate || !toDate) return 0;
-  // Parse DD-MM-YY format
-  const [fromDay, fromMonth, fromYear] = fromDate.split('-').map(Number);
-  const [toDay, toMonth, toYear] = toDate.split('-').map(Number);
-
-  if (isNaN(fromDay) || isNaN(fromMonth) || isNaN(fromYear) || isNaN(toDay) || isNaN(toMonth) || isNaN(toYear)) {
-    return 0;
-  }
-
-  const start = new Date(2000 + fromYear, fromMonth - 1, fromDay);
-  const end = new Date(2000 + toYear, toMonth - 1, toDay);
+  const start = parseDateFromDisplay(fromDate);
+  const end = parseDateFromDisplay(toDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
 
   if (start.getTime() > end.getTime()) {
     return 0;
@@ -316,6 +312,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
   const watchMonth = form.watch("month");
   const watchYear = form.watch("year");
+  const watchedEntries = useWatch({ control: form.control, name: "entries" }) || [];
 
   // Fetch employees who are already in a report for this month/year
   useEffect(() => {
@@ -929,10 +926,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
                   <TableCell>
                     <div className="space-y-1">
-                      {form.getValues("entries")
-                        ?.find(entry => entry.employeeId === employee.id)
-                        ?.periods?.map((period, periodIndex) => (
-                          <div key={periodIndex} className="border p-1 rounded-md bg-slate-50 dark:bg-slate-900">
+                      {(watchedEntries.find(entry => entry.employeeId === employee.id) || form.getValues("entries")?.find(entry => entry.employeeId === employee.id))
+                        ?.periods?.map((period, periodIndex) => {
+                          const isInvalid = isInvalidDateRange(period.fromDate, period.toDate);
+                          return (
+                          <div key={periodIndex} className={`border p-1 rounded-md ${
+                            isInvalid ? "bg-red-50/50 border-red-300" : "bg-slate-50 dark:bg-slate-900"
+                          }`}>
                             {excludedDesignations.includes(employee.designation?.toUpperCase()) && (
                               <div className="flex items-center gap-2 mb-2 pb-2 border-b">
                                 <Switch
@@ -993,7 +993,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
                                     currentEntry.periods = updatedPeriods;
                                     updatedEntries[entryIndex] = currentEntry;
-                                    form.setValue("entries", updatedEntries);
+                                    form.setValue("entries", updatedEntries, { shouldDirty: true });
                                   }}
                                 />
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 cursor-default">
@@ -1041,8 +1041,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                   type="date"
                                   max={maxDateForInput}
                                   className={`w-full p-1 text-sm border rounded-md ${
-                                    isInvalidDateRange(period.fromDate, period.toDate)
-                                      ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500"
+                                    isInvalid
+                                      ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500 font-medium"
                                       : ""
                                   }`}
                                   value={formatDateForInput(period.fromDate)}
@@ -1064,8 +1064,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                   min={formatDateForInput(period.fromDate)}
                                   max={maxDateForInput}
                                   className={`w-full p-1 text-sm border rounded-md ${
-                                    isInvalidDateRange(period.fromDate, period.toDate)
-                                      ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500"
+                                    isInvalid
+                                      ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500 font-medium"
                                       : ""
                                   }`}
                                   value={formatDateForInput(period.toDate)}
@@ -1154,8 +1154,12 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                     />
                                   </div>
                                 ) : (
-                                  <div className="p-1 bg-blue-50 dark:bg-blue-900/30 border rounded-md text-center text-sm">
-                                    {period.days}
+                                  <div className={`p-1 border rounded-md text-center text-sm ${
+                                    isInvalid
+                                      ? "bg-red-100 text-red-700 border-red-500 font-bold"
+                                      : "bg-blue-50 dark:bg-blue-900/30"
+                                  }`}>
+                                    {isInvalid ? 0 : period.days}
                                   </div>
                                 )}
                               </div>
@@ -1191,29 +1195,25 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                               </div>
 
                               <div className="flex justify-center">
-                                <button
+                                <Button
                                   type="button"
-                                  className="p-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-md flex items-center justify-center h-7 w-7"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
                                   onClick={() => removePeriod(employee.id, periodIndex)}
-                                  disabled={isLoading || !includedEmployees.has(employee.id)}
+                                  disabled={isLoading || !includedEmployees.has(employee.id) || (form.getValues("entries")?.find(e => e.employeeId === employee.id)?.periods.length || 0) <= 1}
                                 >
-                                  <X className="h-3 w-3" />
-                                </button>
+                                  <X className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
 
                             {/* Invalid Date Range Warning Inline */}
-                            {(() => {
-                              if (!includedEmployees.has(employee.id)) return null;
-                              if (isInvalidDateRange(period.fromDate, period.toDate)) {
-                                return (
-                                  <div className="text-destructive text-[11px] mt-1 font-semibold text-center bg-red-100 border border-red-300 p-1 rounded-sm">
-                                    ⚠️ Invalid Date Range: From Date ({period.fromDate}) cannot be after To Date ({period.toDate}).
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
+                            {includedEmployees.has(employee.id) && isInvalid && (
+                              <div className="text-destructive text-[11px] mt-1 font-semibold text-center bg-red-100 border border-red-300 p-1 rounded-sm">
+                                ⚠️ Invalid Date Range: From Date ({period.fromDate}) cannot be after To Date ({period.toDate}).
+                              </div>
+                            )}
 
                             {/* Overlap Warning Inline */}
                             {(() => {
@@ -1229,8 +1229,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                               return null;
                             })()}
                           </div>
-
-                        ))}
+                        );
+                      })}
 
                       {isGuestTeacher(employee.id) && includedEmployees.has(employee.id) && (
                         <div className="text-[11px] font-bold text-center mt-1 pb-1">
