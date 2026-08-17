@@ -43,7 +43,11 @@ export function setupCronJobs() {
                         )
                     });
 
-                    if (reports.length === 0) {
+                    const hasSentReport = reports.some(r => r.status === 'sent');
+                    const activeReports = reports.filter(r => r.status !== 'cancelled');
+
+                    // Only send reminder if department has no active reports and no sent report
+                    if (!hasSentReport && activeReports.length === 0) {
                         try {
                             await sendAttendanceReminder(dept.email, dept.name, 'not_created', {
                                 monthName: monthNames[targetMonth],
@@ -69,23 +73,33 @@ export function setupCronJobs() {
                         )
                     });
 
-                    const report = reports.length > 0 ? reports[0] : null;
-                    if (!report || report.status !== 'sent') {
-                        let currentStatus = 'not_created';
-                        if (report) {
-                            currentStatus = report.status;
-                        }
-                        try {
-                            await sendAttendanceReminder(dept.email, dept.name, 'deadline_warning', {
-                                monthName: monthNames[targetMonth],
-                                year: targetYear,
-                                currentStatus: currentStatus
-                            });
-                        } catch (e) {
-                            console.error(`Cron error sending deadline_warning to ${dept.email}:`, e);
-                        }
-                        await delay(2000); // Wait 2 seconds between emails
+                    // If department ALREADY has ANY report in 'sent' status for this month, NEVER send deadline warning
+                    const hasSentReport = reports.some(r => r.status === 'sent');
+                    if (hasSentReport) {
+                        continue;
                     }
+
+                    // Look only at active (non-cancelled) reports
+                    const activeReports = reports.filter(r => r.status !== 'cancelled');
+                    const latestActiveReport = activeReports.length > 0
+                        ? activeReports.sort((a, b) => b.id - a.id)[0]
+                        : null;
+
+                    let currentStatus = 'not_created';
+                    if (latestActiveReport) {
+                        currentStatus = latestActiveReport.status;
+                    }
+
+                    try {
+                        await sendAttendanceReminder(dept.email, dept.name, 'deadline_warning', {
+                            monthName: monthNames[targetMonth],
+                            year: targetYear,
+                            currentStatus: currentStatus
+                        });
+                    } catch (e) {
+                        console.error(`Cron error sending deadline_warning to ${dept.email}:`, e);
+                    }
+                    await delay(2000); // Wait 2 seconds between emails
                 }
             }
 
@@ -112,6 +126,19 @@ export function setupCronJobs() {
             for (const report of draftReports) {
                 const dept = permittedDepts.find(d => d.id === report.departmentId);
                 if (dept?.email) {
+                    // Check if department already has a 'sent' report for this month/year
+                    const alreadySent = await db.query.attendanceReports.findFirst({
+                        where: and(
+                            eq(attendanceReports.departmentId, report.departmentId),
+                            eq(attendanceReports.month, report.month),
+                            eq(attendanceReports.year, report.year),
+                            eq(attendanceReports.status, 'sent')
+                        )
+                    });
+                    if (alreadySent) {
+                        continue; // Skip if department already submitted a report for this month
+                    }
+
                     try {
                         await sendAttendanceReminder(dept.email, dept.name, 'not_finalized', {
                             monthName: monthNames[report.month],
@@ -136,6 +163,19 @@ export function setupCronJobs() {
             for (const report of submittedReports) {
                 const dept = permittedDepts.find(d => d.id === report.departmentId);
                 if (dept?.email) {
+                    // Check if department already has a 'sent' report for this month/year
+                    const alreadySent = await db.query.attendanceReports.findFirst({
+                        where: and(
+                            eq(attendanceReports.departmentId, report.departmentId),
+                            eq(attendanceReports.month, report.month),
+                            eq(attendanceReports.year, report.year),
+                            eq(attendanceReports.status, 'sent')
+                        )
+                    });
+                    if (alreadySent) {
+                        continue; // Skip if department already submitted a report for this month
+                    }
+
                     try {
                         await sendAttendanceReminder(dept.email, dept.name, 'not_sent', {
                             monthName: monthNames[report.month],

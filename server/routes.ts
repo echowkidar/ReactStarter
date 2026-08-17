@@ -80,6 +80,17 @@ async function checkEmployeeAttendanceBlocksTransfer(
 
   return { blocked: false };
 }
+
+// Helper: parse DD-MM-YY -> Date
+export const parseDDMMYY = (dateStr: string): Date | null => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3) return null;
+  const [d, m, y] = parts;
+  if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
+  return new Date(2000 + y, m - 1, d);
+};
+
 import { v4 as uuid } from "uuid";
 import { setupTestEmailAccount, sendPasswordResetEmail, sendAttendanceNotification, sendNoticeEmail, sendTicketResolutionEmail } from "./emailService";
 
@@ -2309,15 +2320,6 @@ export async function registerRoutes(app: Express) {
       const targetMonthStart = new Date(year, month - 1, 1);
       const targetMonthEnd   = new Date(year, month, 0); // last day of month
 
-      // Helper: parse DD-MM-YY â†’ Date
-      const parseDDMMYY = (dateStr: string): Date | null => {
-        if (!dateStr || typeof dateStr !== 'string') return null;
-        const parts = dateStr.split('-').map(Number);
-        if (parts.length !== 3) return null;
-        const [d, m, y] = parts;
-        return new Date(2000 + y, m - 1, d);
-      };
-
       const reportedEmployeeIds = new Set<number>();
 
       for (const row of result.rows as any[]) {
@@ -2588,6 +2590,39 @@ export async function registerRoutes(app: Express) {
 
       if (!periods || !Array.isArray(periods)) {
         return res.status(400).json({ message: "Invalid periods data" });
+      }
+
+      // Validate each period for invalid date ranges
+      for (let i = 0; i < periods.length; i++) {
+        const p = periods[i];
+        if (!p.fromDate || !p.toDate) {
+          return res.status(400).json({ message: `Period ${i + 1} is missing From Date or To Date` });
+        }
+        const pStart = parseDDMMYY(p.fromDate);
+        const pEnd = parseDDMMYY(p.toDate);
+        if (!pStart || !pEnd || isNaN(pStart.getTime()) || isNaN(pEnd.getTime())) {
+          return res.status(400).json({ message: `Invalid date format in Period ${i + 1}: ${p.fromDate} to ${p.toDate}` });
+        }
+        if (pStart.getTime() > pEnd.getTime()) {
+          return res.status(400).json({
+            message: `Invalid date range in Period ${i + 1}: From Date (${p.fromDate}) cannot be after To Date (${p.toDate})`
+          });
+        }
+      }
+
+      // Validate no overlapping periods within the same employee entry
+      for (let i = 0; i < periods.length; i++) {
+        for (let j = i + 1; j < periods.length; j++) {
+          const s1 = parseDDMMYY(periods[i].fromDate);
+          const e1 = parseDDMMYY(periods[i].toDate);
+          const s2 = parseDDMMYY(periods[j].fromDate);
+          const e2 = parseDDMMYY(periods[j].toDate);
+          if (s1 && e1 && s2 && e2 && s1 <= e2 && s2 <= e1) {
+            return res.status(400).json({
+              message: `Overlapping periods detected: Period ${i + 1} (${periods[i].fromDate} to ${periods[i].toDate}) overlaps with Period ${j + 1} (${periods[j].fromDate} to ${periods[j].toDate})`
+            });
+          }
+        }
       }
 
       // Duplicate guard: ek hi report mein ek hi employee ki entry do baar nahi honi chahiye

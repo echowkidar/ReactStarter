@@ -65,22 +65,45 @@ const formatDateFromInput = (dateStr: string): string => {
   }
 };
 
+const parseDateFromDisplay = (dateStr: string): Date => {
+  if (!dateStr || typeof dateStr !== 'string') return new Date(NaN);
+  const [day, month, year] = dateStr.split('-').map(Number);
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return new Date(NaN);
+  return new Date(2000 + year, month - 1, day);
+};
+
+const isInvalidDateRange = (fromDate: string, toDate: string): boolean => {
+  if (!fromDate || !toDate) return false;
+  try {
+    const start = parseDateFromDisplay(fromDate);
+    const end = parseDateFromDisplay(toDate);
+    return !isNaN(start.getTime()) && !isNaN(end.getTime()) && start.getTime() > end.getTime();
+  } catch {
+    return false;
+  }
+};
+
 const calculateDays = (fromDate: string, toDate: string): number => {
+  if (!fromDate || !toDate) return 0;
   // Parse DD-MM-YY format
   const [fromDay, fromMonth, fromYear] = fromDate.split('-').map(Number);
   const [toDay, toMonth, toYear] = toDate.split('-').map(Number);
 
+  if (isNaN(fromDay) || isNaN(fromMonth) || isNaN(fromYear) || isNaN(toDay) || isNaN(toMonth) || isNaN(toYear)) {
+    return 0;
+  }
+
   const start = new Date(2000 + fromYear, fromMonth - 1, fromDay);
   const end = new Date(2000 + toYear, toMonth - 1, toDay);
 
-  const diffTime = Math.abs(end.getTime() - start.getTime());
+  if (start.getTime() > end.getTime()) {
+    return 0;
+  }
+
+  const diffTime = end.getTime() - start.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 };
 
-const parseDateFromDisplay = (dateStr: string): Date => {
-  const [day, month, year] = dateStr.split('-').map(Number);
-  return new Date(2000 + year, month - 1, day);
-};
 
 const shiftPeriodMonth = (fromDateStr: string, direction: number, limitMonth: number, limitYear: number) => {
   const [fDay, fMonth, fYear] = fromDateStr.split('-').map(Number);
@@ -206,7 +229,26 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   };
 
   const handleFormSubmit = async (data: AttendanceFormData) => {
-    // Check for overlaps before submitting
+    // 1. Check for invalid date range (From Date > To Date) before submitting
+    for (const entry of data.entries) {
+      if (!includedEmployees.has(entry.employeeId)) continue;
+      const emp = rawEmployees.find((e: any) => e.id === entry.employeeId) || employees.find((e: any) => e.id === entry.employeeId);
+      const empName = emp?.name || `Employee #${entry.employeeId}`;
+
+      for (let i = 0; i < entry.periods.length; i++) {
+        const period = entry.periods[i];
+        if (isInvalidDateRange(period.fromDate, period.toDate)) {
+          toast({
+            title: "Invalid Date Range",
+            description: `${empName} (Period ${i + 1}): From Date (${period.fromDate}) cannot be after To Date (${period.toDate}).`,
+            variant: "destructive",
+          });
+          return; // Block submission
+        }
+      }
+    }
+
+    // 2. Check for overlaps before submitting
     for (const entry of data.entries) {
       if (!includedEmployees.has(entry.employeeId)) continue;
 
@@ -224,7 +266,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       }
     }
 
-    // No overlaps, proceed with original submission
+    // No overlaps or invalid ranges, proceed with original submission
     await onSubmit(data);
   };
 
@@ -364,10 +406,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     from1: string, to1: string,
     from2: string, to2: string
   ): boolean => {
+    if (!from1 || !to1 || !from2 || !to2) return false;
     const start1 = parseDateFromDisplay(from1);
     const end1 = parseDateFromDisplay(to1);
     const start2 = parseDateFromDisplay(from2);
     const end2 = parseDateFromDisplay(to2);
+    if (isNaN(start1.getTime()) || isNaN(end1.getTime()) || isNaN(start2.getTime()) || isNaN(end2.getTime())) return false;
+    if (start1.getTime() > end1.getTime() || start2.getTime() > end2.getTime()) return false;
     return start1 <= end2 && start2 <= end1;
   };
 
@@ -721,7 +766,27 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit((data) => {
-        // Check for overlapping periods before submitting
+        // 1. Check for invalid date ranges (From Date > To Date) before submitting
+        const dateErrors: string[] = [];
+        for (const entry of data.entries) {
+          if (!includedEmployees.has(entry.employeeId)) continue;
+          const emp = employees.find((e: any) => e.id === entry.employeeId);
+          const empName = emp?.name || `Employee #${entry.employeeId}`;
+          for (let i = 0; i < entry.periods.length; i++) {
+            const p = entry.periods[i];
+            if (isInvalidDateRange(p.fromDate, p.toDate)) {
+              dateErrors.push(
+                `${empName}: Period ${i + 1} From Date (${p.fromDate}) cannot be after To Date (${p.toDate}).`
+              );
+            }
+          }
+        }
+        if (dateErrors.length > 0) {
+          alert('Invalid Date Range found! Please fix before submitting:\n\n' + dateErrors.join('\n'));
+          return;
+        }
+
+        // 2. Check for overlapping periods before submitting
         const overlapErrors: string[] = [];
         for (const entry of data.entries) {
           const emp = employees.find((e: any) => e.id === entry.employeeId);
@@ -975,7 +1040,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 <input
                                   type="date"
                                   max={maxDateForInput}
-                                  className="w-full p-1 text-sm border rounded-md"
+                                  className={`w-full p-1 text-sm border rounded-md ${
+                                    isInvalidDateRange(period.fromDate, period.toDate)
+                                      ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500"
+                                      : ""
+                                  }`}
                                   value={formatDateForInput(period.fromDate)}
                                   onChange={(e) => {
                                     const entries = form.getValues("entries");
@@ -992,8 +1061,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                               <div>
                                 <input
                                   type="date"
+                                  min={formatDateForInput(period.fromDate)}
                                   max={maxDateForInput}
-                                  className="w-full p-1 text-sm border rounded-md"
+                                  className={`w-full p-1 text-sm border rounded-md ${
+                                    isInvalidDateRange(period.fromDate, period.toDate)
+                                      ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500"
+                                      : ""
+                                  }`}
                                   value={formatDateForInput(period.toDate)}
                                   onChange={(e) => {
                                     const entries = form.getValues("entries");
@@ -1127,6 +1201,19 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 </button>
                               </div>
                             </div>
+
+                            {/* Invalid Date Range Warning Inline */}
+                            {(() => {
+                              if (!includedEmployees.has(employee.id)) return null;
+                              if (isInvalidDateRange(period.fromDate, period.toDate)) {
+                                return (
+                                  <div className="text-destructive text-[11px] mt-1 font-semibold text-center bg-red-100 border border-red-300 p-1 rounded-sm">
+                                    ⚠️ Invalid Date Range: From Date ({period.fromDate}) cannot be after To Date ({period.toDate}).
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
 
                             {/* Overlap Warning Inline */}
                             {(() => {
