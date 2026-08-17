@@ -492,6 +492,17 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   };
 
   const addPeriod = (employeeId: number) => {
+    const employee = employees.find((e: any) => e.id === employeeId);
+    const empName = employee ? `${employee.name} (${employee.epid || 'ID: ' + employeeId})` : `Employee #${employeeId}`;
+
+    const isConfirmed = window.confirm(
+      `Do you want to add an additional attendance period for ${empName}?`
+    );
+
+    if (!isConfirmed) {
+      return;
+    }
+
     const currentEntries = form.getValues("entries") || [];
     const entryIndex = currentEntries.findIndex(entry => entry.employeeId === employeeId);
 
