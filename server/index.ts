@@ -8,6 +8,7 @@ import { runMigrations } from "./migrations";
 import { setupCronJobs } from "./cronJobs";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -96,6 +97,40 @@ export async function initApp() {
       await setupVite(app, server);
     } else {
       serveStatic(app);
+    }
+
+    // Auto-seed salary registers if empty
+    try {
+      const { db } = await import("./db");
+      const { salaryRegisters, departments } = await import("../shared/schema");
+      const { sql } = await import("drizzle-orm");
+      
+      const countResult = await db.execute(sql`SELECT count(*) FROM salary_registers`);
+      if (parseInt(countResult.rows[0].count as string) === 0) {
+        console.log("Seeding salary registers from JSON...");
+        const rawData = fs.readFileSync(path.join(__dirname, "../client/src/lib/register-nos.json"), "utf8");
+        const data: { value: string; label: string }[] = JSON.parse(rawData);
+        const depts = await db.select({ id: departments.id, name: departments.name }).from(departments);
+        
+        const mappedData = data.map(item => {
+          let departmentId = null;
+          const parts = item.label.split(" - ");
+          if (parts.length > 1) {
+            const deptNamePart = parts[1].trim().toLowerCase();
+            let match = depts.find(d => d.name.toLowerCase() === deptNamePart) || 
+                        depts.find(d => d.name.toLowerCase().includes(deptNamePart) || deptNamePart.includes(d.name.toLowerCase()));
+            if (match) departmentId = match.id;
+          }
+          return { value: item.value, label: item.label, departmentId };
+        });
+
+        for (let i = 0; i < mappedData.length; i += 500) {
+          await db.insert(salaryRegisters).values(mappedData.slice(i, i + 500)).onConflictDoNothing();
+        }
+        console.log(`Seeded ${mappedData.length} salary registers.`);
+      }
+    } catch (e) {
+      console.error("Failed to seed salary registers:", e);
     }
 
     return { app, server };

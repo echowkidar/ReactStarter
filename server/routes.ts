@@ -20,7 +20,9 @@ import {
   departments,
   employeeGroups,
   employeeGroupMembers,
-  employees
+  employees,
+  salaryRegisters,
+  insertSalaryRegisterSchema
 } from "../shared/schema";
 import fs from "fs";
 import { sql, eq, and, isNotNull, inArray } from "drizzle-orm";
@@ -404,6 +406,16 @@ export async function registerRoutes(app: Express) {
       )
     `);
 
+    // Create salary_registers table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS salary_registers (
+        id SERIAL PRIMARY KEY,
+        value TEXT NOT NULL UNIQUE,
+        label TEXT NOT NULL,
+        department_id INTEGER,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
   } catch (error) {
     console.error("Error initializing tables:", error);
   }
@@ -6420,6 +6432,131 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: error.message });
     }
   });
+
+  // ================= SALARY REGISTERS ENDPOINTS =================
+  app.get("/api/salary-registers", async (req, res) => {
+    try {
+      const departmentId = req.query.departmentId ? parseInt(req.query.departmentId as string) : undefined;
+      
+      let registers;
+      if (departmentId && !isNaN(departmentId)) {
+        registers = await db.select().from(salaryRegisters).where(eq(salaryRegisters.departmentId, departmentId));
+      } else {
+        registers = await db.select().from(salaryRegisters);
+      }
+      
+      res.json(registers);
+    } catch (error: any) {
+      console.error("Fetch salary registers error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/salary-registers", verifyAdminSession, async (req, res) => {
+    try {
+      const parsed = insertSalaryRegisterSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid payload", errors: parsed.error.errors });
+      }
+
+      const [newRegister] = await db.insert(salaryRegisters).values(parsed.data).returning();
+      res.json(newRegister);
+    } catch (error: any) {
+      console.error("Create salary register error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/salary-registers/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const parsed = insertSalaryRegisterSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid payload", errors: parsed.error.errors });
+      }
+
+      const [updated] = await db.update(salaryRegisters)
+        .set(parsed.data)
+        .where(eq(salaryRegisters.id, id))
+        .returning();
+      
+      if (!updated) return res.status(404).json({ message: "Register not found" });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Update salary register error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/salary-registers/:id", verifyAdminSession, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      await db.delete(salaryRegisters).where(eq(salaryRegisters.id, id));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete salary register error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Seeding route (can be called once manually or left here as an admin tool)
+  app.post("/api/admin/seed-salary-registers", verifyAdminSession, async (req, res) => {
+    try {
+      const countResult = await db.execute(sql`SELECT count(*) FROM salary_registers`);
+      if (parseInt(countResult.rows[0].count as string) > 0) {
+        return res.json({ message: "Already seeded" });
+      }
+
+      const rawData = fs.readFileSync(path.join(__dirname, "../client/src/lib/register-nos.json"), "utf8");
+      const data: { value: string; label: string }[] = JSON.parse(rawData);
+      
+      // Fetch departments for matching
+      const depts = await db.select({ id: departments.id, name: departments.name }).from(departments);
+      
+      const mappedData = data.map(item => {
+        let departmentId = null;
+        const parts = item.label.split(" - ");
+        if (parts.length > 1) {
+          const deptNamePart = parts[1].trim().toLowerCase();
+          
+          // Exact match first
+          let match = depts.find(d => d.name.toLowerCase() === deptNamePart);
+          
+          // If no exact match, try partial match
+          if (!match) {
+            match = depts.find(d => 
+              d.name.toLowerCase().includes(deptNamePart) || 
+              deptNamePart.includes(d.name.toLowerCase())
+            );
+          }
+          
+          if (match) {
+            departmentId = match.id;
+          }
+        }
+        return {
+          value: item.value,
+          label: item.label,
+          departmentId: departmentId
+        };
+      });
+
+      // To avoid massive inserts blowing up, insert in chunks
+      for (let i = 0; i < mappedData.length; i += 500) {
+        await db.insert(salaryRegisters).values(mappedData.slice(i, i + 500)).onConflictDoNothing();
+      }
+
+      res.json({ success: true, count: mappedData.length });
+    } catch (error: any) {
+      console.error("Seed error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+  // ================= END SALARY REGISTERS =================
 
   return httpServer;
 }

@@ -701,3 +701,20 @@ export const insertDepartmentGroupMemberSchema = createInsertSchema(departmentGr
 
 export type DepartmentGroupMember = typeof departmentGroupMembers.$inferSelect;
 export type InsertDepartmentGroupMember = z.infer<typeof insertDepartmentGroupMemberSchema>;
+
+// Salary Registers
+export const salaryRegisters = pgTable("salary_registers", {
+  id: serial("id").primaryKey(),
+  value: text("value").notNull().unique(), // e.g. "ADM106"
+  label: text("label").notNull(),          // e.g. "ADM106 - DEAN F/o AGRICULTURAL SCIENCE"
+  departmentId: integer("department_id"),  // Foreign key to departments, nullable if unmapped
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSalaryRegisterSchema = createInsertSchema(salaryRegisters).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SalaryRegister = typeof salaryRegisters.$inferSelect;
+export type InsertSalaryRegister = z.infer<typeof insertSalaryRegisterSchema>;

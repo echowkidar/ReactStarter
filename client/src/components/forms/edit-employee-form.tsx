@@ -40,6 +40,24 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
   const [selectedDesignation, setSelectedDesignation] = useState(employee.designation || "");
   const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState(employee.salary_asstt || "");
+  const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState(employee.salaryRegisterNo || "");
+
+  // Fetch all salary registers dynamically
+  const { data: registers } = useQuery<{id: number; value: string; label: string; departmentId: number | null}[]>({
+    queryKey: ["/api/salary-registers"],
+  });
+
+  const registerNoOptions: ComboboxOption[] = registers 
+    ? registers.map(r => ({ value: r.value, label: r.label }))
+    : [];
+
+  // Always include the current employee's register number in the options so it renders correctly, even if not mapped to this department yet
+  if (employee.salaryRegisterNo && !registerNoOptions.some(opt => opt.value === employee.salaryRegisterNo)) {
+    registerNoOptions.push({
+      value: employee.salaryRegisterNo,
+      label: employee.salaryRegisterNo + " (Legacy/Unmapped)"
+    });
+  }
 
   // Fetch field visibility settings
   const { data: fieldSettings } = useQuery<Record<string, string>>({
@@ -909,6 +927,23 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
                     </p>
                   )}
                   {errors.isActive && <p className="text-red-500 text-xs mt-1">{errors.isActive.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Salary Register No.</label>
+                  <SearchableSelect
+                    options={registerNoOptions}
+                    value={selectedSalaryRegisterNo}
+                    onValueChange={(value) => {
+                      setSelectedSalaryRegisterNo(value);
+                      form.setValue("salaryRegisterNo" as any, value);
+                    }}
+                    placeholder="Select register no..."
+                    searchPlaceholder="Search register no..."
+                    emptyMessage="No register number found."
+                    className={`bg-white ${!isAdmin ? '!opacity-100 bg-slate-100 text-slate-900 font-medium cursor-not-allowed' : ''}`}
+                    disabled={!isAdmin || isSubmitting}
+                  />
                 </div>
 
                 <div>

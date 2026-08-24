@@ -14,14 +14,13 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
 import { useState, useEffect } from "react";
 
-// Import master data for designations and register numbers
+// Import master data for designations
 import designationsData from "@/lib/designations.json";
-import registerNosData from "@/lib/register-nos.json";
 import salaryAssistantsData from "@/lib/salary-assistants.json";
+import { getCurrentDepartment } from "@/lib/auth";
 
 // Prepare options for searchable selects
 const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
-const registerNoOptions: ComboboxOption[] = registerNosData as ComboboxOption[];
 const salaryAssistantOptions: ComboboxOption[] = salaryAssistantsData as ComboboxOption[];
 
 const employeeSchema = z.object({
@@ -62,6 +61,17 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
   const { data: fieldSettings } = useQuery<Record<string, string>>({
     queryKey: ["/api/admin/settings"],
   });
+
+  const department = getCurrentDepartment();
+  
+  // Fetch all salary registers dynamically
+  const { data: registers } = useQuery<{id: number; value: string; label: string; departmentId: number | null}[]>({
+    queryKey: ["/api/salary-registers"],
+  });
+
+  const registerNoOptions: ComboboxOption[] = registers 
+    ? registers.map(r => ({ value: r.value, label: r.label }))
+    : [];
   const showPan = fieldSettings?.show_pan_field !== "false";
   const showBank = fieldSettings?.show_bank_field !== "false";
   const showAadhar = fieldSettings?.show_aadhar_field !== "false";

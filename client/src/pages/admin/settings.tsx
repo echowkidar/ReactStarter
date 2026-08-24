@@ -10,6 +10,7 @@ import Loading from "@/components/layout/loading";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { UsefulDownloadsManager } from "@/components/admin/useful-downloads-manager";
+import { SalaryRegisterManager } from "@/components/admin/salary-register-manager";
 
 type Settings = Record<string, string>;
 
@@ -121,6 +122,7 @@ export default function AdminSettings() {
                 </Card>
 
                 <UsefulDownloadsManager />
+                <SalaryRegisterManager />
             </div>
         </div>
     );

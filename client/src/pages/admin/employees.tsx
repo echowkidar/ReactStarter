@@ -25,14 +25,12 @@ import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal
 import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-// Import master data for designations and register numbers
+// Import master data for designations
 import designationsData from "@/lib/designations.json";
-import registerNosData from "@/lib/register-nos.json";
 import salaryAssistantsData from "@/lib/salary-assistants.json";
 
 // Prepare options for searchable selects
 const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
-const registerNoOptions: ComboboxOption[] = registerNosData as ComboboxOption[];
 const salaryAssistantOptions: ComboboxOption[] = salaryAssistantsData as ComboboxOption[];
 
 interface FileUpload {
@@ -65,6 +63,24 @@ export default function AdminEmployees() {
   const showPan = fieldSettings?.show_pan_field !== "false";
   const showBank = fieldSettings?.show_bank_field !== "false";
   const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+
+  // Fetch all salary registers dynamically
+  const { data: registers } = useQuery<{id: number; value: string; label: string; departmentId: number | null}[]>({
+    queryKey: ["/api/salary-registers"],
+  });
+
+  const registerNoOptions: ComboboxOption[] = registers 
+    ? registers.map(r => ({ value: r.value, label: r.label }))
+    : [];
+
+  // Always include the current employee's register number in the options so it renders correctly, even if not mapped to this department yet
+  if (selectedEmployee?.salaryRegisterNo && !registerNoOptions.some(opt => opt.value === selectedEmployee.salaryRegisterNo)) {
+    registerNoOptions.push({
+      value: selectedEmployee.salaryRegisterNo,
+      label: selectedEmployee.salaryRegisterNo + " (Legacy/Unmapped)"
+    });
+  }
+
   const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState<string>("");
   const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState<string>("");
   const [uploads, setUploads] = useState<UploadState>({});
