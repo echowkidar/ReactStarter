@@ -171,6 +171,7 @@ Use CyberPanel's SSL section to issue an SSL certificate for your domain.
 
 ## DIGITAL OCEAN VPS Commands for build and run
 ## cd /home/salarysection.com/ReactStarter
+## git pull
 ## export NODE_OPTIONS="--max-old-space-size=4096"
 ## npm run build
 ## pm2 start ecosystem.config.cjs --force
