@@ -449,17 +449,123 @@ const PDFDialogContent = ({
   // Transaction ID extraction helpers
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Transaction ID extraction & fuzzy verification helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Normalizes lookalike characters that OCR frequently confuses with hex digits.
+   * Legitimate Transaction IDs are 8-character hex strings [0-9A-F].
+   */
+  const normalizeTxLookalikes = (str: string): string => {
+    return str
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .replace(/O/g, '0')     // Letter O -> Digit 0
+      .replace(/[IL|]/g, '1') // Letter I, L, pipe -> Digit 1
+      .replace(/S/g, '5')     // Letter S -> Digit 5
+      .replace(/Z/g, '2');    // Letter Z -> Digit 2
+  };
+
+  /**
+   * Calculates Levenshtein edit distance between two strings with soft penalty for visual pairs.
+   */
+  const calculateLevenshteinDistance = (a: string, b: string): number => {
+    const m = a.length;
+    const n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        let cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        if (cost === 1) {
+          const charA = a[i - 1];
+          const charB = b[j - 1];
+          // Soft penalty for visual lookalikes
+          if (
+            (charA === '8' && charB === 'B') || (charA === 'B' && charB === '8') ||
+            (charA === '0' && charB === 'D') || (charA === 'D' && charB === '0')
+          ) {
+            cost = 0.5;
+          }
+        }
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,        // deletion
+          dp[i][j - 1] + 1,        // insertion
+          dp[i - 1][j - 1] + cost   // substitution
+        );
+      }
+    }
+    return dp[m][n];
+  };
+
+  /**
+   * Compares an extracted Transaction ID against the actual system Transaction ID.
+   * Tolerates OCR lookalikes (0/O, 1/I, 5/S, 2/Z, 8/B) and minor misreads (up to maxDiff characters).
+   */
+  const compareTransactionIds = (
+    extracted: string | null | undefined,
+    actual: string | null | undefined,
+    maxDiff: number = 3
+  ): { isMatch: boolean; diffCount: number; isExact: boolean } => {
+    if (!extracted || !actual) {
+      return { isMatch: false, diffCount: 8, isExact: false };
+    }
+
+    const rawExtracted = extracted.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const rawActual = actual.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    if (rawExtracted === rawActual) {
+      return { isMatch: true, diffCount: 0, isExact: true };
+    }
+
+    const normExtracted = normalizeTxLookalikes(rawExtracted);
+    const normActual = normalizeTxLookalikes(rawActual);
+
+    if (normExtracted === normActual) {
+      return { isMatch: true, diffCount: 0, isExact: false };
+    }
+
+    // Positional comparison when both are equal length (8 characters)
+    if (normExtracted.length === normActual.length) {
+      let diff = 0;
+      for (let i = 0; i < normActual.length; i++) {
+        const charE = normExtracted[i];
+        const charA = normActual[i];
+        if (charE !== charA) {
+          if (
+            (charE === '8' && charA === 'B') || (charE === 'B' && charA === '8') ||
+            (charE === '0' && charA === 'D') || (charE === 'D' && charA === '0')
+          ) {
+            diff += 0.5;
+          } else {
+            diff += 1;
+          }
+        }
+      }
+      if (diff <= maxDiff) {
+        return { isMatch: true, diffCount: Math.round(diff), isExact: false };
+      }
+    }
+
+    // Levenshtein comparison for slight length deviations (e.g. 7-9 chars)
+    const lev = calculateLevenshteinDistance(normExtracted, normActual);
+    if (lev <= maxDiff && normExtracted.length >= 6) {
+      return { isMatch: true, diffCount: Math.round(lev), isExact: false };
+    }
+
+    return { isMatch: false, diffCount: Math.round(lev), isExact: false };
+  };
+
   /**
    * Helper to clean up OCR mistakes where letters are confused for numbers.
    * Since Transaction ID is Hexadecimal (0-9, A-F), letters like O, I, S, Z are definitely mistakes.
    */
   const sanitizeOCRText = (text: string): string => {
-    return text.toUpperCase()
-      .replace(/O/g, '0')
-      .replace(/I/g, '1')
-      .replace(/S/g, '5')
-      .replace(/Z/g, '2')
-      .replace(/G/g, '6');
+    return normalizeTxLookalikes(text).replace(/G/g, '6');
   };
 
   /**
@@ -610,7 +716,9 @@ const PDFDialogContent = ({
     setTxIdAutoDetected(true);
 
     const systemId = report.transactionId?.toUpperCase() ?? '';
-    if (extracted.toUpperCase() === systemId) {
+    const matchResult = compareTransactionIds(extracted, systemId, 3);
+    if (matchResult.isMatch) {
+      setVerifyTransactionId(systemId);
       setTxIdStatus('verified');
       setTxIdLocked(true);
     } else {
@@ -716,13 +824,15 @@ const PDFDialogContent = ({
         const cleaned = apiTxId.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
         if (cleaned.length >= 6) { // at least 6 chars = plausible TX ID
           txIdSetByApiRef.current = true; // prevent Tesseract from overriding
-          setVerifyTransactionId(cleaned);
           setTxIdAutoDetected(true);
           const systemId = report.transactionId?.toUpperCase() ?? '';
-          if (cleaned === systemId) {
+          const matchResult = compareTransactionIds(cleaned, systemId, 3);
+          if (matchResult.isMatch) {
+            setVerifyTransactionId(systemId);
             setTxIdStatus('verified');
             setTxIdLocked(true);
           } else {
+            setVerifyTransactionId(cleaned);
             setTxIdStatus('mismatch');
             setTxIdLocked(false);
           }
