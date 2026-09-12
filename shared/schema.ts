@@ -123,11 +123,19 @@ export const insertEmployeeSchema = createInsertSchema(employees)
       return val;
     }),
     employmentStatus: z.string().transform(val => {
-      const normalized = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
-      if (!["Permanent", "Probation", "Temporary"].includes(normalized)) {
+      const allowed = [
+        "Permanent",
+        "Probation",
+        "Temporary",
+        "Court Case",
+        "Compensation",
+        "Till Further Order"
+      ];
+      const match = allowed.find(s => s.toLowerCase() === val.trim().toLowerCase());
+      if (!match) {
         throw new Error("Invalid employment status");
       }
-      return normalized;
+      return match;
     }),
     joiningShift: z.string().default("morning"),
     officeMemoNo: z.string().optional().default(""),

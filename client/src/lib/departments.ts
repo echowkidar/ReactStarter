@@ -4,7 +4,10 @@ import { DepartmentName } from "../../../shared/schema";
 export const employmentStatuses = [
   "Permanent",
   "Probation",
-  "Temporary"
+  "Temporary",
+  "Court Case",
+  "Compensation",
+  "Till Further Order"
 ] as const;
 
 // Define the type for the response from /api/departments

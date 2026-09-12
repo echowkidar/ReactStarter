@@ -1230,9 +1230,11 @@ export default function AdminEmployees() {
                                     <SelectValue placeholder="Select status" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="Permanent">Permanent</SelectItem>
-                                    <SelectItem value="Probation">Probation</SelectItem>
-                                    <SelectItem value="Temporary">Temporary</SelectItem>
+                                    {employmentStatuses.map((status) => (
+                                      <SelectItem key={status} value={status}>
+                                        {status}
+                                      </SelectItem>
+                                    ))}
                                   </SelectContent>
                                 </Select>
                               </div>

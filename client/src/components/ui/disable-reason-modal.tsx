@@ -11,6 +11,9 @@ export const DISABLE_REASONS = [
     { value: "resign", label: "Resign" },
     { value: "term_complete", label: "Term Complete" },
     { value: "terminate", label: "Terminate" },
+    { value: "expired", label: "Expired" },
+    { value: "long_leave", label: "Long Leave" },
+    { value: "deputation", label: "Deputation" },
 ] as const;
 
 export type DisableReason = typeof DISABLE_REASONS[number]["value"];
