@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send, Lock, Unlock, ShieldAlert, ShieldCheck } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -254,6 +254,87 @@ export default function AdminDashboard() {
     },
     refetchInterval: 120000,
   });
+
+  // ============ Locked Users & Reset Login State & Queries ============
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [lockedSearchTerm, setLockedSearchTerm] = useState("");
+  const [manualEmailToReset, setManualEmailToReset] = useState("");
+
+  const formatAttemptTime = (dateStr: string | null) => {
+    if (!dateStr) return "-";
+    const isoStr = dateStr.includes('Z') || dateStr.includes('+') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+    const d = new Date(isoStr);
+    return isNaN(d.getTime()) ? "-" : d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata',
+    });
+  };
+
+  // Check if current logged-in admin can perform reset action
+  // Strictly Super Administrator (admin@amu.ac.in) or Salary Officer (salary@amu.ac.in / userCode ALL)
+  const canResetLock = useMemo(() => {
+    const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
+    return (
+      adminData.email === 'admin@amu.ac.in' ||
+      adminData.email === 'salary@amu.ac.in' ||
+      adminData.role === 'superadmin' ||
+      (adminData.role === 'salary' && adminData.userCode === 'ALL')
+    );
+  }, []);
+
+  interface LockedUserItem {
+    id: number;
+    identifier: string;
+    attemptCount: number;
+    lastAttemptAt: string;
+    lockedUntil: string;
+    remainingMinutes: number;
+    isLocked: boolean;
+    departmentName?: string | null;
+    name?: string;
+  }
+
+  const { data: lockedUsersData, refetch: refetchLockedUsers, isFetching: isFetchingLockedUsers } = useQuery<{
+    count: number;
+    users: LockedUserItem[];
+  }>({
+    queryKey: ["/api/admin/locked-users"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/admin/locked-users");
+      return response.json();
+    },
+    refetchInterval: 15000, // Refresh every 15s to keep live status
+    refetchOnWindowFocus: true,
+  });
+
+  const lockedCount = lockedUsersData?.count || 0;
+  const lockedUsersList = lockedUsersData?.users || [];
+
+  // Mutation to reset login lock
+  const resetLockMutation = useMutation({
+    mutationFn: async ({ email, unlockAll }: { email?: string; unlockAll?: boolean }) => {
+      const response = await apiRequest("POST", "/api/admin/reset-login-lock", { email, unlockAll });
+      return response.json();
+    },
+    onSuccess: (res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/locked-users"] });
+      if (vars.email) setManualEmailToReset("");
+      toast({
+        title: "Account Unlocked",
+        description: res.message || "Login attempts have been reset. User can now log in.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Reset Failed",
+        description: err.message || "Failed to reset login lock. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  // ============ End Locked Users State & Queries ============
 
   // Fetch active users count (refresh every 10 seconds)
   const { data: activeUsersStats = { total: 0, departments: 0, admins: 0, users: [] } } = useQuery<{
@@ -1673,7 +1754,8 @@ export default function AdminDashboard() {
                 <p className="text-lg font-bold text-green-700 leading-none">{ticketStats.resolved}</p>
                 <p className="text-[7px] uppercase text-green-600 font-medium">Done</p>
               </div>
-              <div className="text-center py-1 bg-orange-50 rounded border border-orange-100 col-span-2">
+              {/* Pending Requests Box */}
+              <div className="text-center py-1 bg-orange-50 rounded border border-orange-100">
                 {(() => {
                   const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
                   const isSuperOrAll = adminData.role === 'superadmin' || (adminData.role === 'salary' && adminData.userCode === 'ALL');
@@ -1682,7 +1764,7 @@ export default function AdminDashboard() {
                   if (!isSuperOrAll && !isDealingAssistant) return (
                     <>
                       <p className="text-lg font-bold text-gray-400 leading-none">-</p>
-                      <p className="text-[7px] uppercase text-gray-400 font-medium">Pending Requests</p>
+                      <p className="text-[7px] uppercase text-gray-400 font-medium">Pending</p>
                     </>
                   );
 
@@ -1701,10 +1783,45 @@ export default function AdminDashboard() {
                   return (
                     <>
                       <p className="text-lg font-bold text-orange-700 leading-none">{pendingCount}</p>
-                      <p className="text-[7px] uppercase text-orange-600 font-medium">Pending Requests</p>
+                      <p className="text-[7px] uppercase text-orange-600 font-medium">Pending</p>
                     </>
                   );
                 })()}
+              </div>
+
+              {/* Reset Lock Box (Green when 0, Alert Red Blinking when 1+) */}
+              <div
+                onClick={() => setIsResetModalOpen(true)}
+                className={`text-center py-1 rounded border cursor-pointer transition-all hover:scale-[1.02] select-none ${
+                  lockedCount > 0
+                    ? "animate-alert-blink"
+                    : "bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+                }`}
+                title={
+                  lockedCount > 0
+                    ? `${lockedCount} locked department account(s). Click to view & reset.`
+                    : "0 locked accounts. All logins normal. Click to view."
+                }
+              >
+                <p
+                  className={`text-lg font-bold leading-none ${
+                    lockedCount > 0 ? "alert-text font-extrabold" : "text-emerald-700"
+                  }`}
+                >
+                  {lockedCount}
+                </p>
+                <p
+                  className={`text-[7px] uppercase font-medium flex items-center justify-center gap-0.5 mt-0.5 ${
+                    lockedCount > 0 ? "alert-text font-bold" : "text-emerald-600"
+                  }`}
+                >
+                  {lockedCount > 0 ? (
+                    <Lock className="h-2 w-2 alert-text" />
+                  ) : (
+                    <RotateCcw className="h-2 w-2 text-emerald-600" />
+                  )}
+                  Reset Lock
+                </p>
               </div>
               <div className="hidden">
                 <p>{stats.requests.cancellation}</p>
@@ -2453,6 +2570,203 @@ export default function AdminDashboard() {
             <DialogFooter>
               <Button onClick={() => setShowExportPopup(false)} className="w-full bg-green-600 hover:bg-green-700">
                 OK, Got it
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Locked Accounts & Reset Login Dialog */}
+        <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
+          <DialogContent className="max-w-xl max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <ShieldAlert className={`h-5 w-5 ${lockedCount > 0 ? "text-red-600" : "text-emerald-600"}`} />
+                Locked Department Accounts
+                {lockedCount > 0 ? (
+                  <Badge variant="destructive" className="ml-2 text-xs">
+                    {lockedCount} Locked
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="ml-2 text-xs border-emerald-300 text-emerald-700 bg-emerald-50">
+                    All Normal
+                  </Badge>
+                )}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Users who enter incorrect credentials 5+ times are temporarily restricted for 30 minutes.
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Role Notice Banner for Normal Dealing Assistants */}
+            {!canResetLock && (
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-2.5 flex items-start gap-2 text-xs text-amber-800">
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">View Only (Unauthorized to Reset)</p>
+                  <p className="text-amber-700 mt-0.5">
+                    Aap locked accounts dekh sakte hain, lekin reset karne ki permission sirf Salary Officer (salary@amu.ac.in) aur Super Administrator ke paas hai. Unlock karane ke liye unse contact karein.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Actions & Search Bar */}
+            <div className="flex items-center justify-between gap-2 pt-1 pb-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search locked department or email..."
+                  value={lockedSearchTerm}
+                  onChange={(e) => setLockedSearchTerm(e.target.value)}
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+              {canResetLock && lockedCount > 1 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-8 text-xs shrink-0"
+                  disabled={resetLockMutation.isPending}
+                  onClick={() => resetLockMutation.mutate({ unlockAll: true })}
+                >
+                  {resetLockMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Unlock All ({lockedCount})
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs px-2"
+                onClick={() => refetchLockedUsers()}
+                disabled={isFetchingLockedUsers}
+                title="Refresh list"
+              >
+                <RotateCcw className={`h-3.5 w-3.5 ${isFetchingLockedUsers ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+
+            {/* List of Locked Users */}
+            <div className="flex-1 overflow-y-auto max-h-[340px] space-y-2 pr-1">
+              {(() => {
+                const filtered = lockedUsersList.filter(u =>
+                  (u.name && u.name.toLowerCase().includes(lockedSearchTerm.toLowerCase())) ||
+                  (u.departmentName && u.departmentName.toLowerCase().includes(lockedSearchTerm.toLowerCase())) ||
+                  (u.identifier && u.identifier.toLowerCase().includes(lockedSearchTerm.toLowerCase()))
+                );
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-8 bg-slate-50 border border-slate-100 rounded-lg">
+                      <ShieldCheck className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-slate-700">
+                        {lockedUsersList.length === 0 ? "No accounts are currently locked" : "No matching locked accounts"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {lockedUsersList.length === 0
+                          ? "All department users are logging in normally."
+                          : "Try searching with a different keyword."}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filtered.map((user) => (
+                  <div
+                    key={user.id || user.identifier}
+                    className="p-3 border border-red-200 bg-red-50/50 rounded-lg flex items-center justify-between gap-3 hover:bg-red-50 transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-xs text-slate-900 truncate">
+                          {user.departmentName || user.name || "Department Account"}
+                        </span>
+                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                          {user.remainingMinutes}m left
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-600 truncate mt-0.5">{user.identifier}</p>
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1">
+                        <span className="text-red-600 font-medium">
+                          Failed attempts: {user.attemptCount}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Last try: {formatAttemptTime(user.lastAttemptAt)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      {canResetLock ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-300 text-red-700 hover:bg-red-100 h-8 text-xs font-medium"
+                          disabled={resetLockMutation.isPending && resetLockMutation.variables?.email === user.identifier}
+                          onClick={() => resetLockMutation.mutate({ email: user.identifier })}
+                        >
+                          {resetLockMutation.isPending && resetLockMutation.variables?.email === user.identifier ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          ) : (
+                            <Unlock className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Unlock
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="opacity-60 cursor-not-allowed h-8 text-xs text-slate-500"
+                          disabled
+                          title="Unauthorized: Only Salary Officer or Super Admin can unlock"
+                        >
+                          <Lock className="h-3.5 w-3.5 mr-1" />
+                          Locked
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Manual Unlock Search (Only for Authorized Admins) */}
+            {canResetLock && (
+              <div className="border-t pt-3 mt-1">
+                <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">
+                  Manual Reset by Email (Kisi specific user ke attempts clear karne ke liye):
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter email e.g. dept@amu.ac.in"
+                    value={manualEmailToReset}
+                    onChange={(e) => setManualEmailToReset(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs shrink-0"
+                    disabled={!manualEmailToReset.trim() || resetLockMutation.isPending}
+                    onClick={() => resetLockMutation.mutate({ email: manualEmailToReset.trim() })}
+                  >
+                    {resetLockMutation.isPending && resetLockMutation.variables?.email === manualEmailToReset.trim() ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      "Reset"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="mt-2 pt-2 border-t">
+              <Button variant="ghost" size="sm" onClick={() => setIsResetModalOpen(false)} className="h-8 text-xs">
+                Close
               </Button>
             </DialogFooter>
           </DialogContent>

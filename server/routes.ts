@@ -156,17 +156,19 @@ async function isAccountLocked(identifier: string): Promise<{ locked: boolean; r
   try {
     const { db } = await import("./db");
     const { sql } = await import("drizzle-orm");
+    const normId = (identifier || '').trim().toLowerCase();
 
     const result = await db.execute(sql`
-      SELECT locked_until FROM login_attempts 
-      WHERE identifier = ${identifier} 
+      SELECT locked_until,
+             GREATEST(0, ROUND(EXTRACT(EPOCH FROM (locked_until - NOW())) * 1000)) as remaining_ms
+      FROM login_attempts 
+      WHERE LOWER(TRIM(identifier)) = ${normId} 
       AND locked_until IS NOT NULL 
       AND locked_until > NOW()
     `);
 
     if (result.rows.length > 0) {
-      const lockedUntil = new Date(result.rows[0].locked_until as string);
-      const remainingMs = lockedUntil.getTime() - Date.now();
+      const remainingMs = Number(result.rows[0].remaining_ms) || 0;
       return { locked: true, remainingMs };
     }
     return { locked: false };
@@ -181,10 +183,11 @@ async function recordFailedAttempt(identifier: string): Promise<{ locked: boolea
   try {
     const { db } = await import("./db");
     const { sql } = await import("drizzle-orm");
+    const normId = (identifier || '').trim().toLowerCase();
 
     // Get current attempt count
     const existing = await db.execute(sql`
-      SELECT id, attempt_count FROM login_attempts WHERE identifier = ${identifier}
+      SELECT id, attempt_count FROM login_attempts WHERE LOWER(TRIM(identifier)) = ${normId}
     `);
 
     if (existing.rows.length > 0) {
@@ -196,7 +199,7 @@ async function recordFailedAttempt(identifier: string): Promise<{ locked: boolea
         SET attempt_count = ${currentCount},
             last_attempt_at = NOW(),
             locked_until = ${shouldLock ? sql`NOW() + INTERVAL '30 minutes'` : sql`NULL`}
-        WHERE identifier = ${identifier}
+        WHERE LOWER(TRIM(identifier)) = ${normId}
       `);
 
       return {
@@ -207,7 +210,7 @@ async function recordFailedAttempt(identifier: string): Promise<{ locked: boolea
       // First attempt
       await db.execute(sql`
         INSERT INTO login_attempts (identifier, attempt_count, last_attempt_at)
-        VALUES (${identifier}, 1, NOW())
+        VALUES (${normId}, 1, NOW())
       `);
       return { locked: false, attemptsRemaining: MAX_LOGIN_ATTEMPTS - 1 };
     }
@@ -222,7 +225,8 @@ async function clearLoginAttempts(identifier: string): Promise<void> {
   try {
     const { db } = await import("./db");
     const { sql } = await import("drizzle-orm");
-    await db.execute(sql`DELETE FROM login_attempts WHERE identifier = ${identifier}`);
+    const normId = (identifier || '').trim().toLowerCase();
+    await db.execute(sql`DELETE FROM login_attempts WHERE LOWER(TRIM(identifier)) = ${normId}`);
   } catch (error) {
     console.error('Error clearing login attempts:', error);
   }
@@ -1876,6 +1880,122 @@ export async function registerRoutes(app: Express) {
       });
     }
   });
+
+  // ============ Locked Users & Reset Login Provision ============
+  // Get currently locked accounts / login attempts for dashboard
+  app.get("/api/admin/locked-users", verifyAdminSession, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      // Query locked accounts where locked_until > NOW()
+      const result = await db.execute(sql`
+        SELECT id, identifier, attempt_count,
+               last_attempt_at AT TIME ZONE 'UTC' as last_attempt_at,
+               locked_until AT TIME ZONE 'UTC' as locked_until,
+               GREATEST(1, ROUND(EXTRACT(EPOCH FROM (locked_until - NOW())) / 60)) as remaining_minutes
+        FROM login_attempts
+        WHERE locked_until IS NOT NULL AND locked_until > NOW()
+        ORDER BY last_attempt_at DESC
+      `);
+
+      // Fetch all departments to map department name & HOD name
+      const departments = await storage.getAllDepartments();
+      const deptMap = new Map<string, { name: string; hodName: string }>();
+      for (const d of departments) {
+        if (d.email) {
+          deptMap.set(d.email.trim().toLowerCase(), { name: d.name, hodName: d.hodName });
+        }
+      }
+
+      // Also map admins in case an admin got locked
+      const admins = await storage.getAllAdmins();
+      const adminMap = new Map<string, { name: string; role: string }>();
+      for (const a of admins) {
+        if (a.email) {
+          adminMap.set(a.email.trim().toLowerCase(), { name: a.name || 'Admin', role: a.role });
+        }
+      }
+
+      const lockedUsers = (result.rows as any[]).map(row => {
+        const email = String(row.identifier || '').trim().toLowerCase();
+        const dept = deptMap.get(email);
+        const adm = adminMap.get(email);
+        const remainingMinutes = Math.max(1, Math.round(Number(row.remaining_minutes) || 1));
+
+        return {
+          id: row.id,
+          identifier: row.identifier,
+          attemptCount: row.attempt_count,
+          lastAttemptAt: row.last_attempt_at ? String(row.last_attempt_at) : null,
+          lockedUntil: row.locked_until ? String(row.locked_until) : null,
+          remainingMinutes,
+          isLocked: true,
+          departmentName: dept?.name || (adm ? `${adm.role.toUpperCase()} ACCOUNT` : null),
+          name: dept?.hodName || adm?.name || row.identifier
+        };
+      });
+
+      res.json({
+        count: lockedUsers.length,
+        users: lockedUsers
+      });
+    } catch (error) {
+      console.error("Error fetching locked users:", error);
+      res.status(500).json({ message: "Failed to fetch locked users" });
+    }
+  });
+
+  // Reset login lock endpoint (Restricted to Super Admin & Salary Officer)
+  app.post("/api/admin/reset-login-lock", verifyAdminSession, async (req, res) => {
+    try {
+      const admin = (req as any).adminUser;
+
+      // Strict check: Only Super Administrator (admin@amu.ac.in) or Salary Officer (salary@amu.ac.in) can reset
+      const isAuthorized = 
+        admin.email === 'admin@amu.ac.in' || 
+        admin.email === 'salary@amu.ac.in' || 
+        admin.role === 'superadmin' || 
+        (admin.role === 'salary' && admin.userCode === 'ALL');
+
+      if (!isAuthorized) {
+        return res.status(403).json({ 
+          message: "Unauthorized: Only Super Administrator (admin@amu.ac.in) or Salary Officer (salary@amu.ac.in) can reset login locks." 
+        });
+      }
+
+      const { email, unlockAll } = req.body;
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+
+      if (unlockAll) {
+        await db.execute(sql`DELETE FROM login_attempts WHERE locked_until IS NOT NULL`);
+        return res.json({ 
+          success: true, 
+          message: "All locked accounts have been reset successfully." 
+        });
+      }
+
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      await db.execute(sql`
+        DELETE FROM login_attempts 
+        WHERE LOWER(TRIM(identifier)) = ${normalizedEmail}
+      `);
+
+      return res.json({ 
+        success: true, 
+        message: `Login attempts reset successfully for ${email}. Account is unlocked.` 
+      });
+    } catch (error) {
+      console.error("Error resetting login lock:", error);
+      res.status(500).json({ message: "Failed to reset login lock" });
+    }
+  });
+  // ============ End Locked Users Provision ============
 
   // User management endpoints
 

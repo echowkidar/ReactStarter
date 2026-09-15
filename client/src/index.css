@@ -35,6 +35,36 @@
     justify-content: center;
     align-items: center;
   }
+
+  @keyframes alertBlinkBox {
+    0%, 100% {
+      background-color: #fef2f2;
+      border-color: #ef4444;
+      box-shadow: 0 0 0px rgba(220, 38, 38, 0);
+    }
+    50% {
+      background-color: #dc2626;
+      border-color: #991b1b;
+      box-shadow: 0 0 16px 3px rgba(220, 38, 38, 0.65);
+    }
+  }
+
+  @keyframes alertBlinkText {
+    0%, 100% {
+      color: #dc2626;
+    }
+    50% {
+      color: #ffffff;
+    }
+  }
+
+  .animate-alert-blink {
+    animation: alertBlinkBox 1.2s infinite ease-in-out;
+  }
+
+  .animate-alert-blink .alert-text {
+    animation: alertBlinkText 1.2s infinite ease-in-out;
+  }
 }
 
 /* Print styles */
