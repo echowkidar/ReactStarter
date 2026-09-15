@@ -1774,19 +1774,45 @@ export async function registerRoutes(app: Express) {
     }
 
     try {
+      let bufferToSend = req.file.buffer;
+      let filenameToSend = req.file.originalname;
+
+      // If PDF has more than 2 pages, optimize by sending only Page 1 (header/TX ID) and Last Page (signature/stamp) to OCR
+      if (req.file.mimetype === 'application/pdf') {
+        try {
+          const { PDFDocument } = await import('pdf-lib');
+          const srcDoc = await PDFDocument.load(req.file.buffer, { ignoreEncryption: true });
+          const totalPages = srcDoc.getPageCount();
+
+          if (totalPages > 2) {
+            const trimmedDoc = await PDFDocument.create();
+            const [firstPage, lastPage] = await trimmedDoc.copyPages(srcDoc, [0, totalPages - 1]);
+            trimmedDoc.addPage(firstPage);
+            trimmedDoc.addPage(lastPage);
+
+            const trimmedBytes = await trimmedDoc.save({ useObjectStreams: true });
+            bufferToSend = Buffer.from(trimmedBytes);
+            console.log(`[OCR-Validate] Optimized multi-page PDF from ${totalPages} pages (${req.file.size} bytes) to 2 pages (${bufferToSend.length} bytes) for fast OCR verification.`);
+          }
+        } catch (trimErr) {
+          console.warn('[OCR-Validate] PDF trimming failed, falling back to original file:', trimErr);
+          bufferToSend = req.file.buffer;
+        }
+      }
+
       // Build multipart/form-data body using Node 18+ native FormData
       const form = new FormData();
       form.append(
         "file",
-        new Blob([req.file.buffer], { type: req.file.mimetype }),
-        req.file.originalname
+        new Blob([bufferToSend], { type: req.file.mimetype }),
+        filenameToSend
       );
 
       const upstream = await fetch(ocrApiUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${ocrApiToken}`,
-          // Note: do NOT set Content-Type manually â€” fetch sets it with boundary automatically
+          // Note: do NOT set Content-Type manually — fetch sets it with boundary automatically
         },
         body: form as any,
       });

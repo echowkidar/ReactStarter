@@ -754,7 +754,7 @@ const PDFDialogContent = ({
       formData.append('file', file, file.name);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 s
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 s timeout for deep OCR
 
       let resp: Response;
       try {
