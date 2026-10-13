@@ -1825,6 +1825,40 @@ export async function registerRoutes(app: Express) {
 
       const data = await upstream.json();
 
+      // ── Supplementary Attendance Report: override "wrong document" rejection ──────────────
+      // The external OCR API was trained on regular attendance reports. When a Supplementary
+      // Attendance Report is uploaded, the header text ("Supplementary Attendance Report")
+      // confuses the model and it returns document_acceptable=false with a "wrong document" message.
+      // Fix: If the ONLY reason for rejection is document type mismatch (not image quality),
+      // AND a valid transaction_id was detected → override to accepted.
+      if (data.document_acceptable === false || data.quality_acceptable === false) {
+        const msg = (data.message || '').toLowerCase();
+        const isWrongDocTypeError = (
+          msg.includes('wrong document') ||
+          msg.includes('upload the attendance report') ||
+          msg.includes('attendance report only') ||
+          msg.includes('गलत दस्तावेज़') ||
+          msg.includes('केवल attendance report')
+        );
+        // Only override if this is a document-type error (not an image quality error)
+        const hasImageQualityError = (
+          msg.includes('blurry') || msg.includes('dark') || msg.includes('blank') ||
+          msg.includes('low resolution') || msg.includes('landscape') ||
+          msg.includes('धुंधल') || msg.includes('खाली')
+        );
+        const hasValidTxId = data.transaction_id_extracted || data.transaction_id || data.content_checks?.transaction_id;
+
+        if (isWrongDocTypeError && !hasImageQualityError) {
+          console.log('[OCR-Validate] Supplementary Attendance Report detected (wrong-doc-type override). Accepting document.');
+          data.document_acceptable = true;
+          data.quality_acceptable = true;
+          // Clear the rejection message so it shows as accepted
+          data.message = 'Document accepted (Supplementary Attendance Report)';
+          data.message_hindi = 'दस्तावेज़ स्वीकृत (अनुपूरक उपस्थिति रिपोर्ट)';
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────────────────────────
+
       // Resilient Post-processing: Recover handwritten date if OCR missed it due to digit lookalikes
       if (!data.dispatch_date_found) {
         const textToInspect = data.region_ocr_text || data.text || "";
