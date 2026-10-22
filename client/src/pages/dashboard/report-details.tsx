@@ -506,6 +506,7 @@ export default function ReportDetails() {
 
     const certificationData = [
       [''],
+      ['Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered by the Salary Section.'],
       ['Certified that the above attendance report is correct.'],
       [''],
       [report.department?.hodTitle || ''],
@@ -898,6 +899,7 @@ export default function ReportDetails() {
                 <TableRow key="signature-row" className="hover:bg-transparent" style={{ pageBreakInside: 'avoid', border: 'none' }}>
                   <TableCell colSpan={9} className="p-0" style={{ border: 'none' }}>
                     <div className="mt-8 space-y-4 text-right certification-section page-break-inside-avoid">
+                      <p className="text-[11px] italic -mb-3">Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered by the Salary Section.</p>
                       <p>Certified that the above attendance report is correct.</p>
                       {feedbackRemark && (
                         <div className="mb-2 w-full flex justify-end">

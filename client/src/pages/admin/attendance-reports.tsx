@@ -911,6 +911,11 @@ export default function AttendanceReports() {
       const wantsDailyWagerFull = analysisFilter.includes("daily_wager_full_month");
       const wantsInternFull = analysisFilter.includes("intern_full_month");
       const excludeGuests = analysisFilter.includes("exclude_guests");
+      // Oracle payroll stops an intern's stipend automatically when no attendance is fed,
+      // so their MISSING rows need not be exported. Word match only ("INTERN"/"INTERNS"),
+      // so designations like "INTERNAL AUDITOR" are not affected.
+      const excludeInternMissing = analysisFilter.includes("exclude_intern_missing");
+      const isInternDesignation = (d: string) => /\bINTERNS?\b/.test((d || "").toUpperCase());
 
       // First, filter out Guest Teachers if requested
       if (excludeGuests) {
@@ -1056,6 +1061,9 @@ export default function AttendanceReports() {
             const desig = (e.designation || "").toUpperCase();
             return desig !== "GUEST TEACHER" && desig !== "GUEST FACULTY";
           });
+        }
+        if (excludeInternMissing) {
+          filteredMissing = filteredMissing.filter(e => !isInternDesignation(e.designation));
         }
         if (departmentFilter.length > 0) {
           // missing employees don't have departmentId readily mapped to the same IDs as reports, but we can filter by exact name if needed,
@@ -2022,6 +2030,13 @@ export default function AttendanceReports() {
                     {
                       label: "Exclude Guest Teachers",
                       value: "exclude_guests",
+                      className: "bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/90 hover:text-emerald-900",
+                      selectedClassName: "bg-emerald-100 text-emerald-950 font-medium",
+                      badgeClassName: "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    },
+                    {
+                      label: "Exclude Intern Missing",
+                      value: "exclude_intern_missing",
                       className: "bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/90 hover:text-emerald-900",
                       selectedClassName: "bg-emerald-100 text-emerald-950 font-medium",
                       badgeClassName: "bg-emerald-50 text-emerald-800 border-emerald-200"

@@ -2366,7 +2366,12 @@ export default function Attendance() {
   // permitted=true  → cancel allow (Super Admin ne Enable kiya)
   // permitted=false → cancel block (Super Admin ne Disable kiya)
   // undefined       → cancel block (safe default — data load hone tak)
-  const canRequestCancellationFinal = attendanceStatus?.permitted === true;
+  // Supplementary permission active → the department already sent this month's report
+  // and was allowed to add a SUPPLEMENTARY report, so the sent report must not be cancelled
+  // by mistake. (Once the supplementary report is created the flag switches off and
+  // cancellation becomes available again.)
+  const supplementaryBlocksCancel = attendanceStatus?.allowSupplementaryReport === true;
+  const canRequestCancellationFinal = attendanceStatus?.permitted === true && !supplementaryBlocksCancel;
 
   if (isLoading || loadingEntries) return <Loading />;
 
@@ -2719,8 +2724,11 @@ export default function Attendance() {
                         )}
                         {/* Show when cancellation not allowed (attendance disabled by Super Admin) - ONLY for current month */}
                         {report.status === "sent" && !canRequestCancellationFinal && report.year === currentMonthYear && report.month === currentMonthIdx && (
-                          <span className="text-xs text-gray-500">
-                            Cancel N/A
+                          <span
+                            className="text-xs text-gray-500"
+                            title={supplementaryBlocksCancel ? "Supplementary report permission is active. Please create the supplementary report; the already sent report cannot be cancelled now." : undefined}
+                          >
+                            {supplementaryBlocksCancel ? "Cancel N/A (Supplementary allowed)" : "Cancel N/A"}
                           </span>
                         )}
                         {/* Request Recall for Submitted reports — instant countdown, no admin approval */}

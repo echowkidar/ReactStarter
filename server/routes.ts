@@ -89,6 +89,21 @@ async function checkEmployeeAttendanceBlocksTransfer(
   return { blocked: false };
 }
 
+// Helper: while a department has one-time Supplementary Report permission, its
+// already-sent report of the current month must not be cancelled (department-side).
+async function supplementaryBlocksCancel(report: { departmentId: number; month: number; year: number }): Promise<string | null> {
+  try {
+    const department = await storage.getDepartment(report.departmentId);
+    if (!department?.allowSupplementaryReport) return null;
+    const ist = new Date(Date.now() + 5.5 * 3600 * 1000);
+    const isCurrentMonth = report.month === ist.getUTCMonth() + 1 && report.year === ist.getUTCFullYear();
+    if (!isCurrentMonth) return null;
+    return "Supplementary report permission is active for this month. Please create the supplementary report — the already sent report cannot be cancelled now.";
+  } catch {
+    return null;
+  }
+}
+
 // Helper: parse DD-MM-YY -> Date
 export const parseDDMMYY = (dateStr: string): Date | null => {
   if (!dateStr || typeof dateStr !== 'string') return null;
@@ -3955,6 +3970,11 @@ export async function registerRoutes(app: Express) {
         });
       }
 
+      const supplementaryBlock = await supplementaryBlocksCancel(report);
+      if (supplementaryBlock) {
+        return res.status(403).json({ message: supplementaryBlock });
+      }
+
       const updatedReport = await storage.updateAttendanceReport(reportId, {
         status: 'cancel_requested',
         cancelRequestedAt: new Date()
@@ -4004,6 +4024,11 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({
           message: "Only sent reports can be directly cancelled. Current status: " + report.status
         });
+      }
+
+      const supplementaryBlock = await supplementaryBlocksCancel(report);
+      if (supplementaryBlock) {
+        return res.status(403).json({ message: supplementaryBlock });
       }
 
       // Delete all attendance entries (keep PDF and receipt info intact)
