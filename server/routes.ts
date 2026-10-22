@@ -27,6 +27,12 @@ import {
 import fs from "fs";
 import { sql, eq, and, isNotNull, inArray } from "drizzle-orm";
 import { db } from "./db";
+import {
+  registerReportingEmployeeRoutes,
+  checkReportingGuard,
+  validateReportEntries,
+  getActiveAttachmentMap,
+} from "./reportingEmployees";
 
 // Helper: Check if employee's current-month attendance BLOCKS transfer.
 // Logic:
@@ -1238,6 +1244,7 @@ export async function registerRoutes(app: Express) {
           email: dept.email,
           attendancePermitted: dept.attendancePermitted,
           allowSupplementaryReport: dept.allowSupplementaryReport,
+          allowReportingEmployees: !!(dept as any).allowReportingEmployees,
           employeeCount: employeeCounts.get(dept.id) || 0,
           lastLogin: dept.lastLogin || null
         }));
@@ -1320,9 +1327,31 @@ export async function registerRoutes(app: Express) {
       const showBank = settings.show_bank_field !== "false";
       const showAadhar = settings.show_aadhar_field !== "false";
 
+      // Reporting employees: which of these employees currently report at another department
+      let reportingMap = new Map<number, any>();
+      try {
+        reportingMap = await getActiveAttachmentMap(employees.map(e => e.id));
+        if (reportingMap.size > 0) {
+          const hostIds = [...new Set([...reportingMap.values()].map((a: any) => a.hostDepartmentId))];
+          const hostRows = await db.execute(sql`SELECT id, name FROM departments WHERE id IN (${sql.join(hostIds.map(i => sql`${i}`), sql`, `)})`);
+          const hostNames = new Map((hostRows.rows as any[]).map(r => [Number(r.id), r.name]));
+          for (const a of reportingMap.values()) (a as any).hostDepartmentName = hostNames.get((a as any).hostDepartmentId) || 'Unknown';
+        }
+      } catch (e) {
+        console.error('[Reporting] Could not load reporting info for employee list:', e);
+      }
+
       // Transform the response to match the expected format and filter sensitive fields
       const transformedEmployees = employees.map(emp => ({
         ...emp,
+        ...(reportingMap.has(emp.id) ? {
+          reportingAt: {
+            id: reportingMap.get(emp.id).id,
+            hostDepartmentId: reportingMap.get(emp.id).hostDepartmentId,
+            hostDepartmentName: reportingMap.get(emp.id).hostDepartmentName,
+            fromDate: reportingMap.get(emp.id).fromDate,
+          }
+        } : {}),
         departmentName: department.name,
         // Filter sensitive fields if hidden in settings
         panNumber: showPan ? emp.panNumber : "",
@@ -2575,6 +2604,10 @@ export async function registerRoutes(app: Express) {
       const departmentId = Number(req.params.departmentId);
       const month = Number(req.query.month);
       const year = Number(req.query.year);
+      // Optional: only consider reports of one type (used by the Reporting Employees form).
+      // When absent, behaviour is exactly as before.
+      const reportTypeFilter = req.query.reportType === 'reporting' ? 'reporting'
+        : (req.query.reportType === 'regular' ? 'regular' : null);
 
       if (isNaN(departmentId) || isNaN(month) || isNaN(year)) {
         return res.status(400).json({ error: "Invalid parameters" });
@@ -2593,6 +2626,7 @@ export async function registerRoutes(app: Express) {
         JOIN attendance_reports ar ON ae.report_id = ar.id
         WHERE ar.department_id = ${departmentId}
           AND ar.status IN ('submitted', 'sent')
+          ${reportTypeFilter ? sql`AND COALESCE(ar.report_type, 'regular') = ${reportTypeFilter}` : sql``}
       `);
 
       // Target month date range (first and last day of the requested month)
@@ -2656,6 +2690,11 @@ export async function registerRoutes(app: Express) {
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
 
+      // Reporting employees: for a host department (flag on), also include the
+      // history of employees attached to it, so overlaps are caught in the form.
+      const hostDept = await storage.getDepartment(departmentId);
+      const includeReporting = !!(hostDept as any)?.allowReportingEmployees;
+
       // Fetch attendance entries for all employees currently in this department,
       // regardless of which department submitted the report (cross-department history).
       const result = await db.execute(sql`
@@ -2665,7 +2704,8 @@ export async function registerRoutes(app: Express) {
         JOIN attendance_reports ar ON ae.report_id = ar.id
         JOIN departments d ON ar.department_id = d.id
         JOIN employees e ON ae.employee_id = e.id
-        WHERE e.department_id = ${departmentId}
+        WHERE (e.department_id = ${departmentId}
+          ${includeReporting ? sql`OR ae.employee_id IN (SELECT employee_id FROM reporting_employees WHERE host_department_id = ${departmentId})` : sql``})
           AND ar.status IN ('submitted', 'sent')
       `);
 
@@ -2727,18 +2767,26 @@ export async function registerRoutes(app: Express) {
   app.post("/api/departments/:departmentId/attendance", async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
+      // 'reporting' = Reporting Employees report (Admin Non Teaching); anything else = regular
+      const reportType = (req.body as any)?.reportType === 'reporting' ? 'reporting' : 'regular';
       const reportData = insertAttendanceReportSchema.parse({
         ...req.body,
+        reportType,
         departmentId
       });
 
-      // Check if report already exists for this month/year
+      // Check if report already exists for this month/year (of the same report type)
       const existingReports = await storage.getAttendanceReportsByDepartment(departmentId);
       const existingReport = existingReports.find(
         (r) => r.month === reportData.month && r.year === reportData.year && r.status !== 'cancelled'
+          && (((r as any).reportType || 'regular') === reportType)
       );
 
       const department = await storage.getDepartment(departmentId);
+
+      if (reportType === 'reporting' && !(department as any)?.allowReportingEmployees) {
+        return res.status(403).json({ message: "Reporting employees report is not enabled for this department" });
+      }
 
       if (existingReport) {
         // Check if supplementary report is allowed
@@ -2812,6 +2860,18 @@ export async function registerRoutes(app: Express) {
         } else {
           // If it's neither a string nor a Date, remove it to prevent errors
           delete updates.receiptDate;
+        }
+      }
+
+      // Report type is fixed at creation
+      delete updates.reportType;
+
+      // Reporting employees: re-check all entries before finalising (no-op for
+      // reports without reporting employees)
+      if (updates.status === 'submitted') {
+        const check = await validateReportEntries(Number(req.params.id));
+        if (!check.ok) {
+          return res.status(409).json({ message: check.message });
         }
       }
 
@@ -2928,10 +2988,26 @@ export async function registerRoutes(app: Express) {
       // Get report to store departmentId on entry
       const report = await storage.getAttendanceReport(reportId);
 
+      // Reporting employees guard (no effect for employees without reporting records)
+      let reportingEmployeeId: number | null = null;
+      if (report) {
+        const guard = await checkReportingGuard({
+          employeeId: Number(employeeId),
+          reportDepartmentId: report.departmentId,
+          reportType: (report as any).reportType || 'regular',
+          periods,
+        });
+        if (!guard.ok) {
+          return res.status(guard.status).json({ message: guard.message });
+        }
+        reportingEmployeeId = guard.reportingEmployeeId;
+      }
+
       const entryData = insertAttendanceEntrySchema.parse({
         reportId: reportId,
         employeeId: Number(employeeId),
         departmentId: report?.departmentId || null,
+        reportingEmployeeId,
         days: totalDays,
         fromDate: firstPeriod?.fromDate || "",
         toDate: lastPeriod?.toDate || "",
@@ -3464,6 +3540,26 @@ export async function registerRoutes(app: Express) {
         }
       }
 
+      // Reporting employees: parent department info for their entries
+      const reportingInfoById = new Map<number, any>();
+      try {
+        const repIds = new Set<number>();
+        for (const list of entriesByReport.values()) for (const en of list) if ((en as any).reportingEmployeeId) repIds.add((en as any).reportingEmployeeId);
+        if (repIds.size > 0) {
+          const rr = await db.execute(sql`
+            SELECT id, parent_department_id, to_char(from_date, 'YYYY-MM-DD') AS from_date, to_char(to_date, 'YYYY-MM-DD') AS to_date
+            FROM reporting_employees WHERE id IN (${sql.join([...repIds].map(i => sql`${i}`), sql`, `)})`);
+          for (const r of rr.rows as any[]) {
+            reportingInfoById.set(Number(r.id), {
+              parentDepartmentName: departmentMap.get(Number(r.parent_department_id))?.name || 'Unknown',
+              fromDate: r.from_date, toDate: r.to_date,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[Reporting] reporting info skipped:', e);
+      }
+
       // Assemble response using maps (no extra DB queries)
       const reportsWithDetails = filteredReports.map(report => {
         const department = departmentMap.get(report.departmentId);
@@ -3474,6 +3570,8 @@ export async function registerRoutes(app: Express) {
           entriesWithDetails = entries.map(entry => ({
             ...entry,
             employee: employeeMap.get(entry.employeeId),
+            ...((entry as any).reportingEmployeeId && reportingInfoById.has((entry as any).reportingEmployeeId)
+              ? { reportingInfo: reportingInfoById.get((entry as any).reportingEmployeeId) } : {}),
           }));
         }
 
@@ -3539,6 +3637,27 @@ export async function registerRoutes(app: Express) {
           reportedByDept.set(row.department_id, new Set());
         }
         reportedByDept.get(row.department_id)!.add(row.employee_id);
+      }
+
+      // Reporting employees: count them as "reported" for their own (parent)
+      // department, not for the host department that sent their attendance.
+      try {
+        const repResult = await db.execute(sql`
+          SELECT DISTINCT ae.employee_id, ar.department_id AS host_id, e.department_id AS emp_dept
+          FROM attendance_entries ae
+          JOIN attendance_reports ar ON ae.report_id = ar.id
+          JOIN employees e ON e.id = ae.employee_id
+          WHERE ae.reporting_employee_id IS NOT NULL
+            AND ar.month = ${month} AND ar.year = ${year}
+            AND ar.status IN ('submitted', 'sent')
+        `);
+        for (const row of repResult.rows as any[]) {
+          if (row.host_id !== row.emp_dept) reportedByDept.get(row.host_id)?.delete(row.employee_id);
+          if (!reportedByDept.has(row.emp_dept)) reportedByDept.set(row.emp_dept, new Set());
+          reportedByDept.get(row.emp_dept)!.add(row.employee_id);
+        }
+      } catch (e) {
+        console.error('[Reporting] stats adjustment skipped:', e);
       }
 
       const stats = allDepartments.map(dept => {
@@ -3704,6 +3823,20 @@ export async function registerRoutes(app: Express) {
           ORDER BY e.epid
         `);
         employees = result.rows;
+        // Reporting employees whose attendance was sent by the host department are not missing
+        try {
+          const rep = await db.execute(sql`
+            SELECT DISTINCT ae.employee_id FROM attendance_entries ae
+            JOIN attendance_reports ar ON ae.report_id = ar.id
+            WHERE ae.reporting_employee_id IS NOT NULL
+              AND ar.month = ${month} AND ar.year = ${year}
+              AND ar.status IN ('submitted', 'sent')
+          `);
+          const repIds = new Set((rep.rows as any[]).map(r => Number(r.employee_id)));
+          if (repIds.size > 0) employees = employees.filter((e: any) => !repIds.has(Number(e.id)));
+        } catch (e) {
+          console.error('[Reporting] missing-list adjustment skipped:', e);
+        }
       } else if (category === 'disabled') {
         const result = await db.execute(sql`
           SELECT id, epid, name, designation, employment_status, term_expiry, 
@@ -3744,10 +3877,29 @@ export async function registerRoutes(app: Express) {
         }
       }));
 
+      // Reporting employees: parent department info
+      const reportingInfoById = new Map<number, any>();
+      try {
+        const repIds = [...new Set(entries.map(e => (e as any).reportingEmployeeId).filter(Boolean))] as number[];
+        if (repIds.length > 0) {
+          const rr = await db.execute(sql`
+            SELECT re.id, d.name AS parent_name, to_char(re.from_date, 'YYYY-MM-DD') AS from_date, to_char(re.to_date, 'YYYY-MM-DD') AS to_date
+            FROM reporting_employees re LEFT JOIN departments d ON d.id = re.parent_department_id
+            WHERE re.id IN (${sql.join(repIds.map(i => sql`${i}`), sql`, `)})`);
+          for (const r of rr.rows as any[]) {
+            reportingInfoById.set(Number(r.id), { parentDepartmentName: r.parent_name || 'Unknown', fromDate: r.from_date, toDate: r.to_date });
+          }
+        }
+      } catch (e) {
+        console.error('[Reporting] reporting info skipped:', e);
+      }
+
       // Add employee details to entries
       const entriesWithEmployeeDetails = entries.map(entry => ({
         ...entry,
-        employee: employeesMap.get(entry.employeeId)
+        employee: employeesMap.get(entry.employeeId),
+        ...((entry as any).reportingEmployeeId && reportingInfoById.has((entry as any).reportingEmployeeId)
+          ? { reportingInfo: reportingInfoById.get((entry as any).reportingEmployeeId) } : {}),
       }));
 
       res.json({
@@ -4567,6 +4719,7 @@ export async function registerRoutes(app: Express) {
       res.json({
         permitted: department.attendancePermitted,
         allowSupplementaryReport: department.allowSupplementaryReport,
+        allowReportingEmployees: !!(department as any).allowReportingEmployees,
         deadlineDay,
         daysRemaining: isPastDeadline ? 0 : daysRemaining,
         isPastDeadline
@@ -5326,6 +5479,22 @@ export async function registerRoutes(app: Express) {
       const excludeDeptId = deptId || 0;
 
       const results = await storage.searchEmployeesGlobal(query, excludeDeptId);
+
+      // Reporting employees: show if the employee is already reporting somewhere
+      try {
+        const activeMap = await getActiveAttachmentMap(results.map((r: any) => r.id));
+        if (activeMap.size > 0) {
+          const hostIds = [...new Set([...activeMap.values()].map(a => a.hostDepartmentId))];
+          const hostRows = await db.execute(sql`SELECT id, name FROM departments WHERE id IN (${sql.join(hostIds.map(i => sql`${i}`), sql`, `)})`);
+          const hostNames = new Map((hostRows.rows as any[]).map(r => [Number(r.id), r.name]));
+          for (const r of results as any[]) {
+            const a = activeMap.get(r.id);
+            if (a) r.activeAttachment = { id: a.id, hostDepartmentId: a.hostDepartmentId, hostDepartmentName: hostNames.get(a.hostDepartmentId) || 'Unknown', fromDate: a.fromDate };
+          }
+        }
+      } catch (e) {
+        console.error('[Reporting] global search reporting info skipped:', e);
+      }
 
       // Fetch app settings to check field visibility
       try {
@@ -6824,6 +6993,9 @@ export async function registerRoutes(app: Express) {
     }
   });
   // ================= END SALARY REGISTERS =================
+
+  // ================= REPORTING EMPLOYEES (Admin Non Teaching) =================
+  registerReportingEmployeeRoutes(app, storage, verifyAdminSession);
 
   return httpServer;
 }

@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Search, Loader2, UserPlus, ArrowRightLeft } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
+import { Search, Loader2, UserPlus, ArrowRightLeft, LogIn } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { getCurrentDepartment } from "@/lib/auth";
 import { TransferModal } from "@/components/ui/transfer-modal";
 
@@ -22,7 +22,15 @@ interface GlobalEmployee {
     departmentName: string;
     isActive: string; // "active" | "disabled"
     departmentId: number;
+    // Set when the employee is currently reporting at a host department (e.g. Admin Non Teaching)
+    activeAttachment?: { id: number; hostDepartmentId: number; hostDepartmentName: string; fromDate: string };
 }
+
+const formatIsoToDDMMYY = (iso?: string | null) => {
+    if (!iso) return "";
+    const [y, m, d] = iso.split("-");
+    return `${d}-${m}-${(y || "").slice(-2)}`;
+};
 
 export default function GlobalSearch() {
     const { toast } = useToast();
@@ -36,6 +44,35 @@ export default function GlobalSearch() {
     const [selectedEmployee, setSelectedEmployee] = useState<GlobalEmployee | null>(null);
     const [remarks, setRemarks] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // Reporting employees (only for departments where the feature is enabled)
+    const { data: attendanceStatus } = useQuery<{ allowReportingEmployees?: boolean }>({
+        queryKey: [`/api/departments/${department?.id}/attendance-status`],
+        enabled: !!department?.id,
+    });
+    const canMarkReporting = !!attendanceStatus?.allowReportingEmployees;
+    const [reportingEmployee, setReportingEmployee] = useState<GlobalEmployee | null>(null);
+    const [reportingForm, setReportingForm] = useState({ fromDate: "", orderNo: "", orderDate: "", remarks: "" });
+
+    const reportingMutation = useMutation({
+        mutationFn: async (data: { employeeId: number; fromDate: string; orderNo: string; orderDate: string; remarks: string }) => {
+            const res = await apiRequest('POST', `/api/departments/${department?.id}/reporting-employees`, data);
+            return res.json();
+        },
+        onSuccess: () => {
+            toast({ title: "Marked as Reporting Employee", description: `${reportingEmployee?.name} can now be included in your Reporting Employees attendance report.` });
+            setReportingEmployee(null);
+            handleSearch();
+        },
+        onError: (err) => {
+            toast({ title: "Could not mark reporting employee", description: (err as Error).message, variant: "destructive" });
+        }
+    });
+
+    const openReportingModal = (employee: GlobalEmployee) => {
+        setReportingEmployee(employee);
+        setReportingForm({ fromDate: "", orderNo: "", orderDate: "", remarks: "" });
+    };
 
     // Search Function
     const handleSearch = async () => {
@@ -167,6 +204,7 @@ export default function GlobalSearch() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
+                                            <div className="flex flex-wrap items-center gap-2">
                                             <Button
                                                 size="sm"
                                                 variant="outline"
@@ -179,6 +217,21 @@ export default function GlobalSearch() {
                                                     <><UserPlus className="h-3 w-3 mr-1" /> Pull Employee</>
                                                 )}
                                             </Button>
+                                            {emp.activeAttachment ? (
+                                                <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200">
+                                                    Reporting at {emp.activeAttachment.hostDepartmentName} since {formatIsoToDDMMYY(emp.activeAttachment.fromDate)}
+                                                </Badge>
+                                            ) : (canMarkReporting && emp.isActive === 'active' && emp.departmentId !== department?.id && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="text-amber-700 border-amber-200"
+                                                    onClick={() => openReportingModal(emp)}
+                                                >
+                                                    <LogIn className="h-3 w-3 mr-1" /> Add as Reporting Employee
+                                                </Button>
+                                            ))}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -186,6 +239,61 @@ export default function GlobalSearch() {
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Mark as Reporting Employee Modal */}
+                <Dialog open={!!reportingEmployee} onOpenChange={(open) => { if (!open) setReportingEmployee(null); }}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Add as Reporting Employee</DialogTitle>
+                        </DialogHeader>
+                        <div className="py-2 space-y-4">
+                            <div className="p-3 bg-slate-50 rounded-md text-sm border">
+                                <p><span className="font-semibold">Employee:</span> {reportingEmployee?.name} ({reportingEmployee?.epid})</p>
+                                <p><span className="font-semibold">Designation:</span> {reportingEmployee?.designation}</p>
+                                <p><span className="font-semibold">Parent Department:</span> {reportingEmployee?.departmentName}</p>
+                            </div>
+                            <p className="text-sm text-amber-800 bg-amber-50 p-2 rounded border border-amber-200">
+                                The employee will <strong>not</strong> be transferred and will not appear in your staff list. You will be able to send
+                                his/her attendance from the reporting date through a separate <strong>Reporting Employees</strong> attendance report.
+                                The parent department will not be able to send attendance for this period.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium">Reporting Date *</label>
+                                    <Input type="date" value={reportingForm.fromDate}
+                                        max={new Date().toISOString().slice(0, 10)}
+                                        onChange={(e) => setReportingForm(f => ({ ...f, fromDate: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium">Order / Letter No. *</label>
+                                    <Input value={reportingForm.orderNo}
+                                        onChange={(e) => setReportingForm(f => ({ ...f, orderNo: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium">Order / Letter Date</label>
+                                    <Input type="date" value={reportingForm.orderDate}
+                                        onChange={(e) => setReportingForm(f => ({ ...f, orderDate: e.target.value }))} />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium">Remarks</label>
+                                <Textarea value={reportingForm.remarks}
+                                    onChange={(e) => setReportingForm(f => ({ ...f, remarks: e.target.value }))}
+                                    placeholder="e.g. Transferred to X vide order no..., did not join, reported to Admin (Non Teaching)" />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setReportingEmployee(null)}>Cancel</Button>
+                            <Button
+                                disabled={reportingMutation.isPending || !reportingForm.fromDate || !reportingForm.orderNo.trim()}
+                                onClick={() => reportingEmployee && reportingMutation.mutate({ employeeId: reportingEmployee.id, ...reportingForm })}
+                            >
+                                {reportingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                                Confirm
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Transfer/Release Modal */}
                 {selectedEmployee && (

@@ -716,6 +716,7 @@ export default function AttendanceReports() {
       employeeRemarks: string;
       employeeDbId: number;
       exportedToOracleAt: string | null;
+      reportingParentDept?: string; // set only for Reporting Employees entries
     }> = [];
 
     reports.forEach(report => {
@@ -761,6 +762,7 @@ export default function AttendanceReports() {
                   employeeDbId: entry.employee?.id || 0,
                   verified: entry.verified || false,
                   exportedToOracleAt: entry.exported_to_oracle_at || entry.exportedToOracleAt || null,
+                  reportingParentDept: (entry as any).reportingInfo?.parentDepartmentName || undefined,
                 });
               });
             } catch (error) {
@@ -1388,7 +1390,8 @@ export default function AttendanceReports() {
         "Remarks": entry.remarks,
         "Admin Noting": entry.adminNoting || "",
         "Permanent Remark": entry.employeeRemarks || "",
-        "Exported to Oracle Date": formatExportDate(entry.exportedToOracleAt)
+        "Exported to Oracle Date": formatExportDate(entry.exportedToOracleAt),
+        "Reporting (Parent Dept)": (entry as any).reportingParentDept || ""
       };
     }));
 
@@ -2257,7 +2260,16 @@ export default function AttendanceReports() {
                               {entry.showDepartment ? entry.departmentName : ""}
                             </TableCell>
                             <TableCell>{entry.employeeId}</TableCell>
-                            <TableCell>{entry.employeeName}</TableCell>
+                            <TableCell>
+                              {entry.employeeName}
+                              {(entry as any).reportingParentDept && (
+                                <div className="mt-0.5">
+                                  <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] text-amber-800">
+                                    Reporting · Parent: {(entry as any).reportingParentDept}
+                                  </span>
+                                </div>
+                              )}
+                            </TableCell>
                             <TableCell>{entry.designation}</TableCell>
                             <TableCell>{entry.salaryAsstt}</TableCell>
                             <TableCell>{entry.salaryRegisterNo}</TableCell>

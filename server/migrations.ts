@@ -242,6 +242,59 @@ export async function runMigrations() {
       );
     `);
 
+    // ─── Reporting Employees (Admin Non Teaching) ─────────────────────────────
+    // ADDITIVE ONLY: new table + new defaulted/nullable columns. Nothing existing is
+    // altered, renamed or dropped, and every statement is idempotent (IF NOT EXISTS).
+    //
+    // The 3 columns below are referenced by Drizzle in every query on these tables,
+    // so (like all migrations above) a failure here is NOT swallowed: the server
+    // stops with a clear error instead of running half-migrated.
+    // Feature flag — default false, so no department's behaviour changes on deploy
+    await db.execute(sql`
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS allow_reporting_employees BOOLEAN NOT NULL DEFAULT false;
+    `);
+    // All existing reports automatically become 'regular'
+    await db.execute(sql`
+      ALTER TABLE attendance_reports ADD COLUMN IF NOT EXISTS report_type TEXT NOT NULL DEFAULT 'regular';
+    `);
+    // NULL for all existing entries (= normal staff entry)
+    await db.execute(sql`
+      ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS reporting_employee_id INTEGER;
+    `);
+
+    // New table: only used by the new feature (guards fail open if it is missing)
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS reporting_employees (
+          id SERIAL PRIMARY KEY,
+          employee_id INTEGER NOT NULL,
+          host_department_id INTEGER NOT NULL,
+          parent_department_id INTEGER NOT NULL,
+          from_date DATE NOT NULL,
+          to_date DATE,
+          order_no TEXT,
+          order_date DATE,
+          letter_url TEXT,
+          remarks TEXT,
+          status TEXT NOT NULL DEFAULT 'active',
+          close_reason TEXT,
+          created_by TEXT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          closed_by TEXT,
+          closed_at TIMESTAMP
+        );
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_reporting_active_emp
+          ON reporting_employees(employee_id) WHERE status = 'active';
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_reporting_host ON reporting_employees(host_department_id);
+      `);
+    } catch (reportingErr) {
+      console.error("[Migrations] reporting_employees table creation failed (only the new feature is affected):", reportingErr);
+    }
+
     console.log("Database migrations completed successfully");
 
   } catch (error) {

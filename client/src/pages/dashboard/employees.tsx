@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ReportingEmployeesPanel } from "@/components/reporting-employees-panel";
 
 const EmployeeDetails = ({ employee, fieldSettings }: { employee: Employee; fieldSettings?: Record<string, string> }) => {
   const showPan = fieldSettings?.show_pan_field !== "false";
@@ -220,6 +221,12 @@ export default function Employees() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>(["active"]);
+
+  // Reporting employees feature (only for enabled departments, e.g. Admin Non Teaching)
+  const { data: attendanceStatus } = useQuery<{ allowReportingEmployees?: boolean }>({
+    queryKey: [`/api/departments/${department?.id}/attendance-status`],
+    enabled: !!department?.id,
+  });
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],
@@ -524,7 +531,16 @@ export default function Employees() {
                 {filteredEmployees.map((employee) => (
                   <TableRow key={employee.id}>
                     <TableCell>{employee.epid}</TableCell>
-                    <TableCell>{employee.name}</TableCell>
+                    <TableCell>
+                      {employee.name}
+                      {(employee as any).reportingAt && (
+                        <div className="mt-1">
+                          <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">
+                            Reporting at {(employee as any).reportingAt.hostDepartmentName} since {String((employee as any).reportingAt.fromDate).split("-").reverse().join("-")}
+                          </span>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>{employee.designation}</TableCell>
                     <TableCell>{employee.employmentStatus}</TableCell>
                     <TableCell>
@@ -647,6 +663,10 @@ export default function Employees() {
               </TableBody>
             </Table>
           </div>
+
+          {attendanceStatus?.allowReportingEmployees && department?.id && (
+            <ReportingEmployeesPanel departmentId={department.id} />
+          )}
 
           {/* Edit Employee Dialog */}
           {selectedEmployee && (

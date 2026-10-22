@@ -154,6 +154,8 @@ interface AttendanceFormProps {
   };
   isSupplementary?: boolean;
   departmentId?: number;
+  // 'reporting' = Reporting Employees report (Admin Non Teaching). Default 'regular'.
+  reportType?: 'regular' | 'reporting';
 }
 
 // Add the formatTermExpiry function
@@ -174,7 +176,8 @@ const formatTermExpiry = (dateStr: string | null | undefined, employmentStatus?:
   }
 };
 
-export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary, departmentId: propDepartmentId }: AttendanceFormProps) {
+export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary, departmentId: propDepartmentId, reportType = 'regular' }: AttendanceFormProps) {
+  const isReportingMode = reportType === 'reporting';
   const currentDept = getCurrentDepartment();
   const departmentId = propDepartmentId || currentDept?.id;
   const { toast } = useToast();
@@ -239,6 +242,20 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             description: `${empName} (Period ${i + 1}): From Date (${period.fromDate}) cannot be after To Date (${period.toDate}).`,
             variant: "destructive",
           });
+          return; // Block submission
+        }
+      }
+    }
+
+    // 1b. Reporting employees rules (no effect for employees without reporting records)
+    for (const entry of data.entries) {
+      if (!includedEmployees.has(entry.employeeId)) continue;
+      const emp = rawEmployees.find((e: any) => e.id === entry.employeeId) || employees.find((e: any) => e.id === entry.employeeId);
+      if (!emp?.reporting && !emp?.reportingAt) continue;
+      for (const period of entry.periods) {
+        const err = getReportingPeriodError(emp, period.fromDate, period.toDate);
+        if (err) {
+          toast({ title: "Reporting Employee", description: `${emp.name}: ${err}`, variant: "destructive" });
           return; // Block submission
         }
       }
@@ -323,7 +340,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       }
 
       try {
-        const res = await fetch(`/api/departments/${departmentId}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}`);
+        const res = await fetch(`/api/departments/${departmentId}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}${isReportingMode ? '&reportType=reporting' : ''}`);
         if (res.ok) {
           const ids = await res.json();
 
@@ -335,14 +352,37 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     };
 
     fetchReportedEmployees();
-  }, [isSupplementary, departmentId, watchMonth, watchYear]);
+  }, [isSupplementary, departmentId, watchMonth, watchYear, isReportingMode]);
 
   const { data: rawEmployees = [], isLoading: loadingEmployees } = useQuery({
-    queryKey: [`/api/departments/${departmentId}/employees`],
+    queryKey: [isReportingMode
+      ? `/api/departments/${departmentId}/reporting-employees/for-month?month=${selectedMonth}&year=${selectedYear}`
+      : `/api/departments/${departmentId}/employees`],
     enabled: !!departmentId,
     select: (data: any) => {
+      let list: any[] = Array.isArray(data) ? data : [];
+      if (isReportingMode) {
+        // Reporting Employees report: list = employees attached to this department for this month
+        const byEmp = new Map<number, any>();
+        for (const r of list) {
+          byEmp.set(r.employeeId, {
+            ...r.employee,
+            id: r.employeeId,
+            isActive: 'active',
+            reporting: {
+              attachmentId: r.id,
+              parentDepartmentName: r.parentDepartmentName,
+              allowedFrom: r.allowedFrom,
+              allowedTo: r.allowedTo,
+              defaultFrom: r.defaultFrom,
+              defaultTo: r.defaultTo,
+            },
+          });
+        }
+        list = Array.from(byEmp.values());
+      }
       // Filter only active employees and sort by Pay Level (descending) then EPID (ascending)
-      return [...data]
+      return [...list]
         .filter((employee: any) => employee.isActive === "active")
         .sort((a, b) => {
           // First sort by pay level (higher levels first)
@@ -396,6 +436,60 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     const emp = employees.find((e: any) => e.id === empId);
     const designation = emp?.designation?.toUpperCase();
     return designation === 'GUEST TEACHER' || designation === 'GUEST FACULTY';
+  };
+
+  // ── Reporting employees ────────────────────────────────────────────────────
+  // Parent department: an employee reporting at another department (e.g. Admin
+  // Non Teaching) is locked from the reporting date onwards. Employees without
+  // `reportingAt` are not affected at all.
+  const getReportingLimit = (emp: any): { locked: boolean; maxTo: Date | null; label: string } => {
+    const r = emp?.reportingAt;
+    if (!r?.fromDate) return { locked: false, maxTo: null, label: "" };
+    const [y, m, d] = String(r.fromDate).split("-").map(Number);
+    const reportingStart = new Date(y, m - 1, d);
+    const dayBefore = new Date(y, m - 1, d - 1);
+    const label = `Reporting at ${r.hostDepartmentName || "another department"} since ${formatDateForDisplay(reportingStart)}`;
+    return { locked: reportingStart.getTime() <= defaultStartDate.getTime(), maxTo: dayBefore, label };
+  };
+
+  // Default period for an employee being ticked (reporting window / parent limit aware)
+  const applyReportingDefaults = (emp: any, fromStr: string, toStr: string): { fromStr: string; toStr: string } => {
+    if (emp?.reporting) {
+      return { fromStr: emp.reporting.defaultFrom, toStr: emp.reporting.defaultTo };
+    }
+    const lim = getReportingLimit(emp);
+    if (lim.maxTo && parseDateFromDisplay(toStr).getTime() > lim.maxTo.getTime()) {
+      return { fromStr, toStr: formatDateForDisplay(lim.maxTo) };
+    }
+    return { fromStr, toStr };
+  };
+
+  const getMinDateInput = (emp: any): string | undefined =>
+    emp?.reporting?.allowedFrom ? formatDateForInput(emp.reporting.allowedFrom) : undefined;
+
+  const getMaxDateInput = (emp: any): string => {
+    if (emp?.reporting?.allowedTo) return formatDateForInput(emp.reporting.allowedTo);
+    const lim = getReportingLimit(emp);
+    if (lim.maxTo && lim.maxTo.getTime() < defaultEndDate.getTime()) return formatDateForInput(formatDateForDisplay(lim.maxTo));
+    return maxDateForInput;
+  };
+
+  // Returns an error message if a period is not allowed because of reporting rules
+  const getReportingPeriodError = (emp: any, fromDate: string, toDate: string): string | null => {
+    const f = parseDateFromDisplay(fromDate), t = parseDateFromDisplay(toDate);
+    if (isNaN(f.getTime()) || isNaN(t.getTime())) return null;
+    if (emp?.reporting) {
+      const aF = parseDateFromDisplay(emp.reporting.allowedFrom), aT = parseDateFromDisplay(emp.reporting.allowedTo);
+      if (f.getTime() < aF.getTime() || t.getTime() > aT.getTime()) {
+        return `Period ${fromDate} to ${toDate} is outside the reporting period (${emp.reporting.allowedFrom} to ${emp.reporting.allowedTo}).`;
+      }
+      return null;
+    }
+    const lim = getReportingLimit(emp);
+    if (lim.maxTo && t.getTime() > lim.maxTo.getTime()) {
+      return `${lim.label}. Attendance after ${formatDateForDisplay(lim.maxTo)} will be sent by that department.`;
+    }
+    return null;
   };
 
   // Check if two date ranges overlap (dates in DD-MM-YY format)
@@ -456,14 +550,18 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         const currentEntries = form.getValues("entries") || [];
         form.setValue("entries", currentEntries.filter(entry => entry.employeeId !== employeeId));
       } else {
+        const emp = employees.find((e: any) => e.id === employeeId);
+        if (getReportingLimit(emp).locked) {
+          // Employee is reporting at another department for this whole month
+          return prev;
+        }
         next.add(employeeId);
         // Initialize entry when adding employee
         const currentEntries = form.getValues("entries") || [];
         const isGuest = isGuestTeacher(employeeId);
-        const emp = employees.find((e: any) => e.id === employeeId);
         const isExcluded = emp && excludedDesignations.includes(emp.designation?.toUpperCase());
 
-        const fromDateStr = formatDateForDisplay(isGuest ? prevMonthStartDate : defaultStartDate);
+        let fromDateStr = formatDateForDisplay(isGuest ? prevMonthStartDate : defaultStartDate);
 
         let initialEndDate = isGuest ? prevMonthEndDate : defaultEndDate;
         if (isExcluded && hadFullMonthPreviousMonth(employeeId)) {
@@ -472,7 +570,9 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           initialEndDate.setDate(initialEndDate.getDate() - 1);
         }
 
-        const toDateStr = formatDateForDisplay(initialEndDate);
+        let toDateStr = formatDateForDisplay(initialEndDate);
+        // Reporting employees: use reporting window / parent department limit
+        ({ fromStr: fromDateStr, toStr: toDateStr } = applyReportingDefaults(emp, fromDateStr, toDateStr));
 
         form.setValue("entries", [
           ...currentEntries,
@@ -706,7 +806,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   ];
 
   // Filter employees eligible for "All" selection
-  const eligibleEmployees = employees;
+  // (employees reporting at another department for this whole month are excluded)
+  const eligibleEmployees = employees.filter((emp: any) => !getReportingLimit(emp).locked);
 
   // Add a function to select/deselect all eligible employees
   const toggleAllEmployees = () => {
@@ -746,8 +847,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           endDate.setDate(endDate.getDate() - 1);
         }
 
-        const fromStr = formatDateForDisplay(startDate);
-        const toStr = formatDateForDisplay(endDate);
+        const { fromStr, toStr } = applyReportingDefaults(
+          employee, formatDateForDisplay(startDate), formatDateForDisplay(endDate));
         return {
           employeeId: employee.id,
           periods: [{
@@ -919,7 +1020,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                     <Checkbox
                       checked={includedEmployees.has(employee.id)}
                       onCheckedChange={() => toggleEmployee(employee.id)}
-                      disabled={isLoading}
+                      disabled={isLoading || (getReportingLimit(employee).locked && !includedEmployees.has(employee.id))}
+                      title={getReportingLimit(employee).locked ? getReportingLimit(employee).label : undefined}
                     />
                   </TableCell>
                   <TableCell className="whitespace-nowrap px-1">
@@ -930,7 +1032,24 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                       : '-'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap px-1">{employee.epid}</TableCell>
-                  <TableCell className="px-2">{employee.name}</TableCell>
+                  <TableCell className="px-2">
+                    {employee.name}
+                    {employee.reporting && (
+                      <div className="mt-1 text-[11px] text-amber-800">
+                        <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1 py-0.5">
+                          Parent: {employee.reporting.parentDepartmentName}
+                        </span>
+                        <div className="text-muted-foreground">Allowed: {employee.reporting.allowedFrom} to {employee.reporting.allowedTo}</div>
+                      </div>
+                    )}
+                    {!employee.reporting && employee.reportingAt && (
+                      <div className="mt-1">
+                        <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[11px] text-amber-800">
+                          {getReportingLimit(employee).label}
+                        </span>
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="px-2">{employee.designation}</TableCell>
                   <TableCell className="whitespace-nowrap px-1">{formatTermExpiry(employee.termExpiry, employee.employmentStatus)}</TableCell>
                   <TableCell className="whitespace-nowrap px-1">{employee.salaryRegisterNo || '-'}</TableCell>
@@ -1050,7 +1169,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                               <div>
                                 <input
                                   type="date"
-                                  max={maxDateForInput}
+                                  min={getMinDateInput(employee)}
+                                  max={getMaxDateInput(employee)}
                                   className={`w-full p-1 text-sm border rounded-md ${
                                     isInvalid
                                       ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500 font-medium"
@@ -1073,7 +1193,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                 <input
                                   type="date"
                                   min={formatDateForInput(period.fromDate)}
-                                  max={maxDateForInput}
+                                  max={getMaxDateInput(employee)}
                                   className={`w-full p-1 text-sm border rounded-md ${
                                     isInvalid
                                       ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500 font-medium"

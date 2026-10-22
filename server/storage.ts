@@ -294,6 +294,7 @@ export class MemStorage implements IStorage {
       id,
       attendancePermitted: insertDepartment.attendancePermitted ?? true,
       allowSupplementaryReport: false,
+      allowReportingEmployees: false,
       lastLogin: null
     };
     this.departments.set(id, department);

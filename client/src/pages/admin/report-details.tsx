@@ -21,6 +21,9 @@ interface ExtendedAttendanceReport extends AttendanceReport {
   entries?: ExtendedAttendanceEntry[];
 }
 
+// Reporting Employees report (Admin Non Teaching) — separate report type
+const reportTypeSuffix = (r: any) => (r?.reportType === 'reporting' ? ' (Reporting Employees)' : '');
+
 export default function ReportDetails() {
   const [, params] = useRoute("/admin/reports/:id");
   const [, setLocation] = useLocation();
@@ -130,7 +133,7 @@ export default function ReportDetails() {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Attendance Report</title>
+              <title>Attendance Report${reportTypeSuffix(report)}</title>
               <style>${styles}</style>
               <style media="all">
                 @page { 
@@ -321,7 +324,7 @@ export default function ReportDetails() {
     const wb = XLSX.utils.book_new();
 
     const headerData = [
-      ['Attendance Report'],
+      [`Attendance Report${reportTypeSuffix(report)}`],
       [''],
       ['Department:', report.department?.name],
       ['Month/Year:', formatPeriod(report.year, report.month)],
@@ -341,7 +344,7 @@ export default function ReportDetails() {
       periods.forEach((period: any) => {
         attendanceData.push([
           entry.employee?.epid,
-          entry.employee?.name,
+          (entry as any).reportingInfo ? `${entry.employee?.name} (Parent Dept: ${(entry as any).reportingInfo.parentDepartmentName})` : entry.employee?.name,
           entry.employee?.designation,
           `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
           period.days,
@@ -384,7 +387,7 @@ export default function ReportDetails() {
       <AdminHeader />
       <div className="p-6 flex-1">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Attendance Report Details</h1>
+          <h1 className="text-2xl font-bold">Attendance Report{reportTypeSuffix(report)} Details</h1>
           <div className="space-x-2">
             <Button variant="outline" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
@@ -521,7 +524,7 @@ export default function ReportDetails() {
         <div className="print-content space-y-6">
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
-              <CardTitle>{report.status === 'draft' ? 'Draft Attendance Report' : 'Attendance Report'}</CardTitle>
+              <CardTitle>{report.status === 'draft' ? `Draft Attendance Report${reportTypeSuffix(report)}` : `Attendance Report${reportTypeSuffix(report)}`}</CardTitle>
               <div className="border border-black rounded px-4 py-2.5 flex items-center w-full sm:w-[340px] h-[40px] bg-white mr-2 shrink-0 print:w-[340px]">
                 <span className="text-sm font-bold text-black flex-1">D. No.</span>
                 <span className="text-sm font-bold text-black flex-1">D. Date</span>
@@ -609,7 +612,12 @@ export default function ReportDetails() {
                             {isFirstPeriod && (
                               <>
                                 <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.epid}</TableCell>
-                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.name}</TableCell>
+                                <TableCell className="whitespace-nowrap" rowSpan={periodCount}>
+                                  {entry.employee?.name}
+                                  {(entry as any).reportingInfo && (
+                                    <div className="text-[10px] text-muted-foreground">Reporting · Parent Dept: {(entry as any).reportingInfo.parentDepartmentName}</div>
+                                  )}
+                                </TableCell>
                                 <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.designation}</TableCell>
                                 <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.employmentStatus || "-"}</TableCell>
                                 <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>

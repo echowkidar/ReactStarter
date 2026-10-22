@@ -196,6 +196,29 @@ export default function AdminUsers() {
     },
   });
 
+  // Reporting employees feature toggle (e.g. Admin Non Teaching)
+  const toggleReportingPermit = useMutation({
+    mutationFn: async ({ deptId, allowed }: { deptId: number; allowed: boolean }) => {
+      await apiRequest("PATCH", `/api/departments/${deptId}/reporting-permit`, { allowed });
+    },
+    onSuccess: (_, { allowed }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/departments?registeredOnly=true"] });
+      toast({
+        title: allowed ? "Reporting Employees Enabled" : "Reporting Employees Disabled",
+        description: allowed
+          ? "This department can mark reporting employees and send their separate attendance report"
+          : "Reporting employees feature disabled for this department",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update reporting permission",
+      });
+    },
+  });
+
   // Setup form for creating/editing users (assuming 'form' is defined elsewhere or needs setup)
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
@@ -579,6 +602,7 @@ export default function AdminUsers() {
                                 {user.departmentId && (() => {
                                   const isPermitted = dept ? dept.attendancePermitted !== false : true;
                                   const isSupplementaryAllowed = dept ? dept.allowSupplementaryReport === true : false;
+                                  const isReportingAllowed = dept ? (dept as any).allowReportingEmployees === true : false;
 
                                   return (
                                     <>
@@ -607,6 +631,21 @@ export default function AdminUsers() {
                                           }
                                           disabled={toggleSupplementaryPermit.isPending}
                                           className="data-[state=checked]:bg-yellow-500"
+                                        />
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2" title="Allow Reporting Employees (e.g. Admin Non Teaching)">
+                                        <span className="text-xs text-muted-foreground w-20">Reporting Emp:</span>
+                                        <Switch
+                                          checked={isReportingAllowed}
+                                          onCheckedChange={(checked) => {
+                                            if (window.confirm(checked
+                                              ? "Enable Reporting Employees for this department? It will be able to mark employees of other departments as reporting and send their attendance."
+                                              : "Disable Reporting Employees for this department?")) {
+                                              toggleReportingPermit.mutate({ deptId: user.departmentId!, allowed: checked });
+                                            }
+                                          }}
+                                          disabled={toggleReportingPermit.isPending}
+                                          className="data-[state=checked]:bg-amber-600"
                                         />
                                       </div>
                                     </>

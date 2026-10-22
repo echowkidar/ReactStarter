@@ -11,6 +11,7 @@ export const departments = pgTable("departments", {
   password: text("password").notNull(),
   attendancePermitted: boolean("attendance_permitted").notNull().default(true),
   allowSupplementaryReport: boolean("allow_supplementary_report").notNull().default(false),
+  allowReportingEmployees: boolean("allow_reporting_employees").notNull().default(false),
   lastLogin: timestamp("last_login"),
 });
 
@@ -86,6 +87,8 @@ export const attendanceReports = pgTable("attendance_reports", {
   finalizedAt: timestamp("finalized_at"),
   cancelRequestedAt: timestamp("cancel_requested_at"),
   cancelledAt: timestamp("cancelled_at"),
+  // 'regular' = department's own staff, 'reporting' = reporting employees (Admin Non Teaching)
+  reportType: text("report_type").notNull().default("regular"),
 });
 
 
@@ -102,6 +105,8 @@ export const attendanceEntries = pgTable("attendance_entries", {
   verified: boolean("verified").notNull().default(false),
   adminNoting: text("admin_noting"),
   exportedToOracleAt: timestamp("exported_to_oracle_at"),
+  // Set only for entries of reporting employees (FK -> reporting_employees.id), NULL for normal staff
+  reportingEmployeeId: integer("reporting_employee_id"),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
@@ -726,3 +731,29 @@ export const insertSalaryRegisterSchema = createInsertSchema(salaryRegisters).om
 
 export type SalaryRegister = typeof salaryRegisters.$inferSelect;
 export type InsertSalaryRegister = z.infer<typeof insertSalaryRegisterSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reporting Employees — employees who were transferred/relieved but have not
+// joined their new department, and report to a host department (Admin Non
+// Teaching) meanwhile. Their employees.department_id is NOT changed.
+// ─────────────────────────────────────────────────────────────────────────────
+export const reportingEmployees = pgTable("reporting_employees", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull(),
+  hostDepartmentId: integer("host_department_id").notNull(),     // e.g. Admin (Non Teaching)
+  parentDepartmentId: integer("parent_department_id").notNull(), // employee's department at attach time
+  fromDate: date("from_date").notNull(),                          // reporting date
+  toDate: date("to_date"),                                        // null = still reporting
+  orderNo: text("order_no"),
+  orderDate: date("order_date"),
+  letterUrl: text("letter_url"),
+  remarks: text("remarks"),
+  status: text("status").notNull().default("active"),            // active | closed
+  closeReason: text("close_reason"),                              // joined_other_dept | transfer_cancelled | disabled | other
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  closedBy: text("closed_by"),
+  closedAt: timestamp("closed_at"),
+});
+
+export type ReportingEmployee = typeof reportingEmployees.$inferSelect;

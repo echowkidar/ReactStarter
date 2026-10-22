@@ -1692,6 +1692,8 @@ export default function Attendance() {
 
   const department = getCurrentDepartment();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
+  // 'regular' = own staff report, 'reporting' = Reporting Employees report (Admin Non Teaching)
+  const [activeReportType, setActiveReportType] = useState<'regular' | 'reporting'>('regular');
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
@@ -1715,7 +1717,7 @@ export default function Attendance() {
 
 
   // Check attendance status for deadline alert (MOVED FROM BELOW)
-  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean }>({
+  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean; allowReportingEmployees?: boolean }>({
     queryKey: [`/api/departments/${department?.id}/attendance-status`],
     enabled: !!department?.id,
   });
@@ -1770,6 +1772,7 @@ export default function Attendance() {
         year: parseInt(data.year),
         status: "draft",
         totalEmployees: data.entries.length,
+        reportType: activeReportType,
       };
 
       const response = await apiRequest(
@@ -2245,6 +2248,7 @@ export default function Attendance() {
         }))
       };
 
+      setActiveReportType((report as any).reportType === 'reporting' ? 'reporting' : 'regular');
       setEditingReportId(report.id);
       setEditingReportData(formData);
       setIsCreatingReport(true);
@@ -2275,7 +2279,9 @@ export default function Attendance() {
   // Note: 'today' is defined above
   const currentMonthYear = today.getFullYear();
   const currentMonthIdx = today.getMonth() + 1;
-  const existingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled');
+  const existingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled' && (r as any).reportType !== 'reporting');
+  // Reporting Employees report (separate report type; only for enabled departments)
+  const existingReportingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled' && (r as any).reportType === 'reporting');
 
   // Logic for canCreateReport:
   // 1. If department is explicitly permitted by admin (permitted === true): ignore deadline
@@ -2288,6 +2294,15 @@ export default function Attendance() {
     : attendanceStatus?.permitted === false
       ? false  // Explicitly NOT permitted: always disable
       : (!isPastDeadline && (!existingReport || attendanceStatus?.allowSupplementaryReport));  // Undefined/loading: respect deadline, check existing report OR supp allowed
+
+  // Same rules for the Reporting Employees report, checked against its own existing report
+  const canCreateReportingReport = !!attendanceStatus?.allowReportingEmployees && (
+    attendanceStatus?.permitted === true
+      ? (!existingReportingReport || attendanceStatus?.allowSupplementaryReport)
+      : attendanceStatus?.permitted === false
+        ? false
+        : (!isPastDeadline && (!existingReportingReport || attendanceStatus?.allowSupplementaryReport))
+  );
 
   // "Request to Cancel" button ab sirf Super Admin ke attendance toggle se control hoga
   // permitted=true  → cancel allow (Super Admin ne Enable kiya)
@@ -2368,10 +2383,12 @@ export default function Attendance() {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Attendance Reports</h1>
             <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
+              <div className="flex flex-wrap items-center gap-2">
               <DialogTrigger asChild>
                 <Button
                   className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
                   disabled={!canCreateReport}
+                  onClick={() => { if (!editingReportId) setActiveReportType('regular'); }}
                   title={
                     !canCreateReport
                       ? (existingReport
@@ -2388,11 +2405,34 @@ export default function Attendance() {
                   Create Report
                 </Button>
               </DialogTrigger>
+              {attendanceStatus?.allowReportingEmployees && (
+                <Button
+                  variant="outline"
+                  className="border-amber-300 text-amber-800 hover:bg-amber-50"
+                  disabled={!canCreateReportingReport}
+                  title={canCreateReportingReport
+                    ? "Create attendance report for Reporting Employees (not on your staff)"
+                    : existingReportingReport
+                      ? `Reporting Employees report for this month already exists (${existingReportingReport.status})`
+                      : "Attendance submission disabled"}
+                  onClick={() => {
+                    setActiveReportType('reporting');
+                    setEditingReportId(null);
+                    setEditingReportData(null);
+                    setIsCreatingReport(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Reporting Employees Report
+                </Button>
+              )}
+              </div>
 
               <DialogContent className="max-w-[95vw] w-[1400px] max-h-[85vh] overflow-hidden flex flex-col">
                 <DialogHeader className="flex-shrink-0">
                   <DialogTitle className="text-xl font-semibold">
                     {editingReportId ? "Edit Attendance Report" : "Create Attendance Report"}
+                    {activeReportType === 'reporting' ? " (Reporting Employees)" : ""}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="overflow-auto flex-grow pr-1">
@@ -2411,7 +2451,8 @@ export default function Attendance() {
                     }}
                     isLoading={createReport.isPending || editReport.isPending}
                     initialData={editingReportData}
-                    isSupplementary={!!(existingReport && attendanceStatus?.allowSupplementaryReport)}
+                    isSupplementary={!!((activeReportType === 'reporting' ? existingReportingReport : existingReport) && attendanceStatus?.allowSupplementaryReport)}
+                    reportType={activeReportType}
                   />
                 </div>
               </DialogContent>
@@ -2442,6 +2483,13 @@ export default function Attendance() {
                     </TableCell>
                     <TableCell>
                       {formatPeriod(report.year, report.month)}
+                      {(report as any).reportType === 'reporting' && (
+                        <div className="mt-1">
+                          <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">
+                            Reporting Employees
+                          </span>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       {report.transactionId ? (

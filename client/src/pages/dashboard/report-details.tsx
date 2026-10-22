@@ -71,7 +71,9 @@ export default function ReportDetails() {
     const earlierReports = allReports.filter(
       r => r.month === report.month && 
            r.year === report.year && 
-           r.id < report.id
+           r.id < report.id &&
+           // Only reports of the same type (regular vs Reporting Employees) count
+           (((r as any).reportType || 'regular') === ((report as any).reportType || 'regular'))
     );
 
     const hasEarlierValid = earlierReports.some(r => r.status !== 'cancelled');
@@ -85,6 +87,10 @@ export default function ReportDetails() {
     
     return '';
   }, [report, allReports]);
+
+  // Reporting Employees report (Admin Non Teaching) — separate report type
+  const isReportingReport = (report as any)?.reportType === 'reporting';
+  const reportTypeSuffix = isReportingReport ? ' (Reporting Employees)' : '';
 
   if (isLoadingReport) {
     return <LoadingSkeleton />;
@@ -211,7 +217,7 @@ export default function ReportDetails() {
         printWindow.document.write(`
           <html>
             <head>
-              <title>${reportPrefix}Attendance Report</title>
+              <title>${reportPrefix}Attendance Report${reportTypeSuffix}</title>
               <style>${styles}</style>
               <style media="all">
                 @page { 
@@ -463,7 +469,7 @@ export default function ReportDetails() {
     const wb = XLSX.utils.book_new();
 
     const headerData = [
-      [`${reportPrefix}Attendance Report`],
+      [`${reportPrefix}Attendance Report${reportTypeSuffix}`],
       [''],
       ['Department:', report.department?.name],
       ['Month/Year:', formatPeriod(report.year, report.month)],
@@ -485,7 +491,7 @@ export default function ReportDetails() {
         attendanceData.push([
           serialNumber++,
           entry.employee?.epid,
-          entry.employee?.name,
+          (entry as any).reportingInfo ? `${entry.employee?.name} (Parent Dept: ${(entry as any).reportingInfo.parentDepartmentName})` : entry.employee?.name,
           entry.employee?.designation,
           formatTermExpiry(entry.employee?.termExpiry, entry.employee?.employmentStatus),
           entry.employee?.salaryRegisterNo || '-',
@@ -695,7 +701,7 @@ export default function ReportDetails() {
       `}</style>
 
       <div className="flex justify-between items-center no-print">
-        <h1 className="text-2xl font-bold">{reportPrefix}Attendance Report Details</h1>
+        <h1 className="text-2xl font-bold">{reportPrefix}Attendance Report{reportTypeSuffix} Details</h1>
         <div className="space-x-2">
           {report.fileUrl && (
             <Button variant="outline" onClick={() => setShowPdfPreview(true)}>
@@ -723,7 +729,12 @@ export default function ReportDetails() {
       <div className="print-content space-y-6">
         <Card>
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
-            <CardTitle>{report.status === 'draft' ? `Draft ${reportPrefix}Attendance Report` : `${reportPrefix}Attendance Report`}</CardTitle>
+            <CardTitle>
+              {report.status === 'draft' ? `Draft ${reportPrefix}Attendance Report${reportTypeSuffix}` : `${reportPrefix}Attendance Report${reportTypeSuffix}`}
+              {isReportingReport && (
+                <div className="text-xs font-normal mt-1">Employees reporting to {report.department?.name}, awaiting posting</div>
+              )}
+            </CardTitle>
             {report.status === 'sent' ? (
               /* Sent status: label + value ek line mein, wider box */
               <div className="border border-black rounded flex items-center w-full sm:w-[420px] h-[40px] bg-white mr-2 shrink-0 print:w-[420px] overflow-hidden">
@@ -844,7 +855,12 @@ export default function ReportDetails() {
                             <>
                               <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{serialNumber}</TableCell>
                               <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.epid}</TableCell>
-                              <TableCell rowSpan={periodCount}>{entry.employee?.name}</TableCell>
+                              <TableCell rowSpan={periodCount}>
+                                {entry.employee?.name}
+                                {(entry as any).reportingInfo && (
+                                  <div className="text-[10px] text-muted-foreground">Parent Dept: {(entry as any).reportingInfo.parentDepartmentName}</div>
+                                )}
+                              </TableCell>
                               <TableCell rowSpan={periodCount}>{entry.employee?.designation}</TableCell>
                               <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{formatTermExpiry(entry.employee?.termExpiry, entry.employee?.employmentStatus)}</TableCell>
                               <TableCell className="whitespace-nowrap" rowSpan={periodCount}>{entry.employee?.salaryRegisterNo || "-"}</TableCell>

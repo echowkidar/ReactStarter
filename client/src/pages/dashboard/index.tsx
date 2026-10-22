@@ -194,10 +194,17 @@ export default function Dashboard() {
   });
 
   // Check attendance status for deadline alert
-  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; isPastDeadline: boolean }>({
+  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; isPastDeadline: boolean; allowReportingEmployees?: boolean }>({
     queryKey: [`/api/departments/${department?.id}/attendance-status`],
     enabled: !!department?.id,
   });
+
+  // Reporting employees (only for enabled departments, e.g. Admin Non Teaching)
+  const { data: reportingEmployees = [] } = useQuery<Array<{ id: number; needsClose: string | null }>>({
+    queryKey: [`/api/departments/${department?.id}/reporting-employees?status=active`],
+    enabled: !!department?.id && !!attendanceStatus?.allowReportingEmployees,
+  });
+  const reportingNeedsClose = reportingEmployees.filter(r => r.needsClose).length;
 
   const [showDeadlineAlert, setShowDeadlineAlert] = useState(false);
 
@@ -276,6 +283,27 @@ export default function Dashboard() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Reporting Employees Card (only for enabled departments) */}
+            {attendanceStatus?.allowReportingEmployees && (
+              <Card
+                className={`cursor-pointer hover:shadow-md transition-shadow ${reportingNeedsClose > 0 ? 'border-red-300 bg-red-50' : ''}`}
+                onClick={() => setLocation("/dashboard/employees")}
+              >
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Reporting Employees
+                  </CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{reportingEmployees.length}</div>
+                  {reportingNeedsClose > 0 && (
+                    <p className="text-xs text-red-600 mt-1">{reportingNeedsClose} joined elsewhere — close reporting</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Release Requests Card (NEW) */}
             <Card

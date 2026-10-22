@@ -26,6 +26,7 @@ import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
+import { ReportingEmployeesDialog, useAdminReportingEmployees } from "@/components/admin/reporting-employees-dialog";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Label, BarChart, Bar, Legend } from 'recharts';
 
 import { useState, useMemo, useEffect } from "react";
@@ -401,6 +402,12 @@ export default function AdminDashboard() {
     },
     refetchInterval: 120000, // Refresh every 2 minutes
   });
+
+  // Reporting employees (employees reporting at a department without transfer)
+  const { data: reportingEmployees = [] } = useAdminReportingEmployees();
+  const reportingActiveCount = reportingEmployees.filter(r => r.status === 'active').length;
+  const reportingNeedsCloseCount = reportingEmployees.filter(r => !!r.needsClose).length;
+  const [showReportingDialog, setShowReportingDialog] = useState(false);
 
   // Fetch department employee stats for current month
   interface DeptEmployeeStats {
@@ -1530,8 +1537,19 @@ export default function AdminDashboard() {
                 <span className="text-[9px] uppercase tracking-wider text-green-600 font-semibold">Done</span>
                 <span className="text-lg font-bold text-green-700">{transferStats.resolved}</span>
               </div>
+              <div
+                onClick={() => setShowReportingDialog(true)}
+                title="Employees reporting at a department without transfer (e.g. Admin Non Teaching)"
+                className={`px-3 py-1.5 rounded border flex items-center justify-between cursor-pointer transition-colors ${reportingNeedsCloseCount > 0 ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'bg-amber-50 border-amber-100 hover:bg-amber-100'}`}
+              >
+                <span className={`text-[9px] uppercase tracking-wider font-semibold ${reportingNeedsCloseCount > 0 ? 'text-red-600' : 'text-amber-700'}`}>
+                  Reporting{reportingNeedsCloseCount > 0 ? ` (${reportingNeedsCloseCount} to close)` : ''}
+                </span>
+                <span className={`text-lg font-bold ${reportingNeedsCloseCount > 0 ? 'text-red-700' : 'text-amber-800'}`}>{reportingActiveCount}</span>
+              </div>
             </div>
           </div>
+          <ReportingEmployeesDialog open={showReportingDialog} onOpenChange={setShowReportingDialog} />
         </div>
 
         {/* Row 2: Active Users, Visitor Stats, Tickets, Pending Actions - 4 column grid */}
