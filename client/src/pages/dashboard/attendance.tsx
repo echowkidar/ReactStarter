@@ -28,7 +28,8 @@ import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import Loading from "@/components/layout/loading";
 import AttendanceForm from "@/components/forms/attendance-form";
-import { Plus, Eye, Upload, Trash2, Loader2, FileCheck, AlertTriangle } from "lucide-react";
+import { Plus, Eye, Upload, Trash2, Loader2, FileCheck, AlertTriangle, Camera, ScanLine } from "lucide-react";
+import { DocumentScannerDialog } from "@/components/document-scanner-dialog";
 import { Input } from "@/components/ui/input";
 import React from "react";
 
@@ -88,6 +89,10 @@ const PDFDialogContent = ({
   const [processedFile, setProcessedFile] = React.useState<File | null>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Document scanner: images / camera photos are cropped & straightened before upload
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const [scanSource, setScanSource] = React.useState<File | null>(null);
+  const [scannedFrom, setScannedFrom] = React.useState<string | null>(null);
 
   // Manual entry confirmation checkbox
   const [manualConfirmed, setManualConfirmed] = React.useState(false);
@@ -907,8 +912,28 @@ const PDFDialogContent = ({
   };
 
   // Handler for file input changes
+  // Images (incl. phone camera photos) first go through the document scanner,
+  // which crops the page, straightens it and keeps it under 2 MB. PDFs go
+  // straight to the existing checks.
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isImageFile = file.type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'].includes(ext);
+    if (isImageFile) {
+      if (file.size > 30 * 1024 * 1024) {
+        toast({ variant: 'destructive', title: 'File Too Large', description: 'Photo is too large. Please use a photo smaller than 30MB.' });
+        return;
+      }
+      setScanSource(file);
+      return;
+    }
+    setScannedFrom(null);
+    await processSelectedFile(file);
+  };
+
+  const processSelectedFile = async (file: File | undefined) => {
 
     // ── Reset all state on every new file selection ──────────────
     setSelectedFile(file || null);
@@ -1180,6 +1205,39 @@ const PDFDialogContent = ({
                 accept=".pdf,application/pdf,image/jpeg,image/png,image/jpg"
                 className="cursor-pointer"
                 onChange={handleFileChange}
+              />
+              {/* Phone camera: take a photo of the signed report (opens the camera on mobile) */}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => cameraInputRef.current?.click()}>
+                  <Camera className="h-4 w-4 mr-2" /> Take Photo
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Photos are auto-cropped and straightened before upload.
+                </span>
+              </div>
+              {selectedFile && (
+                <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                  <span>Selected: <span className="font-medium text-foreground">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(0)} KB)</span>
+                  {scannedFrom && (
+                    <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-green-800">
+                      <ScanLine className="h-3 w-3" /> Scanned
+                    </span>
+                  )}
+                </div>
+              )}
+              <DocumentScannerDialog
+                file={scanSource}
+                onCancel={() => setScanSource(null)}
+                onUseOriginal={(f) => { setScanSource(null); setScannedFrom(null); processSelectedFile(f); }}
+                onDone={(f) => { const orig = scanSource?.name || null; setScanSource(null); setScannedFrom(orig); processSelectedFile(f); }}
               />
               {/* ── Quality status block ────────────────────────────────── */}
 

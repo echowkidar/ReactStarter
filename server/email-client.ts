@@ -32,13 +32,80 @@ function isCacheValid<T>(item: CachedItem<T> | undefined, ttl: number): item is 
 }
 
 // ─── IMAP Client ────────────────────────────────────────────────────────────
+// Gmail allows only ~15 simultaneous IMAP connections per account. Earlier every
+// request (unread-count poll, inbox, message, prefetch) opened its own connection,
+// so parallel requests hit "Too many simultaneous connections". Now:
+//   1. withImap(): max IMAP_MAX_PER_ACCOUNT connections per Gmail account at a
+//      time (others wait in a queue), always logged out / closed afterwards.
+//   2. singleFlight(): identical concurrent read requests share ONE IMAP call.
+//   3. An 'error' listener on every client, so a socket error can never become
+//      an unhandled 'error' event that crashes the Node process.
 
-export async function getImapClient(userId: string, userType: string) {
+const IMAP_MAX_PER_ACCOUNT = 2;
+const IMAP_QUEUE_TIMEOUT_MS = 60 * 1000;
+
+const accountSlots = new Map<string, { active: number; queue: Array<() => void> }>();
+
+async function acquireAccountSlot(account: string): Promise<() => void> {
+  let slot = accountSlots.get(account);
+  if (!slot) {
+    slot = { active: 0, queue: [] };
+    accountSlots.set(account, slot);
+  }
+  const s = slot;
+  if (s.active >= IMAP_MAX_PER_ACCOUNT) {
+    await new Promise<void>((resolve, reject) => {
+      const grant = () => { clearTimeout(timer); resolve(); };
+      const timer = setTimeout(() => {
+        const i = s.queue.indexOf(grant);
+        if (i >= 0) s.queue.splice(i, 1);
+        reject(new Error("Mail server is busy. Please try again in a moment."));
+      }, IMAP_QUEUE_TIMEOUT_MS);
+      s.queue.push(grant);
+    });
+    // the releasing caller handed its slot over to us (active not decremented)
+  } else {
+    s.active++;
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const next = s.queue.shift();
+    if (next) {
+      next(); // hand the slot over
+    } else {
+      s.active--;
+      if (s.active <= 0 && s.queue.length === 0) accountSlots.delete(account);
+    }
+  };
+}
+
+const inflight = new Map<string, Promise<any>>();
+
+/** Concurrent calls with the same key share one running promise. */
+function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const running = inflight.get(key);
+  if (running) return running as Promise<T>;
+  const p = (async () => {
+    try {
+      return await fn();
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+  inflight.set(key, p);
+  return p;
+}
+
+async function getEmailRecord(userId: string, userType: string) {
   const [record] = await db.select().from(userEmails)
     .where(and(eq(userEmails.userId, userId), eq(userEmails.userType, userType)));
-  
   if (!record) throw new Error("Email configuration not found.");
+  return record;
+}
 
+function createImapClient(record: { email: string; appPassword: string }) {
   const client = new ImapFlow({
     host: 'imap.gmail.com',
     port: 993,
@@ -48,16 +115,47 @@ export async function getImapClient(userId: string, userType: string) {
       pass: record.appPassword
     },
     logger: false,
+    connectionTimeout: 20 * 1000,
+    greetingTimeout: 15 * 1000,
+    socketTimeout: 2 * 60 * 1000,
   });
+  // Without a listener, an emitted 'error' (e.g. socket timeout) would crash the process
+  client.on('error', (err: any) => {
+    console.error(`[IMAP] ${record.email}: ${err?.code || ''} ${err?.message || err}`);
+  });
+  return client;
+}
 
+export async function getImapClient(userId: string, userType: string) {
+  const record = await getEmailRecord(userId, userType);
+  const client = createImapClient(record);
   return { client, record };
 }
 
+/** Runs fn with a connected IMAP client; limits connections per account and always cleans up. */
+async function withImap<T>(userId: string, userType: string, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
+  const record = await getEmailRecord(userId, userType);
+  const release = await acquireAccountSlot(record.email.toLowerCase());
+  const client = createImapClient(record);
+  try {
+    await client.connect();
+    return await fn(client);
+  } finally {
+    try {
+      if (client.usable) {
+        await client.logout();
+      } else {
+        client.close();
+      }
+    } catch {
+      try { client.close(); } catch { /* ignore */ }
+    }
+    release();
+  }
+}
+
 export async function getSmtpTransporter(userId: string, userType: string) {
-  const [record] = await db.select().from(userEmails)
-    .where(and(eq(userEmails.userId, userId), eq(userEmails.userType, userType)));
-    
-  if (!record) throw new Error("Email configuration not found.");
+  const record = await getEmailRecord(userId, userType);
 
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
@@ -72,6 +170,80 @@ export async function getSmtpTransporter(userId: string, userType: string) {
   return { transporter, record };
 }
 
+// ─── Shared fetch helpers ───────────────────────────────────────────────────
+
+async function fetchMailboxList(client: ImapFlow, mailbox: string, extra: Record<string, any> = {}, withTo = false) {
+  const messages: any[] = [];
+  const lock = await client.getMailboxLock(mailbox);
+  try {
+    const status = await client.status(mailbox, { messages: true });
+    if (status && status.messages && status.messages > 0) {
+      const totalMessages = status.messages;
+      const start = Math.max(1, totalMessages - 49);
+
+      for await (const message of client.fetch(`${start}:*`, { envelope: true, flags: true })) {
+        if (message.flags && message.flags.has('\\Deleted')) {
+          continue;
+        }
+        messages.push({
+          id: message.uid,
+          seq: message.seq,
+          subject: message.envelope?.subject,
+          from: message.envelope?.from,
+          ...(withTo ? { to: message.envelope?.to } : {}),
+          date: message.envelope?.date,
+          ...extra,
+          read: message.flags ? message.flags.has('\\Seen') : false,
+          starred: message.flags ? message.flags.has('\\Flagged') : false,
+        });
+      }
+    }
+  } finally {
+    lock.release();
+  }
+  return messages.reverse(); // Newest first
+}
+
+async function parseMessage(msg: any) {
+  let bodyText = "";
+  let htmlText: any = "";
+  let attachments: any[] = [];
+  let toList: any[] = [];
+  if (msg.source) {
+    const parsed = await simpleParser(msg.source);
+    bodyText = parsed.text || "";
+    htmlText = parsed.html || "";
+
+    attachments = parsed.attachments.map(att => ({
+      filename: att.filename,
+      contentType: att.contentType,
+      size: att.size,
+      content: att.content ? att.content.toString('base64') : null
+    }));
+
+    if (parsed.to) {
+      if (Array.isArray(parsed.to)) {
+        toList = parsed.to.flatMap(t => t.value);
+      } else {
+        toList = parsed.to.value;
+      }
+    } else {
+      toList = msg.envelope?.to || [];
+    }
+  }
+
+  return {
+    id: msg.uid,
+    subject: msg.envelope?.subject,
+    from: msg.envelope?.from,
+    to: toList,
+    date: msg.envelope?.date,
+    body: bodyText,
+    html: htmlText,
+    attachments,
+  };
+}
+
 // ─── Inbox (with cache) ─────────────────────────────────────────────────────
 
 export async function getInbox(userId: string, userType: string) {
@@ -81,43 +253,11 @@ export async function getInbox(userId: string, userType: string) {
     return cached.data;
   }
 
-  const { client } = await getImapClient(userId, userType);
-  await client.connect();
-
-  const messages: any[] = [];
-  try {
-    const lock = await client.getMailboxLock('INBOX');
-    try {
-      const status = await client.status('INBOX', { messages: true });
-      if (status && status.messages > 0) {
-        const totalMessages = status.messages;
-        const start = Math.max(1, totalMessages - 49); 
-
-        for await (let message of client.fetch(`${start}:*`, { envelope: true, flags: true })) {
-          if (message.flags && message.flags.has('\\Deleted')) {
-            continue;
-          }
-          messages.push({
-            id: message.uid,
-            seq: message.seq,
-            subject: message.envelope.subject,
-            from: message.envelope.from,
-            date: message.envelope.date,
-            read: message.flags ? message.flags.has('\\Seen') : false,
-            starred: message.flags ? message.flags.has('\\Flagged') : false,
-          });
-        }
-      }
-    } finally {
-      lock.release();
-    }
-  } finally {
-    await client.logout();
-  }
-  
-  const result = messages.reverse(); // Newest first
-  inboxCache.set(cacheKey, { data: result, timestamp: Date.now() });
-  return result;
+  return singleFlight(cacheKey, async () => {
+    const result = await withImap(userId, userType, (client) => fetchMailboxList(client, 'INBOX'));
+    inboxCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
+  });
 }
 
 // ─── Unread Count ───────────────────────────────────────────────────────────
@@ -125,33 +265,21 @@ export async function getInbox(userId: string, userType: string) {
 export async function getUnreadCount(userId: string, userType: string) {
   const cacheKey = getCacheKey(userId, userType, 'unread');
 
-  // ✅ Return cached result if still fresh — avoids IMAP connection on every poll
+  // Return cached result if still fresh — avoids IMAP connection on every poll
   const cached = unreadCountCache.get(cacheKey);
   if (isCacheValid(cached, UNREAD_CACHE_TTL)) {
     return cached.data;
   }
 
-  const { client } = await getImapClient(userId, userType);
-  await client.connect();
-
-  let unreadCount = 0;
-  try {
-    const lock = await client.getMailboxLock('INBOX');
-    try {
+  return singleFlight(cacheKey, async () => {
+    const unreadCount = await withImap(userId, userType, async (client) => {
+      // STATUS does not need a mailbox lock / SELECT
       const status = await client.status('INBOX', { unseen: true });
-      if (status && typeof status.unseen === 'number') {
-        unreadCount = status.unseen;
-      }
-    } finally {
-      lock.release();
-    }
-  } finally {
-    await client.logout();
-  }
-
-  // ✅ Store result in cache
-  unreadCountCache.set(cacheKey, { data: unreadCount, timestamp: Date.now() });
-  return unreadCount;
+      return status && typeof status.unseen === 'number' ? status.unseen : 0;
+    });
+    unreadCountCache.set(cacheKey, { data: unreadCount, timestamp: Date.now() });
+    return unreadCount;
+  });
 }
 
 // ─── Get Single Message (with cache) ────────────────────────────────────────
@@ -163,65 +291,22 @@ export async function getMessage(userId: string, userType: string, uid: number, 
     return cached.data;
   }
 
-  const { client } = await getImapClient(userId, userType);
-  await client.connect();
-
-  let messageData = null;
-  try {
-    const lock = await client.getMailboxLock(folder);
-    try {
-      const msg = await client.fetchOne(uid.toString(), { source: true, envelope: true }, { uid: true });
-      if (msg) {
-        let bodyText = "";
-        let htmlText = "";
-        let attachments: any[] = [];
-        let toList: any[] = [];
-        if (msg.source) {
-          const parsed = await simpleParser(msg.source);
-          bodyText = parsed.text || "";
-          htmlText = parsed.html || "";
-          
-          attachments = parsed.attachments.map(att => ({
-            filename: att.filename,
-            contentType: att.contentType,
-            size: att.size,
-            content: att.content ? att.content.toString('base64') : null
-          }));
-
-          if (parsed.to) {
-            if (Array.isArray(parsed.to)) {
-              toList = parsed.to.flatMap(t => t.value);
-            } else {
-              toList = parsed.to.value;
-            }
-          } else {
-            toList = msg.envelope.to || [];
-          }
-        }
-
-        messageData = {
-          id: msg.uid,
-          subject: msg.envelope.subject,
-          from: msg.envelope.from,
-          to: toList,
-          date: msg.envelope.date,
-          body: bodyText,
-          html: htmlText,
-          attachments,
-        };
+  return singleFlight(cacheKey, async () => {
+    const messageData = await withImap(userId, userType, async (client) => {
+      const lock = await client.getMailboxLock(folder);
+      try {
+        const msg = await client.fetchOne(uid.toString(), { source: true, envelope: true }, { uid: true });
+        return msg ? await parseMessage(msg) : null;
+      } finally {
+        lock.release();
       }
-    } finally {
-      lock.release();
+    });
+
+    if (messageData) {
+      messageCache.set(cacheKey, { data: messageData, timestamp: Date.now() });
     }
-  } finally {
-    await client.logout();
-  }
-
-  if (messageData) {
-    messageCache.set(cacheKey, { data: messageData, timestamp: Date.now() });
-  }
-
-  return messageData;
+    return messageData;
+  });
 }
 
 // ─── Sent Mail (with cache) ─────────────────────────────────────────────────
@@ -233,60 +318,28 @@ export async function getSentMail(userId: string, userType: string) {
     return cached.data;
   }
 
-  const { client } = await getImapClient(userId, userType);
-  await client.connect();
-
-  const messages: any[] = [];
-  try {
-    const lock = await client.getMailboxLock('[Gmail]/Sent Mail');
-    try {
-      const status = await client.status('[Gmail]/Sent Mail', { messages: true });
-      if (status && status.messages > 0) {
-        const totalMessages = status.messages;
-        const start = Math.max(1, totalMessages - 49); 
-
-        for await (let message of client.fetch(`${start}:*`, { envelope: true, flags: true })) {
-          if (message.flags && message.flags.has('\\Deleted')) {
-            continue;
-          }
-          messages.push({
-            id: message.uid,
-            seq: message.seq,
-            subject: message.envelope.subject,
-            from: message.envelope.from,
-            to: message.envelope.to,
-            date: message.envelope.date,
-            folder: '[Gmail]/Sent Mail',
-            read: message.flags ? message.flags.has('\\Seen') : false,
-            starred: message.flags ? message.flags.has('\\Flagged') : false,
-          });
-        }
+  return singleFlight(cacheKey, async () => {
+    const result = await withImap(userId, userType, async (client) => {
+      try {
+        return await fetchMailboxList(client, '[Gmail]/Sent Mail', { folder: '[Gmail]/Sent Mail' }, true);
+      } catch (e) {
+        console.error("Failed to fetch sent mail. Folder might be named differently.", e);
+        return [];
       }
-    } catch (e) {
-      console.error("Failed to fetch sent mail. Folder might be named differently.", e);
-    } finally {
-      lock.release();
-    }
-  } finally {
-    await client.logout();
-  }
-  
-  const result = messages.reverse();
-  sentCache.set(cacheKey, { data: result, timestamp: Date.now() });
-  return result;
+    });
+    sentCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
+  });
 }
 
 // ─── Delete Message ─────────────────────────────────────────────────────────
 
 export async function deleteMessage(userId: string, userType: string, uid: number, folder: string = 'INBOX') {
-  const { client } = await getImapClient(userId, userType);
-  await client.connect();
-
-  try {
+  await withImap(userId, userType, async (client) => {
     const lock = await client.getMailboxLock(folder);
     try {
       await client.messageFlagsAdd(uid.toString(), ['\\Deleted'], { uid: true });
-      
+
       let trashPath = '[Gmail]/Trash';
       try {
         const mailboxes = await client.list();
@@ -306,9 +359,7 @@ export async function deleteMessage(userId: string, userType: string, uid: numbe
     } finally {
       lock.release();
     }
-  } finally {
-    await client.logout();
-  }
+  });
 
   // Invalidate caches for this user
   const inboxKey = getCacheKey(userId, userType, 'inbox');
@@ -317,15 +368,13 @@ export async function deleteMessage(userId: string, userType: string, uid: numbe
   inboxCache.delete(inboxKey);
   sentCache.delete(sentKey);
   messageCache.delete(msgKey);
+  unreadCountCache.delete(getCacheKey(userId, userType, 'unread'));
 }
 
 // ─── Toggle Flag ────────────────────────────────────────────────────────────
 
 export async function toggleEmailFlag(userId: string, userType: string, uid: number, folder: string, flag: string, value: boolean) {
-  const { client } = await getImapClient(userId, userType);
-  await client.connect();
-
-  try {
+  await withImap(userId, userType, async (client) => {
     const lock = await client.getMailboxLock(folder);
     try {
       if (value) {
@@ -336,136 +385,77 @@ export async function toggleEmailFlag(userId: string, userType: string, uid: num
     } finally {
       lock.release();
     }
-  } finally {
-    await client.logout();
-  }
+  });
 
   // Invalidate inbox/sent cache so flag changes show up
   const inboxKey = getCacheKey(userId, userType, 'inbox');
   const sentKey = getCacheKey(userId, userType, 'sent');
   inboxCache.delete(inboxKey);
   sentCache.delete(sentKey);
+  if (flag === '\\Seen') unreadCountCache.delete(getCacheKey(userId, userType, 'unread'));
 }
 
 // ─── Background Prefetch (called on login) ──────────────────────────────────
 // Fetches inbox list + latest 30 message contents in a SINGLE IMAP connection.
 // Does NOT block the UI, runs silently in the background.
-// Uses connection pooling and strict caching to avoid overloading IMAP server.
+// Repeated logins while a prefetch is running share the same run (singleFlight),
+// and a fresh inbox cache skips the prefetch entirely.
 export async function prefetchEmails(userId: string, userType: string) {
+  const PREFETCH_MESSAGE_COUNT = 30;
+  const inboxKey = getCacheKey(userId, userType, 'inbox');
+
+  if (isCacheValid(inboxCache.get(inboxKey), INBOX_CACHE_TTL)) {
+    return; // recently fetched — nothing to do
+  }
+
   try {
-    const lockKey = `prefetch:${userType}:${userId}`;
-    const lock = getPrefetchLock(lockKey);
-    
-    // Acquire lock, wait max 0ms (if already locked, fail immediately)
-    await lock.acquire(0);
-    
-    const PREFETCH_MESSAGE_COUNT = 30;
+    await singleFlight(getCacheKey(userId, userType, 'prefetch'), async () => {
+      let inboxCount = 0;
+      let parsedCount = 0;
 
-    try {
-      const { client } = await getImapClient(userId, userType);
-      await client.connect();
-
-      const messages: any[] = [];
-      const lock = await client.getMailboxLock('INBOX');
-      try {
-        // Step 1: Fetch inbox list (envelope + flags only — fast)
-        const status = await client.status('INBOX', { messages: true });
-        if (status && status.messages > 0) {
-          const totalMessages = status.messages;
-          const start = Math.max(1, totalMessages - 49);
-
-          for await (let message of client.fetch(`${start}:*`, { envelope: true, flags: true })) {
-            if (message.flags && message.flags.has('\\Deleted')) {
-              continue;
-            }
-            messages.push({
-              id: message.uid,
-              seq: message.seq,
-              subject: message.envelope.subject,
-              from: message.envelope.from,
-              date: message.envelope.date,
-              read: message.flags ? message.flags.has('\\Seen') : false,
-              starred: message.flags ? message.flags.has('\\Flagged') : false,
-            });
-          }
-        }
-
-        // Cache inbox list (newest first)
-        const inboxResult = [...messages].reverse();
-        const inboxKey = getCacheKey(userId, userType, 'inbox');
+      await withImap(userId, userType, async (client) => {
+        // Step 1: Inbox list (envelope + flags only — fast)
+        const inboxResult = await fetchMailboxList(client, 'INBOX');
+        inboxCount = inboxResult.length;
         inboxCache.set(inboxKey, { data: inboxResult, timestamp: Date.now() });
 
-        // Step 2: Fetch full content of the latest 30 messages
-        const latestUIDs = inboxResult.slice(0, PREFETCH_MESSAGE_COUNT).map(m => m.id);
-        const uidsToFetch = latestUIDs.filter(uid => {
+        // Step 2: Full content of the latest messages not already cached
+        const uidsToFetch = inboxResult.slice(0, PREFETCH_MESSAGE_COUNT).map(m => m.id).filter(uid => {
           const msgCacheKey = getCacheKey(userId, userType, `msg:INBOX:${uid}`);
           return !isCacheValid(messageCache.get(msgCacheKey), MESSAGE_CACHE_TTL);
         });
 
-        if (uidsToFetch.length > 0) {
-          const sequenceString = uidsToFetch.join(',');
-          const parsePromises = [];
+        if (uidsToFetch.length === 0) return;
 
-          try {
-            for await (let msg of client.fetch(sequenceString, { source: true, envelope: true }, { uid: true })) {
-              if (msg && msg.source) {
-                // Parse concurrently
-                parsePromises.push((async () => {
-                  try {
-                    const parsed = await simpleParser(msg.source);
-                    const attachments = parsed.attachments.map(att => ({
-                      filename: att.filename,
-                      contentType: att.contentType,
-                      size: att.size,
-                      content: att.content ? att.content.toString('base64') : null
-                    }));
-
-                    let toList: any[] = [];
-                    if (parsed.to) {
-                      if (Array.isArray(parsed.to)) {
-                        toList = parsed.to.flatMap(t => t.value);
-                      } else {
-                        toList = parsed.to.value;
-                      }
-                    } else {
-                      toList = msg.envelope.to || [];
-                    }
-
-                    const messageData = {
-                      id: msg.uid,
-                      subject: msg.envelope.subject,
-                      from: msg.envelope.from,
-                      to: toList,
-                      date: msg.envelope.date,
-                      body: parsed.text || "",
-                      html: parsed.html || "",
-                      attachments,
-                    };
-
-                    const msgCacheKey = getCacheKey(userId, userType, `msg:INBOX:${msg.uid}`);
-                    messageCache.set(msgCacheKey, { data: messageData, timestamp: Date.now() });
-                  } catch (err) {
-                    console.error(`[Prefetch] Failed to parse message UID ${msg.uid}:`, err);
-                  }
-                })());
+        const lock = await client.getMailboxLock('INBOX');
+        try {
+          const parsePromises: Promise<void>[] = [];
+          for await (const msg of client.fetch(uidsToFetch.join(','), { source: true, envelope: true }, { uid: true })) {
+            if (!msg || !msg.source) continue;
+            parsePromises.push((async () => {
+              try {
+                const messageData = await parseMessage(msg);
+                const msgCacheKey = getCacheKey(userId, userType, `msg:INBOX:${msg.uid}`);
+                messageCache.set(msgCacheKey, { data: messageData, timestamp: Date.now() });
+                parsedCount++;
+              } catch (err) {
+                console.error(`[Prefetch] Failed to parse message UID ${msg.uid}:`, err);
               }
-            }
-            // Wait for all concurrent parsings to finish
-            await Promise.all(parsePromises);
-          } catch (err) {
-            console.error(`[Prefetch] Bulk fetch failed:`, err);
+            })());
           }
+          await Promise.all(parsePromises);
+        } catch (err) {
+          console.error(`[Prefetch] Bulk fetch failed:`, err);
+        } finally {
+          lock.release();
         }
-      } finally {
-        lock.release();
-      }
-    } finally {
-      await client.logout();
-    }
+      });
 
-    console.log(`[Prefetch] Completed for ${userType}:${userId} — ${messages.length} inbox items, up to ${PREFETCH_MESSAGE_COUNT} messages cached`);
-  } catch (error) {
+      console.log(`[Prefetch] Completed for ${userType}:${userId} — ${inboxCount} inbox items, ${parsedCount} messages cached`);
+    });
+  } catch (error: any) {
     // Prefetch failure is non-critical — user can still fetch on demand
-    console.error(`[Prefetch] Failed for ${userType}:${userId}:`, error);
+    if (error?.message === "Email configuration not found.") return;
+    console.error(`[Prefetch] Failed for ${userType}:${userId}:`, error?.message || error);
   }
 }
