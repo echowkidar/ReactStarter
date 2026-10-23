@@ -44,6 +44,9 @@ import * as XLSX from "xlsx";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import salaryAssistants from "@/lib/salary-assistants.json";
+import { RegisterOrderDialog } from "@/components/admin/register-order-dialog";
+import { sortByCustomOrder, stepRegister } from "@/lib/register-order";
+import { ChevronsLeft, ChevronsRight, ListOrdered } from "lucide-react";
 
 type AttendanceEntry = {
   id: number;
@@ -332,6 +335,30 @@ export default function AttendanceReports() {
     return [current];
   });
   const [salaryRegisterFilter, setSalaryRegisterFilter] = useState<string[]>([]);
+
+  // Dealing assistant's own salary-register order (saved per admin login)
+  const { data: registerOrderPref } = useQuery<{ value: string[] | null }>({
+    queryKey: ["/api/admin/preferences/salary_register_order"],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const savedRegisterOrder = useMemo<string[]>(
+    () => (Array.isArray(registerOrderPref?.value) ? (registerOrderPref!.value as string[]) : []),
+    [registerOrderPref]
+  );
+  const [showRegisterOrder, setShowRegisterOrder] = useState(false);
+  const saveRegisterOrder = useMutation({
+    mutationFn: async (order: string[]) => {
+      const res = await apiRequest("PUT", "/api/admin/preferences/salary_register_order", { value: order });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/admin/preferences/salary_register_order"], data);
+      setShowRegisterOrder(false);
+      toast({ title: "Register order saved", description: "« » will now follow this order." });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Could not save order", description: e?.message || "" }),
+  });
   const [salaryAssistantFilter, setSalaryAssistantFilter] = useState<string[]>([]);
   const [designationFilter, setDesignationFilter] = useState<string[]>([]);
   const [analysisFilter, setAnalysisFilter] = useState<string[]>([]);
@@ -876,6 +903,28 @@ export default function AttendanceReports() {
       filteredDesignations: Array.from(designations).sort()
     };
   }, [allEntries, searchTerm, departmentFilter, monthFilter, salaryRegisterFilter, salaryAssistantFilter, designationFilter, availableDepartments]);
+
+  // Registers in the dealing assistant's order (no saved order → A to Z, as before)
+  const orderedSalaryRegisters = useMemo(
+    () => sortByCustomOrder(filteredSalaryRegisters, savedRegisterOrder),
+    [filteredSalaryRegisters, savedRegisterOrder]
+  );
+  const currentRegisterPos = salaryRegisterFilter.length === 1
+    ? orderedSalaryRegisters.findIndex(r => r.trim().toUpperCase() === salaryRegisterFilter[0].trim().toUpperCase()) + 1
+    : 0;
+  const stepSalaryRegister = (dir: 1 | -1) => {
+    const r = stepRegister(orderedSalaryRegisters, salaryRegisterFilter, dir);
+    if (!r) {
+      toast({ title: "No registers", description: "No salary registers in the current list." });
+      return;
+    }
+    if ("edge" in r) {
+      toast({ title: r.edge === "first" ? "First register" : "Last register", description: r.edge === "first" ? "This is the first register in your order." : "This is the last register in your order." });
+      return;
+    }
+    setSalaryRegisterFilter([r.value]);
+    setCurrentPage(1);
+  };
 
   // Filter entries based on all criteria
   const filteredEntries = useMemo(() => {
@@ -1966,19 +2015,66 @@ export default function AttendanceReports() {
                   disabled={isSalaryAdmin}
                 />
               </div>
-              <div className="w-full md:w-64">
-                <MultiSelect
-                  options={filteredSalaryRegisters.map(register => ({
-                    label: register,
-                    value: register
-                  }))}
-                  selected={salaryRegisterFilter}
-                  onChange={(values) => {
-                    setSalaryRegisterFilter(values);
-                    setCurrentPage(1); // Reset to first page on filter change
-                  }}
-                  placeholder="Filter by salary register"
-                  className="min-w-[180px]"
+              <div className="w-full md:w-80 flex items-start gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-9 shrink-0"
+                  title="Previous register (your order)"
+                  onClick={() => stepSalaryRegister(-1)}
+                  disabled={orderedSalaryRegisters.length === 0}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <MultiSelect
+                    options={orderedSalaryRegisters.map(register => ({
+                      label: register,
+                      value: register
+                    }))}
+                    selected={salaryRegisterFilter}
+                    onChange={(values) => {
+                      setSalaryRegisterFilter(values);
+                      setCurrentPage(1); // Reset to first page on filter change
+                    }}
+                    placeholder="Filter by salary register"
+                    className="min-w-[140px]"
+                  />
+                  {currentRegisterPos > 0 && (
+                    <div className="text-[11px] text-muted-foreground mt-0.5 text-center">
+                      Register {currentRegisterPos} of {orderedSalaryRegisters.length}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-9 shrink-0"
+                  title="Next register (your order)"
+                  onClick={() => stepSalaryRegister(1)}
+                  disabled={orderedSalaryRegisters.length === 0}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-9 shrink-0"
+                  title="Arrange register order (as in your paper register)"
+                  onClick={() => setShowRegisterOrder(true)}
+                >
+                  <ListOrdered className="h-4 w-4" />
+                </Button>
+                <RegisterOrderDialog
+                  open={showRegisterOrder}
+                  onOpenChange={setShowRegisterOrder}
+                  savedOrder={savedRegisterOrder}
+                  availableRegisters={filteredSalaryRegisters}
+                  saving={saveRegisterOrder.isPending}
+                  onSave={(order) => saveRegisterOrder.mutate(order)}
                 />
               </div>
               <div className="w-full md:w-64">
