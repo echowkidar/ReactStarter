@@ -3562,12 +3562,12 @@ export async function registerRoutes(app: Express) {
         for (const list of entriesByReport.values()) for (const en of list) if ((en as any).reportingEmployeeId) repIds.add((en as any).reportingEmployeeId);
         if (repIds.size > 0) {
           const rr = await db.execute(sql`
-            SELECT id, parent_department_id, to_char(from_date, 'YYYY-MM-DD') AS from_date, to_char(to_date, 'YYYY-MM-DD') AS to_date
+            SELECT id, parent_department_id, remarks, to_char(from_date, 'YYYY-MM-DD') AS from_date, to_char(to_date, 'YYYY-MM-DD') AS to_date
             FROM reporting_employees WHERE id IN (${sql.join([...repIds].map(i => sql`${i}`), sql`, `)})`);
           for (const r of rr.rows as any[]) {
             reportingInfoById.set(Number(r.id), {
               parentDepartmentName: departmentMap.get(Number(r.parent_department_id))?.name || 'Unknown',
-              fromDate: r.from_date, toDate: r.to_date,
+              fromDate: r.from_date, toDate: r.to_date, remarks: r.remarks || null,
             });
           }
         }
@@ -3898,11 +3898,11 @@ export async function registerRoutes(app: Express) {
         const repIds = [...new Set(entries.map(e => (e as any).reportingEmployeeId).filter(Boolean))] as number[];
         if (repIds.length > 0) {
           const rr = await db.execute(sql`
-            SELECT re.id, d.name AS parent_name, to_char(re.from_date, 'YYYY-MM-DD') AS from_date, to_char(re.to_date, 'YYYY-MM-DD') AS to_date
+            SELECT re.id, d.name AS parent_name, re.remarks, to_char(re.from_date, 'YYYY-MM-DD') AS from_date, to_char(re.to_date, 'YYYY-MM-DD') AS to_date
             FROM reporting_employees re LEFT JOIN departments d ON d.id = re.parent_department_id
             WHERE re.id IN (${sql.join(repIds.map(i => sql`${i}`), sql`, `)})`);
           for (const r of rr.rows as any[]) {
-            reportingInfoById.set(Number(r.id), { parentDepartmentName: r.parent_name || 'Unknown', fromDate: r.from_date, toDate: r.to_date });
+            reportingInfoById.set(Number(r.id), { parentDepartmentName: r.parent_name || 'Unknown', fromDate: r.from_date, toDate: r.to_date, remarks: r.remarks || null });
           }
         }
       } catch (e) {

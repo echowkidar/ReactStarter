@@ -24,6 +24,15 @@ interface ExtendedAttendanceReport extends AttendanceReport {
 // Reporting Employees report (Admin Non Teaching) — separate report type
 const reportTypeSuffix = (r: any) => (r?.reportType === 'reporting' ? ' (Reporting Employees)' : '');
 
+// Reporting employees: the reason of reporting (remarks entered by Admin Non Teaching)
+// is shown in the Remarks column on the first period row of that employee.
+const remarksWithReporting = (entry: any, period: any, periodIndex: number) => {
+  const own = String(period?.remarks || "").trim();
+  const rep = periodIndex === 0 ? String(entry?.reportingInfo?.remarks || "").trim() : "";
+  const parts = [own, rep].filter((v, i, a) => v && a.indexOf(v) === i);
+  return parts.length ? parts.join("; ") : "-";
+};
+
 export default function ReportDetails() {
   const [, params] = useRoute("/admin/reports/:id");
   const [, setLocation] = useLocation();
@@ -341,21 +350,21 @@ export default function ReportDetails() {
 
     report.entries?.forEach(entry => {
       const periods = JSON.parse(entry.periods);
-      periods.forEach((period: any) => {
+      periods.forEach((period: any, periodIdx: number) => {
         attendanceData.push([
           entry.employee?.epid,
           (entry as any).reportingInfo ? `${entry.employee?.name} (Parent Dept: ${(entry as any).reportingInfo.parentDepartmentName})` : entry.employee?.name,
           entry.employee?.designation,
           `${formatShortDate(period.fromDate)} to ${formatShortDate(period.toDate)}`,
           period.days,
-          period.remarks || '-'
+          remarksWithReporting(entry, period, periodIdx)
         ]);
       });
     });
 
     const certificationData = [
       [''],
-      ['Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered by the Salary Section.'],
+      ['Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered.'],
       ['Certified that the above attendance report is correct.'],
       [''],
       [report.department?.hodTitle || ''],
@@ -526,7 +535,7 @@ export default function ReportDetails() {
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
               <CardTitle>{report.status === 'draft' ? `Draft Attendance Report${reportTypeSuffix(report)}` : `Attendance Report${reportTypeSuffix(report)}`}</CardTitle>
-              <div className="border border-black rounded px-4 py-2.5 flex items-center w-full sm:w-[340px] h-[40px] bg-white mr-2 shrink-0 print:w-[340px]">
+              <div className="border border-black rounded px-4 py-2.5 flex items-center w-full sm:w-[340px] h-[64px] bg-white mr-2 shrink-0 print:w-[340px]">
                 <span className="text-sm font-bold text-black flex-1">D. No.</span>
                 <span className="text-sm font-bold text-black flex-1">D. Date</span>
               </div>
@@ -644,7 +653,7 @@ export default function ReportDetails() {
                                 ? <div className="flex flex-col items-center justify-center -mt-1"><span className="leading-tight">{period.days}</span>{designation.includes('GUEST') && <span className="font-bold text-[9px] text-[#ea580c] leading-tight mt-0.5">Periods</span>}</div>
                                 : period.days}
                             </TableCell>
-                            <TableCell>{period.remarks || "-"}</TableCell>
+                            <TableCell>{remarksWithReporting(entry, period, periodIndex)}</TableCell>
                           </TableRow>
                         );
                       });
@@ -657,7 +666,7 @@ export default function ReportDetails() {
                     <TableRow key="signature-row" className="hover:bg-transparent" style={{ pageBreakInside: 'avoid', border: 'none' }}>
                       <TableCell colSpan={9} className="p-0" style={{ border: 'none' }}>
                         <div className="mt-8 space-y-4 text-right certification-section page-break-inside-avoid">
-                          <p className="text-[11px] italic -mb-3">Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered by the Salary Section.</p>
+                          <p className="text-[11px] italic -mb-3">Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered.</p>
                           <p>Certified that the above attendance report is correct.</p>
                           <div className="space-y-1">
                             <div style={{ height: '3em' }}></div>
