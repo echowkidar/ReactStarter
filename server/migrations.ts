@@ -295,6 +295,23 @@ export async function runMigrations() {
       console.error("[Migrations] reporting_employees table creation failed (only the new feature is affected):", reportingErr);
     }
 
+    // ─── Admin preferences (e.g. salary register order per dealing assistant) ──
+    // New table only; failure affects just this preference feature.
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS admin_preferences (
+          id SERIAL PRIMARY KEY,
+          admin_email TEXT NOT NULL,
+          pref_key TEXT NOT NULL,
+          value JSONB NOT NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (admin_email, pref_key)
+        );
+      `);
+    } catch (prefErr) {
+      console.error("[Migrations] admin_preferences table creation failed (only register ordering is affected):", prefErr);
+    }
+
     console.log("Database migrations completed successfully");
 
   } catch (error) {

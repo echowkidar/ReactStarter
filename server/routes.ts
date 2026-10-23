@@ -33,6 +33,7 @@ import {
   validateReportEntries,
   getActiveAttachmentMap,
 } from "./reportingEmployees";
+import { registerAdminPreferenceRoutes } from "./adminPreferences";
 
 // Helper: Check if employee's current-month attendance BLOCKS transfer.
 // Logic:
@@ -7021,6 +7022,9 @@ export async function registerRoutes(app: Express) {
 
   // ================= REPORTING EMPLOYEES (Admin Non Teaching) =================
   registerReportingEmployeeRoutes(app, storage, verifyAdminSession);
+
+  // ================= ADMIN PREFERENCES (salary register order) =================
+  registerAdminPreferenceRoutes(app, storage);
 
   return httpServer;
 }
