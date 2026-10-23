@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
-import { History, Pencil, LogOut, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { History, Pencil, LogOut, Trash2, Loader2, AlertTriangle, Undo2 } from "lucide-react";
 
 export interface ReportingRecord {
   id: number;
@@ -86,6 +86,15 @@ export function ReportingEmployeesPanel({ departmentId }: { departmentId: number
     onError: (e) => toast({ title: "Could not close", description: (e as Error).message, variant: "destructive" }),
   });
 
+  const reopenMutation = useMutation({
+    mutationFn: async (r: ReportingRecord) => {
+      const res = await apiRequest("POST", `/api/departments/${departmentId}/reporting-employees/${r.id}/reopen`);
+      return res.json();
+    },
+    onSuccess: (_, r) => { toast({ title: "Reporting reopened", description: `${r.employee.name} is reporting again from ${fmt(r.fromDate)}.` }); refresh(); },
+    onError: (e) => toast({ title: "Could not reopen", description: (e as Error).message, variant: "destructive" }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (r: ReportingRecord) => {
       const res = await apiRequest("DELETE", `/api/departments/${departmentId}/reporting-employees/${r.id}`);
@@ -148,6 +157,19 @@ export function ReportingEmployeesPanel({ departmentId }: { departmentId: number
                 <TableCell>
                   <div className="flex gap-1">
                     <Button size="icon" variant="outline" title="History" onClick={() => setHistoryFor(r)}><History className="h-4 w-4" /></Button>
+                    {r.status !== "active" && (
+                      <>
+                        <Button size="sm" variant="outline" className="text-amber-700 border-amber-200" title="Undo relieve (if relieved by mistake)"
+                          disabled={reopenMutation.isPending}
+                          onClick={() => { if (window.confirm(`Reopen reporting of ${r.employee.name}? The relieved date ${fmt(r.toDate)} will be removed and the employee will be reporting again.`)) reopenMutation.mutate(r); }}>
+                          <Undo2 className="h-4 w-4 mr-1" /> Reopen
+                        </Button>
+                        <Button size="icon" variant="outline" title="Delete (only if no attendance has been prepared for this record)" className="text-red-600"
+                          onClick={() => { if (window.confirm(`Delete this reporting record of ${r.employee.name} (${fmt(r.fromDate)} to ${fmt(r.toDate)})? Use this only if it was created by mistake.`)) deleteMutation.mutate(r); }}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                     {r.status === "active" && (
                       <>
                         <Button size="icon" variant="outline" title="Edit" onClick={() => { setEditing(r); setEditForm({ fromDate: r.fromDate, orderNo: r.orderNo || "", orderDate: r.orderDate || "", remarks: r.remarks || "" }); }}>

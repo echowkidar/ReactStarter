@@ -362,22 +362,39 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     select: (data: any) => {
       let list: any[] = Array.isArray(data) ? data : [];
       if (isReportingMode) {
-        // Reporting Employees report: list = employees attached to this department for this month
+        // Reporting Employees report: one row per employee. An employee can have more than one
+        // reporting window in a month (e.g. relieved, then reported again) — keep them all.
         const byEmp = new Map<number, any>();
         for (const r of list) {
-          byEmp.set(r.employeeId, {
-            ...r.employee,
-            id: r.employeeId,
-            isActive: 'active',
-            reporting: {
-              attachmentId: r.id,
-              parentDepartmentName: r.parentDepartmentName,
-              allowedFrom: r.allowedFrom,
-              allowedTo: r.allowedTo,
-              defaultFrom: r.defaultFrom,
-              defaultTo: r.defaultTo,
-            },
-          });
+          const win = { attachmentId: r.id, from: r.allowedFrom, to: r.allowedTo, status: r.status };
+          const prev = byEmp.get(r.employeeId);
+          if (!prev) {
+            byEmp.set(r.employeeId, {
+              ...r.employee,
+              id: r.employeeId,
+              isActive: 'active',
+              reporting: {
+                attachmentId: r.id,
+                parentDepartmentName: r.parentDepartmentName,
+                allowedFrom: r.allowedFrom,
+                allowedTo: r.allowedTo,
+                defaultFrom: r.defaultFrom,
+                defaultTo: r.defaultTo,
+                windows: [win],
+              },
+            });
+          } else {
+            const rep = prev.reporting;
+            rep.windows.push(win);
+            if (parseDateFromDisplay(r.allowedFrom) < parseDateFromDisplay(rep.allowedFrom)) rep.allowedFrom = r.allowedFrom;
+            if (parseDateFromDisplay(r.allowedTo) > parseDateFromDisplay(rep.allowedTo)) rep.allowedTo = r.allowedTo;
+            // prefer the active (current) window for the default period
+            if (r.status === 'active') {
+              rep.attachmentId = r.id;
+              rep.defaultFrom = r.defaultFrom;
+              rep.defaultTo = r.defaultTo;
+            }
+          }
         }
         list = Array.from(byEmp.values());
       }
@@ -479,9 +496,13 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     const f = parseDateFromDisplay(fromDate), t = parseDateFromDisplay(toDate);
     if (isNaN(f.getTime()) || isNaN(t.getTime())) return null;
     if (emp?.reporting) {
-      const aF = parseDateFromDisplay(emp.reporting.allowedFrom), aT = parseDateFromDisplay(emp.reporting.allowedTo);
-      if (f.getTime() < aF.getTime() || t.getTime() > aT.getTime()) {
-        return `Period ${fromDate} to ${toDate} is outside the reporting period (${emp.reporting.allowedFrom} to ${emp.reporting.allowedTo}).`;
+      const windows: Array<{ from: string; to: string }> = emp.reporting.windows?.length
+        ? emp.reporting.windows
+        : [{ from: emp.reporting.allowedFrom, to: emp.reporting.allowedTo }];
+      const inside = windows.some((w) =>
+        f.getTime() >= parseDateFromDisplay(w.from).getTime() && t.getTime() <= parseDateFromDisplay(w.to).getTime());
+      if (!inside) {
+        return `Period ${fromDate} to ${toDate} is outside the reporting period (${windows.map((w) => `${w.from} to ${w.to}`).join(", ")}).`;
       }
       return null;
     }
@@ -1039,7 +1060,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                         <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1 py-0.5">
                           Parent: {employee.reporting.parentDepartmentName}
                         </span>
-                        <div className="text-muted-foreground">Allowed: {employee.reporting.allowedFrom} to {employee.reporting.allowedTo}</div>
+                        {(employee.reporting.windows || [{ from: employee.reporting.allowedFrom, to: employee.reporting.allowedTo, status: 'active' }]).map((w: any, wi: number) => (
+                          <div key={wi} className="text-muted-foreground">
+                            Allowed: {w.from} to {w.to}{w.status && w.status !== 'active' ? ' (relieved)' : ''}
+                          </div>
+                        ))}
                       </div>
                     )}
                     {!employee.reporting && employee.reportingAt && (

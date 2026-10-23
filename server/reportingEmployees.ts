@@ -172,6 +172,18 @@ async function getDeptName(deptId: number): Promise<string> {
   return (r.rows[0] as any)?.name || "Unknown Department";
 }
 
+/** First run of days in [from, to] not covered by any of `covered` (inclusive day numbers) */
+export function firstUncoveredGap(from: number, to: number, covered: Array<{ from: number; to: number }>): { from: number; to: number } | null {
+  const sorted = covered.filter((c) => c.to >= from && c.from <= to).sort((a, b) => a.from - b.from);
+  let cur = from;
+  for (const c of sorted) {
+    if (c.from > cur) return { from: cur, to: Math.min(to, c.from - 1) };
+    cur = Math.max(cur, c.to + 1);
+    if (cur > to) return null;
+  }
+  return cur <= to ? { from: cur, to } : null;
+}
+
 // ── Guard used by POST /api/attendance/:reportId/entries and on submit ──────
 export type GuardResult =
   | { ok: true; reportingEmployeeId: number | null }
@@ -394,25 +406,52 @@ export function registerReportingEmployeeRoutes(
       if (!month || !year) return res.status(400).json({ message: "month and year are required" });
       const monthStart = dayNum(year, month, 1);
       const monthEnd = dayNum(year, month + 1, 1) - 1;
-      // Active attachments started on/before month end, plus recently closed ones (arrears)
+      // Active attachments started on/before month end, plus relieved ones that still have
+      // days whose attendance has NOT been prepared yet (arrears). A relieved record whose
+      // whole window is already covered by this department's reports is not listed.
       const rows = await db.execute(sql`
         SELECT ${SELECT_COLS} FROM reporting_employees
         WHERE host_department_id = ${host.id}
           AND from_date <= ${dayToIso(monthEnd)}::date
-          AND (status = 'active' OR to_date >= ${dayToIso(monthStart - 120)}::date)
+          AND (status = 'active' OR to_date >= ${dayToIso(monthStart - 366)}::date)
         ORDER BY from_date`);
-      const list = await enrich((rows.rows as any[]).map(mapRow));
-      res.json(list.map((a: any) => {
+      const attachments = (rows.rows as any[]).map(mapRow);
+      const coverCache = new Map<number, Array<{ from: number; to: number }>>();
+      const hostCover = async (employeeId: number) => {
+        if (!coverCache.has(employeeId)) {
+          const periods = await getEmployeePeriods(employeeId);
+          coverCache.set(employeeId, periods
+            .filter((p) => p.departmentId === host.id && p.reportType === "reporting")
+            .map((p) => ({ from: p.from, to: p.to })));
+        }
+        return coverCache.get(employeeId)!;
+      };
+      const out: any[] = [];
+      for (const a of attachments) {
         const ws = windowStart(a), we = Math.min(windowEnd(a), monthEnd);
-        const defFrom = Math.max(ws, monthStart);
-        return {
+        if (we < ws) continue;
+        let defFrom: number, defTo: number;
+        if (a.status === "active") {
+          defFrom = Math.max(ws, monthStart);
+          defTo = we;
+          if (defFrom > defTo) { defFrom = Math.max(ws, we - 30); }
+        } else {
+          const gap = firstUncoveredGap(ws, we, await hostCover(a.employeeId));
+          if (!gap) continue; // everything already prepared/sent for this relieved record
+          // default stays inside the selected month when the gap reaches into it;
+          // earlier pending days remain selectable (allowed range starts at the reporting date)
+          defFrom = gap.to >= monthStart ? Math.max(gap.from, monthStart) : gap.from;
+          defTo = gap.to;
+        }
+        out.push({
           ...a,
           allowedFrom: dayToDDMMYY(ws),
           allowedTo: dayToDDMMYY(we),
-          defaultFrom: dayToDDMMYY(defFrom <= we ? defFrom : Math.max(ws, we - 30)),
-          defaultTo: dayToDDMMYY(we),
-        };
-      }));
+          defaultFrom: dayToDDMMYY(defFrom),
+          defaultTo: dayToDDMMYY(defTo),
+        });
+      }
+      res.json(await enrich(out)); // enrich keeps all fields of each item and adds names
     } catch (e) {
       console.error("Error fetching reporting employees for month:", e);
       res.status(500).json({ message: "Failed to fetch reporting employees" });
@@ -445,7 +484,10 @@ export function registerReportingEmployeeRoutes(
       }
       const clash = existing.find((a) => from <= windowEnd(a));
       if (clash) {
-        return res.status(400).json({ message: `Reporting date overlaps an earlier reporting period (${dayToDDMMYY(windowStart(clash))} to ${clash.toDate ? dayToDDMMYY(windowEnd(clash)) : "till date"}). Choose a date after it.` });
+        const clashHost = await getDeptName(clash.hostDepartmentId);
+        return res.status(400).json({
+          message: `This employee already has a relieved reporting record at "${clashHost}" for ${dayToDDMMYY(windowStart(clash))} to ${clash.toDate ? dayToDDMMYY(windowEnd(clash)) : "till date"}, which overlaps the new reporting date. Choose a date after ${clash.toDate ? dayToDDMMYY(windowEnd(clash)) : "it"}, or — if that record is wrong — open Employees → Reporting Employees → Relieved and use "Reopen" or "Delete" there.`,
+        });
       }
 
       // Rule 4: other departments must not already have attendance on/after the reporting date
@@ -565,6 +607,54 @@ export function registerReportingEmployeeRoutes(
     } catch (e) {
       console.error("Error closing reporting employee:", e);
       res.status(500).json({ message: "Failed to close reporting record" });
+    }
+  });
+
+  // Reopen a relieved record (undo "Relieve" done by mistake)
+  app.post("/api/departments/:departmentId/reporting-employees/:rid/reopen", async (req, res) => {
+    try {
+      const host = await getHost(req, res); if (!host) return;
+      const att = await getAttachment(Number(req.params.rid));
+      if (!att || att.hostDepartmentId !== host.id) return res.status(404).json({ message: "Reporting record not found" });
+      if (att.status === "active") return res.status(400).json({ message: "This reporting record is already active" });
+
+      const all = await getAttachmentsForEmployees([att.employeeId]);
+      const otherActive = all.find((a) => a.id !== att.id && a.status === "active");
+      if (otherActive) {
+        const n = await getDeptName(otherActive.hostDepartmentId);
+        return res.status(400).json({ message: `Employee already has an active reporting record at "${n}" (since ${dayToDDMMYY(windowStart(otherActive))}).` });
+      }
+      const later = all.find((a) => a.id !== att.id && windowStart(a) > windowStart(att));
+      if (later) {
+        return res.status(400).json({ message: `A later reporting record (from ${dayToDDMMYY(windowStart(later))}) exists for this employee, so this one cannot be reopened.` });
+      }
+      const employee = await storage.getEmployee(att.employeeId);
+      if (!employee || employee.isActive !== "active") {
+        return res.status(400).json({ message: "Employee is disabled, so the reporting record cannot be reopened." });
+      }
+      // Days after the relieved date must not already be reported by another department
+      const relievedOn = windowEnd(att);
+      const periods = await getEmployeePeriods(att.employeeId);
+      const conflict = periods.find((p) => p.departmentId !== host.id && p.to > relievedOn);
+      if (conflict) {
+        return res.status(409).json({
+          message: `"${conflict.departmentName}" has already included this employee for ${conflict.fromStr} to ${conflict.toStr} (report status: ${conflict.status}), so reporting cannot be reopened after ${dayToDDMMYY(relievedOn)}.`,
+        });
+      }
+
+      await db.execute(sql`
+        UPDATE reporting_employees SET status = 'active', to_date = NULL, close_reason = NULL, closed_by = NULL, closed_at = NULL
+        WHERE id = ${att.id} AND status <> 'active'`);
+      await storage.logEmployeeChange(att.employeeId, "reporting_reopen", "reporting",
+        `Reporting at ${host.name} reopened (was relieved on ${dayToDDMMYY(relievedOn)})`, host.email, "department", host.id);
+      const updated = await getAttachment(att.id);
+      res.json(updated ? (await enrich([updated]))[0] : null);
+    } catch (e: any) {
+      if (String(e?.message || "").includes("uq_reporting_active_emp")) {
+        return res.status(400).json({ message: "Employee already has an active reporting record" });
+      }
+      console.error("Error reopening reporting employee:", e);
+      res.status(500).json({ message: "Failed to reopen reporting record" });
     }
   });
 
