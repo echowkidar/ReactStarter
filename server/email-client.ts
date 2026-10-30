@@ -31,6 +31,58 @@ function isCacheValid<T>(item: CachedItem<T> | undefined, ttl: number): item is 
   return !!item && (Date.now() - item.timestamp) < ttl;
 }
 
+// ─── Memory limits for the message cache ─────────────────────────────────────
+// Messages are cached WITH their attachments (base64), and expired entries were
+// never removed, so memory kept growing until PM2's 400 MB limit restarted the
+// app. Now: total budget + per-message cap + oldest-first eviction + periodic sweep.
+const MESSAGE_CACHE_MAX_BYTES = 60 * 1024 * 1024;      // whole message cache
+const MESSAGE_CACHE_MAX_ITEM_BYTES = 5 * 1024 * 1024;  // bigger messages are not cached
+const PREFETCH_MAX_RAW_BYTES = 1024 * 1024;             // prefetch skips messages > 1 MB
+const messageSizes = new Map<string, number>();
+let messageCacheBytes = 0;
+
+/** Rough in-memory size of a parsed message (JS strings are UTF-16: 2 bytes/char) */
+function estimateMessageBytes(m: any): number {
+  if (!m) return 0;
+  let chars = String(m.body || "").length + String(typeof m.html === "string" ? m.html : "").length + 512;
+  for (const a of m.attachments || []) chars += String(a?.content || "").length + 128;
+  return chars * 2;
+}
+
+function dropCachedMessage(key: string) {
+  if (messageCache.delete(key)) messageCacheBytes -= messageSizes.get(key) || 0;
+  messageSizes.delete(key);
+  if (messageCacheBytes < 0) messageCacheBytes = 0;
+}
+
+function cacheMessage(key: string, data: any) {
+  const size = estimateMessageBytes(data);
+  dropCachedMessage(key);
+  if (size > MESSAGE_CACHE_MAX_ITEM_BYTES) return; // served fresh from Gmail each time instead
+  messageCache.set(key, { data, timestamp: Date.now() });
+  messageSizes.set(key, size);
+  messageCacheBytes += size;
+  // Map keeps insertion order → the first key is the oldest
+  while (messageCacheBytes > MESSAGE_CACHE_MAX_BYTES && messageCache.size > 0) {
+    const oldest = messageCache.keys().next().value as string;
+    dropCachedMessage(oldest);
+  }
+}
+
+/** Removes expired entries from all caches (runs every 2 minutes) */
+export function sweepEmailCaches(now = Date.now()) {
+  for (const [k, v] of inboxCache) if (now - v.timestamp >= INBOX_CACHE_TTL) inboxCache.delete(k);
+  for (const [k, v] of sentCache) if (now - v.timestamp >= INBOX_CACHE_TTL) sentCache.delete(k);
+  for (const [k, v] of unreadCountCache) if (now - v.timestamp >= UNREAD_CACHE_TTL) unreadCountCache.delete(k);
+  for (const [k, v] of messageCache) if (now - v.timestamp >= MESSAGE_CACHE_TTL) dropCachedMessage(k);
+}
+const cacheSweeper = setInterval(() => sweepEmailCaches(), 2 * 60 * 1000);
+(cacheSweeper as any).unref?.(); // never keeps the process alive on its own
+
+export function emailCacheStats() {
+  return { messages: messageCache.size, messageBytes: messageCacheBytes, inbox: inboxCache.size, sent: sentCache.size, unread: unreadCountCache.size };
+}
+
 // ─── IMAP Client ────────────────────────────────────────────────────────────
 // Gmail allows only ~15 simultaneous IMAP connections per account. Earlier every
 // request (unread-count poll, inbox, message, prefetch) opened its own connection,
@@ -303,7 +355,7 @@ export async function getMessage(userId: string, userType: string, uid: number, 
     });
 
     if (messageData) {
-      messageCache.set(cacheKey, { data: messageData, timestamp: Date.now() });
+      cacheMessage(cacheKey, messageData);
     }
     return messageData;
   });
@@ -367,7 +419,7 @@ export async function deleteMessage(userId: string, userType: string, uid: numbe
   const msgKey = getCacheKey(userId, userType, `msg:${folder}:${uid}`);
   inboxCache.delete(inboxKey);
   sentCache.delete(sentKey);
-  messageCache.delete(msgKey);
+  dropCachedMessage(msgKey);
   unreadCountCache.delete(getCacheKey(userId, userType, 'unread'));
 }
 
@@ -429,14 +481,21 @@ export async function prefetchEmails(userId: string, userType: string) {
 
         const lock = await client.getMailboxLock('INBOX');
         try {
+          // Only small messages are prefetched; big ones (attachments) load when opened
+          const smallUids: number[] = [];
+          for await (const m of client.fetch(uidsToFetch.join(','), { size: true }, { uid: true })) {
+            if (m && typeof m.size === 'number' && m.size <= PREFETCH_MAX_RAW_BYTES) smallUids.push(m.uid);
+          }
+          if (smallUids.length === 0) return;
+
           const parsePromises: Promise<void>[] = [];
-          for await (const msg of client.fetch(uidsToFetch.join(','), { source: true, envelope: true }, { uid: true })) {
+          for await (const msg of client.fetch(smallUids.join(','), { source: true, envelope: true }, { uid: true })) {
             if (!msg || !msg.source) continue;
             parsePromises.push((async () => {
               try {
                 const messageData = await parseMessage(msg);
                 const msgCacheKey = getCacheKey(userId, userType, `msg:INBOX:${msg.uid}`);
-                messageCache.set(msgCacheKey, { data: messageData, timestamp: Date.now() });
+                cacheMessage(msgCacheKey, messageData);
                 parsedCount++;
               } catch (err) {
                 console.error(`[Prefetch] Failed to parse message UID ${msg.uid}:`, err);
