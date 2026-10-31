@@ -1,20 +1,56 @@
-version: "3.8"
+# Attendance app stack (app + PostgreSQL 14).
+# Portainer: Stacks -> Add stack -> paste this file (or use the git repo),
+# set the variables below under "Environment variables".
+#
+# Host folders (create once):
+#   /srv/attendance/pgdata   -> database files
+#   /srv/attendance/uploads  -> uploaded PDFs / images
+#   /srv/attendance/.env     -> copy of the app's .env (SMTP, OCR, Turnstile, ...)
+#
+# Required stack variables: POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+# Optional: APP_PORT (default 5001), BASE_URL
 
 services:
-  salarysection:
-    build: .
-    container_name: salarysection
+  db:
+    image: postgres:14
+    container_name: attendance-db
     restart: always
-    ports:
-      - "5001:5001"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - BASE_URL=${BASE_URL}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASS=${SMTP_PASS}
-      - SMTP_FROM=${SMTP_FROM}
-      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY}
-      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY}
-      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - /srv/attendance/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No "ports:" on purpose - the database is only reachable from the app.
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  app:
+    build: .
+    container_name: attendance-app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - /srv/attendance/.env
+    environment:
+      NODE_ENV: production
+      PORT: "5001"
+      # overrides DATABASE_URL from .env so the app talks to the db container
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      NODE_OPTIONS: --max-old-space-size=768
+    volumes:
+      - /srv/attendance/uploads:/app/uploads
+    ports:
+      - "${APP_PORT:-5001}:5001"
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

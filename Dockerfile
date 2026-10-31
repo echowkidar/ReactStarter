@@ -2,53 +2,31 @@
 # Build stage
 # =========================
 FROM node:20 AS builder
-
 WORKDIR /app
-
-# Install build dependencies (for canvas etc.)
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    libcairo2-dev \
-    libpango1.0-dev \
-    libjpeg-dev \
-    libgif-dev \
-    librsvg2-dev \
+RUN apt-get update && apt-get install -y python3 make g++ \
+    libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
     && rm -rf /var/lib/apt/lists/*
-
-# Install dependencies
 COPY package*.json ./
-RUN npm install
-
-# Copy source code
+RUN npm ci || npm install
 COPY . .
-
-# Build project
 RUN npm run build
-
 
 # =========================
 # Production stage
 # =========================
 FROM node:20
-
 WORKDIR /app
-
-# Copy only required files from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/client ./client
+# Runtime libraries needed by `canvas` (PDF/image features)
+RUN apt-get update && apt-get install -y \
+    libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/theme.json ./theme.json
-
-# Install dependencies (including vite if needed)
-RUN npm install
-
-# 🔥 VERY IMPORTANT (fixes blank screen issue)
 ENV NODE_ENV=production
-
-# Expose port
+ENV PORT=5001
 EXPOSE 5001
-
-# Start app
+# uploads live in a mounted volume (see docker-compose.yml)
+RUN mkdir -p /app/uploads
 CMD ["node", "dist/index.js"]
