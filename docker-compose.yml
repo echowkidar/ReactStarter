@@ -7,7 +7,7 @@
 #   /srv/attendance/uploads  -> uploaded PDFs / images
 #
 # All settings come from the stack's "Environment variables" in Portainer
-# (paste/load the production .env there; no separate .env file needed):
+# (Repository stacks do not create stack.env, so each variable is listed below):
 #   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD  (same as in DATABASE_URL)
 #   SMTP_*, TURNSTILE_*, OCR_*, LPC_*, DISPATCH_*, *_OLLAMA_*, BASE_URL, ...
 #   APP_PORT (optional, default 5001)
@@ -40,15 +40,39 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - path: stack.env        # Portainer writes the stack's Environment variables here
-        required: false
     environment:
       NODE_ENV: production
       PORT: "5001"
-      # overrides DATABASE_URL from .env so the app talks to the db container
+      # overrides DATABASE_URL from the old .env so the app talks to the db container
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       NODE_OPTIONS: --max-old-space-size=768
+      # values come from the stack's Environment variables in Portainer
+      BASE_URL: ${BASE_URL:-}
+      APP_URL: ${APP_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_REJECT_UNAUTHORIZED: ${SMTP_REJECT_UNAUTHORIZED:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
+      EXTERNAL_API_KEY: ${EXTERNAL_API_KEY:-}
+      OCR_API_URL: ${OCR_API_URL:-}
+      OCR_API_TOKEN: ${OCR_API_TOKEN:-}
+      LPC_OCR_API_URL: ${LPC_OCR_API_URL:-}
+      LPC_OCR_API_TOKEN: ${LPC_OCR_API_TOKEN:-}
+      DISPATCH_API_URL: ${DISPATCH_API_URL:-}
+      DISPATCH_API_KEY: ${DISPATCH_API_KEY:-}
+      DISPATCH_OLLAMA_API_URL: ${DISPATCH_OLLAMA_API_URL:-}
+      DISPATCH_OLLAMA_API_KEY: ${DISPATCH_OLLAMA_API_KEY:-}
+      DISPATCH_OLLAMA_MODEL: ${DISPATCH_OLLAMA_MODEL:-}
+      RECEIVE_OLLAMA_API_URL: ${RECEIVE_OLLAMA_API_URL:-}
+      RECEIVE_OLLAMA_API_KEY: ${RECEIVE_OLLAMA_API_KEY:-}
+      RECEIVE_OLLAMA_MODEL: ${RECEIVE_OLLAMA_MODEL:-}
+      LPC_DISPATCH_EMAILS: ${LPC_DISPATCH_EMAILS:-}
     volumes:
       - /srv/attendance/uploads:/app/uploads
     ports:
