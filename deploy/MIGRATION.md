@@ -5,7 +5,7 @@ Never start both against live users - two databases would diverge.
 
 ## 1. Prepare host
     sudo mkdir -p /srv/attendance/{pgdata,uploads,migrate}
-    # copy the production .env to /srv/attendance/.env (SMTP, OCR, Turnstile, ... as on the VPS)
+    # (no .env file needed: load the production .env into the Portainer stack Environment variables)
     printf 'POSTGRES_USER=attendance\nPOSTGRES_DB=attendance\n' > /srv/attendance/db.env
 
 ## 2. Bring over the final snapshot (taken after `pm2 stop`)

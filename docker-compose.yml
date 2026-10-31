@@ -5,10 +5,12 @@
 # Host folders (create once):
 #   /srv/attendance/pgdata   -> database files
 #   /srv/attendance/uploads  -> uploaded PDFs / images
-#   /srv/attendance/.env     -> copy of the app's .env (SMTP, OCR, Turnstile, ...)
 #
-# Required stack variables: POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
-# Optional: APP_PORT (default 5001), BASE_URL
+# All settings come from the stack's "Environment variables" in Portainer
+# (paste/load the production .env there; no separate .env file needed):
+#   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD  (same as in DATABASE_URL)
+#   SMTP_*, TURNSTILE_*, OCR_*, LPC_*, DISPATCH_*, *_OLLAMA_*, BASE_URL, ...
+#   APP_PORT (optional, default 5001)
 
 services:
   db:
@@ -39,7 +41,8 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - /srv/attendance/.env
+      - path: stack.env        # Portainer writes the stack's Environment variables here
+        required: false
     environment:
       NODE_ENV: production
       PORT: "5001"
