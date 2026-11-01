@@ -12,5 +12,7 @@ STAMP=$(date +%F_%H%M)
 docker exec "$DB_CONTAINER" pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB" > "$DEST/db_$STAMP.dump"
 # uploads are only added to, so an rsync mirror is enough
 rsync -a /srv/attendance/uploads/ "$DEST/uploads_mirror/"
+# LPC signing CA (key + cert + p12) - cannot be regenerated, keep a copy
+rsync -a /srv/attendance/pki/ "$DEST/pki_copy/"
 find "$DEST" -maxdepth 1 -name 'db_*.dump' -mtime +"$KEEP_DAYS" -delete
 echo "$(date -Is) backup ok: db_$STAMP.dump"
