@@ -5,6 +5,7 @@
 # Host folders (create once):
 #   /srv/attendance/pgdata   -> database files
 #   /srv/attendance/uploads  -> uploaded PDFs / images
+#   /srv/attendance/pki      -> LPC certificate authority files (copy from the old server's dist/pki)
 #
 # All settings come from the stack's "Environment variables" in Portainer
 # (Repository stacks do not create stack.env, so each variable is listed below):
@@ -75,6 +76,9 @@ services:
       LPC_DISPATCH_EMAILS: ${LPC_DISPATCH_EMAILS:-}
     volumes:
       - /srv/attendance/uploads:/app/uploads
+      # LPC signing CA (key + cert + p12). The app generates a NEW CA if this folder
+      # is empty, so keep it persistent and seed it with the production CA.
+      - /srv/attendance/pki:/app/dist/pki
     ports:
       - "${APP_PORT:-5001}:5001"
     mem_limit: 1g

@@ -24,6 +24,9 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/theme.json ./theme.json
+# files the server reads at runtime
+COPY --from=builder /app/client/src/lib/register-nos.json ./client/src/lib/register-nos.json
+COPY --from=builder /app/server/scanner-helper ./server/scanner-helper
 ENV NODE_ENV=production
 ENV PORT=5001
 EXPOSE 5001
