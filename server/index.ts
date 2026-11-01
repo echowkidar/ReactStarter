@@ -2,6 +2,7 @@
 import 'dotenv/config';
 
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrations";
@@ -14,6 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// gzip API/JSON/HTML/JS responses (big lists were ~10x larger over the tunnel)
+app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
