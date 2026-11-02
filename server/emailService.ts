@@ -24,8 +24,28 @@ async function validateEmailDomain(email: string): Promise<boolean> {
       return false;
     }
 
-    const records = await resolveMx(domain);
-    return records && records.length > 0;
+    try {
+      const records = await resolveMx(domain);
+      if (records && records.length > 0) return true;
+    } catch (error: any) {
+      // Only a definite "no such domain" is a wrong address. A resolver that is
+      // slow/blocked/filtered (timeout, SERVFAIL, refused, ...) must not reject a
+      // good address - the SMTP server will report a bad one itself.
+      if (error?.code === 'ENOTFOUND') return false;
+      if (error?.code !== 'ENODATA') return true;
+    }
+    // No MX record: RFC 5321 falls back to the domain's own A/AAAA record.
+    const resolve4 = promisify(dns.resolve4);
+    const resolve6 = promisify(dns.resolve6);
+    try {
+      const a = await resolve4(domain);
+      if (a && a.length > 0) return true;
+    } catch { /* try AAAA */ }
+    try {
+      const aaaa = await resolve6(domain);
+      if (aaaa && aaaa.length > 0) return true;
+    } catch { /* none */ }
+    return false;
   } catch (error) {
     return false;
   }
