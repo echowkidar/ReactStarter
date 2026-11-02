@@ -29,7 +29,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    # No "ports:" on purpose - the database is only reachable from the app.
+    # Only on the PC itself (127.0.0.1), never on the network. For DBeaver etc. use an
+    # SSH tunnel to this PC and connect to localhost:${DB_LOCAL_PORT:-5433}.
+    ports:
+      - "127.0.0.1:${DB_LOCAL_PORT:-5433}:5432"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
