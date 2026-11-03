@@ -2827,33 +2827,39 @@ export async function registerRoutes(app: Express) {
       }
 
       // A Supplementary report always needs the one-time Admin permission
-      // (Supp. Report switch in the admin dashboard); it is used up on creation.
+      // (Supp. Report switch in the admin dashboard). It is used up only AFTER the
+      // report has been created successfully (see below), so a failed creation
+      // does not cost the department its permission.
       // Without that permission only the Main report can be created, as before.
-      if (reportKind === 'supplementary') {
-        if (!department?.allowSupplementaryReport) {
-          return res.status(400).json({
-            message: existingMainReport
-              ? "The Main Attendance Report for this month already exists. Please ask Admin for Supplementary report permission (or request cancellation/recall of the Main report)."
-              : "Supplementary Attendance Report needs Admin permission. Please ask Admin to enable Supplementary Report for your department."
-          });
-        }
-
-        // CRITICAL: Reset the flag to false immediately so they can't create another one
-        const { db } = await import("./db");
-        const { sql } = await import("drizzle-orm");
-        await db.execute(sql`
-           UPDATE departments 
-           SET allow_supplementary_report = false
-           WHERE id = ${departmentId}
-         `);
-
-        // If we are using MemStorage, update it there too
-        if (department) {
-          department.allowSupplementaryReport = false;
-        }
+      if (reportKind === 'supplementary' && !department?.allowSupplementaryReport) {
+        return res.status(400).json({
+          message: existingMainReport
+            ? "The Main Attendance Report for this month already exists. Please ask Admin for Supplementary report permission (or request cancellation/recall of the Main report)."
+            : "Supplementary Attendance Report needs Admin permission. Please ask Admin to enable Supplementary Report for your department."
+        });
       }
 
       const report = await storage.createAttendanceReport(reportData);
+
+      // Report created → now use up the one-time Supplementary permission
+      // (admin dashboard switch turns OFF by itself)
+      if (reportKind === 'supplementary') {
+        try {
+          const { db } = await import("./db");
+          const { sql } = await import("drizzle-orm");
+          await db.execute(sql`
+             UPDATE departments 
+             SET allow_supplementary_report = false
+             WHERE id = ${departmentId}
+           `);
+          // If we are using MemStorage, update it there too
+          if (department) {
+            department.allowSupplementaryReport = false;
+          }
+        } catch (permErr) {
+          console.error(`[ReportKind] Report ${report.id} created but failed to reset supplementary permission for dept ${departmentId}:`, permErr);
+        }
+      }
 
       try {
         if (department?.email) {
