@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { getReportPrefix } from "@shared/reportKind";
 import { useRoute, useLocation } from "wouter";
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,27 +75,11 @@ export default function ReportDetails() {
     enabled: !!report?.departmentId,
   });
 
+  // 'Supplementary ' / 'Revised ' / '' — uses the stored Main/Supplementary kind;
+  // old reports (no stored kind) keep the previous derived label.
   const reportPrefix = useMemo(() => {
     if (!report || !allReports) return '';
-    
-    const earlierReports = allReports.filter(
-      r => r.month === report.month && 
-           r.year === report.year && 
-           r.id < report.id &&
-           // Only reports of the same type (regular vs Reporting Employees) count
-           (((r as any).reportType || 'regular') === ((report as any).reportType || 'regular'))
-    );
-
-    const hasEarlierValid = earlierReports.some(r => r.status !== 'cancelled');
-    const hasEarlierCancelled = earlierReports.some(r => r.status === 'cancelled');
-
-    if (hasEarlierValid) {
-      return 'Supplementary ';
-    } else if (hasEarlierCancelled) {
-      return 'Revised ';
-    }
-    
-    return '';
+    return getReportPrefix(report as any, allReports as any);
   }, [report, allReports]);
 
   // Reporting Employees report (Admin Non Teaching) — separate report type

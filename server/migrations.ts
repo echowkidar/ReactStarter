@@ -257,6 +257,10 @@ export async function runMigrations() {
     await db.execute(sql`
       ALTER TABLE attendance_reports ADD COLUMN IF NOT EXISTS report_type TEXT NOT NULL DEFAULT 'regular';
     `);
+    // Main vs Supplementary report kind — NULL for all existing reports (label derived as before)
+    await db.execute(sql`
+      ALTER TABLE attendance_reports ADD COLUMN IF NOT EXISTS report_kind TEXT;
+    `);
     // NULL for all existing entries (= normal staff entry)
     await db.execute(sql`
       ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS reporting_employee_id INTEGER;

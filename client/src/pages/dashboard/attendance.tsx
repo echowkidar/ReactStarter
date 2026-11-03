@@ -32,6 +32,7 @@ import { Plus, Eye, Upload, Trash2, Loader2, FileCheck, AlertTriangle, Camera, S
 import { DocumentScannerDialog } from "@/components/document-scanner-dialog";
 import { Input } from "@/components/ui/input";
 import React from "react";
+import { findMainReport, getReportPrefix, type ReportKind } from "@shared/reportKind";
 
 // Types
 interface AttendanceReport {
@@ -1752,6 +1753,8 @@ export default function Attendance() {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   // 'regular' = own staff report, 'reporting' = Reporting Employees report (Admin Non Teaching)
   const [activeReportType, setActiveReportType] = useState<'regular' | 'reporting'>('regular');
+  // Main vs Supplementary — chosen in the Create dialog
+  const [reportKind, setReportKind] = useState<ReportKind>('main');
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [, setLocation] = useLocation();
@@ -1831,6 +1834,7 @@ export default function Attendance() {
         status: "draft",
         totalEmployees: data.entries.length,
         reportType: activeReportType,
+        reportKind,
       };
 
       const response = await apiRequest(
@@ -2337,9 +2341,16 @@ export default function Attendance() {
   // Note: 'today' is defined above
   const currentMonthYear = today.getFullYear();
   const currentMonthIdx = today.getMonth() + 1;
-  const existingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled' && (r as any).reportType !== 'reporting');
+  // "existingReport" = this month's MAIN report. Supplementary reports sent before the
+  // Main report do not lock report creation (see shared/reportKind.ts).
+  const existingReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'regular');
   // Reporting Employees report (separate report type; only for enabled departments)
-  const existingReportingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status !== 'cancelled' && (r as any).reportType === 'reporting');
+  const existingReportingReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'reporting');
+  // An open draft (Main or Supplementary) must be finalised/deleted before another report is created
+  const existingDraftReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType !== 'reporting');
+  const existingDraftReportingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType === 'reporting');
+  // Main report exists for the report type currently being created → only Supplementary possible
+  const mainExistsForActiveType = !!(activeReportType === 'reporting' ? existingReportingReport : existingReport);
 
   // Logic for canCreateReport:
   // 1. If department is explicitly permitted by admin (permitted === true): ignore deadline
@@ -2347,14 +2358,14 @@ export default function Attendance() {
   // 3. If permitted is undefined (loading/error): respect deadline as fallback
   // 
   // ADDITIONALLY: If existingReport exists, check allowSupplementaryReport
-  const canCreateReport = attendanceStatus?.permitted === true
-    ? (!existingReport || attendanceStatus?.allowSupplementaryReport) // Permitted: ignore deadline, check if report exists OR supp allowed
+  const canCreateReport = !existingDraftReport && (attendanceStatus?.permitted === true
+    ? (!existingReport || attendanceStatus?.allowSupplementaryReport) // Permitted: ignore deadline, check if Main report exists OR supp allowed
     : attendanceStatus?.permitted === false
       ? false  // Explicitly NOT permitted: always disable
-      : (!isPastDeadline && (!existingReport || attendanceStatus?.allowSupplementaryReport));  // Undefined/loading: respect deadline, check existing report OR supp allowed
+      : (!isPastDeadline && (!existingReport || attendanceStatus?.allowSupplementaryReport)));  // Undefined/loading: respect deadline, check Main report OR supp allowed
 
   // Same rules for the Reporting Employees report, checked against its own existing report
-  const canCreateReportingReport = !!attendanceStatus?.allowReportingEmployees && (
+  const canCreateReportingReport = !!attendanceStatus?.allowReportingEmployees && !existingDraftReportingReport && (
     attendanceStatus?.permitted === true
       ? (!existingReportingReport || attendanceStatus?.allowSupplementaryReport)
       : attendanceStatus?.permitted === false
@@ -2451,10 +2462,18 @@ export default function Attendance() {
                 <Button
                   className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
                   disabled={!canCreateReport}
-                  onClick={() => { if (!editingReportId) setActiveReportType('regular'); }}
+                  onClick={() => {
+                    if (!editingReportId) {
+                      setActiveReportType('regular');
+                      // Main report already there → only Supplementary; otherwise default to Main
+                      setReportKind(existingReport ? 'supplementary' : 'main');
+                    }
+                  }}
                   title={
                     !canCreateReport
-                      ? (existingReport
+                      ? (existingDraftReport && !existingReport
+                        ? "A draft report already exists. Please finalise or delete it before creating another report."
+                      : existingReport
                         ? (existingReport.status === 'draft' ? "Draft report already exists. Please delete it to create new."
                           : existingReport.status === 'submitted' || existingReport.status === 'recall_requested' ? "Report submitted. Use 'Recall' to modify."
                             : attendanceStatus?.allowSupplementaryReport ? "Create Supplementary Report" : "Report sent. Request cancellation to recreate or ask Admin for supplementary permission.")
@@ -2480,6 +2499,7 @@ export default function Attendance() {
                       : "Attendance submission disabled"}
                   onClick={() => {
                     setActiveReportType('reporting');
+                    setReportKind(existingReportingReport ? 'supplementary' : 'main');
                     setEditingReportId(null);
                     setEditingReportData(null);
                     setIsCreatingReport(true);
@@ -2494,11 +2514,48 @@ export default function Attendance() {
               <DialogContent className="max-w-[95vw] w-[1400px] max-h-[85vh] overflow-hidden flex flex-col">
                 <DialogHeader className="flex-shrink-0">
                   <DialogTitle className="text-xl font-semibold">
-                    {editingReportId ? "Edit Attendance Report" : "Create Attendance Report"}
+                    {editingReportId
+                      ? "Edit Attendance Report"
+                      : `Create ${reportKind === 'supplementary' ? 'Supplementary' : 'Main'} Attendance Report`}
                     {activeReportType === 'reporting' ? " (Reporting Employees)" : ""}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="overflow-auto flex-grow pr-1">
+                  {/* Main vs Supplementary choice (only while creating a new report) */}
+                  {!editingReportId && (
+                    mainExistsForActiveType ? (
+                      <div className="mb-4 p-3 rounded-lg border border-purple-200 bg-purple-50 text-purple-800 text-sm">
+                        The Main Attendance Report for this month has already been created, so this will be a
+                        <span className="font-semibold"> Supplementary Attendance Report</span>.
+                      </div>
+                    ) : (
+                      <div className="mb-4">
+                        <p className="text-sm font-medium mb-2">Report type</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setReportKind('main')}
+                            className={`text-left rounded-lg border p-3 transition ${reportKind === 'main' ? 'border-primary bg-primary/5 ring-2 ring-primary/30' : 'border-gray-200 hover:bg-gray-50'}`}
+                          >
+                            <div className="font-semibold">Main Attendance Report</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Regular monthly report for your staff. Only one Main report can be created per month.
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReportKind('supplementary')}
+                            className={`text-left rounded-lg border p-3 transition ${reportKind === 'supplementary' ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-300' : 'border-gray-200 hover:bg-gray-50'}`}
+                          >
+                            <div className="font-semibold">Supplementary Attendance Report</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              For one or a few employees only (e.g. left out earlier or needed urgently). You can still create the Main report afterwards.
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  )}
 
                   <AttendanceForm
                     onSubmit={async (data) => {
@@ -2514,7 +2571,7 @@ export default function Attendance() {
                     }}
                     isLoading={createReport.isPending || editReport.isPending}
                     initialData={editingReportData}
-                    isSupplementary={!!((activeReportType === 'reporting' ? existingReportingReport : existingReport) && attendanceStatus?.allowSupplementaryReport)}
+                    isSupplementary={reportKind === 'supplementary'}
                     reportType={activeReportType}
                   />
                 </div>
@@ -2546,6 +2603,16 @@ export default function Attendance() {
                     </TableCell>
                     <TableCell>
                       {formatPeriod(report.year, report.month)}
+                      {(() => {
+                        const prefix = getReportPrefix(report as any, reports as any).trim();
+                        return prefix ? (
+                          <div className="mt-1">
+                            <span className={`inline-block rounded border px-1.5 py-0.5 text-[11px] ${prefix === 'Supplementary' ? 'border-purple-200 bg-purple-50 text-purple-800' : 'border-sky-200 bg-sky-50 text-sky-800'}`}>
+                              {prefix}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
                       {(report as any).reportType === 'reporting' && (
                         <div className="mt-1">
                           <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">

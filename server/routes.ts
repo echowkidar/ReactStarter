@@ -34,6 +34,7 @@ import {
   getActiveAttachmentMap,
 } from "./reportingEmployees";
 import { registerAdminPreferenceRoutes } from "./adminPreferences";
+import { normaliseReportKind, findMainReport } from "../shared/reportKind";
 
 // Helper: Check if employee's current-month attendance BLOCKS transfer.
 // Logic:
@@ -2785,18 +2786,24 @@ export async function registerRoutes(app: Express) {
       const departmentId = Number(req.params.departmentId);
       // 'reporting' = Reporting Employees report (Admin Non Teaching); anything else = regular
       const reportType = (req.body as any)?.reportType === 'reporting' ? 'reporting' : 'regular';
+      // 'main' | 'supplementary' — chosen by the department in the Create dialog
+      const reportKind = normaliseReportKind((req.body as any)?.reportKind);
       const reportData = insertAttendanceReportSchema.parse({
         ...req.body,
         reportType,
+        reportKind,
         departmentId
       });
 
-      // Check if report already exists for this month/year (of the same report type)
+      // Existing (non-cancelled) reports of this month/year and of the same report type
       const existingReports = await storage.getAttendanceReportsByDepartment(departmentId);
-      const existingReport = existingReports.find(
+      const sameMonthReports = existingReports.filter(
         (r) => r.month === reportData.month && r.year === reportData.year && r.status !== 'cancelled'
           && (((r as any).reportType || 'regular') === reportType)
       );
+      // Main report of the month (old reports without a stored kind count as Main)
+      const existingMainReport = findMainReport(existingReports, reportData.month, reportData.year, reportType);
+      const existingDraftReport = sameMonthReports.find((r) => r.status === 'draft');
 
       const department = await storage.getDepartment(departmentId);
 
@@ -2804,7 +2811,25 @@ export async function registerRoutes(app: Express) {
         return res.status(403).json({ message: "Reporting employees report is not enabled for this department" });
       }
 
-      if (existingReport) {
+      // An unfinished draft must be finalised or deleted first (avoids the same
+      // employee being entered in two open reports at once)
+      if (existingDraftReport) {
+        return res.status(400).json({
+          message: "A draft attendance report for this month already exists. Please finalise or delete it before creating another report."
+        });
+      }
+
+      // Only one Main report per month
+      if (reportKind === 'main' && existingMainReport) {
+        return res.status(400).json({
+          message: "The Main Attendance Report for this month has already been created. You can only create a Supplementary Attendance Report (with Admin permission)."
+        });
+      }
+
+      // Supplementary BEFORE the Main report → allowed without Admin permission
+      // (the Main report stays open). Supplementary AFTER the Main report →
+      // needs the one-time Admin permission, exactly as before.
+      if (reportKind === 'supplementary' && existingMainReport) {
         // Check if supplementary report is allowed
         if (department?.allowSupplementaryReport) {
 
@@ -2824,7 +2849,7 @@ export async function registerRoutes(app: Express) {
 
         } else {
           return res.status(400).json({
-            message: "A report for this month already exists. Please request cancellation/recall or ask Admin for supplementary report permission."
+            message: "The Main Attendance Report for this month already exists. Please ask Admin for Supplementary Report permission (or request cancellation/recall of the Main report)."
           });
         }
       }
@@ -2879,8 +2904,10 @@ export async function registerRoutes(app: Express) {
         }
       }
 
-      // Report type is fixed at creation
+      // Report type and Main/Supplementary kind are fixed at creation
+      // (kind can only be corrected by Admin via /api/admin/attendance/:id/report-kind)
       delete updates.reportType;
+      delete updates.reportKind;
 
       // Reporting employees: re-check all entries before finalising (no-op for
       // reports without reporting employees)
@@ -4701,6 +4728,47 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error updating department permission:", error);
       res.status(500).json({ message: "Failed to update permission" });
+    }
+  });
+
+  // Admin: correct a report's kind (Main ↔ Supplementary), e.g. when a department's
+  // first report of the month covered only 1-2 employees and was taken as Main.
+  app.patch("/api/admin/attendance/:id/report-kind", verifyAdminSession, async (req, res) => {
+    try {
+      const reportId = Number(req.params.id);
+      const raw = (req.body as any)?.reportKind;
+      if (isNaN(reportId) || (raw !== 'main' && raw !== 'supplementary')) {
+        return res.status(400).json({ message: "reportKind must be 'main' or 'supplementary'" });
+      }
+      const reportKind = normaliseReportKind(raw);
+
+      const report = await storage.getAttendanceReport(reportId);
+      if (!report) return res.status(404).json({ message: "Report not found" });
+
+      if (reportKind === 'main' && report.status !== 'cancelled') {
+        const deptReports = await storage.getAttendanceReportsByDepartment(report.departmentId);
+        const otherMain = findMainReport(
+          deptReports.filter((r) => r.id !== report.id),
+          report.month, report.year, (report as any).reportType || 'regular',
+        );
+        if (otherMain) {
+          return res.status(409).json({
+            message: `Another Main report (Receipt #${otherMain.receiptNo ?? otherMain.id}) already exists for this month. Change that one to Supplementary first.`
+          });
+        }
+      }
+
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      await db.execute(sql`UPDATE attendance_reports SET report_kind = ${reportKind} WHERE id = ${reportId}`);
+
+      const admin = (req as any).adminUser;
+      console.log(`[ReportKind] Report ${reportId} (dept ${report.departmentId}, ${report.month}/${report.year}) set to '${reportKind}' by ${admin?.email || 'admin'}`);
+
+      res.json({ success: true, id: reportId, reportKind });
+    } catch (error) {
+      console.error("Error updating report kind:", error);
+      res.status(500).json({ message: "Failed to update report kind" });
     }
   });
 

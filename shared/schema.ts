@@ -89,6 +89,9 @@ export const attendanceReports = pgTable("attendance_reports", {
   cancelledAt: timestamp("cancelled_at"),
   // 'regular' = department's own staff, 'reporting' = reporting employees (Admin Non Teaching)
   reportType: text("report_type").notNull().default("regular"),
+  // 'main' | 'supplementary' — NULL for reports created before this field existed
+  // (their label is derived as before; see shared/reportKind.ts)
+  reportKind: text("report_kind"),
 });
 
 

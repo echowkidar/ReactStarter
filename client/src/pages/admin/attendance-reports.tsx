@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { getReportPrefix } from "@shared/reportKind";
 import { useLocation } from "wouter";
 
 import {
@@ -744,7 +745,13 @@ export default function AttendanceReports() {
       employeeDbId: number;
       exportedToOracleAt: string | null;
       reportingParentDept?: string; // set only for Reporting Employees entries
+      reportPrefix?: string; // 'Supplementary' | 'Revised' | ''
     }> = [];
+
+    // Main / Supplementary label per report (stored kind; old reports derived as before)
+    const prefixByReport = new Map<number, string>(
+      reports.map(r => [r.id, getReportPrefix(r as any, reports as any).trim()])
+    );
 
     reports.forEach(report => {
       if (report.entries && report.department) {
@@ -790,6 +797,7 @@ export default function AttendanceReports() {
                   verified: entry.verified || false,
                   exportedToOracleAt: entry.exported_to_oracle_at || entry.exportedToOracleAt || null,
                   reportingParentDept: (entry as any).reportingInfo?.parentDepartmentName || undefined,
+                  reportPrefix: prefixByReport.get(report.id) || '',
                 });
               });
             } catch (error) {
@@ -2373,6 +2381,13 @@ export default function AttendanceReports() {
                             <TableCell>{entry.employeeId}</TableCell>
                             <TableCell>
                               {entry.employeeName}
+                              {(entry as any).reportPrefix === 'Supplementary' && (
+                                <div className="mt-0.5">
+                                  <span className="inline-block rounded border border-purple-200 bg-purple-50 px-1 py-0.5 text-[10px] text-purple-800">
+                                    Supplementary Report
+                                  </span>
+                                </div>
+                              )}
                               {(entry as any).reportingParentDept && (
                                 <div className="mt-0.5">
                                   <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] text-amber-800">

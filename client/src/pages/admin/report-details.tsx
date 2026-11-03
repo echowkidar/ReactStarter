@@ -1,4 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { getReportPrefix } from "@shared/reportKind";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { useRoute, useLocation } from "wouter";
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +44,34 @@ export default function ReportDetails() {
   const { data: report, isLoading: isLoadingReport } = useQuery<ExtendedAttendanceReport>({
     queryKey: [`/api/admin/attendance/${reportId}`],
     enabled: !!reportId,
+  });
+
+  // All reports of this department → needed to label old reports (no stored kind)
+  const { data: deptReports } = useQuery<AttendanceReport[]>({
+    queryKey: [`/api/departments/${report?.departmentId}/attendance`],
+    enabled: !!report?.departmentId,
+  });
+  const reportPrefix = report ? getReportPrefix(report as any, (deptReports || []) as any) : '';
+
+  const { toast } = useToast();
+  const adminInfo = (() => { try { return JSON.parse(localStorage.getItem("admin") || "{}"); } catch { return {}; } })();
+  const canChangeKind = adminInfo?.userCode !== 'VEW';
+
+  // Admin correction: Main ↔ Supplementary
+  const changeKind = useMutation({
+    mutationFn: async (reportKind: 'main' | 'supplementary') => {
+      const res = await apiRequest("PATCH", `/api/admin/attendance/${reportId}/report-kind`, { reportKind });
+      return res.json();
+    },
+    onSuccess: (_data, reportKind) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/attendance/${reportId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/departments/${report?.departmentId}/attendance`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+      toast({ title: "Report updated", description: `Report marked as ${reportKind === 'main' ? 'Main' : 'Supplementary'} Attendance Report.` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Could not change report type", description: error?.message || "Failed", variant: "destructive" });
+    },
   });
 
   if (isLoadingReport) {
@@ -142,7 +173,7 @@ export default function ReportDetails() {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Attendance Report${reportTypeSuffix(report)}</title>
+              <title>${reportPrefix}Attendance Report${reportTypeSuffix(report)}</title>
               <style>${styles}</style>
               <style media="all">
                 @page { 
@@ -333,7 +364,7 @@ export default function ReportDetails() {
     const wb = XLSX.utils.book_new();
 
     const headerData = [
-      [`Attendance Report${reportTypeSuffix(report)}`],
+      [`${reportPrefix}Attendance Report${reportTypeSuffix(report)}`],
       [''],
       ['Department:', report.department?.name],
       ['Month/Year:', formatPeriod(report.year, report.month)],
@@ -386,7 +417,7 @@ export default function ReportDetails() {
     ];
     ws['!cols'] = colWidths;
 
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
+    XLSX.utils.book_append_sheet(wb, ws, `${reportPrefix}Attendance Report`.trim());
 
     const fileName = `attendance_report_${report.department?.name}_${report.year}_${report.month}.xlsx`;
     XLSX.writeFile(wb, fileName);
@@ -397,8 +428,19 @@ export default function ReportDetails() {
       <AdminHeader />
       <div className="p-6 flex-1">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Attendance Report{reportTypeSuffix(report)} Details</h1>
+          <h1 className="text-2xl font-bold">{reportPrefix}Attendance Report{reportTypeSuffix(report)} Details</h1>
           <div className="space-x-2">
+            {canChangeKind && (
+              <Button
+                variant="outline"
+                className="print:hidden border-purple-300 text-purple-800 hover:bg-purple-50"
+                disabled={changeKind.isPending}
+                title="Correct whether this is the Main or a Supplementary attendance report of the month"
+                onClick={() => changeKind.mutate(reportPrefix === 'Supplementary ' ? 'main' : 'supplementary')}
+              >
+                {reportPrefix === 'Supplementary ' ? 'Mark as Main Report' : 'Mark as Supplementary'}
+              </Button>
+            )}
             <Button variant="outline" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
               Download Excel
@@ -534,7 +576,7 @@ export default function ReportDetails() {
         <div className="print-content space-y-6">
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
-              <CardTitle>{report.status === 'draft' ? `Draft Attendance Report${reportTypeSuffix(report)}` : `Attendance Report${reportTypeSuffix(report)}`}</CardTitle>
+              <CardTitle>{report.status === 'draft' ? `Draft ${reportPrefix}Attendance Report${reportTypeSuffix(report)}` : `${reportPrefix}Attendance Report${reportTypeSuffix(report)}`}</CardTitle>
               <div className="border border-black rounded px-4 py-2.5 flex items-center w-full sm:w-[340px] h-[64px] bg-white mr-2 shrink-0 print:w-[340px]">
                 <span className="text-sm font-bold text-black flex-1">D. No.</span>
                 <span className="text-sm font-bold text-black flex-1">D. Date</span>
