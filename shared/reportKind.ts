@@ -15,6 +15,7 @@ export type ReportKind = 'main' | 'supplementary';
 
 type ReportLike = {
   id: number;
+  departmentId?: number | null;
   month: number;
   year: number;
   status: string;
@@ -24,7 +25,10 @@ type ReportLike = {
 
 const typeOf = (r: ReportLike) => r.reportType || 'regular';
 
+// Same department (when known) + month + year + report type.
+// The department check matters where reports of ALL departments are in one list.
 const sameGroup = (a: ReportLike, b: ReportLike) =>
+  (a.departmentId == null || b.departmentId == null || a.departmentId === b.departmentId) &&
   a.month === b.month && a.year === b.year && typeOf(a) === typeOf(b);
 
 /** Normalise any incoming value to a valid kind ('main' unless explicitly 'supplementary'). */
