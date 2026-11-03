@@ -1818,14 +1818,14 @@ export default function AttendanceReports() {
       <div className="p-6 flex-1">
         <Card className="w-full">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                 <h1 className="text-2xl font-bold">Attendance Reports</h1>
                 <Badge variant="outline" className="text-lg">
                   Received
                 </Badge>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   onClick={downloadExcel}

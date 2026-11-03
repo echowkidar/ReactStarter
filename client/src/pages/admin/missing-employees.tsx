@@ -201,8 +201,8 @@ export default function MissingEmployees() {
                 <Card className="w-full">
                     <CardContent className="p-6">
                         {/* Header */}
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                                 <h1 className="text-2xl font-bold">Missing Employees</h1>
                                 <Badge variant="outline" className="text-lg bg-orange-50 text-orange-700 border-orange-200">
                                     {monthLabel}
@@ -211,7 +211,7 @@ export default function MissingEmployees() {
                                     {filteredEmployees.length} of {employees.length} employees
                                 </Badge>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <Button variant="outline" size="sm" onClick={handleDownload} className="flex items-center gap-2">
                                     <Download className="h-4 w-4" /> Download CSV
                                 </Button>

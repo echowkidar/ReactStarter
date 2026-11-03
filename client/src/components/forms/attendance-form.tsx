@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { LIVE_CHANGE_EVENT } from "@/hooks/useDepartmentLiveUpdates";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -285,6 +286,15 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
   const [reportedEmployeeIds, setReportedEmployeeIds] = useState<Set<number>>(new Set());
+  // Live updates (Admin changes while this popup is open)
+  const [liveTick, setLiveTick] = useState(0);
+  const [liveRemovedNames, setLiveRemovedNames] = useState<string[]>([]);
+  const [liveAddedNames, setLiveAddedNames] = useState<string[]>([]);
+  useEffect(() => {
+    const onLive = () => setLiveTick((t) => t + 1);
+    window.addEventListener(LIVE_CHANGE_EVENT, onLive);
+    return () => window.removeEventListener(LIVE_CHANGE_EVENT, onLive);
+  }, []);
 
   // Watch month/year to update reported employees list
   const selectedMonth = parseInt(initialData?.month || String(new Date().getMonth() + 1));
@@ -352,7 +362,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     };
 
     fetchReportedEmployees();
-  }, [isSupplementary, departmentId, watchMonth, watchYear, isReportingMode]);
+  }, [isSupplementary, departmentId, watchMonth, watchYear, isReportingMode, liveTick]);
 
   const { data: rawEmployees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [isReportingMode
@@ -791,8 +801,12 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   }, [includedEmployees, form]);
 
   // Update the useEffect for initialData
+  // Applied ONCE per initialData: a later change of the employee list (e.g. a live
+  // update while the popup is open) must not wipe what the user has edited.
+  const appliedInitialDataRef = React.useRef<any>(null);
   useEffect(() => {
-    if (initialData?.entries && employees.length > 0) {
+    if (initialData?.entries && employees.length > 0 && appliedInitialDataRef.current !== initialData) {
+      appliedInitialDataRef.current = initialData;
       // Set included employees
       const employeeIds = new Set(initialData.entries.map(entry => entry.employeeId));
       setIncludedEmployees(employeeIds);
@@ -817,6 +831,46 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       form.reset(formattedData);
     }
   }, [initialData, form, employees.length]);
+
+  // ── Live employee list while creating a NEW report ─────────────────────────
+  // If Admin transfers/disables an employee (or the employee's attendance is sent
+  // in another report) while this popup is open, the employee disappears from the
+  // list — and must also leave the entries, otherwise he would still be saved in
+  // this report. Newly added employees simply appear in the list (unticked).
+  // Editing an existing report is not touched (its old entries stay as they are).
+  const isCreatingNewReport = !reportId && !initialData;
+  const previousEmployeesRef = React.useRef<Map<number, string> | null>(null);
+  useEffect(() => {
+    if (loadingEmployees) return;
+    const current = new Map<number, string>(employees.map((e: any) => [Number(e.id), String(e.name || `Employee #${e.id}`)]));
+    const previous = previousEmployeesRef.current;
+    previousEmployeesRef.current = current;
+    if (!previous || !isCreatingNewReport) return;
+
+    const currentEntries = form.getValues("entries") || [];
+    const removedEntries = currentEntries.filter((en: any) => en.employeeId && !current.has(Number(en.employeeId)));
+    if (removedEntries.length > 0) {
+      const removedIds = new Set(removedEntries.map((en: any) => Number(en.employeeId)));
+      form.setValue(
+        "entries",
+        currentEntries.filter((en: any) => !removedIds.has(Number(en.employeeId))),
+        { shouldDirty: true },
+      );
+      setIncludedEmployees((prev) => {
+        const next = new Set(prev);
+        removedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      const names = removedEntries.map((en: any) => previous.get(Number(en.employeeId)) || `Employee #${en.employeeId}`);
+      setLiveRemovedNames((prev) => Array.from(new Set([...prev, ...names])));
+    }
+
+    const added: string[] = [];
+    current.forEach((name, id) => { if (!previous.has(id)) added.push(name); });
+    if (added.length > 0 && added.length < current.size) {
+      setLiveAddedNames((prev) => Array.from(new Set([...prev, ...added])));
+    }
+  }, [employees, loadingEmployees]);
 
   // Designations to exclude from "All" selection (Daily Wage employees with breaks)
   const excludedDesignations = [
@@ -960,6 +1014,23 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
         handleFormSubmit(data);
       })} className="space-y-6">
+        {/* Marks this popup as safe for live updates (see useDepartmentLiveUpdates) */}
+        <span data-live-safe hidden />
+        {liveRemovedNames.length > 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="font-semibold">Removed from this report</div>
+            <div className="mt-1">
+              {liveRemovedNames.join(", ")} — transferred or disabled by Admin (or attendance already sent in another report).
+              {" "}Their entries have been removed. Please check the list before saving.
+            </div>
+          </div>
+        )}
+        {liveAddedNames.length > 0 && (
+          <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">
+            <div className="font-semibold">New in your employee list</div>
+            <div className="mt-1">{liveAddedNames.join(", ")} — tick to include in this report.</div>
+          </div>
+        )}
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}

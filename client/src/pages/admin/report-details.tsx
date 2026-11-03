@@ -427,9 +427,9 @@ export default function ReportDetails() {
     <div className="min-h-screen flex flex-col">
       <AdminHeader />
       <div className="p-6 flex-1">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <h1 className="text-2xl font-bold">{reportPrefix}Attendance Report{reportTypeSuffix(report)} Details</h1>
-          <div className="space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             {canChangeKind && (
               <Button
                 variant="outline"

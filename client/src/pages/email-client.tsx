@@ -358,13 +358,13 @@ export default function EmailClient() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center">
-      <div className="w-full max-w-6xl flex justify-between items-center mb-6">
+      <div className="w-full max-w-6xl flex flex-wrap justify-between items-center gap-3 mb-6">
         <Button variant="ghost" onClick={() => setLocation(returnPath)}>
           <ArrowLeft className="h-5 w-5 mr-2" />
           Back to Dashboard
         </Button>
 
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-2 sm:gap-4">
           <Button variant="outline" onClick={() => setLocation(isAdmin ? "/admin/email" : "/dashboard/email")}>
             <Settings className="h-4 w-4 mr-2" />
             Email Settings

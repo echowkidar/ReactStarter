@@ -7,6 +7,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrations";
 import { setupCronJobs } from "./cronJobs";
+import { registerLiveUpdateStream, liveChangeMiddleware, LIVE_PATH_PREFIX } from "./liveUpdates";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -16,7 +17,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 // gzip API/JSON/HTML/JS responses (big lists were ~10x larger over the tunnel)
-app.use(compression({ threshold: 1024 }));
+// (never for the live-update stream — compression would buffer the events)
+app.use(compression({
+  threshold: 1024,
+  filter: (req: Request, res: Response) => !req.path.startsWith(LIVE_PATH_PREFIX) && compression.filter(req, res),
+}));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -52,6 +57,10 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Live updates for department pages (SSE stream + change signals)
+registerLiveUpdateStream(app);
+app.use(liveChangeMiddleware);
 
 // Initialize app function
 export async function initApp() {

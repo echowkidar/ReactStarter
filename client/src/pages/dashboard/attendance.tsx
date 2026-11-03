@@ -1751,6 +1751,13 @@ export default function Attendance() {
 
   const department = getCurrentDepartment();
   const [isCreatingReport, setIsCreatingReport] = useState(false);
+  // Main/Supplementary situation captured when the Create popup opens. A live
+  // update while the popup is open must not silently switch the report kind;
+  // the server re-checks everything on save anyway.
+  const [kindContext, setKindContext] = useState<{ mainExists: boolean; suppAllowed: boolean } | null>(null);
+  React.useEffect(() => {
+    if (!isCreatingReport) setKindContext(null);
+  }, [isCreatingReport]);
   // 'regular' = own staff report, 'reporting' = Reporting Employees report (Admin Non Teaching)
   const [activeReportType, setActiveReportType] = useState<'regular' | 'reporting'>('regular');
   // Main vs Supplementary — chosen in the Create dialog
@@ -1827,6 +1834,25 @@ export default function Attendance() {
 
   const createReport = useMutation({
     mutationFn: async (data: any) => {
+      // Last check just before saving: every selected employee must still belong to
+      // this department (Admin may have transferred/disabled someone meanwhile).
+      if (activeReportType === 'regular' && department?.id) {
+        const empKey = [`/api/departments/${department.id}/employees`];
+        const freshRes = await fetch(`/api/departments/${department.id}/employees`, { cache: "no-store" });
+        if (freshRes.ok) {
+          const fresh: any[] = await freshRes.json();
+          const activeIds = new Set(fresh.filter((e: any) => e.isActive === 'active').map((e: any) => Number(e.id)));
+          const missing = (data.entries || []).filter((en: any) => en.employeeId && !activeIds.has(Number(en.employeeId)));
+          if (missing.length > 0) {
+            const cached = (queryClient.getQueryData(empKey) as any[]) || [];
+            const names = missing.map((en: any) => cached.find((e: any) => Number(e.id) === Number(en.employeeId))?.name || `Employee #${en.employeeId}`);
+            // Refresh the list → the form removes these employees and shows a notice
+            queryClient.invalidateQueries({ queryKey: empKey });
+            throw new Error(`Not saved: ${names.join(", ")} ${missing.length > 1 ? "are" : "is"} no longer in your department (transferred or disabled by Admin). They have been removed from the list — please check and save again.`);
+          }
+        }
+      }
+
       const formattedData = {
         departmentId: department?.id,
         month: parseInt(data.month),
@@ -1858,6 +1884,8 @@ export default function Attendance() {
         await apiRequest("POST", `/api/attendance/${report.id}/entries`, {
           employeeId: entry.employeeId,
           periods,
+          // New report: server re-checks that the employee is still in this department
+          strictDepartmentCheck: true,
         });
       }
       return report;
@@ -2350,10 +2378,14 @@ export default function Attendance() {
   const existingDraftReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType !== 'reporting');
   const existingDraftReportingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType === 'reporting');
   // Main report exists for the report type currently being created → only Supplementary possible
-  const mainExistsForActiveType = !!(activeReportType === 'reporting' ? existingReportingReport : existingReport);
+  const mainExistsForActiveType = kindContext
+    ? kindContext.mainExists
+    : !!(activeReportType === 'reporting' ? existingReportingReport : existingReport);
   // Supplementary is offered only while Admin has enabled "Supp. Report" for this department.
   // Otherwise the report is always a Main report (as it was before).
-  const supplementaryAllowed = attendanceStatus?.allowSupplementaryReport === true;
+  const supplementaryAllowed = kindContext
+    ? kindContext.suppAllowed
+    : attendanceStatus?.allowSupplementaryReport === true;
   const effectiveReportKind: ReportKind = mainExistsForActiveType
     ? 'supplementary'
     : (supplementaryAllowed ? reportKind : 'main');
@@ -2473,6 +2505,7 @@ export default function Attendance() {
                       setActiveReportType('regular');
                       // Main report already there → only Supplementary; otherwise default to Main
                       setReportKind(existingReport ? 'supplementary' : 'main');
+                      setKindContext({ mainExists: !!existingReport, suppAllowed: attendanceStatus?.allowSupplementaryReport === true });
                     }
                   }}
                   title={
@@ -2506,6 +2539,7 @@ export default function Attendance() {
                   onClick={() => {
                     setActiveReportType('reporting');
                     setReportKind(existingReportingReport ? 'supplementary' : 'main');
+                    setKindContext({ mainExists: !!existingReportingReport, suppAllowed: attendanceStatus?.allowSupplementaryReport === true });
                     setEditingReportId(null);
                     setEditingReportData(null);
                     setIsCreatingReport(true);

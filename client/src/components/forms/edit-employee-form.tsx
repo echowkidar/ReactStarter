@@ -32,9 +32,52 @@ interface EditEmployeeFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /** Department page: merge changes made by Admin while this popup is open */
+  liveUpdates?: boolean;
 }
 
-export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditEmployeeFormProps) {
+// Fields that can change on the server while the popup is open (live merge)
+const LIVE_FIELDS: Array<{ key: string; label: string }> = [
+  { key: "name", label: "Name" },
+  { key: "designation", label: "Designation" },
+  { key: "employmentStatus", label: "Employment Status" },
+  { key: "payLevel", label: "Pay Level" },
+  { key: "termExpiry", label: "Term Expiry" },
+  { key: "panNumber", label: "PAN Number" },
+  { key: "bankAccount", label: "Bank Account" },
+  { key: "aadharCard", label: "Aadhar Card" },
+  { key: "officeMemoNo", label: "Office Memo No." },
+  { key: "joiningDate", label: "Joining Date" },
+  { key: "joiningShift", label: "Joining Shift" },
+  { key: "salaryRegisterNo", label: "Salary Register No." },
+  { key: "salary_asstt", label: "Salary Assistant" },
+  { key: "isActive", label: "Status" },
+  { key: "remarks", label: "Remarks" },
+];
+
+/** Same normalisation as the form's defaultValues, so values compare correctly. */
+export function liveFieldValues(emp: any): Record<string, string> {
+  const status = String(emp?.isActive || "active").toLowerCase();
+  return {
+    name: String(emp?.name ?? ""),
+    designation: String(emp?.designation ?? ""),
+    employmentStatus: String(emp?.employmentStatus ?? ""),
+    payLevel: String(emp?.payLevel || "L-0"),
+    termExpiry: String(emp?.termExpiry || ""),
+    panNumber: String(emp?.panNumber || ""),
+    bankAccount: String(emp?.bankAccount || ""),
+    aadharCard: String(emp?.aadharCard || ""),
+    officeMemoNo: String(emp?.officeMemoNo || ""),
+    joiningDate: String(emp?.joiningDate || ""),
+    joiningShift: String(emp?.joiningShift || "FN"),
+    salaryRegisterNo: String(emp?.salaryRegisterNo || ""),
+    salary_asstt: String(emp?.salary_asstt || ""),
+    isActive: status === "disabled" ? "inactive" : status,
+    remarks: String(emp?.remarks || ""),
+  };
+}
+
+export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpdates = false }: EditEmployeeFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
@@ -416,6 +459,98 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
 
   const { register, handleSubmit, watch, formState: { errors } } = form;
 
+  // ── Live merge (department page) ───────────────────────────────────────────
+  // While this popup is open, Admin may change the same employee. The department's
+  // own employee list is kept up to date by the live-update hook; here we compare
+  // the latest server copy with the values the popup was opened with:
+  //  • field not touched by the user → takes Admin's new value automatically
+  //  • field changed by both         → user's value stays, Admin's value is shown
+  //  • employee transferred/removed  → saving is blocked
+  const liveDepartmentId = liveUpdates ? (department?.id ?? null) : null;
+  const { data: liveEmployeeList, isFetched: liveListFetched } = useQuery<Employee[]>({
+    queryKey: [`/api/departments/${liveDepartmentId}/employees`],
+    enabled: !!liveDepartmentId && isOpen,
+  });
+  const liveBaseRef = useRef<Record<string, string>>(liveFieldValues(employee));
+  const liveBaseFilesRef = useRef<Record<string, string>>({
+    panCardUrl: employee.panCardUrl || "",
+    bankProofUrl: employee.bankProofUrl || "",
+    aadharCardUrl: employee.aadharCardUrl || "",
+    officeMemoUrl: employee.officeMemoUrl || "",
+    joiningReportUrl: employee.joiningReportUrl || "",
+    termExtensionUrl: employee.termExtensionUrl || "",
+  });
+  const [liveUpdatedLabels, setLiveUpdatedLabels] = useState<string[]>([]);
+  const [liveConflicts, setLiveConflicts] = useState<Record<string, string>>({});
+  const [liveGone, setLiveGone] = useState<null | "transferred" | "removed">(null);
+
+  const setFieldValue = (key: string, value: string) => {
+    form.setValue(key as any, value as any, { shouldDirty: false });
+    if (key === "designation") setSelectedDesignation(value);
+    if (key === "salaryRegisterNo") setSelectedSalaryRegisterNo(value);
+    if (key === "salary_asstt") setSelectedSalaryAsstt(value);
+  };
+
+  const liveServerEmployee = liveEmployeeList?.find((e) => e.id === employee.id);
+  const liveServerSignature = liveServerEmployee
+    ? JSON.stringify([liveFieldValues(liveServerEmployee), liveServerEmployee.departmentId,
+        liveServerEmployee.panCardUrl, liveServerEmployee.bankProofUrl, liveServerEmployee.aadharCardUrl,
+        liveServerEmployee.officeMemoUrl, liveServerEmployee.joiningReportUrl, liveServerEmployee.termExtensionUrl])
+    : (liveListFetched ? "missing" : "");
+
+  useEffect(() => {
+    if (!liveDepartmentId || !isOpen || !liveListFetched || !Array.isArray(liveEmployeeList)) return;
+    const server = liveServerEmployee;
+    if (!server) { setLiveGone("removed"); return; }
+    if (server.departmentId !== liveDepartmentId) { setLiveGone("transferred"); return; }
+    setLiveGone(null);
+
+    const serverValues = liveFieldValues(server);
+    const base = liveBaseRef.current;
+    const updated: string[] = [];
+    const conflicts: Record<string, string> = {};
+    for (const { key, label } of LIVE_FIELDS) {
+      if (serverValues[key] === base[key]) continue; // Admin did not change this field
+      const current = String((form.getValues() as any)[key] ?? "");
+      if (current === base[key] || current === serverValues[key]) {
+        setFieldValue(key, serverValues[key]);
+        updated.push(label);
+      } else {
+        conflicts[key] = serverValues[key];
+      }
+      base[key] = serverValues[key];
+    }
+
+    // Documents: take Admin's new file only if the user has not changed that document
+    const baseFiles = liveBaseFilesRef.current;
+    const fileUpdates: Record<string, string> = {};
+    for (const k of Object.keys(baseFiles)) {
+      const serverUrl = String((server as any)[k] || "");
+      if (serverUrl === baseFiles[k]) continue;
+      if ((fileUrls as any)[k] === baseFiles[k]) fileUpdates[k] = serverUrl;
+      baseFiles[k] = serverUrl;
+    }
+    if (Object.keys(fileUpdates).length > 0) {
+      setFileUrls((prev) => ({ ...prev, ...fileUpdates }));
+      updated.push("Documents");
+    }
+
+    if (updated.length > 0) setLiveUpdatedLabels((prev) => Array.from(new Set([...prev, ...updated])));
+    if (Object.keys(conflicts).length > 0) setLiveConflicts((prev) => ({ ...prev, ...conflicts }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveServerSignature, liveDepartmentId, isOpen, liveListFetched]);
+
+  const liveLabelOf = (key: string) => LIVE_FIELDS.find((f) => f.key === key)?.label || key;
+  const applyAdminValue = (key: string) => {
+    const value = liveConflicts[key];
+    if (value === undefined) return;
+    setFieldValue(key, value);
+    setLiveConflicts((prev) => { const next = { ...prev }; delete next[key]; return next; });
+  };
+  const keepMyValue = (key: string) => {
+    setLiveConflicts((prev) => { const next = { ...prev }; delete next[key]; return next; });
+  };
+
   // Watch employment status to conditionally show term expiry field
   const employmentStatus = watch("employmentStatus");
   const showTermExpiry = employmentStatus === "Probation" || employmentStatus === "Temporary";
@@ -457,6 +592,16 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
   }, [errors]);
 
   const onSubmit = async (data: any) => {
+    if (liveGone) {
+      toast({
+        variant: "destructive",
+        title: "Cannot save",
+        description: liveGone === "transferred"
+          ? "This employee has been transferred to another department by Admin."
+          : "This employee is no longer in your department (transferred or removed by Admin).",
+      });
+      return;
+    }
     try {
       setIsSubmitting(true);
 
@@ -749,6 +894,39 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold">Edit Employee</DialogTitle>
           </DialogHeader>
+          {/* Department page: this popup handles live updates itself (see liveUpdates) */}
+          {liveUpdates && <span data-live-safe hidden />}
+
+          {liveGone && (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+              {liveGone === "transferred"
+                ? "This employee has just been transferred to another department by Admin. Your changes cannot be saved — please close this window."
+                : "This employee is no longer in your department (transferred or removed by Admin). Your changes cannot be saved — please close this window."}
+            </div>
+          )}
+          {!liveGone && liveUpdatedLabels.length > 0 && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Admin updated this employee while you were editing. Updated: <span className="font-medium">{liveUpdatedLabels.join(", ")}</span>.
+            </div>
+          )}
+          {!liveGone && Object.keys(liveConflicts).length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+              <div className="font-semibold">Admin also changed fields you have edited</div>
+              {Object.entries(liveConflicts).map(([key, adminValue]) => (
+                <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between border-t border-amber-200 pt-2">
+                  <div>
+                    <span className="font-medium">{liveLabelOf(key)}:</span>{" "}
+                    Admin's value <span className="font-mono">"{adminValue || "(empty)"}"</span>,
+                    {" "}yours <span className="font-mono">"{String((form.getValues() as any)[key] ?? "") || "(empty)"}"</span>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button type="button" size="sm" variant="outline" onClick={() => applyAdminValue(key)}>Use Admin's</Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => keepMyValue(key)}>Keep mine</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" encType="multipart/form-data">
             {/* Basic Information */}
@@ -1190,7 +1368,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess }: EditE
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !!liveGone}
                 className="w-32 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2"
               >
                 {isSubmitting ? (

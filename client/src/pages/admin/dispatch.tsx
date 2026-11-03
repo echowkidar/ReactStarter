@@ -316,7 +316,7 @@ export default function AdminDispatch() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 max-w-full overflow-x-auto justify-start">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" /> Overview
             </TabsTrigger>

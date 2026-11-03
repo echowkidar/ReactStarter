@@ -1099,8 +1099,8 @@ export default function AdminDashboard() {
     <div className="min-h-screen flex flex-col">
       <AdminHeader />
       <div className="p-6 flex-1">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <h1 className="text-2xl font-bold">Attendance Reports</h1>
             <Badge variant="outline" className="text-lg">
               <FileCheck className="h-4 w-4 mr-2" />
@@ -1852,7 +1852,7 @@ export default function AdminDashboard() {
         {/* Attendance Control Panel - Super Admin Only */}
         {isSuperAdmin && (
           <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="text-xl">🎛️</span>
                 <div>
@@ -1869,7 +1869,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <Button
                   variant="default"
                   className="bg-green-600 hover:bg-green-700 text-white"
@@ -1902,9 +1902,9 @@ export default function AdminDashboard() {
 
 
 
-        <div className="flex gap-4 mb-4">
+        <div className="flex flex-wrap gap-3 mb-4">
 
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by department, receipt no. or transaction ID..."
@@ -1923,13 +1923,13 @@ export default function AdminDashboard() {
               setMonthFilter(values);
             }}
             placeholder="Filter by month (All Months)"
-            className="w-[240px]"
+            className="w-full sm:w-[240px]"
           />
           <Select
             value={statusFilter}
             onValueChange={setStatusFilter}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -1950,7 +1950,7 @@ export default function AdminDashboard() {
               setDepartmentFilter(values);
             }}
             placeholder="Filter by department"
-            className="w-[240px]"
+            className="w-full sm:w-[240px]"
           />
         </div>
 

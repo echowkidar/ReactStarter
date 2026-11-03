@@ -672,8 +672,10 @@ export default function Employees() {
           {selectedEmployee && (
             <>
               <EditEmployeeForm
+                key={selectedEmployee.id}
                 employee={selectedEmployee}
                 isOpen={isEditDialogOpen}
+                liveUpdates
                 onClose={() => {
                   setIsEditDialogOpen(false);
                   setSelectedEmployee(null);

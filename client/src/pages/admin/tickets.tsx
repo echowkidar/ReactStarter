@@ -152,23 +152,23 @@ export default function AdminTickets() {
         <div className="min-h-screen flex flex-col">
             <AdminHeader />
             <div className="p-6 flex-1">
-                <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                         <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/dashboard")}>
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
                         <h1 className="text-2xl font-bold">Support Tickets</h1>
                         <Badge variant="outline">{tickets.length} Total</Badge>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                         <Input
                             placeholder="Search tickets..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-[250px]"
+                            className="w-full sm:w-[250px]"
                         />
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-[150px]">
+                            <SelectTrigger className="w-full sm:w-[150px]">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

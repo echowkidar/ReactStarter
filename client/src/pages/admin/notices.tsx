@@ -149,7 +149,7 @@ export default function AdminNotices() {
             <AdminHeader />
             <div className="p-6 flex-1">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <div className="flex items-center gap-4">
                         <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/dashboard")}>
                             <ArrowLeft className="h-5 w-5" />

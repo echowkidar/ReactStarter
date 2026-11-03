@@ -484,15 +484,15 @@ export default function AdminUsers() {
     <div className="min-h-screen flex flex-col">
       <AdminHeader />
       <div className="p-6 flex-1">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <h1 className="text-2xl font-bold">User Management</h1>
             <Badge variant="outline" className="text-lg">
               <Users className="h-4 w-4 mr-2" />
               Admin Section
             </Badge>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={() => setLocation("/admin/dashboard")}
@@ -517,8 +517,8 @@ export default function AdminUsers() {
               <CardTitle>User Management</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex justify-between items-center mb-4 gap-4">
-                <div className="relative flex-grow max-w-sm">
+              <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
+                <div className="relative flex-grow min-w-[200px] max-w-sm">
                   <SearchIcon className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search by name, email or department..."
@@ -527,7 +527,7 @@ export default function AdminUsers() {
                     className="pl-8"
                   />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={openDepartmentDialog} variant="outline" className="flex items-center gap-2">
                     <Building className="h-4 w-4" />
                     New Department

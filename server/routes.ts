@@ -3049,6 +3049,22 @@ export async function registerRoutes(app: Express) {
           return res.status(guard.status).json({ message: guard.message });
         }
         reportingEmployeeId = guard.reportingEmployeeId;
+
+        // New report being created by the department: the employee must still be an
+        // active employee of this department (Admin may have transferred/disabled him
+        // while the popup was open). Only sent by the "create report" flow, so edits
+        // of older reports and admin edits are not affected.
+        if ((req.body as any)?.strictDepartmentCheck === true
+            && ((report as any).reportType || 'regular') === 'regular'
+            && !reportingEmployeeId) {
+          const emp = await storage.getEmployee(Number(employeeId));
+          const isActive = String(emp?.isActive || 'active').toLowerCase() === 'active';
+          if (!emp || emp.departmentId !== report.departmentId || !isActive) {
+            return res.status(409).json({
+              message: `${emp?.name || `Employee ID ${employeeId}`} is no longer an active employee of this department (transferred or disabled). Please refresh the list and save again.`
+            });
+          }
+        }
       }
 
       const entryData = insertAttendanceEntrySchema.parse({

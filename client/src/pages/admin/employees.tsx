@@ -1108,9 +1108,9 @@ export default function AdminEmployees() {
       <AdminHeader />
       <div className="flex-1">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <CardTitle>Employee Management</CardTitle>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               {(() => {
                 const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
                 if (adminData.userCode === 'VEW' || adminData.email === 'qasim@amu.ac.in') return null;
