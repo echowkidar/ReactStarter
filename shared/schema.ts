@@ -110,6 +110,13 @@ export const attendanceEntries = pgTable("attendance_entries", {
   exportedToOracleAt: timestamp("exported_to_oracle_at"),
   // Set only for entries of reporting employees (FK -> reporting_employees.id), NULL for normal staff
   reportingEmployeeId: integer("reporting_employee_id"),
+  // Employee's designation / status / pay level AS IT WAS when this entry was made.
+  // Reports, prints, filters and exports use these (not the employee's current
+  // values), so a later promotion or change does not alter old reports.
+  // NULL only if it could not be determined (then the current value is used).
+  designationAtReport: text("designation_at_report"),
+  employmentStatusAtReport: text("employment_status_at_report"),
+  payLevelAtReport: text("pay_level_at_report"),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });

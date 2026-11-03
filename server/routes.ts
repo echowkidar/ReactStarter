@@ -106,6 +106,43 @@ async function supplementaryBlocksCancel(report: { departmentId: number; month: 
   }
 }
 
+// ── Designation as it was when an attendance entry was made ─────────────────
+// Entries keep the employee's designation / status / pay level of that time
+// (attendance_entries.*_at_report). Everything that shows, filters or exports
+// reports reads the employee through withEntrySnapshot(), so a later promotion
+// or change of the employee record does not alter old reports.
+type EntrySnapshot = { designation: string | null; employmentStatus: string | null; payLevel: string | null };
+
+export function withEntrySnapshot<E extends Record<string, any> | undefined>(entry: any, employee: E): E {
+  if (!employee || !entry) return employee;
+  const d = entry.designationAtReport, s = entry.employmentStatusAtReport, p = entry.payLevelAtReport;
+  if (d == null && s == null && p == null) return employee;
+  return {
+    ...employee,
+    ...(d != null ? { designation: d } : {}),
+    ...(s != null ? { employmentStatus: s } : {}),
+    ...(p != null ? { payLevel: p } : {}),
+    // the employee's present values, in case a screen wants to show both
+    currentDesignation: employee.designation,
+    currentEmploymentStatus: employee.employmentStatus,
+    currentPayLevel: employee.payLevel,
+  } as E;
+}
+
+// When Admin edits a SENT report, the edit page deletes all entries and saves them
+// again. Keep the original designation of each employee for that re-save, so that
+// editing an old report does not replace it with today's designation.
+const entrySnapshotStash = new Map<string, EntrySnapshot & { at: number }>();
+const STASH_TTL_MS = 30 * 60 * 1000;
+function stashKey(reportId: number, employeeId: number) { return `${reportId}:${employeeId}`; }
+function takeStashedSnapshot(reportId: number, employeeId: number): EntrySnapshot | null {
+  const key = stashKey(reportId, employeeId);
+  const v = entrySnapshotStash.get(key);
+  if (!v) return null;
+  entrySnapshotStash.delete(key);
+  return Date.now() - v.at <= STASH_TTL_MS ? v : null;
+}
+
 // Helper: parse DD-MM-YY -> Date
 export const parseDDMMYY = (dateStr: string): Date | null => {
   if (!dateStr || typeof dateStr !== 'string') return null;
@@ -3067,9 +3104,21 @@ export async function registerRoutes(app: Express) {
         }
       }
 
+      // Designation / status / pay level at the time of this entry
+      let snapshot: EntrySnapshot | null = takeStashedSnapshot(reportId, Number(employeeId));
+      if (!snapshot) {
+        try {
+          const emp = await storage.getEmployee(Number(employeeId));
+          if (emp) snapshot = { designation: emp.designation ?? null, employmentStatus: emp.employmentStatus ?? null, payLevel: emp.payLevel ?? null };
+        } catch { /* leave empty → current values are shown */ }
+      }
+
       const entryData = insertAttendanceEntrySchema.parse({
         reportId: reportId,
         employeeId: Number(employeeId),
+        designationAtReport: snapshot?.designation ?? null,
+        employmentStatusAtReport: snapshot?.employmentStatus ?? null,
+        payLevelAtReport: snapshot?.payLevel ?? null,
         departmentId: report?.departmentId || null,
         reportingEmployeeId,
         days: totalDays,
@@ -3092,6 +3141,24 @@ export async function registerRoutes(app: Express) {
       const reportId = Number(req.params.reportId);
       if (isNaN(reportId)) {
         return res.status(400).json({ message: "Invalid report ID" });
+      }
+
+      // Remember each employee's designation-at-report for the re-save (see entrySnapshotStash)
+      try {
+        const now = Date.now();
+        for (const [k, v] of entrySnapshotStash) if (now - v.at > STASH_TTL_MS) entrySnapshotStash.delete(k);
+        const old = await db.select().from(attendanceEntries).where(eq(attendanceEntries.reportId, reportId));
+        for (const e of old as any[]) {
+          if (e.designationAtReport == null && e.employmentStatusAtReport == null && e.payLevelAtReport == null) continue;
+          entrySnapshotStash.set(stashKey(reportId, Number(e.employeeId)), {
+            designation: e.designationAtReport ?? null,
+            employmentStatus: e.employmentStatusAtReport ?? null,
+            payLevel: e.payLevelAtReport ?? null,
+            at: now,
+          });
+        }
+      } catch (stashErr) {
+        console.error("[EntrySnapshot] could not keep designations before re-save:", stashErr);
       }
 
       await db.delete(attendanceEntries).where(eq(attendanceEntries.reportId, reportId));
@@ -3633,7 +3700,7 @@ export async function registerRoutes(app: Express) {
           const entries = entriesByReport.get(report.id) || [];
           entriesWithDetails = entries.map(entry => ({
             ...entry,
-            employee: employeeMap.get(entry.employeeId),
+            employee: withEntrySnapshot(entry, employeeMap.get(entry.employeeId)),
             ...((entry as any).reportingEmployeeId && reportingInfoById.has((entry as any).reportingEmployeeId)
               ? { reportingInfo: reportingInfoById.get((entry as any).reportingEmployeeId) } : {}),
           }));
@@ -3961,7 +4028,7 @@ export async function registerRoutes(app: Express) {
       // Add employee details to entries
       const entriesWithEmployeeDetails = entries.map(entry => ({
         ...entry,
-        employee: employeesMap.get(entry.employeeId),
+        employee: withEntrySnapshot(entry, employeesMap.get(entry.employeeId)),
         ...((entry as any).reportingEmployeeId && reportingInfoById.has((entry as any).reportingEmployeeId)
           ? { reportingInfo: reportingInfoById.get((entry as any).reportingEmployeeId) } : {}),
       }));

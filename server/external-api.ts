@@ -53,7 +53,8 @@ export function registerExternalRoutes(app: any) {
                 dealingAssistant: departmentNames.dealingAssistantCode, // d_ast
                 employeeId: employees.epid,
                 employeeName: employees.name,
-                designation: employees.designation,
+                // Designation as it was when the attendance was reported (falls back to current)
+                designation: sql<string>`COALESCE(${attendanceEntries.designationAtReport}, ${employees.designation})`,
                 salaryAssistant: employees.salary_asstt,
                 registerNo: employees.salaryRegisterNo,
                 days: attendanceEntries.days,

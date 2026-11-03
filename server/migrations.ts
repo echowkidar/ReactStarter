@@ -266,6 +266,47 @@ export async function runMigrations() {
       ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS reporting_employee_id INTEGER;
     `);
 
+    // ─── Designation as it was at the time of the attendance entry ───────────
+    // ADDITIVE: three new nullable columns (Drizzle selects them, so not swallowed).
+    await db.execute(sql`ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS designation_at_report TEXT;`);
+    await db.execute(sql`ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS employment_status_at_report TEXT;`);
+    await db.execute(sql`ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS pay_level_at_report TEXT;`);
+
+    // Fill existing entries once (only rows still NULL; new entries are filled when
+    // created). Value = what the employee had when the report was created: if the
+    // employee history shows a later change of that field, its "previous value" of
+    // the FIRST change after the report was created; otherwise the current value.
+    // Existing data is only read; nothing else is changed. A failure here is logged
+    // and the app keeps working (current values are then shown, as before).
+    try {
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_history_emp_field ON employee_history (employee_id, field, "timestamp")`);
+      const filled = await db.execute(sql`
+        UPDATE attendance_entries ae SET
+          designation_at_report = COALESCE((
+            SELECT NULLIF(h.previous_value, '') FROM employee_history h
+            WHERE h.employee_id = ae.employee_id AND h.action = 'update' AND h.field = 'designation'
+              AND h."timestamp" > ar.created_at
+            ORDER BY h."timestamp" ASC LIMIT 1), e.designation),
+          employment_status_at_report = COALESCE((
+            SELECT NULLIF(h.previous_value, '') FROM employee_history h
+            WHERE h.employee_id = ae.employee_id AND h.action = 'update' AND h.field = 'employmentStatus'
+              AND h."timestamp" > ar.created_at
+            ORDER BY h."timestamp" ASC LIMIT 1), e.employment_status),
+          pay_level_at_report = COALESCE((
+            SELECT NULLIF(h.previous_value, '') FROM employee_history h
+            WHERE h.employee_id = ae.employee_id AND h.action = 'update' AND h.field = 'payLevel'
+              AND h."timestamp" > ar.created_at
+            ORDER BY h."timestamp" ASC LIMIT 1), e.pay_level)
+        FROM attendance_reports ar, employees e
+        WHERE ar.id = ae.report_id AND e.id = ae.employee_id
+          AND ae.designation_at_report IS NULL
+      `);
+      const n = (filled as any)?.rowCount ?? 0;
+      if (n > 0) console.log(`[Migration] Filled designation-at-report for ${n} existing attendance entries`);
+    } catch (e) {
+      console.error('[Migration] designation-at-report backfill skipped:', e);
+    }
+
     // New table: only used by the new feature (guards fail open if it is missing)
     try {
       await db.execute(sql`
