@@ -1104,9 +1104,9 @@ export default function AdminEmployees() {
   }, [filteredDepartments, filteredDealingAssistants, filteredRegNos, departmentFilter, dealingAssistantFilter, regNoFilter]);
 
   return (
-    <div className="container mx-auto py-8 min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <AdminHeader />
-      <div className="flex-1">
+      <div className="flex-1 container mx-auto py-6">
         <Card>
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <CardTitle>Employee Management</CardTitle>
@@ -1465,18 +1465,7 @@ export default function AdminEmployees() {
                   </Dialog>
                 );
               })()}
-              <Button
-                variant="outline"
-                onClick={handleBackToDashboard}
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Dashboard
-              </Button>
-              <Button variant="outline" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
+              {/* Back to Dashboard / Logout: in the shared AdminHeader menu */}
               {isAdmin && (
                 <Button
                   variant="outline"

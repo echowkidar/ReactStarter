@@ -170,7 +170,7 @@ export default function Help() {
   return (
     <div className="flex min-h-screen">
       <Sidebar className="w-64 border-r" />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 p-6">
           <h1 className="text-3xl font-bold mb-4">User Guide</h1>

@@ -1107,34 +1107,12 @@ export default function AdminDashboard() {
               Salary Section
             </Badge>
           </div>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
             {/* Global Attendance Indicator */}
             <div
               className={`w-3 h-3 rounded-full mr-2 shadow-sm border border-white ring-1 ring-gray-100 ${isAllEnabled ? 'bg-green-500' : 'bg-red-500'}`}
               title={isAllEnabled ? "Attendance Enabled for All Departments" : "Attendance Restrictions Active"}
             />
-            {adminInfo.email !== "qasim@amu.ac.in" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLocation("/admin/attendance-reports")}
-                className="flex items-center gap-1"
-              >
-                <FileCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">Detailed View</span>
-              </Button>
-            )}
-            {!isSalaryAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLocation("/admin/users")}
-                className="flex items-center gap-1"
-              >
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">User Management</span>
-              </Button>
-            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1143,7 +1121,7 @@ export default function AdminDashboard() {
                   className="flex items-center gap-1"
                 >
                   <Download className="h-4 w-4" />
-                  <span className="hidden md:inline">Download Excel</span>
+                  <span>Download Excel</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -1193,130 +1171,8 @@ export default function AdminDashboard() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/admin/mailbox")}
-              className="relative flex items-center gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200"
-            >
-              <Mail className="h-4 w-4" />
-              <span className="hidden md:inline">Email</span>
-              {unreadEmailCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center border-2 border-white shadow-sm">
-                  {unreadEmailCount > 99 ? '99+' : unreadEmailCount}
-                </span>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/admin/documents")}
-              className="flex items-center gap-1"
-            >
-              <FileImage className="h-4 w-4" />
-              <span className="hidden md:inline">Documents</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/admin/lpc")}
-              className="flex items-center gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
-            >
-              <ScrollText className="h-4 w-4" />
-              <span className="hidden md:inline">LPC</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/admin/dispatch")}
-              className="flex items-center gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
-            >
-              <Send className="h-4 w-4" />
-              <span className="hidden md:inline">Dak</span>
-            </Button>
-
-            {(() => {
-              const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-              if (adminData.userCode === 'VEW' || adminData.email === "qasim@amu.ac.in") return null;
-              return (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLocation("/admin/tickets")}
-                  className="flex items-center gap-1"
-                >
-                  <Ticket className="h-4 w-4" />
-                  <span className="hidden md:inline">Tickets</span>
-                  {ticketStats.open > 0 && (
-                    <Badge className="ml-1 bg-red-500 text-white text-xs">{ticketStats.open}</Badge>
-                  )}
-                </Button>
-              );
-            })()}
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                if (adminData.userCode === 'VEW') {
-                  toast({
-                    variant: "destructive",
-                    title: "Access Denied",
-                    description: "You do not have permission to manage notices.",
-                  });
-                  return;
-                }
-                setLocation("/admin/notices");
-              }}
-              className={`flex items-center gap-1 ${JSON.parse(localStorage.getItem("admin") || "{}").userCode === 'VEW'
-                ? 'bg-blue-400 hover:bg-blue-400 cursor-not-allowed opacity-80'
-                : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-            >
-              <Megaphone className="h-4 w-4" />
-              <span className="hidden sm:inline">Notice</span>
-            </Button>
-            {canManageEmployees && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLocation("/admin/employees")}
-                className="flex items-center gap-1"
-              >
-                <Users className="h-4 w-4" />
-                <span className="hidden lg:inline">Employees</span>
-              </Button>
-            )}
-            {canManageEmployees && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLocation("/admin/department-contacts")}
-                className="flex items-center gap-1"
-              >
-                <Phone className="h-4 w-4" />
-                <span className="hidden lg:inline">Contacts</span>
-              </Button>
-            )}
-            {isSuperAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLocation("/admin/settings")}
-                className="flex items-center gap-1"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="flex items-center gap-1 text-red-600 border-red-200 hover:bg-red-50"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
+            {/* Navigation (Detailed View, Users, Email, Documents, LPC, Dak, Tickets, Notices,
+                Employees, Contacts, Settings, Logout) is in the shared AdminHeader menu */}
           </div>
         </div>
 

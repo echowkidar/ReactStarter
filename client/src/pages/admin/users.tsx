@@ -492,23 +492,7 @@ export default function AdminUsers() {
               Admin Section
             </Badge>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setLocation("/admin/dashboard")}
-              className="flex items-center gap-2"
-            >
-              Back to Dashboard
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              className="flex items-center gap-2"
-            >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Button>
-          </div>
+          {/* Back to Dashboard / Logout: in the shared AdminHeader menu */}
         </div>
 
         <div className="mb-6">

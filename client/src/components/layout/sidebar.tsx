@@ -122,6 +122,15 @@ const navigation = [
   { name: "Help", href: "/dashboard/help", icon: HelpCircle },
 ];
 
+// Which menu item a page belongs to (sub-pages keep their menu item highlighted)
+function isNavActive(location: string, href: string): boolean {
+  if (href === "/dashboard") return location === "/dashboard" || location === "/dashboard/";
+  if (location === href || location.startsWith(href + "/")) return true;
+  if (href === "/dashboard/attendance" && location.startsWith("/dashboard/reports/")) return true;
+  if (href === "/dashboard/mailbox" && location.startsWith("/dashboard/email")) return true;
+  return false;
+}
+
 interface Notice {
   id: number;
   subject: string;
@@ -141,6 +150,9 @@ export default function Sidebar({ className }: SidebarProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+
+  // Close the phone menu after moving to another page
+  useEffect(() => { setOpen(false); }, [location]);
 
   // Check and update department name if needed
   useEffect(() => {
@@ -213,7 +225,12 @@ export default function Sidebar({ className }: SidebarProps) {
   };
 
   const content = (
-    <div className={cn("flex h-full flex-col gap-1", className)}>
+    <div className={cn(
+      "flex h-full flex-col gap-1",
+      // Desktop: the menu stays in place while the page scrolls
+      !isMobile && "md:sticky md:top-0 md:h-screen md:overflow-y-auto",
+      className,
+    )}>
       <N8nChatStyles />
       <N8nChatScript />
       <NeuralNetworkOverlay />
@@ -231,8 +248,14 @@ export default function Sidebar({ className }: SidebarProps) {
           {navigation.map((item) => (
             <Link key={item.name} href={item.href}>
               <Button
-                variant={location === item.href ? "secondary" : "ghost"}
-                className="w-full justify-start h-8 text-sm relative"
+                variant="ghost"
+                aria-current={isNavActive(location, item.href) ? "page" : undefined}
+                className={cn(
+                  "w-full justify-start h-8 text-sm relative border-l-2",
+                  isNavActive(location, item.href)
+                    ? "border-blue-600 bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100 hover:text-blue-800"
+                    : "border-transparent",
+                )}
                 onClick={() => setOpen(false)}
               >
                 <item.icon className="mr-2 h-4 w-4" />
@@ -353,11 +376,22 @@ export default function Sidebar({ className }: SidebarProps) {
     return (
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="lg:hidden">
+          {/* Sits in the top-left corner of the (sticky) page header on phones */}
+          <Button
+            variant="outline"
+            className="fixed left-3 top-3 z-50 h-10 gap-2 bg-white px-3 shadow-sm print:hidden"
+            aria-label="Open menu"
+          >
             <Menu className="h-5 w-5" />
+            <span className="text-sm font-medium">Menu</span>
+            {(unreadEmailCount + unreadDispatchCount) > 0 && (
+              <span className="absolute -right-2 -top-2 min-w-[18px] rounded-full border-2 border-white bg-red-500 px-1 text-center text-[10px] font-bold leading-[16px] text-white">
+                {(unreadEmailCount + unreadDispatchCount) > 99 ? "99+" : unreadEmailCount + unreadDispatchCount}
+              </span>
+            )}
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="p-0">
+        <SheetContent side="left" className="bg-white p-0">
           {content}
         </SheetContent>
       </Sheet>

@@ -961,9 +961,9 @@ export default function Dispatch() {
   // ═══════════════════════════════════════════════════════════════════════
   return (
     <div className="flex h-screen">
-      <Sidebar className="hidden lg:flex lg:w-64 lg:flex-col border-r" />
+      <Sidebar className="hidden md:flex md:w-64 md:flex-col border-r" />
       <main className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="p-4 pt-16 md:p-6 max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
