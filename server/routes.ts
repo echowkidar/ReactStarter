@@ -2826,31 +2826,30 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      // Supplementary BEFORE the Main report → allowed without Admin permission
-      // (the Main report stays open). Supplementary AFTER the Main report →
-      // needs the one-time Admin permission, exactly as before.
-      if (reportKind === 'supplementary' && existingMainReport) {
-        // Check if supplementary report is allowed
-        if (department?.allowSupplementaryReport) {
-
-          // CRITICAL: Reset the flag to false immediately so they can't create another one
-          const { db } = await import("./db");
-          const { sql } = await import("drizzle-orm");
-          await db.execute(sql`
-             UPDATE departments 
-             SET allow_supplementary_report = false
-             WHERE id = ${departmentId}
-           `);
-
-          // If we are using MemStorage, update it there too
-          if (department) {
-            department.allowSupplementaryReport = false;
-          }
-
-        } else {
+      // A Supplementary report always needs the one-time Admin permission
+      // (Supp. Report switch in the admin dashboard); it is used up on creation.
+      // Without that permission only the Main report can be created, as before.
+      if (reportKind === 'supplementary') {
+        if (!department?.allowSupplementaryReport) {
           return res.status(400).json({
-            message: "The Main Attendance Report for this month already exists. Please ask Admin for Supplementary Report permission (or request cancellation/recall of the Main report)."
+            message: existingMainReport
+              ? "The Main Attendance Report for this month already exists. Please ask Admin for Supplementary report permission (or request cancellation/recall of the Main report)."
+              : "Supplementary Attendance Report needs Admin permission. Please ask Admin to enable Supplementary Report for your department."
           });
+        }
+
+        // CRITICAL: Reset the flag to false immediately so they can't create another one
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`
+           UPDATE departments 
+           SET allow_supplementary_report = false
+           WHERE id = ${departmentId}
+         `);
+
+        // If we are using MemStorage, update it there too
+        if (department) {
+          department.allowSupplementaryReport = false;
         }
       }
 
