@@ -521,6 +521,24 @@ export default function AttendanceReports() {
     },
   });
 
+  // Checkbox in "Export to Oracle" column: mark one row exported (today) / unmark it,
+  // e.g. a period already paid mid-month, so "Skip Already Exported" leaves it out.
+  const setRowExported = useMutation({
+    mutationFn: async ({ entryId, exported }: { entryId: number; exported: boolean }) => {
+      const res = await apiRequest('POST', `/api/admin/attendance/entry/${entryId}/exported`, { exported });
+      return res.json();
+    },
+    onSuccess: (_data, { exported }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance/export-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance/export-dates"] });
+      toast({ title: exported ? "Marked as exported" : "Export mark removed" });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update export status." });
+    },
+  });
+
   // ---- Bulk Export Date Reset/Update ----
   const [bulkExportDialogOpen, setBulkExportDialogOpen] = useState(false);
   const [selectedTargetDates, setSelectedTargetDates] = useState<Set<string | null>>(new Set());
@@ -1386,11 +1404,32 @@ export default function AttendanceReports() {
   // Also skips already-exported entries when skipExported checkbox is checked.
   // Exception: if the entry is already exported AND its period is not in the current month,
   // we convert it to a "MISSING" entry for export instead of skipping it completely.
+  // A converted MISSING row is sent only when NO other row of that employee (same
+  // month) goes into this export, and at most one per employee — otherwise an
+  // employee whose earlier period was paid mid-month would get both an NP (missing)
+  // row and an FP row for the current-month period.
   const entriesToExport = useMemo(() => {
+    const empKey = (e: { employeeId: string; monthNum: number; yearNum: number }) => `${e.employeeId}|${e.monthNum}|${e.yearNum}`;
+    const isRealRow = (e: { period: string }) => !e.period.startsWith("MISSING");
+
+    // Employees that still have a real (not yet exported) row in this export, or
+    // whose report-month row was already exported (paid for this month → no NP row)
+    const employeesWithRealRow = new Set<string>();
+    for (const e of processedEntries) {
+      if (!isRealRow(e)) continue;
+      if (!(skipExported && e.exportedToOracleAt)) employeesWithRealRow.add(empKey(e));
+      else if (isPeriodInMonth(e.period, e.monthNum, e.yearNum)) employeesWithRealRow.add(empKey(e));
+    }
+    const convertedMissingFor = new Set<string>();
+
     return processedEntries.map(entry => {
       if (skipExported && entry.exportedToOracleAt && !entry.period.startsWith("MISSING")) {
         const isInMonth = isPeriodInMonth(entry.period, entry.monthNum, entry.yearNum);
         if (!isInMonth) {
+          const key = empKey(entry);
+          // Other rows of this employee are exported, or a MISSING row already made → skip
+          if (employeesWithRealRow.has(key) || convertedMissingFor.has(key)) return null;
+          convertedMissingFor.add(key);
           return {
             ...entry,
             period: "MISSING",
@@ -1400,7 +1439,8 @@ export default function AttendanceReports() {
         }
       }
       return entry;
-    }).filter(entry => {
+    }).filter((entry): entry is NonNullable<typeof entry> => {
+      if (!entry) return false;
       if (entry.period === "MISSING") {
         const desig = (entry.designation || "").toUpperCase();
         if (desig.includes("DAILY WAGE") && desig !== "DAILY WAGER (FIXED)") {
@@ -2398,6 +2438,20 @@ export default function AttendanceReports() {
                               />
                             </TableCell>
                             <TableCell className="text-xs">
+                              <div className="flex items-center gap-1.5">
+                              {canExport && entry.entryId > 0 && !entry.period.startsWith("MISSING") && (
+                                <input
+                                  type="checkbox"
+                                  className="h-3.5 w-3.5 accent-green-600 cursor-pointer shrink-0"
+                                  checked={!!entry.exportedToOracleAt}
+                                  disabled={setRowExported.isPending}
+                                  onChange={(e) => setRowExported.mutate({ entryId: entry.entryId, exported: e.target.checked })}
+                                  title={entry.exportedToOracleAt
+                                    ? "Remove export mark"
+                                    : "Mark as already exported (today) — skipped by \"Skip Already Exported\". In old reports this marks all periods of this employee."}
+                                  aria-label="Mark as exported to Oracle"
+                                />
+                              )}
                               {entry.exportedToOracleAt ? (() => {
                                 // Strip trailing 'Z' before parsing — PostgreSQL TIMESTAMP WITHOUT TIME ZONE
                                 // is stored in server local time (IST) but pg driver adds 'Z' suffix,
@@ -2444,6 +2498,7 @@ export default function AttendanceReports() {
                               })() : (
                                 <span className="text-muted-foreground">-</span>
                               )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">

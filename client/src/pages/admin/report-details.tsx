@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getReportPrefix } from "@shared/reportKind";
+import { groupEntriesByEmployee } from "@shared/entryPeriods";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRoute, useLocation } from "wouter";
@@ -89,6 +90,9 @@ export default function ReportDetails() {
       </div>
     );
   }
+
+  // One line per employee: rows saved one-per-period are joined back together
+  const employeeEntries = groupEntriesByEmployee(report.entries);
 
   const formatPeriod = (year: number, month: number) => {
     return new Date(year, month - 1).toLocaleDateString("en-US", {
@@ -379,7 +383,7 @@ export default function ReportDetails() {
       ['Employee ID', 'Name', 'Designation', 'Period', 'Days', 'Remarks']
     ];
 
-    report.entries?.forEach(entry => {
+    employeeEntries.forEach(entry => {
       const periods = JSON.parse(entry.periods);
       periods.forEach((period: any, periodIdx: number) => {
         attendanceData.push([
@@ -643,7 +647,7 @@ export default function ReportDetails() {
                 </TableHeader>
                 {(() => {
                   const allRows: React.ReactNode[] = [];
-                  (report.entries || []).forEach((entry) => {
+                  employeeEntries.forEach((entry) => {
                     try {
                       const periods = typeof entry.periods === 'string'
                         ? JSON.parse(entry.periods)
@@ -725,7 +729,7 @@ export default function ReportDetails() {
                     return <TableBody>{signatureRow}</TableBody>;
                   }
 
-                  const entries = report.entries || [];
+                  const entries = employeeEntries;
                   const lastEntry = entries[entries.length - 1];
                   const lastEntryPeriods = typeof lastEntry?.periods === 'string'
                     ? JSON.parse(lastEntry.periods)

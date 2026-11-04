@@ -1,3 +1,4 @@
+import { groupEntriesByEmployee } from "@shared/entryPeriods";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -2324,7 +2325,7 @@ export default function Attendance() {
       const entries = await res.json();
 
       // Parse JSON periods if they are strings (schema says periods is text/JSON)
-      const parsedEntries = entries.map((entry: any) => ({
+      const parsedEntries = groupEntriesByEmployee(entries).map((entry: any) => ({
         ...entry,
         periods: typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods
       }));

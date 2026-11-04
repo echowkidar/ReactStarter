@@ -1,3 +1,4 @@
+import { groupEntriesByEmployee } from "@shared/entryPeriods";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { useEffect, useMemo } from "react";
@@ -42,7 +43,7 @@ export default function AdminEditAttendance() {
         if (!report || !report.entries) return undefined;
 
         try {
-            const formattedEntries = report.entries.map((entry: any) => ({
+            const formattedEntries = groupEntriesByEmployee(report.entries).map((entry: any) => ({
                 employeeId: entry.employeeId,
                 employee: entry.employee,
                 periods: typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods

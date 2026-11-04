@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getReportPrefix } from "@shared/reportKind";
+import { groupEntriesByEmployee } from "@shared/entryPeriods";
 import { useRoute, useLocation } from "wouter";
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,6 +102,9 @@ export default function ReportDetails() {
       </div>
     );
   }
+
+  // One line per employee: rows saved one-per-period are joined back together
+  const employeeEntries = groupEntriesByEmployee(report.entries);
 
   const formatPeriod = (year: number, month: number) => {
     return new Date(year, month - 1).toLocaleDateString("en-US", {
@@ -479,7 +483,7 @@ export default function ReportDetails() {
     ];
 
     let serialNumber = 1;
-    report.entries?.forEach(entry => {
+    employeeEntries.forEach(entry => {
       const periods = typeof entry.periods === 'string' ? JSON.parse(entry.periods) : entry.periods;
       periods.forEach((period: any, periodIdx: number) => {
         attendanceData.push([
@@ -811,7 +815,7 @@ export default function ReportDetails() {
             </TableHeader>
             {(() => {
               const allRows: React.ReactNode[] = [];
-              [...(report.entries || [])]
+              [...employeeEntries]
                 .sort((a, b) => {
                   const payLevelA = a.employee?.payLevel || "L-0";
                   const payLevelB = b.employee?.payLevel || "L-0";
@@ -923,7 +927,7 @@ export default function ReportDetails() {
               // Fix for multi-period rowSpans breaking across TableBody tags:
               // Determine how many rows belong to the final employee (from their period count)
               // We need the sorted entries to find the actual last entry
-              const sortedEntries = [...(report.entries || [])].sort((a, b) => {
+              const sortedEntries = [...employeeEntries].sort((a, b) => {
                 const payLevelA = a.employee?.payLevel || "L-0";
                 const payLevelB = b.employee?.payLevel || "L-0";
                 if (payLevelA !== payLevelB) {

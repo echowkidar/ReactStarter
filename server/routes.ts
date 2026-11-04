@@ -24,6 +24,7 @@ import {
   salaryRegisters,
   insertSalaryRegisterSchema
 } from "../shared/schema";
+import { splitPeriodAtMonthStart, isHandEnteredDaysDesignation } from "../shared/entryPeriods";
 import fs from "fs";
 import { sql, eq, and, isNotNull, inArray } from "drizzle-orm";
 import { db } from "./db";
@@ -393,7 +394,8 @@ export async function registerRoutes(app: Express) {
       // Exception: Allow nasir to use the mark-exported API and bulk-export-date PATCH even if VEW
       const isNasirExporting = admin.email === 'nasir@amu.ac.in' && (
         (req.path === '/api/admin/attendance/mark-exported' && req.method === 'POST') ||
-        (req.path === '/api/admin/attendance/bulk-export-date' && req.method === 'PATCH')
+        (req.path === '/api/admin/attendance/bulk-export-date' && req.method === 'PATCH') ||
+        (/^\/api\/admin\/attendance\/entry\/\d+\/exported$/.test(req.path) && req.method === 'POST')
       );
 
       if (admin.userCode === 'VEW' && writeMethods.includes(req.method) && !isNasirExporting) {
@@ -3062,14 +3064,6 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      // Calculate total days and combine remarks
-      const totalDays = periods.reduce((sum, period) => sum + (period.days || 0), 0);
-      const remarks = periods.map(p => p.remarks).filter(Boolean).join("; ");
-
-      // Get the first and last period dates
-      const firstPeriod = periods[0];
-      const lastPeriod = periods[periods.length - 1];
-
       // Get report to store departmentId on entry
       const report = await storage.getAttendanceReport(reportId);
 
@@ -3113,7 +3107,19 @@ export async function registerRoutes(app: Express) {
         } catch { /* leave empty → current values are shown */ }
       }
 
-      const entryData = insertAttendanceEntrySchema.parse({
+      // One row per period (see shared/entryPeriods.ts), so the admin can keep noting /
+      // verified / exported-to-Oracle separately for each period. A period running
+      // from an earlier month into the report month is saved as two periods
+      // (not for Guest Teacher / Faculty, whose days are entered by hand).
+      let designationForSplit: string | null = snapshot?.designation ?? null;
+      if (designationForSplit == null) {
+        try { designationForSplit = (await storage.getEmployee(Number(employeeId)))?.designation ?? null; } catch { /* keep null */ }
+      }
+      const rowPeriods: any[] = (report && !isHandEnteredDaysDesignation(designationForSplit))
+        ? periods.flatMap((p: any) => splitPeriodAtMonthStart(p, report.month, report.year))
+        : periods;
+
+      const rowsData = rowPeriods.map((p: any) => insertAttendanceEntrySchema.parse({
         reportId: reportId,
         employeeId: Number(employeeId),
         designationAtReport: snapshot?.designation ?? null,
@@ -3121,15 +3127,22 @@ export async function registerRoutes(app: Express) {
         payLevelAtReport: snapshot?.payLevel ?? null,
         departmentId: report?.departmentId || null,
         reportingEmployeeId,
-        days: totalDays,
-        fromDate: firstPeriod?.fromDate || "",
-        toDate: lastPeriod?.toDate || "",
-        periods: JSON.stringify(periods), // Store all periods as JSON string
-        remarks: remarks || ""
-      });
+        days: Number(p.days) || 0,
+        fromDate: p.fromDate || "",
+        toDate: p.toDate || "",
+        periods: JSON.stringify([p]),
+        remarks: p.remarks || ""
+      }));
 
-      const entry = await storage.createAttendanceEntry(entryData);
-      res.status(201).json(entry);
+      // All rows of the employee are saved together, or none.
+      const created = rowsData.length > 0
+        ? await db.transaction(async (tx) => tx.insert(attendanceEntries).values(rowsData).returning())
+        : [];
+      if (created.length === 0) {
+        return res.status(400).json({ message: "Invalid periods data" });
+      }
+      // First row is returned as before; `entries` has every row of the employee.
+      res.status(201).json({ ...created[0], entries: created });
     } catch (error) {
       console.error('Error creating attendance entry:', error);
       res.status(400).json({ message: "Invalid entry data", error: String(error) });
@@ -3291,6 +3304,54 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error marking entries as exported:", error);
       res.status(500).json({ message: "Failed to mark entries as exported" });
+    }
+  });
+
+  // Mark / unmark ONE row as exported to Oracle (checkbox in the Detailed View),
+  // e.g. a period already paid in a mid-month supplementary payment, so that
+  // "Skip Already Exported" leaves it out of the month-end export.
+  // Mark = today's date. Nasir may unmark only a row marked today.
+  app.post("/api/admin/attendance/entry/:entryId/exported", verifyAdminSession, async (req, res) => {
+    try {
+      const entryId = Number(req.params.entryId);
+      if (!Number.isInteger(entryId) || entryId <= 0) {
+        return res.status(400).json({ message: "Invalid entry" });
+      }
+      const exported = req.body?.exported === true;
+      const adminUser = (req as any).adminUser;
+      const isSuper = ["super", "super_admin"].includes(adminUser?.role) || adminUser?.email === "admin@amu.ac.in";
+      const isNasir = adminUser?.email === "nasir@amu.ac.in";
+      if (!isSuper && !isNasir) {
+        return res.status(403).json({ message: "You are not allowed to change the export status." });
+      }
+
+      const cur = await db.execute(sql`
+        SELECT ae.id, ae.exported_to_oracle_at,
+               (DATE(ae.exported_to_oracle_at) = CURRENT_DATE) AS exported_today,
+               ar.status
+        FROM attendance_entries ae
+        JOIN attendance_reports ar ON ar.id = ae.report_id
+        WHERE ae.id = ${entryId}
+      `);
+      const row = cur.rows[0] as any;
+      if (!row) return res.status(404).json({ message: "Entry not found" });
+      if (!['sent', 'cancel_requested'].includes(row.status)) {
+        return res.status(400).json({ message: "Only rows of sent reports can be marked as exported." });
+      }
+      if (!exported && isNasir && !isSuper && row.exported_to_oracle_at && !row.exported_today) {
+        return res.status(403).json({ message: "You can only remove an export date of today." });
+      }
+
+      const result = await db.execute(sql`
+        UPDATE attendance_entries
+        SET exported_to_oracle_at = ${exported ? new Date() : null}
+        WHERE id = ${entryId}
+        RETURNING id, exported_to_oracle_at
+      `);
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Error setting export status:", error);
+      res.status(500).json({ message: "Failed to update export status" });
     }
   });
 
@@ -3911,11 +3972,15 @@ export async function registerRoutes(app: Express) {
           const result = await db.execute(sql`
             SELECT e.id, e.epid, e.name, e.designation, e.employment_status, 
                    e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active,
-                   COALESCE(ae.days, 0)::int as days_count,
-                   ae.from_date, ae.to_date
+                   COALESCE(SUM(ae.days), 0)::int as days_count,
+                   (ARRAY_AGG(ae.from_date ORDER BY ae.id))[1] as from_date,
+                   (ARRAY_AGG(ae.to_date ORDER BY ae.id DESC))[1] as to_date
             FROM employees e
             JOIN attendance_entries ae ON ae.employee_id = e.id
             WHERE ae.report_id = ${reportId}
+            -- an employee may have one row per period → one line per employee
+            GROUP BY e.id, e.epid, e.name, e.designation, e.employment_status,
+                     e.term_expiry, e.salary_asstt, e.salary_register_no, e.is_active
             ORDER BY e.epid
           `);
           employees = result.rows;
