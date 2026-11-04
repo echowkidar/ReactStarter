@@ -2439,7 +2439,7 @@ export default function AttendanceReports() {
                             </TableCell>
                             <TableCell className="text-xs">
                               <div className="flex items-center gap-1.5">
-                              {canExport && entry.entryId > 0 && !entry.period.startsWith("MISSING") && (
+                              {(canExport || isSalaryAdmin) && entry.entryId > 0 && !entry.period.startsWith("MISSING") && (
                                 <input
                                   type="checkbox"
                                   className="h-3.5 w-3.5 accent-green-600 cursor-pointer shrink-0"

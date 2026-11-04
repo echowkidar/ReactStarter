@@ -89,7 +89,10 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      // Data counts as old as soon as it arrives: a page shows the cached data at
+      // once and re-fetches it in the background when it is opened again, so
+      // changes made elsewhere appear without a page reload.
+      staleTime: 0,
       retry: false,
     },
     mutations: {

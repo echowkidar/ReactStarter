@@ -2495,7 +2495,18 @@ export default function Attendance() {
 
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Attendance Reports</h1>
-            <Dialog open={isCreatingReport} onOpenChange={setIsCreatingReport}>
+            <Dialog
+              open={isCreatingReport}
+              onOpenChange={(open) => {
+                setIsCreatingReport(open);
+                // Closed without saving → forget the report being edited, so the next
+                // "Create Report" starts empty and never shows an old (maybe deleted) report
+                if (!open) {
+                  setEditingReportId(null);
+                  setEditingReportData(null);
+                }
+              }}
+            >
               <div className="flex flex-wrap items-center gap-2">
               <DialogTrigger asChild>
                 <Button

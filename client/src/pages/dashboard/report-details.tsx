@@ -50,10 +50,21 @@ const remarksWithReporting = (entry: any, period: any, periodIndex: number) => {
   return parts.length ? parts.join("; ") : "-";
 };
 
+// Department page: /dashboard/reports/:id
 export default function ReportDetails() {
   const [, params] = useRoute("/dashboard/reports/:id");
   const [, setLocation] = useLocation();
-  const reportId = params?.id;
+  return <ReportDetailsView reportId={params?.id} onClose={() => setLocation("/dashboard/attendance")} />;
+}
+
+// The report view + print. Shared by the department page and the Admin page
+// (client/src/pages/admin/report-details.tsx), so both print exactly the same.
+export function ReportDetailsView({ reportId, onClose, extraActions }: {
+  reportId?: string;
+  onClose: () => void;
+  /** Extra buttons shown before "Download Excel" (Admin: Main / Supplementary) */
+  extraActions?: React.ReactNode;
+}) {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [feedbackRemark, setFeedbackRemark] = useState<string | null>(null);
 
@@ -701,7 +712,8 @@ export default function ReportDetails() {
 
       <div className="flex justify-between items-center no-print">
         <h1 className="text-2xl font-bold">{reportPrefix}Attendance Report{reportTypeSuffix} Details</h1>
-        <div className="space-x-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {extraActions}
           {report.fileUrl && (
             <Button variant="outline" onClick={() => setShowPdfPreview(true)}>
               <Download className="h-4 w-4 mr-2" />
@@ -718,7 +730,7 @@ export default function ReportDetails() {
             <Printer className="h-4 w-4 mr-2" />
             {report.status === "draft" ? "Draft Report Print" : "Print"}
           </Button>
-          <Button variant="outline" onClick={() => setLocation("/dashboard/attendance")}>
+          <Button variant="outline" onClick={onClose}>
             <X className="h-4 w-4 mr-2" />
             Close
           </Button>

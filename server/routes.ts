@@ -3310,7 +3310,12 @@ export async function registerRoutes(app: Express) {
   // Mark / unmark ONE row as exported to Oracle (checkbox in the Detailed View),
   // e.g. a period already paid in a mid-month supplementary payment, so that
   // "Skip Already Exported" leaves it out of the month-end export.
-  // Mark = today's date. Nasir may unmark only a row marked today.
+  // Mark = today's date. Who may use it:
+  //  - Super Admin: any row
+  //  - Nasir: any row, may unmark only a row marked today
+  //  - Salary Admin with own code (e.g. AZK): only rows of employees whose salary
+  //    assistant is that code, may unmark only a row marked today
+  //    (view-only codes ALL / VEW may not)
   app.post("/api/admin/attendance/entry/:entryId/exported", verifyAdminSession, async (req, res) => {
     try {
       const entryId = Number(req.params.entryId);
@@ -3321,16 +3326,21 @@ export async function registerRoutes(app: Express) {
       const adminUser = (req as any).adminUser;
       const isSuper = ["super", "super_admin"].includes(adminUser?.role) || adminUser?.email === "admin@amu.ac.in";
       const isNasir = adminUser?.email === "nasir@amu.ac.in";
-      if (!isSuper && !isNasir) {
+      const salaryCode = String(adminUser?.userCode || "").trim().toUpperCase();
+      const isSalaryAdmin = ["salary", "salary_admin"].includes(adminUser?.role)
+        && !!salaryCode && salaryCode !== "ALL" && salaryCode !== "VEW";
+      if (!isSuper && !isNasir && !isSalaryAdmin) {
         return res.status(403).json({ message: "You are not allowed to change the export status." });
       }
 
       const cur = await db.execute(sql`
         SELECT ae.id, ae.exported_to_oracle_at,
                (DATE(ae.exported_to_oracle_at) = CURRENT_DATE) AS exported_today,
-               ar.status
+               ar.status,
+               UPPER(TRIM(COALESCE(e.salary_asstt, ''))) AS salary_asstt
         FROM attendance_entries ae
         JOIN attendance_reports ar ON ar.id = ae.report_id
+        LEFT JOIN employees e ON e.id = ae.employee_id
         WHERE ae.id = ${entryId}
       `);
       const row = cur.rows[0] as any;
@@ -3338,7 +3348,11 @@ export async function registerRoutes(app: Express) {
       if (!['sent', 'cancel_requested'].includes(row.status)) {
         return res.status(400).json({ message: "Only rows of sent reports can be marked as exported." });
       }
-      if (!exported && isNasir && !isSuper && row.exported_to_oracle_at && !row.exported_today) {
+      const limited = !isSuper && !isNasir; // salary admin
+      if (limited && row.salary_asstt !== salaryCode) {
+        return res.status(403).json({ message: "You can change the export status only of your own employees." });
+      }
+      if (!exported && !isSuper && row.exported_to_oracle_at && !row.exported_today) {
         return res.status(403).json({ message: "You can only remove an export date of today." });
       }
 
