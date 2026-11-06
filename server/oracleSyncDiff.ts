@@ -218,23 +218,66 @@ export function isBadDate(d: string | null): boolean {
 
 const fmt = (d: string | null) => (d ? d.split("-").reverse().join("-") : "");
 
-function statusFor(a: AppEmployee | null, o: OracleRow, today: string, monthLabel: string): StatusSuggestion | null {
+// ── Configuration (saved from the Oracle Sync page, app_settings.oracle_sync_config) ──
+
+export type SyncConfig = {
+  /** fields to compare; a field set to false is never shown or updated */
+  fields: Record<string, boolean>;
+  /** Oracle PAY_RELEASE_FLAG values that agree with "active" in the app (Y, N, B) */
+  activeFlags: string[];
+  /** a regular salary in the latest paybill month means "active", whatever the flags say */
+  paidMeansActive: boolean;
+  /** an expired TERM_APP means "should be inactive" */
+  termExpiredMeansInactive: boolean;
+  /** list active employees whose ONLY sign is "no salary in the latest month" */
+  showNoSalaryOnly: boolean;
+};
+
+export const PAY_RELEASE_FLAGS: Record<string, string> = { Y: "Yes", N: "No", B: "Block" };
+
+export const DEFAULT_CONFIG: SyncConfig = {
+  fields: {},
+  activeFlags: ["Y"],
+  paidMeansActive: true,
+  termExpiredMeansInactive: true,
+  showNoSalaryOnly: true,
+};
+
+/** Merge a saved config with the defaults, dropping anything unknown */
+export function normaliseConfig(raw: unknown): SyncConfig {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, any>;
+  const fields: Record<string, boolean> = {};
+  for (const f of FIELDS) if (!f.quiet) fields[f.field] = r.fields?.[f.field] !== false;
+  const flags = Array.isArray(r.activeFlags) ? r.activeFlags.filter((x: any) => x in PAY_RELEASE_FLAGS) : DEFAULT_CONFIG.activeFlags;
+  const bool = (k: keyof SyncConfig) => (typeof r[k] === "boolean" ? r[k] : DEFAULT_CONFIG[k]) as boolean;
+  return {
+    fields,
+    activeFlags: flags,
+    paidMeansActive: bool("paidMeansActive"),
+    termExpiredMeansInactive: bool("termExpiredMeansInactive"),
+    showNoSalaryOnly: bool("showNoSalaryOnly"),
+  };
+}
+
+function statusFor(a: AppEmployee | null, o: OracleRow, today: string, monthLabel: string, cfg: SyncConfig): StatusSuggestion | null {
   const paid = o.paid_last_month === 1;
   const release = clean(o.pay_release_flag);
   const term = clean(o.term_app) || null;
   const retire = clean(o.actual_retire_date) || clean(o.retire_date) || null;
-  const termExpired = !!term && term < today;
+  const termExpired = cfg.termExpiredMeansInactive && !!term && term < today;
   const retired = !!retire && retire < today;
+  const flagLabel = `Oracle: pay release ${release ? `${release} (${PAY_RELEASE_FLAGS[release] || "?"})` : "empty"}`;
 
   if (!a) return null;
   if (a.is_active === "active") {
-    if (paid) return null;
-    const reasons: string[] = [`No regular salary in ${monthLabel}`];
-    if (release === "B") reasons.push("Oracle: pay BLOCKED");
-    if (release === "N") reasons.push("Oracle: pay release N");
+    if (cfg.paidMeansActive && paid) return null; // salary was made → agrees with active
+    const reasons: string[] = [];
+    if (!cfg.activeFlags.includes(release)) reasons.push(flagLabel);
     if (termExpired) reasons.push(`Term expired ${fmt(term)}`);
     if (retired) reasons.push(`Retired ${fmt(retire)}`);
-    const strong = reasons.length > 1;
+    const strong = reasons.length > 0;
+    if (!paid) reasons.unshift(`No regular salary in ${monthLabel}`);
+    if (!strong && (paid || !cfg.showNoSalaryOnly)) return null;
     return {
       action: "disable",
       suggested: strong,
@@ -243,9 +286,13 @@ function statusFor(a: AppEmployee | null, o: OracleRow, today: string, monthLabe
       wefDate: retired ? retire : termExpired ? term : null,
     };
   }
-  // inactive in app but paid in Oracle
-  if (paid && release === "Y") {
-    return { action: "enable", suggested: true, reasons: [`Regular salary made in ${monthLabel}`, "Oracle: pay release Y"] };
+  // inactive in app: Oracle says active?
+  const flagOk = cfg.activeFlags.includes(release);
+  const activeInOracle = cfg.paidMeansActive ? paid && flagOk : flagOk && !termExpired && !retired;
+  if (activeInOracle) {
+    const reasons = [flagLabel];
+    if (paid) reasons.unshift(`Regular salary made in ${monthLabel}`);
+    return { action: "enable", suggested: true, reasons };
   }
   return null;
 }
@@ -265,6 +312,7 @@ export function computeDiff(
   employees: AppEmployee[],
   deptByCode: Map<string, { id: number; name: string }>,
   paybill: { year: number | null; month: number | null },
+  config: SyncConfig = normaliseConfig(null),
   today = new Date().toISOString().slice(0, 10),
 ): DiffResult {
   const monthLabel = paybill.month && paybill.year
@@ -302,12 +350,13 @@ export function computeDiff(
       continue;
     }
 
-    const status = statusFor(a, o, today, monthLabel);
+    const status = statusFor(a, o, today, monthLabel, config);
     // Field differences only for employees who are (or should become) active
     const compare = a.is_active === "active" || status?.action === "enable";
     const changes: FieldChange[] = [];
     if (compare) {
       for (const f of FIELDS) {
+        if (!f.quiet && config.fields[f.field] === false) continue; // switched off in the configuration
         const ov = f.oracle(o);
         if (!ov) continue; // empty Oracle value never clears app data
         const av = f.app(a);

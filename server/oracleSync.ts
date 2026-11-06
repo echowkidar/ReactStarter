@@ -17,9 +17,17 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { requireSettingsUnlock } from "./settingsPin";
 import {
-  computeDiff, newEmployeeValues, FIELD_BY_NAME, FIELDS,
-  type AppEmployee, type OracleRow,
+  computeDiff, newEmployeeValues, normaliseConfig, FIELD_BY_NAME, FIELDS, PAY_RELEASE_FLAGS,
+  type AppEmployee, type OracleRow, type SyncConfig,
 } from "./oracleSyncDiff";
+
+const CONFIG_KEY = "oracle_sync_config";
+
+async function loadConfig(): Promise<SyncConfig> {
+  const r = await db.execute(sql`SELECT value FROM app_settings WHERE key = ${CONFIG_KEY}`);
+  const raw = (r.rows[0] as any)?.value;
+  try { return normaliseConfig(raw ? JSON.parse(raw) : null); } catch { return normaliseConfig(null); }
+}
 
 const SERVICE_URL = () => (process.env.ORACLE_SYNC_URL || "http://oracle-sync:8000").replace(/\/+$/, "");
 const KEEP_SNAPSHOTS = 3;
@@ -177,8 +185,8 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
       const meta = await latestSnapshotMeta();
       if (!meta) return res.json({ snapshot: null, items: [], counts: null, departments: [] });
       const snap = (await loadSnapshot(meta.id))!;
-      const [employees, depts] = await Promise.all([loadEmployees(), loadDepartments()]);
-      const diff = computeDiff(snap.rows, employees, depts.byCode, snap.paybill);
+      const [employees, depts, config] = await Promise.all([loadEmployees(), loadDepartments(), loadConfig()]);
+      const diff = computeDiff(snap.rows, employees, depts.byCode, snap.paybill, config);
       res.json({
         snapshot: meta, ...diff, departments: depts.list,
         fields: FIELDS.map((f) => ({ field: f.field, label: f.label, sensitive: !!f.sensitive, quiet: !!f.quiet })),
@@ -206,8 +214,8 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
         return res.status(409).json({ message: "A newer Oracle snapshot exists. Reload the page." });
       }
       const snap = (await loadSnapshot(meta.id))!;
-      const [employees, depts] = await Promise.all([loadEmployees(), loadDepartments()]);
-      const diff = computeDiff(snap.rows, employees, depts.byCode, snap.paybill);
+      const [employees, depts, config] = await Promise.all([loadEmployees(), loadDepartments(), loadConfig()]);
+      const diff = computeDiff(snap.rows, employees, depts.byCode, snap.paybill, config);
       const diffByEpid = new Map(diff.items.map((i) => [i.epid, i]));
       const empById = new Map(employees.map((e) => [e.id, e]));
       const oracleByEcode = new Map(snap.rows.map((o) => [String(o.ecode).trim(), o]));
@@ -313,6 +321,28 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
     } catch (e: any) {
       console.error("[OracleSync] apply failed:", e);
       res.status(500).json({ message: `Nothing was changed: ${e.message || "update failed"}` });
+    }
+  });
+
+  // What to compare and which Oracle pay release flags agree with "active"
+  app.get("/api/admin/oracle-sync/config", ...guard, async (_req, res) => {
+    res.json({
+      config: await loadConfig(),
+      fields: FIELDS.filter((f) => !f.quiet).map((f) => ({ field: f.field, label: f.label })),
+      payReleaseFlags: PAY_RELEASE_FLAGS,
+    });
+  });
+
+  app.put("/api/admin/oracle-sync/config", ...guard, async (req, res) => {
+    try {
+      const config = normaliseConfig(req.body?.config);
+      await db.execute(sql`
+        INSERT INTO app_settings (key, value) VALUES (${CONFIG_KEY}, ${JSON.stringify(config)})
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+      res.json({ ok: true, config });
+    } catch (e: any) {
+      console.error("[OracleSync] save config failed:", e);
+      res.status(500).json({ message: "Could not save the configuration" });
     }
   });
 

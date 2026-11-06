@@ -3592,7 +3592,8 @@ export async function registerRoutes(app: Express) {
     try {
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
-      const result = await db.execute(sql`SELECT key, value FROM app_settings`);
+      // Only the on/off switches; other keys (e.g. oracle_sync_config) have their own APIs
+      const result = await db.execute(sql`SELECT key, value FROM app_settings WHERE key LIKE 'show%'`);
       const settings: Record<string, string> = {};
       for (const row of result.rows) {
         settings[row.key as string] = row.value as string;

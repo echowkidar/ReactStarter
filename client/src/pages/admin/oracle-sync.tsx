@@ -15,10 +15,16 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   ArrowLeft, Database, RefreshCw, DownloadCloud, Loader2, Undo2, Eye, EyeOff, CircleAlert, CheckCircle2,
+  SlidersHorizontal, FileSpreadsheet,
 } from "lucide-react";
 import salaryAssistants from "@/lib/salary-assistants.json";
 
@@ -60,6 +66,19 @@ type Run = {
   summary: { employeesUpdated: number; fieldsChanged: number; disabled: number; enabled: number; created: number; skipped: string[] };
   undone_at: string | null; undone_by: string | null;
   undo_summary: { restored: number; removed: number; keptBecauseChanged: string[] } | null;
+};
+
+type SyncConfig = {
+  fields: Record<string, boolean>;
+  activeFlags: string[];
+  paidMeansActive: boolean;
+  termExpiredMeansInactive: boolean;
+  showNoSalaryOnly: boolean;
+};
+type ConfigResponse = {
+  config: SyncConfig;
+  fields: Array<{ field: string; label: string }>;
+  payReleaseFlags: Record<string, string>;
 };
 
 type Tab = "changes" | "fills" | "disable" | "enable" | "new" | "missing";
@@ -133,6 +152,7 @@ function OracleSync() {
   const [newChoice, setNewChoice] = useState<Record<string, { departmentId?: number; status?: string }>>({});
   const [busy, setBusy] = useState<"" | "fetch" | "apply" | "undo">("");
   const [confirm, setConfirm] = useState<{ title: string; text: string; run: () => Promise<void> } | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
 
   const status = useQuery<StatusResponse>({ queryKey: ["/api/admin/oracle-sync/status"], staleTime: 0 });
   const diff = useQuery<DiffResponse>({ queryKey: ["/api/admin/oracle-sync/diff"], staleTime: Infinity });
@@ -271,6 +291,59 @@ function OracleSync() {
     },
   });
 
+  /** Download the list shown now (this tab + filters, all pages) as an Excel file */
+  const downloadExcel = () => {
+    const tabLabel = TABS.find((t) => t.key === tab)!.label;
+    const month = snapshot ? `${MONTHS[snapshot.paybill.month - 1]} ${snapshot.paybill.year}` : "";
+    const base = (i: DiffItem): Record<string, string> => ({
+      ECODE: i.epid,
+      Name: i.name,
+      "Oracle Name": i.oracleName || "",
+      Department: i.departmentName || "",
+      "Oracle Posting": i.posting || "",
+      "D.Ast (App)": i.appDAst || "",
+      "D.Ast (Oracle)": i.oracleDAst || "",
+      "Register No": i.register || "",
+      "Status (App)": i.isActive || "",
+      "Pay Release (Oracle)": i.oracle?.payRelease || "",
+      "Emp Status (Oracle)": i.oracle?.empStatusLabel || i.oracle?.empStatus || "",
+      "Term (Oracle)": fmtDate(i.oracle?.termApp || null),
+      [`Paid ${month}`]: i.oracle ? (i.oracle.paidLastMonth ? "Yes" : "No") : "",
+    });
+    let data: Record<string, string>[] = [];
+    if (tab === "changes" || tab === "fills") {
+      for (const i of rows) for (const c of changesFor(i, tab, fieldFilter)) {
+        data.push({
+          ...base(i), Field: c.label,
+          "App Value": String(shown(c, c.app, showSensitive)), "Oracle Value": String(shown(c, c.oracle, showSensitive)),
+          Suggested: c.suggested ? "Yes" : "Check",
+        });
+      }
+    } else if (tab === "disable" || tab === "enable") {
+      data = rows.map((i) => ({ ...base(i), Reasons: (i.status?.reasons || []).join("; "), Suggested: i.status?.suggested ? "Yes" : "Check" }));
+    } else if (tab === "new") {
+      data = rows.map((i) => {
+        const v = (f: string) => { const c = i.changes.find((x) => x.field === f); return c ? String(shown(c, c.oracle, showSensitive)) : ""; };
+        return {
+          ...base(i), "Suggested Department": departments.find((d) => d.id === i.suggestedDepartmentId)?.name || "",
+          Designation: v("designation"), "Pay Level": v("payLevel"), "Term Expiry": v("termExpiry"),
+          "Employment Status": i.suggestedEmploymentStatus || "", Category: v("employeeCategory"),
+          PAN: v("panNumber"), "Bank Account": v("bankAccount"), "Bank Name": v("bankName"), IFSC: v("ifsc"), Aadhar: v("aadharCard"),
+        };
+      });
+    } else {
+      data = rows.map(base);
+    }
+    if (!data.length) { toast({ title: "Nothing to download" }); return; }
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = Object.keys(data[0]).map((k) => ({ wch: Math.min(40, Math.max(10, k.length + 2)) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, tabLabel.slice(0, 31));
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    XLSX.writeFile(wb, `oracle-sync-${tab}${dAst ? "-" + dAst : ""}-${stamp}.xlsx`);
+  };
+
   const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.epid));
   const toggleRow = (epid: string, on: boolean) => setSelected((s) => { const n = new Set(s); on ? n.add(epid) : n.delete(epid); return n; });
   const selectedPayload = rows.filter((r) => selected.has(r.epid)).map(payloadFor).filter(Boolean);
@@ -362,6 +435,14 @@ function OracleSync() {
                   {showSensitive ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
                   {showSensitive ? "Hide" : "Show"} PAN / bank / Aadhar
                 </Button>
+                <div className="ml-auto flex gap-2">
+                  <Button variant="outline" size="sm" onClick={downloadExcel} disabled={!rows.length}>
+                    <FileSpreadsheet className="h-4 w-4 mr-1" /> Download Excel
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+                    <SlidersHorizontal className="h-4 w-4 mr-1" /> Configure
+                  </Button>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{rows.length.toLocaleString()} employees</span>
@@ -530,6 +611,9 @@ function OracleSync() {
         </CardContent>
       </Card>
 
+      <ConfigDialog open={configOpen} onClose={() => setConfigOpen(false)}
+        onSaved={async () => { setFieldChoice({}); await queryClient.invalidateQueries({ queryKey: ["/api/admin/oracle-sync/diff"] }); }} />
+
       <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -543,5 +627,90 @@ function OracleSync() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// ── Configuration dialog ────────────────────────────────────────────────────
+function ConfigDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
+  const { toast } = useToast();
+  const q = useQuery<ConfigResponse>({ queryKey: ["/api/admin/oracle-sync/config"], enabled: open, staleTime: 0 });
+  const [cfg, setCfg] = useState<SyncConfig | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { if (open && q.data) setCfg(q.data.config); }, [open, q.data]);
+
+  const save = async () => {
+    if (!cfg) return;
+    setSaving(true);
+    try {
+      await apiRequest("PUT", "/api/admin/oracle-sync/config", { config: cfg });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/oracle-sync/config"] });
+      await onSaved();
+      toast({ title: "Configuration saved", description: "The comparison has been worked out again." });
+      onClose();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not save", description: e.message });
+    } finally { setSaving(false); }
+  };
+
+  const flagToggle = (f: string, on: boolean) =>
+    setCfg((c) => c && ({ ...c, activeFlags: on ? Array.from(new Set([...c.activeFlags, f])) : c.activeFlags.filter((x) => x !== f) }));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Oracle Sync configuration</DialogTitle>
+          <DialogDescription>Decide what is compared and when Oracle and the app are taken to agree.</DialogDescription>
+        </DialogHeader>
+        {!cfg || !q.data ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+        ) : (
+          <div className="space-y-6 text-sm">
+            <section className="space-y-2">
+              <h3 className="font-semibold">Active / inactive</h3>
+              <p className="text-muted-foreground">Oracle pay release values that agree with <b>active</b> in the app. The others mean the employee should be inactive.</p>
+              <div className="flex flex-wrap gap-4">
+                {Object.entries(q.data.payReleaseFlags).map(([f, label]) => (
+                  <label key={f} className="flex items-center gap-2">
+                    <Checkbox checked={cfg.activeFlags.includes(f)} onCheckedChange={(v) => flagToggle(f, !!v)} />
+                    {f} – {label}
+                  </label>
+                ))}
+              </div>
+              <label className="flex items-center justify-between gap-4 border rounded-md p-2">
+                <span>A regular salary in the latest paybill month means <b>active</b> (even if the pay release flag says otherwise)</span>
+                <Switch checked={cfg.paidMeansActive} onCheckedChange={(v) => setCfg({ ...cfg, paidMeansActive: v })} />
+              </label>
+              <label className="flex items-center justify-between gap-4 border rounded-md p-2">
+                <span>An expired term (TERM_APP) means <b>inactive</b></span>
+                <Switch checked={cfg.termExpiredMeansInactive} onCheckedChange={(v) => setCfg({ ...cfg, termExpiredMeansInactive: v })} />
+              </label>
+              <label className="flex items-center justify-between gap-4 border rounded-md p-2">
+                <span>Also list active employees whose only sign is “no salary in the latest month”</span>
+                <Switch checked={cfg.showNoSalaryOnly} onCheckedChange={(v) => setCfg({ ...cfg, showNoSalaryOnly: v })} />
+              </label>
+            </section>
+            <section className="space-y-2">
+              <h3 className="font-semibold">Fields to compare</h3>
+              <p className="text-muted-foreground">Switched-off fields are not shown in Differences / Fill empty fields and are never updated.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {q.data.fields.map((f) => (
+                  <label key={f.field} className="flex items-center gap-2">
+                    <Checkbox checked={cfg.fields[f.field] !== false}
+                      onCheckedChange={(v) => setCfg({ ...cfg, fields: { ...cfg.fields, [f.field]: !!v } })} />
+                    {f.label}
+                  </label>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={!cfg || saving}>{saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
