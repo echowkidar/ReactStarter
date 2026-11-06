@@ -37,6 +37,7 @@ import {
 import { registerAdminPreferenceRoutes } from "./adminPreferences";
 import { registerSettingsPinRoutes, requireSettingsUnlock } from "./settingsPin";
 import { registerOracleSyncRoutes } from "./oracleSync";
+import { buildHistoryView } from "./employeeHistoryView";
 import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
 import { normaliseReportKind, findMainReport } from "../shared/reportKind";
 
@@ -5937,8 +5938,13 @@ export async function registerRoutes(app: Express) {
   app.get("/api/employees/:employeeId/history", async (req, res) => {
     try {
       const employeeId = Number(req.params.employeeId);
-      const history = await storage.getEmployeeHistory(employeeId);
-      res.json(history);
+      const [history, employee] = await Promise.all([
+        storage.getEmployeeHistory(employeeId),
+        storage.getEmployee(employeeId),
+      ]);
+      const dept = employee ? await storage.getDepartment(employee.departmentId) : undefined;
+      // previous → new value, real changes only (see employeeHistoryView.ts)
+      res.json(buildHistoryView(history as any, employee as any, dept?.name));
     } catch (error) {
       console.error("Error fetching employee history:", error);
       res.status(500).json({ message: "Failed to fetch employee history" });

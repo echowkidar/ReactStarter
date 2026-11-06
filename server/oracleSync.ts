@@ -225,10 +225,11 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
           await tx.execute(sql`
             INSERT INTO oracle_sync_changes (run_id, employee_id, epid, field, old_value, new_value)
             VALUES (${runId}, ${employeeId}, ${epid}, ${column}, ${oldV}, ${newV})`);
-          if (column !== "__created") {
+          // Employee history: real changes only (not Oracle-only bookkeeping fields)
+          if (column !== "__created" && !QUIET_COLUMNS.has(column)) {
             await tx.execute(sql`
-              INSERT INTO employee_history (employee_id, action, field, previous_value, changed_by, changed_by_role)
-              VALUES (${employeeId}, ${action}, ${HISTORY_FIELD[column] || column}, ${oldV ?? ""}, ${email}, 'oracle_sync')`);
+              INSERT INTO employee_history (employee_id, action, field, previous_value, new_value, changed_by, changed_by_role)
+              VALUES (${employeeId}, ${action}, ${HISTORY_FIELD[column] || column}, ${oldV ?? ""}, ${newV ?? ""}, ${email}, 'oracle_sync')`);
           }
         };
 
@@ -296,8 +297,8 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
             const newId = Number((ins.rows[0] as any).id);
             await record(newId, epid, "__created", null, epid);
             await tx.execute(sql`
-              INSERT INTO employee_history (employee_id, action, field, previous_value, changed_by, changed_by_role)
-              VALUES (${newId}, 'oracle_sync', 'created', '', ${email}, 'oracle_sync')`);
+              INSERT INTO employee_history (employee_id, action, field, previous_value, new_value, changed_by, changed_by_role)
+              VALUES (${newId}, 'oracle_sync', 'created', '', 'Added from Oracle payroll master', ${email}, 'oracle_sync')`);
             summary.created++;
             continue;
           }
@@ -354,9 +355,11 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
             continue;
           }
           await tx.execute(sql`UPDATE employees SET ${setExpr(c.field, textOf(c.old_value))} WHERE id = ${c.employee_id}`);
-          await tx.execute(sql`
-            INSERT INTO employee_history (employee_id, action, field, previous_value, changed_by, changed_by_role)
-            VALUES (${c.employee_id}, 'oracle_sync_undo', ${HISTORY_FIELD[c.field] || c.field}, ${c.new_value ?? ""}, ${email}, 'oracle_sync')`);
+          if (!QUIET_COLUMNS.has(c.field)) {
+            await tx.execute(sql`
+              INSERT INTO employee_history (employee_id, action, field, previous_value, new_value, changed_by, changed_by_role)
+              VALUES (${c.employee_id}, 'oracle_sync_undo', ${HISTORY_FIELD[c.field] || c.field}, ${c.new_value ?? ""}, ${c.old_value ?? ""}, ${email}, 'oracle_sync')`);
+          }
           out.restored++;
         }
         await tx.execute(sql`

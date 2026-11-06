@@ -418,6 +418,7 @@ export const employeeHistory = pgTable("employee_history", {
   action: text("action").notNull(),              // update, document_update, document_delete, transfer, disable
   field: text("field").notNull(),                // Which field was changed
   previousValue: text("previous_value"),         // Previous value (stored as text)
+  newValue: text("new_value"),                   // Value after the change (null on older rows)
   changedBy: text("changed_by").notNull(),       // Who made the change (email/name)
   changedByRole: text("changed_by_role").notNull(), // department, salary_admin
   departmentId: integer("department_id"),        // Department that made the change

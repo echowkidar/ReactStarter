@@ -929,6 +929,7 @@ export class DbStorage implements IStorage {
       action: employeeHistory.action,
       field: employeeHistory.field,
       previousValue: employeeHistory.previousValue,
+      newValue: employeeHistory.newValue,
       changedBy: employeeHistory.changedBy,
       changedByRole: employeeHistory.changedByRole,
       departmentId: employeeHistory.departmentId,
@@ -949,7 +950,8 @@ export class DbStorage implements IStorage {
     previousValue: string | null,
     changedBy: string,
     changedByRole: string,
-    departmentId?: number
+    departmentId?: number,
+    newValue?: string | null
   ): Promise<void> {
     try {
       await db.insert(employeeHistory).values({
@@ -957,6 +959,7 @@ export class DbStorage implements IStorage {
         action,
         field,
         previousValue,
+        newValue: newValue ?? null,
         changedBy,
         changedByRole,
         departmentId: departmentId || null
@@ -1003,14 +1006,17 @@ export class DbStorage implements IStorage {
 
       if (normOld !== normNew) {
         let displayValue = normOld;
+        let displayNew = normNew;
 
-        // If tracking departmentId, try to resolve the department name
-        if (field === 'departmentId' && oldValue) {
+        // If tracking departmentId, show department names instead of ids
+        if (field === 'departmentId') {
           try {
-            const dept = await this.getDepartment(Number(oldValue));
-            if (dept) {
-              displayValue = dept.name;
-            }
+            const [o, n] = await Promise.all([
+              oldValue ? this.getDepartment(Number(oldValue)) : undefined,
+              newValue ? this.getDepartment(Number(newValue)) : undefined,
+            ]);
+            if (o) displayValue = o.name;
+            if (n) displayNew = n.name;
           } catch (err) {
             console.error("Error fetching department name for log:", err);
           }
@@ -1023,7 +1029,8 @@ export class DbStorage implements IStorage {
           displayValue, // Log the resolved name or normalized value
           changedBy,
           changedByRole,
-          departmentId
+          departmentId,
+          displayNew
         );
       }
     }
@@ -1050,7 +1057,8 @@ export class DbStorage implements IStorage {
           normOld === '' ? 'none' : normOld,
           changedBy,
           changedByRole,
-          departmentId
+          departmentId,
+          normNew
         );
       }
     }

@@ -204,6 +204,9 @@ export async function runMigrations() {
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS oracle_sync_changes_run_idx ON oracle_sync_changes (run_id)`);
 
+    // Employee history keeps the new value too (older rows: worked out when shown)
+    await db.execute(sql`ALTER TABLE employee_history ADD COLUMN IF NOT EXISTS new_value TEXT`);
+
     // Settings page PIN (one row per admin, scrypt hash) — see server/settingsPin.ts
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS admin_settings_pin (
