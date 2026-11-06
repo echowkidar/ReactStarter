@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Mail, Key, Loader2, ArrowLeft, ShieldCheck, Info } from "lucide-react";
 import { useLocation } from "wouter";
 import { GroupManager } from "@/components/GroupManager";
+import { EmailLayout } from "@/components/layout/email-layout";
 
 export default function EmailManagement() {
   const [, setLocation] = useLocation();
@@ -88,14 +89,14 @@ export default function EmailManagement() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <EmailLayout isAdmin={isAdmin} className="flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      </EmailLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-6 flex flex-col items-center">
+    <EmailLayout isAdmin={isAdmin} className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex flex-col items-center">
       <div className="w-full max-w-4xl flex items-center mb-8">
         {(() => {
           const hasConfig = !!currentConfig?.email;
@@ -234,6 +235,6 @@ export default function EmailManagement() {
         </div>
       </div>
     </div>
-  </div>
+    </EmailLayout>
   );
 }

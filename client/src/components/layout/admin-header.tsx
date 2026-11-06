@@ -3,13 +3,10 @@
 // Left: who is logged in. Right: the admin menu (same on every page, the open
 // page highlighted). Phones/tablets get a ☰ menu. Sub-pages also show a small
 // breadcrumb ("Dashboard › Page") so the way back is always one click.
-// Menu items follow the same role rules the dashboard used before:
-//   • Detailed View  – everyone except qasim@amu.ac.in
-//   • Users          – not for Salary admins
-//   • Tickets        – not for view-only (VEW) admins / qasim@amu.ac.in
-//   • Notices        – not for view-only (VEW) admins
-//   • Employees, Contacts – Salary and Super admins
-//   • Settings       – Super admin only
+// Which menu items an admin sees comes from lib/admin-access.ts — the same
+// rules ProtectedAdminRoute uses, so nobody sees a button they cannot open.
+// "Dashboard" is styled as the home button (outlined, separated from the rest)
+// so the way back to the main page is easy to spot from any other page.
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -20,6 +17,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { getAdminAccess } from "@/lib/admin-access";
 
 interface AdminHeaderProps {
   className?: string;
@@ -72,13 +70,8 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
   const [location, setLocation] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const adminInfo = readAdmin();
-  const adminType = (() => { try { return localStorage.getItem("adminType") || ""; } catch { return ""; } })();
-  const email: string = adminInfo.email || "";
-  const isViewOnly = adminInfo.userCode === "VEW";
-  const isQasim = email === "qasim@amu.ac.in";
-  const isSalaryAdmin = adminType === "salary";
-  const isSuperAdmin = adminType === "super";
-  const canManageEmployees = isSalaryAdmin || isSuperAdmin;
+  const access = getAdminAccess();
+  const { email, isViewOnly, isQasim } = access;
 
   useEffect(() => { setMenuOpen(false); }, [location]);
 
@@ -102,21 +95,24 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
   const badgeCount = (b?: NavItem["badge"]) =>
     b === "email" ? unreadEmailData?.count || 0 : b === "tickets" ? ticketStats?.open || 0 : 0;
 
+  const dashboardItem: NavItem = { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, primary: true };
+  const onDashboard = location === "/admin/dashboard";
   const items: NavItem[] = [
-    { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, primary: true },
-    ...(!isQasim ? [{ href: "/admin/attendance-reports", label: "Detailed View", icon: FileCheck, primary: true,
+    dashboardItem,
+    ...(access.detailedView ? [{ href: "/admin/attendance-reports", label: "Detailed View", icon: FileCheck, primary: true,
       match: ["/admin/reports/", "/admin/missing-employees"] }] : []),
-    ...(!isSalaryAdmin ? [{ href: "/admin/users", label: "Users", icon: UserCog }] : []),
-    ...(canManageEmployees ? [{ href: "/admin/employees", label: "Employees", icon: Users, primary: true }] : []),
+    ...(access.users ? [{ href: "/admin/users", label: "Users", icon: UserCog }] : []),
+    ...(access.employees ? [{ href: "/admin/employees", label: "Employees", icon: Users, primary: true }] : []),
     { href: "/admin/mailbox", label: "Email", icon: Mail, badge: "email" as const, match: ["/admin/email"] },
     { href: "/admin/documents", label: "Documents", icon: FileImage },
     { href: "/admin/lpc", label: "LPC", icon: ScrollText },
     { href: "/admin/dispatch", label: "Dak", icon: Send },
-    ...(!isViewOnly && !isQasim ? [{ href: "/admin/tickets", label: "Tickets", icon: Ticket, badge: "tickets" as const }] : []),
-    ...(!isViewOnly ? [{ href: "/admin/notices", label: "Notices", icon: Megaphone }] : []),
-    ...(canManageEmployees ? [{ href: "/admin/department-contacts", label: "Contacts", icon: Phone }] : []),
-    ...(isSuperAdmin ? [{ href: "/admin/settings", label: "Settings", icon: Settings }] : []),
+    ...(access.tickets ? [{ href: "/admin/tickets", label: "Tickets", icon: Ticket, badge: "tickets" as const }] : []),
+    ...(access.notices ? [{ href: "/admin/notices", label: "Notices", icon: Megaphone }] : []),
+    ...(access.contacts ? [{ href: "/admin/department-contacts", label: "Contacts", icon: Phone }] : []),
+    ...(access.settings ? [{ href: "/admin/settings", label: "Settings", icon: Settings }] : []),
   ];
+  const otherItems = items.filter((i) => i !== dashboardItem);
 
   const isActive = (item: NavItem) =>
     location === item.href || location.startsWith(item.href + "/") ||
@@ -173,7 +169,23 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
 
         {/* Menu – large screens (right aligned) */}
         <nav className="hidden shrink-0 items-center gap-0.5 lg:flex" aria-label="Admin menu">
-          {items.map((item) => {
+          {/* Home button: always outlined + labelled so it stands apart from the other menu items */}
+          <Link
+            href="/admin/dashboard"
+            title="Back to main Dashboard"
+            aria-current={onDashboard ? "page" : undefined}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-sm font-semibold transition-colors",
+              onDashboard
+                ? "border-blue-600 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                : "border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-500 hover:bg-blue-100",
+            )}
+          >
+            <LayoutDashboard className="h-4 w-4 shrink-0" />
+            <span>Dashboard</span>
+          </Link>
+          <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden />
+          {otherItems.map((item) => {
             const active = isActive(item);
             const Icon = item.icon;
             const n = badgeCount(item.badge);
@@ -222,7 +234,18 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
           <SheetContent side="right" className="w-72 overflow-y-auto bg-white p-0">
             <SheetTitle className="border-b px-4 py-3 text-base">Admin Menu</SheetTitle>
             <nav className="flex flex-col gap-0.5 p-2" aria-label="Admin menu">
-              {items.map((item) => {
+              <Link
+                href="/admin/dashboard"
+                aria-current={onDashboard ? "page" : undefined}
+                className={cn(
+                  "mb-1 flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm font-semibold",
+                  onDashboard ? "border-blue-600 bg-blue-600 text-white" : "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100",
+                )}
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                <span className="flex-1">Dashboard</span>
+              </Link>
+              {otherItems.map((item) => {
                 const active = isActive(item);
                 const Icon = item.icon;
                 const n = badgeCount(item.badge);

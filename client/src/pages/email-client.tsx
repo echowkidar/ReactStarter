@@ -11,12 +11,12 @@ import { Loader2, Mail, Send, ArrowLeft, RefreshCw, Inbox, Settings, ChevronDown
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import ScannerModal from "@/components/ScannerModal";
+import { EmailLayout } from "@/components/layout/email-layout";
 
 export default function EmailClient() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const isAdmin = window.location.pathname.startsWith("/admin");
-  const returnPath = isAdmin ? "/admin/dashboard" : "/dashboard";
 
   const userInfo = (() => {
     if (isAdmin) {
@@ -357,12 +357,12 @@ export default function EmailClient() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center">
+    <EmailLayout isAdmin={isAdmin} className="flex flex-col items-center">
       <div className="w-full max-w-6xl flex flex-wrap justify-between items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={() => setLocation(returnPath)}>
-          <ArrowLeft className="h-5 w-5 mr-2" />
-          Back to Dashboard
-        </Button>
+        <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">
+          <Mail className="h-5 w-5 text-indigo-600" />
+          Mailbox
+        </h1>
 
         <div className="flex flex-wrap gap-2 sm:gap-4">
           <Button variant="outline" onClick={() => setLocation(isAdmin ? "/admin/email" : "/dashboard/email")}>
@@ -874,6 +874,6 @@ export default function EmailClient() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </EmailLayout>
   );
 }

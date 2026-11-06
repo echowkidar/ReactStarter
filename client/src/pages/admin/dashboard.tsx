@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
+import { getAdminAccess } from "@/lib/admin-access";
+import { getReportPrefix } from "@shared/reportKind";
 import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send, Lock, Unlock, ShieldAlert, ShieldCheck } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -193,6 +195,15 @@ export default function AdminDashboard() {
     },
     refetchInterval: 120000,
   });
+
+  // Reports labelled "Supplementary" (same rule as Detailed View / report pages)
+  const supplementaryReportIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const r of reports as any[]) {
+      if (r && typeof r.id === "number" && getReportPrefix(r, reports as any).trim() === "Supplementary") ids.add(r.id);
+    }
+    return ids;
+  }, [reports]);
 
   // Fetch departments with permit status (Super Admin only)
   // Fetch departments with permit status (Super Admin only)
@@ -1609,8 +1620,7 @@ export default function AdminDashboard() {
             <div className="flex justify-between items-center mb-1">
               <h3 className="text-[11px] font-semibold text-gray-700">Tickets/Actions</h3>
               {(() => {
-                const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                if (adminData.userCode === 'VEW') return null;
+                if (!getAdminAccess().tickets) return null;
                 return (
                   <Button variant="ghost" size="sm" onClick={() => setLocation("/admin/tickets")} className="text-[9px] h-4 px-1">
                     View
@@ -1903,6 +1913,11 @@ export default function AdminDashboard() {
                         return (
                           <div className="flex flex-col gap-0.5">
                             <span className="font-medium">{deptName}</span>
+                            {supplementaryReportIds.has(report.id) && (
+                              <span className="w-fit rounded border border-purple-200 bg-purple-50 px-1 py-0.5 text-[10px] text-purple-800">
+                                Supplementary Report
+                              </span>
+                            )}
                             <div className="flex items-center gap-1.5">
                               <span
                                 className="text-xs font-semibold text-green-600 cursor-pointer hover:underline"

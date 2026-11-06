@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { Route, Redirect } from "wouter";
 import { getCurrentAdmin } from "@/lib/auth"; // Adjust path if necessary
+import { canOpenAdminPage } from "@/lib/admin-access";
+import { toast } from "@/hooks/use-toast";
+
+// Shown when a logged-in admin opens a page they are not allowed to use
+function NotAllowed() {
+  useEffect(() => {
+    toast({
+      title: "Access denied",
+      description: "You are not authorized to open this page.",
+      variant: "destructive",
+    });
+  }, []);
+  return <Redirect to="/admin/dashboard" />;
+}
 
 interface ProtectedAdminRouteProps {
   path: string;
@@ -80,9 +94,12 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
   return (
     <Route
       path={path}
-      component={(props: any) =>
-        isAuthenticated ? <Component {...props} /> : <Redirect to="/admin/login" />
-      }
+      component={(props: any) => {
+        if (!isAuthenticated) return <Redirect to="/admin/login" />;
+        // Logged in, but this admin may not open this page → back to the dashboard
+        if (!canOpenAdminPage(window.location.pathname)) return <NotAllowed />;
+        return <Component {...props} />;
+      }}
     />
   );
 };

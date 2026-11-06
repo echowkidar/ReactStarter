@@ -46,7 +46,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import salaryAssistants from "@/lib/salary-assistants.json";
 import { RegisterOrderDialog } from "@/components/admin/register-order-dialog";
-import { sortByCustomOrder, stepRegister } from "@/lib/register-order";
+import { sortByCustomOrder, stepRegister, mergeOrder } from "@/lib/register-order";
 import { ChevronsLeft, ChevronsRight, ListOrdered } from "lucide-react";
 
 type AttendanceEntry = {
@@ -935,6 +935,25 @@ export default function AttendanceReports() {
     () => sortByCustomOrder(filteredSalaryRegisters, savedRegisterOrder),
     [filteredSalaryRegisters, savedRegisterOrder]
   );
+  // Register filter list = the SAME list the user built in "Arrange Salary Registers"
+  // (same order, same numbering). Registers with no entries under the current
+  // filters stay in the list but are greyed out; « » still skips them.
+  const registerFilterOptions = useMemo(() => {
+    // exact register value as stored on the entries (the filter compares exactly)
+    const inView = new Map(filteredSalaryRegisters.map(r => [r.trim().toUpperCase(), r] as const));
+    const list = savedRegisterOrder.length > 0
+      ? mergeOrder(savedRegisterOrder, filteredSalaryRegisters)
+      : orderedSalaryRegisters;
+    return list.map((register, i) => {
+      const actual = inView.get(register.trim().toUpperCase());
+      const has = actual !== undefined;
+      return {
+        label: `${i + 1}. ${actual ?? register}${has ? "" : "  (no entries)"}`,
+        value: actual ?? register,
+        className: has ? undefined : "text-slate-400 hover:bg-accent",
+      };
+    });
+  }, [savedRegisterOrder, filteredSalaryRegisters, orderedSalaryRegisters]);
   const currentRegisterPos = salaryRegisterFilter.length === 1
     ? orderedSalaryRegisters.findIndex(r => r.trim().toUpperCase() === salaryRegisterFilter[0].trim().toUpperCase()) + 1
     : 0;
@@ -2062,10 +2081,7 @@ export default function AttendanceReports() {
                 </Button>
                 <div className="flex-1 min-w-0">
                   <MultiSelect
-                    options={orderedSalaryRegisters.map(register => ({
-                      label: register,
-                      value: register
-                    }))}
+                    options={registerFilterOptions}
                     selected={salaryRegisterFilter}
                     onChange={(values) => {
                       setSalaryRegisterFilter(values);
