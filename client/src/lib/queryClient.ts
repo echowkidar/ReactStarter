@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { settingsUnlockHeader } from "./settings-unlock";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -30,6 +31,8 @@ export async function apiRequest(
   if (adminSessionToken) {
     headers["x-session-token"] = adminSessionToken;
   }
+  // Settings PIN unlock (only present while Settings are unlocked)
+  Object.assign(headers, settingsUnlockHeader());
 
   let body: BodyInit | null | undefined = undefined;
 

@@ -35,6 +35,8 @@ import {
   getActiveAttachmentMap,
 } from "./reportingEmployees";
 import { registerAdminPreferenceRoutes } from "./adminPreferences";
+import { registerSettingsPinRoutes, requireSettingsUnlock } from "./settingsPin";
+import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
 import { normaliseReportKind, findMainReport } from "../shared/reportKind";
 
 // Helper: Check if employee's current-month attendance BLOCKS transfer.
@@ -1373,15 +1375,7 @@ export async function registerRoutes(app: Express) {
       // Fetch app settings to check field visibility
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
-      const settingsResult = await db.execute(sql`SELECT key, value FROM app_settings`);
-      const settings: Record<string, string> = {};
-      for (const row of settingsResult.rows) {
-        settings[row.key as string] = row.value as string;
-      }
-
-      const showPan = settings.show_pan_field !== "false";
-      const showBank = settings.show_bank_field !== "false";
-      const showAadhar = settings.show_aadhar_field !== "false";
+      const fieldVis = await getFieldVisibility();
 
       // Reporting employees: which of these employees currently report at another department
       let reportingMap = new Map<number, any>();
@@ -1409,15 +1403,7 @@ export async function registerRoutes(app: Express) {
           }
         } : {}),
         departmentName: department.name,
-        // Filter sensitive fields if hidden in settings
-        panNumber: showPan ? emp.panNumber : "",
-        bankAccount: showBank ? emp.bankAccount : "",
-        aadharCard: showAadhar ? emp.aadharCard : "",
-        // Also mask the document URLs for hidden fields to be safe
-        panCardUrl: showPan ? emp.panCardUrl : null,
-        bankProofUrl: showBank ? emp.bankProofUrl : null,
-        aadharCardUrl: showAadhar ? emp.aadharCardUrl : null
-      }));
+      })).map(emp => maskEmployee(emp, fieldVis)); // hide fields switched off in Settings
 
       res.json(transformedEmployees);
     } catch (error) {
@@ -1575,7 +1561,10 @@ export async function registerRoutes(app: Express) {
         }
       }
 
-      const employee = await storage.updateEmployee(employeeId, updates);
+      // Hidden fields reach the form blank — never let that blank overwrite the stored value
+      const safeUpdates = stripHiddenUpdates(updates, await getFieldVisibility());
+      if (Object.keys(safeUpdates).length === 0) return res.json(currentEmployee); // nothing left to change
+      const employee = await storage.updateEmployee(employeeId, safeUpdates);
 
       // Log changes
       // Attempt to get user info, default to generic admin if not present
@@ -1628,7 +1617,7 @@ export async function registerRoutes(app: Express) {
         await storage.logEmployeeChanges(
           employeeId,
           currentEmployee,
-          updates,
+          safeUpdates,
           changedBy,
           changedByRole,
           undefined // No department ID for admin updates
@@ -1672,7 +1661,7 @@ export async function registerRoutes(app: Express) {
 
       // Handle uploaded files exactly like admin route
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-      const updates: any = {
+      let updates: any = {
         ...req.body,
         // Only update URLs if new files are uploaded (same as admin side)
         ...(files?.panCardDoc && { panCardUrl: `/uploads/${files.panCardDoc[0].filename}` }),
@@ -1682,6 +1671,10 @@ export async function registerRoutes(app: Express) {
         ...(files?.joiningReportDoc && { joiningReportUrl: `/uploads/${files.joiningReportDoc[0].filename}` }),
         ...(files?.termExtensionDoc && { termExtensionUrl: `/uploads/${files.termExtensionDoc[0].filename}` })
       };
+
+      // Hidden fields reach the form blank — never let that blank overwrite the stored value
+      updates = stripHiddenUpdates(updates, await getFieldVisibility());
+      if (Object.keys(updates).length === 0) return res.json(employee); // nothing left to change
 
       // Handle disable with reason and WEF date
       if (updates.isActive === 'disabled' && employee.isActive !== 'disabled') {
@@ -3610,7 +3603,8 @@ export async function registerRoutes(app: Express) {
   });
 
   // App Settings - PATCH (update individual setting)
-  app.patch("/api/admin/settings", async (req, res) => {
+  // Super admin only, and only while Settings are unlocked with the PIN
+  app.patch("/api/admin/settings", verifyAdminSession, requireSettingsUnlock, async (req, res) => {
     try {
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
@@ -3618,6 +3612,10 @@ export async function registerRoutes(app: Express) {
 
       if (!key || value === undefined) {
         return res.status(400).json({ message: "key and value are required" });
+      }
+      // Only the on/off switches shown on the Settings page may be changed here
+      if (typeof key !== "string" || !/^show_[a-z_]+_field$/.test(key) || !["true", "false"].includes(String(value))) {
+        return res.status(400).json({ message: "Unknown setting" });
       }
 
       await db.execute(sql`
@@ -4429,29 +4427,13 @@ export async function registerRoutes(app: Express) {
       const departmentMap = new Map(departments.map(d => [d.id, d]));
 
       // Fetch app settings to check field visibility
-      const settingsResult = await db.execute(sql`SELECT key, value FROM app_settings`);
-      const settings: Record<string, string> = {};
-      for (const row of settingsResult.rows) {
-        settings[row.key as string] = row.value as string;
-      }
-
-      const showPan = settings.show_pan_field !== "false";
-      const showBank = settings.show_bank_field !== "false";
-      const showAadhar = settings.show_aadhar_field !== "false";
+      const fieldVis = await getFieldVisibility();
 
       // Add department names to employees and filter sensitive fields
-      const employeesWithDepartments = employees.map(emp => ({
+      const employeesWithDepartments = employees.map(emp => maskEmployee({
         ...emp,
         departmentName: departmentMap.get(emp.departmentId)?.name || 'Unknown Department',
-        // Filter sensitive fields if hidden in settings
-        panNumber: showPan ? emp.panNumber : "",
-        bankAccount: showBank ? emp.bankAccount : "",
-        aadharCard: showAadhar ? emp.aadharCard : "",
-        // Also mask the document URLs for hidden fields to be safe
-        panCardUrl: showPan ? emp.panCardUrl : null,
-        bankProofUrl: showBank ? emp.bankProofUrl : null,
-        aadharCardUrl: showAadhar ? emp.aadharCardUrl : null
-      }));
+      }, fieldVis)); // hide fields switched off in Settings
 
       res.json(employeesWithDepartments);
     } catch (error) {
@@ -5761,26 +5743,10 @@ export async function registerRoutes(app: Express) {
       try {
         const { db } = await import("./db");
         const { sql } = await import("drizzle-orm");
-        const settingsResult = await db.execute(sql`SELECT key, value FROM app_settings`);
-        const settings: Record<string, string> = {};
-        for (const row of settingsResult.rows) {
-          settings[row.key as string] = row.value as string;
-        }
-
-        const showPan = settings.show_pan_field !== "false";
-        const showBank = settings.show_bank_field !== "false";
-        const showAadhar = settings.show_aadhar_field !== "false";
+        const fieldVis = await getFieldVisibility();
 
         // Filter sensitive fields
-        const filteredResults = results.map(emp => ({
-          ...emp,
-          panNumber: showPan ? emp.panNumber : "",
-          bankAccount: showBank ? emp.bankAccount : "",
-          aadharCard: showAadhar ? emp.aadharCard : "",
-          panCardUrl: showPan ? emp.panCardUrl : null,
-          bankProofUrl: showBank ? emp.bankProofUrl : null,
-          aadharCardUrl: showAadhar ? emp.aadharCardUrl : null
-        }));
+        const filteredResults = results.map((emp: any) => maskEmployee(emp, fieldVis));
 
         res.json(filteredResults);
       } catch (err) {
@@ -5788,12 +5754,7 @@ export async function registerRoutes(app: Express) {
         // Fallback to sending results if settings fail, or send empty? 
         // Safer to return results as is if DB fails, or empty. 
         // Let's return results with fields masked to be safe on error
-        const safeResults = results.map(emp => ({
-          ...emp,
-          panNumber: "",
-          bankAccount: "",
-          aadharCard: ""
-        }));
+        const safeResults = results.map((emp: any) => maskEmployee(emp, ALL_HIDDEN));
         res.json(safeResults);
       }
     } catch (error) {
@@ -6001,7 +5962,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Admin: Add new useful download
-  app.post("/api/admin/downloads", verifyAdminSession, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
+  app.post("/api/admin/downloads", verifyAdminSession, requireSettingsUnlock, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
     try {
       const { title, description, externalLink } = req.body;
       const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
@@ -6044,7 +6005,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Admin: Update useful download
-  app.patch("/api/admin/downloads/:id", verifyAdminSession, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
+  app.patch("/api/admin/downloads/:id", verifyAdminSession, requireSettingsUnlock, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
     try {
       const { id } = req.params;
       const { title, description, externalLink, removeFile, removeThumbnail } = req.body;
@@ -6093,7 +6054,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Admin: Delete useful download
-  app.delete("/api/admin/downloads/:id", verifyAdminSession, async (req, res) => {
+  app.delete("/api/admin/downloads/:id", verifyAdminSession, requireSettingsUnlock, async (req, res) => {
     try {
       const { id } = req.params;
       const { db } = await import("./db");
@@ -7149,7 +7110,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/salary-registers", verifyAdminSession, async (req, res) => {
+  app.post("/api/admin/salary-registers", verifyAdminSession, requireSettingsUnlock, async (req, res) => {
     try {
       const parsed = insertSalaryRegisterSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -7164,7 +7125,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/admin/salary-registers/:id", verifyAdminSession, async (req, res) => {
+  app.patch("/api/admin/salary-registers/:id", verifyAdminSession, requireSettingsUnlock, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -7187,7 +7148,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/admin/salary-registers/:id", verifyAdminSession, async (req, res) => {
+  app.delete("/api/admin/salary-registers/:id", verifyAdminSession, requireSettingsUnlock, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -7260,6 +7221,7 @@ export async function registerRoutes(app: Express) {
 
   // ================= ADMIN PREFERENCES (salary register order) =================
   registerAdminPreferenceRoutes(app, storage);
+  registerSettingsPinRoutes(app, verifyAdminSession);
 
   return httpServer;
 }

@@ -150,8 +150,31 @@ export async function runMigrations() {
       INSERT INTO app_settings (key, value) VALUES
         ('show_pan_field', 'true'),
         ('show_bank_field', 'true'),
-        ('show_aadhar_field', 'true')
+        ('show_aadhar_field', 'true'),
+        ('show_employee_category_field', 'false')
       ON CONFLICT (key) DO NOTHING;
+    `);
+
+    // Employee fields filled from the Oracle payroll master (all optional)
+    await db.execute(sql`
+      ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS employee_category TEXT,
+        ADD COLUMN IF NOT EXISTS bank_name TEXT,
+        ADD COLUMN IF NOT EXISTS ifsc TEXT,
+        ADD COLUMN IF NOT EXISTS oracle_emp_status TEXT,
+        ADD COLUMN IF NOT EXISTS sal_group TEXT,
+        ADD COLUMN IF NOT EXISTS oracle_synced_at TIMESTAMP;
+    `);
+
+    // Settings page PIN (one row per admin, scrypt hash) — see server/settingsPin.ts
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS admin_settings_pin (
+        admin_id INTEGER PRIMARY KEY,
+        pin_hash TEXT NOT NULL,
+        failed_attempts INTEGER NOT NULL DEFAULT 0,
+        locked_until TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
     `);
 
     // Add department_id column to attendance_entries table

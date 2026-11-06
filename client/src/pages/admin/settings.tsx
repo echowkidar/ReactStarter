@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, CreditCard, Building2, Fingerprint } from "lucide-react";
+import { ArrowLeft, CreditCard, Building2, Fingerprint, GraduationCap } from "lucide-react";
 import AdminHeader from "@/components/layout/admin-header";
 import Loading from "@/components/layout/loading";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { UsefulDownloadsManager } from "@/components/admin/useful-downloads-manager";
 import { SalaryRegisterManager } from "@/components/admin/salary-register-manager";
+import { SettingsPinGate } from "@/components/admin/settings-pin-gate";
 
 type Settings = Record<string, string>;
 
@@ -30,8 +31,8 @@ export default function AdminSettings() {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
             toast({ title: "Setting updated", description: "Changes saved successfully." });
         },
-        onError: () => {
-            toast({ variant: "destructive", title: "Error", description: "Failed to update setting." });
+        onError: (err: any) => {
+            toast({ variant: "destructive", title: "Error", description: err?.message || "Failed to update setting." });
         },
     });
 
@@ -55,7 +56,7 @@ export default function AdminSettings() {
         {
             key: "show_bank_field",
             label: "Bank Account",
-            description: "Show Bank Account field and Bank Account Proof document upload in employee forms",
+            description: "Show Bank Account, Bank Name, IFSC and Bank Account Proof document upload in employee forms",
             icon: Building2,
             color: "text-green-600",
         },
@@ -65,6 +66,13 @@ export default function AdminSettings() {
             description: "Show Aadhar Number field and Aadhar Card document upload in employee forms",
             icon: Fingerprint,
             color: "text-purple-600",
+        },
+        {
+            key: "show_employee_category_field",
+            label: "Employee Category",
+            description: "Show Teaching / Non-Teaching in employee forms (filled from the Oracle payroll master)",
+            icon: GraduationCap,
+            color: "text-amber-600",
         },
     ];
 
@@ -80,6 +88,7 @@ export default function AdminSettings() {
                     </Button>
                 </div>
 
+                <SettingsPinGate>
                 <Card className="max-w-2xl">
                     <CardHeader>
                         <CardTitle className="text-lg">Employee Form Field Visibility</CardTitle>
@@ -123,6 +132,7 @@ export default function AdminSettings() {
 
                 <UsefulDownloadsManager />
                 <SalaryRegisterManager />
+                </SettingsPinGate>
             </div>
         </div>
     );

@@ -61,6 +61,15 @@ export const employees = pgTable("employees", {
   transferStatus: text("transfer_status"),       // pending, null
   // Custom sort order for employees with same pay level
   sortOrder: integer("sort_order").notNull().default(0),
+  // Filled from the Oracle payroll master (M_EMP_MAST) by the Oracle sync; optional in forms.
+  // Shown to users only when switched on in Settings (like PAN / Aadhar).
+  employeeCategory: text("employee_category"),   // "Teaching" (EMP_CAT P) / "Non-Teaching" (Q)
+  bankName: text("bank_name"),                   // M_BANK.BANK_NAME via BANK_CODE
+  ifsc: text("ifsc"),
+  // Oracle-only info, kept for the sync page (never edited in forms)
+  oracleEmpStatus: text("oracle_emp_status"),    // EMP_STATUS code: C,T,P,D,Q,X,Y,O
+  salGroup: text("sal_group"),                   // SALGROUP code: RG, FX, DC, ...
+  oracleSyncedAt: timestamp("oracle_synced_at"), // last time the sync updated this employee
 });
 
 export const departmentNames = pgTable("department_names", {
@@ -158,6 +167,10 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     bankAccount: z.string().optional().default(""),
     panNumber: z.string().optional().default(""),
     aadharCard: z.string().optional().default(""),
+    employeeCategory: z.enum(["Teaching", "Non-Teaching"]).nullable().optional()
+      .or(z.literal("").transform(() => null)),
+    bankName: z.string().max(100).nullable().optional(),
+    ifsc: z.string().max(11).nullable().optional(),
     // Document URLs should be optional but preserve their values when present
     panCardUrl: z.string().nullable(),
     bankProofUrl: z.string().nullable(),

@@ -29,6 +29,9 @@ const employeeSchema = z.object({
   panNumber: z.string().optional(),
   bankAccount: z.string().optional(),
   aadharCard: z.string().optional(),
+  bankName: z.string().max(100).optional(),
+  ifsc: z.string().max(11, "IFSC is 11 characters").optional(),
+  employeeCategory: z.enum(["", "Teaching", "Non-Teaching"]).optional(),
   designation: z.string().min(1, "Designation is required"),
 
   employmentStatus: z.enum(employmentStatuses),
@@ -75,6 +78,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
   const showPan = fieldSettings?.show_pan_field !== "false";
   const showBank = fieldSettings?.show_bank_field !== "false";
   const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+  const showCategory = fieldSettings?.show_employee_category_field === "true";
 
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
@@ -84,6 +88,9 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       panNumber: "",
       bankAccount: "",
       aadharCard: "",
+      bankName: "",
+      ifsc: "",
+      employeeCategory: "",
       designation: "",
       employmentStatus: "Permanent",
       payLevel: "L-0",
@@ -337,7 +344,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
           </div>
 
           {/* Identification Details Section */}
-          {(showPan || showBank || showAadhar) && (
+          {(showPan || showBank || showAadhar || showCategory) && (
             <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
               <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -381,6 +388,61 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                         <FormControl>
                           <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {showBank && (
+                  <FormField
+                    control={form.control}
+                    name="bankName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bank Name <span className="text-xs text-muted-foreground">(optional)</span></FormLabel>
+                        <FormControl>
+                          <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {showBank && (
+                  <FormField
+                    control={form.control}
+                    name="ifsc"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>IFSC <span className="text-xs text-muted-foreground">(optional)</span></FormLabel>
+                        <FormControl>
+                          <Input {...field} maxLength={11} onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                            disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {showCategory && (
+                  <FormField
+                    control={form.control}
+                    name="employeeCategory"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Employee Category <span className="text-xs text-muted-foreground">(optional)</span></FormLabel>
+                        <Select disabled={isLoading} onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
+                          <FormControl>
+                            <SelectTrigger className="bg-white dark:bg-slate-800">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Not set</SelectItem>
+                            <SelectItem value="Teaching">Teaching</SelectItem>
+                            <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

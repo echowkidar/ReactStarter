@@ -63,6 +63,7 @@ export default function AdminEmployees() {
   const showPan = fieldSettings?.show_pan_field !== "false";
   const showBank = fieldSettings?.show_bank_field !== "false";
   const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+  const showCategory = fieldSettings?.show_employee_category_field === "true";
 
   // Fetch all salary registers dynamically
   const { data: registers } = useQuery<{id: number; value: string; label: string; departmentId: number | null}[]>({
@@ -1288,7 +1289,7 @@ export default function AdminEmployees() {
                             </div>
                           </div>
 
-                          {(showPan || showBank || showAadhar) && (
+                          {(showPan || showBank || showAadhar || showCategory) && (
                             <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                               <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -1324,6 +1325,44 @@ export default function AdminEmployees() {
                                       className="bg-white dark:bg-slate-800"
                                       onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
                                     />
+                                  </div>
+                                )}
+                                {showBank && (
+                                  <div>
+                                    <Label htmlFor="bankName">Bank Name <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                                    <Input
+                                      id="bankName"
+                                      name="bankName"
+                                      defaultValue={selectedEmployee?.bankName || ""}
+                                      className="bg-white dark:bg-slate-800"
+                                    />
+                                  </div>
+                                )}
+                                {showBank && (
+                                  <div>
+                                    <Label htmlFor="ifsc">IFSC <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                                    <Input
+                                      id="ifsc"
+                                      name="ifsc"
+                                      maxLength={11}
+                                      defaultValue={selectedEmployee?.ifsc || ""}
+                                      className="bg-white dark:bg-slate-800 uppercase"
+                                    />
+                                  </div>
+                                )}
+                                {showCategory && (
+                                  <div>
+                                    <Label htmlFor="employeeCategory">Employee Category <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                                    <select
+                                      id="employeeCategory"
+                                      name="employeeCategory"
+                                      defaultValue={selectedEmployee?.employeeCategory || ""}
+                                      className="flex h-10 w-full rounded-md border border-input bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+                                    >
+                                      <option value="">Not set</option>
+                                      <option value="Teaching">Teaching</option>
+                                      <option value="Non-Teaching">Non-Teaching</option>
+                                    </select>
                                   </div>
                                 )}
                               </div>

@@ -242,6 +242,12 @@ export class MemStorage implements IStorage {
       bankAccount: employee.bankAccount || "",
       panNumber: employee.panNumber || "",
       aadharCard: employee.aadharCard || "",
+      employeeCategory: employee.employeeCategory ?? null,
+      bankName: employee.bankName ?? null,
+      ifsc: employee.ifsc ?? null,
+      oracleEmpStatus: employee.oracleEmpStatus ?? null,
+      salGroup: employee.salGroup ?? null,
+      oracleSyncedAt: employee.oracleSyncedAt ?? null,
       // Preserve document URLs
       panCardUrl: employee.panCardUrl || null,
       bankProofUrl: employee.bankProofUrl || null,

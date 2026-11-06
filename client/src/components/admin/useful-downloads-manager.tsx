@@ -16,6 +16,7 @@ import {
 import { Plus, Trash2, Edit, FileText, Link as LinkIcon, Image as ImageIcon, Globe } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { settingsUnlockHeader } from "@/lib/settings-unlock";
 
 type UsefulDownload = {
     id: number;
@@ -44,7 +45,8 @@ export function UsefulDownloadsManager() {
             const res = await fetch("/api/admin/downloads", {
                 method: "POST",
                 headers: {
-                    "x-session-token": localStorage.getItem("adminSessionToken") || ""
+                    "x-session-token": localStorage.getItem("adminSessionToken") || "",
+                    ...settingsUnlockHeader(),
                 },
                 body: formData,
             });
@@ -66,7 +68,8 @@ export function UsefulDownloadsManager() {
             const res = await fetch(`/api/admin/downloads/${id}`, {
                 method: "PATCH",
                 headers: {
-                    "x-session-token": localStorage.getItem("adminSessionToken") || ""
+                    "x-session-token": localStorage.getItem("adminSessionToken") || "",
+                    ...settingsUnlockHeader(),
                 },
                 body: formData,
             });
@@ -88,7 +91,8 @@ export function UsefulDownloadsManager() {
             const res = await fetch(`/api/admin/downloads/${id}`, {
                 method: "DELETE",
                 headers: {
-                    "x-session-token": localStorage.getItem("adminSessionToken") || ""
+                    "x-session-token": localStorage.getItem("adminSessionToken") || "",
+                    ...settingsUnlockHeader(),
                 }
             });
             if (!res.ok) throw new Error(await res.text());

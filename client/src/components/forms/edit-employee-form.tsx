@@ -109,6 +109,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
   const showPan = fieldSettings?.show_pan_field !== "false";
   const showBank = fieldSettings?.show_bank_field !== "false";
   const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+  const showCategory = fieldSettings?.show_employee_category_field === "true";
 
   // Disable modal state
   const [showDisableModal, setShowDisableModal] = useState(false);
@@ -437,6 +438,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
       panNumber: employee.panNumber || "",
       bankAccount: employee.bankAccount || "",
       aadharCard: employee.aadharCard || "",
+      bankName: employee.bankName || "",
+      ifsc: employee.ifsc || "",
+      employeeCategory: (employee.employeeCategory as any) || "",
       officeMemoNo: employee.officeMemoNo || "",
       joiningDate: employee.joiningDate || "",
       joiningShift: employee.joiningShift || "FN",
@@ -752,6 +756,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
           panNumber: data.panNumber || "",
           bankAccount: data.bankAccount || "",
           aadharCard: data.aadharCard || "",
+          // Sent only when shown; hidden ones keep their stored (e.g. Oracle) value
+          ...(showBank && { bankName: data.bankName || null, ifsc: (data.ifsc || "").toUpperCase() || null }),
+          ...(showCategory && { employeeCategory: data.employeeCategory || null }),
           officeMemoNo: data.officeMemoNo || "",
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
@@ -813,6 +820,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
           panNumber: data.panNumber || "",
           bankAccount: data.bankAccount || "",
           aadharCard: data.aadharCard || "",
+          // Sent only when shown; hidden ones keep their stored (e.g. Oracle) value
+          ...(showBank && { bankName: data.bankName || null, ifsc: (data.ifsc || "").toUpperCase() || null }),
+          ...(showCategory && { employeeCategory: data.employeeCategory || null }),
           officeMemoNo: data.officeMemoNo || "",
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
@@ -1307,6 +1317,41 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                       />
                     </div>
                   </>
+                )}
+
+                {showBank && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Bank Name <span className="text-xs text-slate-400">(optional)</span></label>
+                      <input
+                        {...register("bankName")}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">IFSC <span className="text-xs text-slate-400">(optional)</span></label>
+                      <input
+                        {...register("ifsc")}
+                        maxLength={11}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all uppercase"
+                      />
+                      {errors.ifsc && <p className="text-red-500 text-xs mt-1">{String(errors.ifsc.message)}</p>}
+                    </div>
+                  </>
+                )}
+
+                {showCategory && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Employee Category <span className="text-xs text-slate-400">(optional)</span></label>
+                    <select
+                      {...register("employeeCategory")}
+                      className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                    >
+                      <option value="">Not set</option>
+                      <option value="Teaching">Teaching</option>
+                      <option value="Non-Teaching">Non-Teaching</option>
+                    </select>
+                  </div>
                 )}
 
                 <div>
