@@ -36,6 +36,7 @@ import {
 } from "./reportingEmployees";
 import { registerAdminPreferenceRoutes } from "./adminPreferences";
 import { registerSettingsPinRoutes, requireSettingsUnlock } from "./settingsPin";
+import { registerOracleSyncRoutes } from "./oracleSync";
 import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
 import { normaliseReportKind, findMainReport } from "../shared/reportKind";
 
@@ -7222,6 +7223,7 @@ export async function registerRoutes(app: Express) {
   // ================= ADMIN PREFERENCES (salary register order) =================
   registerAdminPreferenceRoutes(app, storage);
   registerSettingsPinRoutes(app, verifyAdminSession);
+  registerOracleSyncRoutes(app, verifyAdminSession);
 
   return httpServer;
 }

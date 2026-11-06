@@ -77,6 +77,11 @@ services:
       RECEIVE_OLLAMA_API_KEY: ${RECEIVE_OLLAMA_API_KEY:-}
       RECEIVE_OLLAMA_MODEL: ${RECEIVE_OLLAMA_MODEL:-}
       LPC_DISPATCH_EMAILS: ${LPC_DISPATCH_EMAILS:-}
+      # Settings PIN unlock tokens stay valid across restarts when this is set
+      SETTINGS_PIN_SECRET: ${SETTINGS_PIN_SECRET:-}
+      # Oracle sync container (separate stack, oracle-sync/docker-compose.yml)
+      ORACLE_SYNC_URL: ${ORACLE_SYNC_URL:-http://oracle-sync:8000}
+      ORACLE_SYNC_KEY: ${ORACLE_SYNC_KEY:-}
     volumes:
       - /srv/attendance/uploads:/app/uploads
       # LPC signing CA (key + cert + p12). The app generates a NEW CA if this folder
@@ -92,3 +97,8 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+
+# Fixed network name so the separate oracle-sync stack can join it
+networks:
+  default:
+    name: attendance-net

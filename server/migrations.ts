@@ -166,6 +166,44 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS oracle_synced_at TIMESTAMP;
     `);
 
+    // Oracle sync (see server/oracleSync.ts): data read from the payroll master,
+    // every sync run, and every value it changed (so a run can be undone).
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS oracle_snapshots (
+        id SERIAL PRIMARY KEY,
+        fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        fetched_by TEXT NOT NULL,
+        paybill_year INTEGER,
+        paybill_month INTEGER,
+        row_count INTEGER NOT NULL,
+        rows JSONB NOT NULL
+      );
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS oracle_sync_runs (
+        id SERIAL PRIMARY KEY,
+        snapshot_id INTEGER NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_by TEXT NOT NULL,
+        summary JSONB NOT NULL,
+        undone_at TIMESTAMPTZ,
+        undone_by TEXT,
+        undo_summary JSONB
+      );
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS oracle_sync_changes (
+        id SERIAL PRIMARY KEY,
+        run_id INTEGER NOT NULL,
+        employee_id INTEGER NOT NULL,
+        epid TEXT NOT NULL,
+        field TEXT NOT NULL,
+        old_value TEXT,
+        new_value TEXT
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS oracle_sync_changes_run_idx ON oracle_sync_changes (run_id)`);
+
     // Settings page PIN (one row per admin, scrypt hash) — see server/settingsPin.ts
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS admin_settings_pin (

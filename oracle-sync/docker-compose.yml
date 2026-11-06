@@ -1,0 +1,44 @@
+# Oracle sync — a SEPARATE Portainer stack from the attendance app.
+#
+# Keep it STOPPED. To sync employees:
+#   Portainer -> Containers -> attendance-oracle-sync -> Start
+#   App: Settings -> Oracle Sync -> "Fetch from Oracle", review, update
+#   Portainer -> Stop   (the data is kept in the app, the Oracle link is closed)
+#
+# Portainer: Stacks -> Add stack -> Repository, compose path: oracle-sync/docker-compose.yml
+# Environment variables of this stack:
+#   ORACLE_USER, ORACLE_PASSWORD      payroll login (used READ-ONLY, see queries.py)
+#   ORACLE_DSN                        default 10.0.93.148:1521/TENG
+#   ORACLE_SYNC_KEY                   long random text, SAME value as in the app stack
+#
+# No port is published: only the attendance app reaches it, over the
+# attendance-net Docker network created by the app stack.
+
+services:
+  oracle-sync:
+    build: .
+    container_name: attendance-oracle-sync
+    restart: "no"                 # never starts by itself
+    environment:
+      ORACLE_DSN: ${ORACLE_DSN:-10.0.93.148:1521/TENG}
+      ORACLE_USER: ${ORACLE_USER}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD}
+      ORACLE_SYNC_KEY: ${ORACLE_SYNC_KEY}
+    networks:
+      - attendance-net
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+networks:
+  attendance-net:
+    external: true
+    name: attendance-net

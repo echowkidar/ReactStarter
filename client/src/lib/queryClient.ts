@@ -72,6 +72,7 @@ export const getQueryFn: <T>(options: {
       if (adminSessionToken) {
         headers["x-session-token"] = adminSessionToken;
       }
+      Object.assign(headers, settingsUnlockHeader());
 
       const res = await fetch(queryKey[0] as string, {
         headers,

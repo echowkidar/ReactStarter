@@ -111,6 +111,8 @@ const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 // Requests that never change department-visible data
 const IGNORED_PREFIXES = [
   "/api/live/",
+  "/api/admin/settings-pin",        // PIN checks change no shown data
+  "/api/admin/oracle-sync/fetch",   // only stores an Oracle snapshot
   "/api/heartbeat",
   "/api/visitors",
   "/api/auth",
@@ -136,6 +138,8 @@ const GLOBAL_PREFIXES = [
   "/api/admin/salary-registers",
   "/api/admin/seed-salary-registers",
   "/api/admin/downloads",
+  "/api/admin/oracle-sync/apply",   // may change many employees in many departments
+  "/api/admin/oracle-sync/runs",    // undo
 ];
 
 export interface ParsedChange {

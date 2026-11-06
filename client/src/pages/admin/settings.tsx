@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, CreditCard, Building2, Fingerprint, GraduationCap } from "lucide-react";
+import { ArrowLeft, CreditCard, Building2, Fingerprint, GraduationCap, Database, ChevronRight } from "lucide-react";
 import AdminHeader from "@/components/layout/admin-header";
 import Loading from "@/components/layout/loading";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -89,6 +89,20 @@ export default function AdminSettings() {
                 </div>
 
                 <SettingsPinGate>
+                <Card className="max-w-2xl mb-6">
+                    <CardContent className="pt-6 flex items-center gap-4">
+                        <div className="p-2 rounded-full bg-slate-100 text-indigo-600"><Database className="h-5 w-5" /></div>
+                        <div className="flex-1">
+                            <Label className="text-base font-medium">Oracle Sync</Label>
+                            <p className="text-sm text-muted-foreground">
+                                Compare employees with the Oracle payroll master and update them (needs the oracle-sync container running).
+                            </p>
+                        </div>
+                        <Button onClick={() => setLocation("/admin/settings/oracle-sync")}>
+                            Open <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </CardContent>
+                </Card>
                 <Card className="max-w-2xl">
                     <CardHeader>
                         <CardTitle className="text-lg">Employee Form Field Visibility</CardTitle>
