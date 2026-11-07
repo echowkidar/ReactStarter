@@ -3594,7 +3594,7 @@ export async function registerRoutes(app: Express) {
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
       // Only the on/off switches; other keys (e.g. oracle_sync_config) have their own APIs
-      const result = await db.execute(sql`SELECT key, value FROM app_settings WHERE key LIKE 'show%'`);
+      const result = await db.execute(sql`SELECT key, value FROM app_settings WHERE key LIKE 'show%' OR key = 'attendance_term_check'`);
       const settings: Record<string, string> = {};
       for (const row of result.rows) {
         settings[row.key as string] = row.value as string;
@@ -3618,12 +3618,15 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "key and value are required" });
       }
       // Only the on/off switches shown on the Settings page may be changed here
-      if (typeof key !== "string" || !/^show_[a-z_]+_field$/.test(key) || !["true", "false"].includes(String(value))) {
+      // (plus the attendance Term Check switch)
+      const knownKey = typeof key === "string" && (/^show_[a-z_]+_field$/.test(key) || key === "attendance_term_check");
+      if (!knownKey || !["true", "false"].includes(String(value))) {
         return res.status(400).json({ message: "Unknown setting" });
       }
 
       await db.execute(sql`
-        UPDATE app_settings SET value = ${String(value)} WHERE key = ${key}
+        INSERT INTO app_settings (key, value) VALUES (${key}, ${String(value)})
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
       `);
 
       // Return all settings

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, CreditCard, Building2, Fingerprint, GraduationCap, Database, ChevronRight } from "lucide-react";
+import { ArrowLeft, CreditCard, Building2, Fingerprint, GraduationCap, Database, ChevronRight, CalendarClock } from "lucide-react";
 import AdminHeader from "@/components/layout/admin-header";
 import Loading from "@/components/layout/loading";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -101,6 +101,24 @@ export default function AdminSettings() {
                         <Button onClick={() => setLocation("/admin/settings/oracle-sync")}>
                             Open <ChevronRight className="h-4 w-4 ml-1" />
                         </Button>
+                    </CardContent>
+                </Card>
+                <Card className="max-w-2xl mb-6">
+                    <CardContent className="pt-6 flex items-center gap-4">
+                        <div className="p-2 rounded-full bg-slate-100 text-rose-600"><CalendarClock className="h-5 w-5" /></div>
+                        <div className="flex-1">
+                            <Label className="text-base font-medium">Attendance Term Check</Label>
+                            <p className="text-sm text-muted-foreground">
+                                When creating an attendance report, warn about Temporary / Probation employees whose term ends
+                                before the attendance period, and let the department extend the term or give a reason.
+                                Switched off, reports are created as before, without this check.
+                            </p>
+                        </div>
+                        <Switch
+                            checked={settings?.attendance_term_check !== "false"}
+                            onCheckedChange={(on) => updateSetting.mutate({ key: "attendance_term_check", value: on ? "true" : "false" })}
+                            disabled={updateSetting.isPending}
+                        />
                     </CardContent>
                 </Card>
                 <Card className="max-w-2xl">

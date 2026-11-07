@@ -114,3 +114,24 @@
     box-shadow: none !important;
   }
 }
+/* Attendance Term Check: employee whose term ends before the attendance period */
+@keyframes term-alert-pulse {
+  0%, 100% { background-color: rgb(254 226 226); box-shadow: inset 0 0 0 2px rgb(248 113 113); }
+  50% { background-color: rgb(254 202 202); box-shadow: inset 0 0 0 2px rgb(220 38 38); }
+}
+@keyframes term-row-flash {
+  0%, 100% { background-color: rgb(255 251 235); }
+  50% { background-color: rgb(254 243 199); }
+}
+@keyframes term-locate-flash {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: inset 0 0 0 3px rgb(37 99 235); }
+}
+.term-alert-row { animation: term-row-flash 1.6s ease-in-out infinite; }
+.term-alert-cell { animation: term-alert-pulse 1.2s ease-in-out infinite; color: rgb(153 27 27); font-weight: 700; border-radius: 4px; }
+.term-locate { animation: term-locate-flash 0.5s ease-in-out 4; }
+@media (prefers-reduced-motion: reduce) {
+  .term-alert-row { animation: none; background-color: rgb(254 243 199); }
+  .term-alert-cell { animation: none; background-color: rgb(254 202 202); }
+  .term-locate { animation: none; box-shadow: inset 0 0 0 3px rgb(37 99 235); }
+}

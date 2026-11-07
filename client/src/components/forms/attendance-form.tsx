@@ -3,7 +3,8 @@ import { LIVE_CHANGE_EVENT } from "@/hooks/useDepartmentLiveUpdates";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { TermCheckDialog, type TermIssue } from "@/components/forms/term-check-dialog";
 import { getCurrentDepartment } from "@/lib/auth";
 import { getPayLevelOrder } from "@/lib/pay-levels";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, X, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Loader2, Plus, X, ChevronsLeft, ChevronsRight, AlertTriangle, Undo2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const months = [
@@ -26,6 +27,34 @@ const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
 const AUTO_REMARK_TEXT = "No break in the previous month as well";
+
+// ── Term Check ──────────────────────────────────────────────────────────────
+// A Temporary / Probation employee whose term ends before the attendance period
+// must have the term updated, or a reason written in Remarks, e.g.
+// "Term upto 31-10-26 - Extension order awaited". That remark is what marks the
+// employee as dealt with, so deleting it brings the warning back.
+const TERM_CHECK_STATUSES = ["TEMPORARY", "PROBATION"];
+// A reason must follow the dash — "Term upto 15-11-26 - " alone does not count
+const TERM_REMARK_TEST = /Term (upto \d{2}-\d{2}-\d{2}|not entered) - *[^;\s]/;
+const TERM_REMARK_STRIP = /(;\s*)?Term (upto \d{2}-\d{2}-\d{2}|not entered) - [^;]*/g;
+
+const stripTermRemark = (remarks: string): string =>
+  (remarks || "").replace(TERM_REMARK_STRIP, "").replace(/^\s*;\s*/, "").trim();
+
+// Term expiry is stored as YYYY-MM-DD (date input); older / imported values may be DD-MM-YYYY
+const parseTermExpiry = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+  const v = String(value).trim().slice(0, 10);
+  let m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  m = v.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  if (m) {
+    const y = Number(m[3]) < 100 ? 2000 + Number(m[3]) : Number(m[3]);
+    return new Date(y, Number(m[2]) - 1, Number(m[1]));
+  }
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
 
 // Utility function to format date to DD-MM-YY
 const formatDateForDisplay = (date: Date): string => {
@@ -161,6 +190,8 @@ interface AttendanceFormProps {
   departmentId?: number;
   // 'reporting' = Reporting Employees report (Admin Non Teaching). Default 'regular'.
   reportType?: 'regular' | 'reporting';
+  // Term Check popup (department side). Admin editing a report passes false.
+  termCheck?: boolean;
 }
 
 // Add the formatTermExpiry function
@@ -181,7 +212,7 @@ const formatTermExpiry = (dateStr: string | null | undefined, employmentStatus?:
   }
 };
 
-export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary, departmentId: propDepartmentId, reportType = 'regular' }: AttendanceFormProps) {
+export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary, departmentId: propDepartmentId, reportType = 'regular', termCheck = true }: AttendanceFormProps) {
   const isReportingMode = reportType === 'reporting';
   const currentDept = getCurrentDepartment();
   const departmentId = propDepartmentId || currentDept?.id;
@@ -290,6 +321,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
   const [reportedEmployeeIds, setReportedEmployeeIds] = useState<Set<number>>(new Set());
+  // Employees ticked since the last render — a Term Check popup opens for them if needed
+  const justTickedRef = React.useRef<Set<number>>(new Set());
   // Live updates (Admin changes while this popup is open)
   const [liveTick, setLiveTick] = useState(0);
   const [liveRemovedNames, setLiveRemovedNames] = useState<string[]>([]);
@@ -591,6 +624,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           return prev;
         }
         next.add(employeeId);
+        justTickedRef.current.add(employeeId);
         // Initialize entry when adding employee
         const currentEntries = form.getValues("entries") || [];
         const isGuest = isGuestTeacher(employeeId);
@@ -904,6 +938,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     } else {
       // Select all eligible employees
       const newIncluded = new Set([...includedEmployees, ...eligibleEmployees.map((emp: any) => emp.id)]);
+      eligibleEmployees.forEach((emp: any) => { if (!includedEmployees.has(emp.id)) justTickedRef.current.add(emp.id); });
       setIncludedEmployees(newIncluded);
 
       // Initialize entries for newly added eligible employees
@@ -943,6 +978,127 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     }
   };
 
+  // ── Term Check ────────────────────────────────────────────────────────────
+  const queryClient = useQueryClient();
+  const { data: appSettings } = useQuery<Record<string, string>>({ queryKey: ["/api/admin/settings"] });
+  // Off on the Admin Settings page → reports are created exactly as before
+  const termCheckOn = termCheck && !isReportingMode && !!appSettings && appSettings.attendance_term_check !== "false";
+  const [termDialogOpen, setTermDialogOpen] = useState(false);
+
+  type TermState = Omit<TermIssue, "serial"> & { bypassed: boolean; bypassReason: string; expiry: Date | null };
+  const getTermState = (emp: any, periods: Array<{ fromDate: string; toDate: string; remarks?: string }>): TermState | null => {
+    if (!termCheckOn || !emp) return null;
+    if (!TERM_CHECK_STATUSES.includes(String(emp.employmentStatus || "").toUpperCase())) return null;
+    const valid = (periods || []).filter((p) =>
+      !isNaN(parseDateFromDisplay(p.fromDate).getTime()) && !isNaN(parseDateFromDisplay(p.toDate).getTime()));
+    if (valid.length === 0) return null;
+    const lastTo = valid.reduce((a, p) => Math.max(a, dayNumber(parseDateFromDisplay(p.toDate))), -Infinity);
+    const firstFrom = valid.reduce((a, p) => Math.min(a, dayNumber(parseDateFromDisplay(p.fromDate))), Infinity);
+    const expiry = parseTermExpiry(emp.termExpiry);
+    if (expiry && dayNumber(expiry) >= lastTo) return null; // term covers the whole period
+    const remark = valid.map((p) => p.remarks || "").find((r) => TERM_REMARK_TEST.test(r)) || "";
+    const reasonMatch = remark.match(/Term (?:upto \d{2}-\d{2}-\d{2}|not entered) - ([^;]*)/);
+    return {
+      employee: emp,
+      kind: expiry ? "short" : "missing",
+      expiry,
+      expiryDisplay: expiry ? formatDateForDisplay(expiry) : "",
+      periodTo: valid.find((p) => dayNumber(parseDateFromDisplay(p.toDate)) === lastTo)!.toDate,
+      canTrim: !!expiry && dayNumber(expiry) >= firstFrom,
+      bypassed: !!remark,
+      bypassReason: reasonMatch ? reasonMatch[1].trim() : "",
+    };
+  };
+
+  const entriesNow = form.getValues("entries") || [];
+  const termStateById = new Map<number, TermState & { serial: number }>();
+  employees
+    .filter((e: any) => includedEmployees.has(e.id))
+    .forEach((e: any, i: number) => {
+      const entry = entriesNow.find((en) => en.employeeId === e.id);
+      const st = entry ? getTermState(e, entry.periods) : null;
+      if (st) termStateById.set(e.id, { ...st, serial: i + 1 });
+    });
+  const pendingTermIssues = Array.from(termStateById.values()).filter((t) => !t.bypassed);
+  const pendingTermKey = pendingTermIssues.map((t) => t.employee.id).join(",");
+
+  // Open the popup when a just-ticked employee has a term problem
+  useEffect(() => {
+    const ticked = justTickedRef.current;
+    if (ticked.size === 0) return;
+    justTickedRef.current = new Set();
+    if (pendingTermIssues.some((t) => ticked.has(t.employee.id))) setTermDialogOpen(true);
+  }, [includedEmployees, pendingTermKey]);
+
+  // Everything resolved → close the popup
+  useEffect(() => {
+    if (termDialogOpen && pendingTermIssues.length === 0) {
+      setTermDialogOpen(false);
+      toast({ title: "Term Check complete", description: "All selected employees are now in order." });
+    }
+  }, [pendingTermKey, termDialogOpen]);
+
+  const updateEntryPeriods = (employeeId: number, fn: (periods: any[]) => any[]) => {
+    const entries = form.getValues("entries") || [];
+    const idx = entries.findIndex((en) => en.employeeId === employeeId);
+    if (idx === -1) return;
+    const next = [...entries];
+    next[idx] = { ...next[idx], periods: fn([...next[idx].periods]) };
+    form.setValue("entries", next, { shouldDirty: true });
+  };
+
+  // "Attendance upto <expiry>": cut every period at the term expiry date
+  const trimToTermExpiry = (employeeId: number) => {
+    const st = termStateById.get(employeeId);
+    if (!st?.expiry) return;
+    const exp = dayNumber(st.expiry);
+    const guest = isGuestTeacher(employeeId);
+    updateEntryPeriods(employeeId, (periods) => periods
+      .filter((p) => dayNumber(parseDateFromDisplay(p.fromDate)) <= exp)
+      .map((p) => {
+        if (dayNumber(parseDateFromDisplay(p.toDate)) <= exp) return p;
+        const toDate = formatDateForDisplay(st.expiry!);
+        return { ...p, toDate, days: guest ? p.days : calculateDays(p.fromDate, toDate) };
+      }));
+  };
+
+  // Write the chosen reason into Remarks (period that runs past the expiry, else the first)
+  const bypassTerm = (employeeId: number, reason: string) => {
+    const st = termStateById.get(employeeId);
+    if (!st) return;
+    const text = st.kind === "missing" ? `Term not entered - ${reason}` : `Term upto ${st.expiryDisplay} - ${reason}`;
+    updateEntryPeriods(employeeId, (periods) => {
+      let target = st.expiry
+        ? periods.findIndex((p) => dayNumber(parseDateFromDisplay(p.toDate)) > dayNumber(st.expiry!))
+        : 0;
+      if (target < 0) target = 0;
+      const existing = stripTermRemark(periods[target].remarks || "");
+      periods[target] = { ...periods[target], remarks: existing ? `${existing}; ${text}` : text };
+      return periods;
+    });
+  };
+
+  const undoTermBypass = (employeeId: number) => {
+    updateEntryPeriods(employeeId, (periods) => periods.map((p) => ({ ...p, remarks: stripTermRemark(p.remarks || "") })));
+  };
+
+  const locateEmployeeRow = (employeeId: number) => {
+    setTimeout(() => {
+      const row = document.getElementById(`att-row-${employeeId}`);
+      if (!row) return;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.classList.remove("term-locate");
+      void row.offsetWidth; // restart the animation
+      row.classList.add("term-locate");
+      setTimeout(() => row.classList.remove("term-locate"), 2200);
+    }, 150);
+  };
+
+  const refreshEmployees = async () => {
+    await queryClient.invalidateQueries({ queryKey: [`/api/departments/${departmentId}/employees`] });
+    toast({ title: "Employee updated", description: "Term saved to the employee record." });
+  };
+
   if (loadingEmployees) {
     return (
       <div className="flex justify-center p-4">
@@ -954,6 +1110,16 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit((data) => {
+        // 0. Term Check: every flagged employee must be updated or given a reason
+        if (pendingTermIssues.length > 0) {
+          setTermDialogOpen(true);
+          toast({
+            title: "Term Check pending",
+            description: `${pendingTermIssues.length} employee(s) have a term shorter than the attendance period.`,
+            variant: "destructive",
+          });
+          return;
+        }
         // 1. Check for invalid date ranges (From Date > To Date) before submitting
         const dateErrors: string[] = [];
         for (const entry of data.entries) {
@@ -1035,6 +1201,33 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             <div className="mt-1">{liveAddedNames.join(", ")} — tick to include in this report.</div>
           </div>
         )}
+        {pendingTermIssues.length > 0 && (
+          <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 shadow-sm">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <span>
+                <strong>{pendingTermIssues.length}</strong> employee(s) — term shorter than the attendance period
+                (S.No. {pendingTermIssues.map((t) => t.serial).join(", ")})
+              </span>
+            </div>
+            <Button type="button" size="sm" variant="destructive" onClick={() => setTermDialogOpen(true)}>
+              Resolve
+            </Button>
+          </div>
+        )}
+        {termCheckOn && (
+          <TermCheckDialog
+            open={termDialogOpen}
+            onOpenChange={setTermDialogOpen}
+            issues={pendingTermIssues}
+            departmentId={departmentId}
+            onEmployeeUpdated={refreshEmployees}
+            onTrim={trimToTermExpiry}
+            onBypass={bypassTerm}
+            onUntick={(id) => { if (includedEmployees.has(id)) toggleEmployee(id); }}
+            onLocate={locateEmployeeRow}
+          />
+        )}
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
@@ -1110,8 +1303,11 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             </TableHeader>
 
             <TableBody>
-              {employees.map((employee: any) => (
-                <TableRow key={employee.id}>
+              {employees.map((employee: any) => {
+                const termState = termStateById.get(employee.id);
+                const termPending = !!termState && !termState.bypassed;
+                return (
+                <TableRow key={employee.id} id={`att-row-${employee.id}`} className={termPending ? "term-alert-row" : undefined}>
                   <TableCell className="px-2">
                     <Checkbox
                       checked={includedEmployees.has(employee.id)}
@@ -1151,7 +1347,31 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                     )}
                   </TableCell>
                   <TableCell className="px-2">{employee.designation}</TableCell>
-                  <TableCell className="whitespace-nowrap px-1">{formatTermExpiry(employee.termExpiry, employee.employmentStatus)}</TableCell>
+                  <TableCell className="whitespace-nowrap px-1">
+                    {termPending ? (
+                      <button
+                        type="button"
+                        className="term-alert-cell inline-flex items-center gap-0.5 px-1 py-0.5 text-sm"
+                        title="Term is shorter than the attendance period — click to resolve"
+                        onClick={() => setTermDialogOpen(true)}
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        {termState!.kind === "missing" ? "Not entered" : termState!.expiryDisplay}
+                      </button>
+                    ) : (
+                      formatTermExpiry(employee.termExpiry, employee.employmentStatus)
+                    )}
+                    {termState?.bypassed && (
+                      <button
+                        type="button"
+                        className="mt-1 flex items-center gap-0.5 rounded bg-slate-200 px-1 text-[10px] text-slate-700 hover:bg-slate-300"
+                        title={`Term not updated: ${termState.bypassReason}. Click to undo.`}
+                        onClick={() => undoTermBypass(employee.id)}
+                      >
+                        Awaited <Undo2 className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap px-1">{employee.salaryRegisterNo || '-'}</TableCell>
 
                   <TableCell>
@@ -1484,7 +1704,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

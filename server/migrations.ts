@@ -151,7 +151,8 @@ export async function runMigrations() {
         ('show_pan_field', 'true'),
         ('show_bank_field', 'true'),
         ('show_aadhar_field', 'true'),
-        ('show_employee_category_field', 'false')
+        ('show_employee_category_field', 'false'),
+        ('attendance_term_check', 'true')
       ON CONFLICT (key) DO NOTHING;
     `);
 

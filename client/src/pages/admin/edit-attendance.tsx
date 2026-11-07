@@ -129,6 +129,7 @@ export default function AdminEditAttendance() {
                                 initialData={initialData}
                                 departmentId={report.departmentId}
                                 reportId={String(reportId)}
+                                termCheck={false}
                                 onSubmit={async (data) => {
                                     try {
                                         await updateMutation.mutateAsync(data);
