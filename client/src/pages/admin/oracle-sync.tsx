@@ -24,7 +24,7 @@ import * as XLSX from "xlsx";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   ArrowLeft, Database, RefreshCw, DownloadCloud, Loader2, Undo2, Eye, EyeOff, CircleAlert, CheckCircle2,
-  SlidersHorizontal, FileSpreadsheet,
+  SlidersHorizontal, FileSpreadsheet, ChevronDown, ChevronUp, X,
 } from "lucide-react";
 import salaryAssistants from "@/lib/salary-assistants.json";
 
@@ -68,6 +68,10 @@ type Run = {
   undo_summary: { restored: number; removed: number; keptBecauseChanged: string[] } | null;
 };
 
+type RunChange = { id: number; epid: string; name: string; field: string; oldValue: string | null; newValue: string | null };
+/** Rows hidden from the lists: "tab|epid" → what the row looked like when hidden */
+type Hidden = Record<string, { sig: string; at: string }>;
+
 type SyncConfig = {
   fields: Record<string, boolean>;
   activeFlags: string[];
@@ -91,7 +95,11 @@ const TABS: Array<{ key: Tab; label: string; hint: string; tone: string }> = [
   { key: "missing", label: "Not in Oracle", hint: "Active here, ECODE not in Oracle", tone: "text-slate-700" },
 ];
 const APP_STATUSES = ["Permanent", "Probation", "Temporary", "Court Case", "Compensation", "Till Further Order"];
-const PAGE = 50;
+const PAGE_SIZES = [50, 100, 200, 500];
+const NO_HIDDEN: Hidden = {};
+const STATUS_LABELS: Record<string, string> = {
+  isActive: "Status", disableReason: "Disable reason", disableWefDate: "Disable w.e.f.", created: "Employee",
+};
 const DAST_NAME = new Map((salaryAssistants as Array<{ value: string; label: string }>).map((a) => [a.value, a.label]));
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -107,6 +115,28 @@ function changesFor(item: DiffItem, tab: Tab, fieldFilter: string): FieldChange[
   return item.changes.filter((c) => !c.quiet && (tab === "changes" ? !c.fill : c.fill) &&
     (!fieldFilter || c.field === fieldFilter));
 }
+
+/**
+ * What a row looks like on a tab. A hidden row stays hidden only while this is
+ * unchanged — new Oracle data (or an edit in the app) brings it back.
+ */
+function sigFor(i: DiffItem, tab: Tab): string {
+  if (tab === "changes" || tab === "fills") {
+    return changesFor(i, tab, "").map((c) => `${c.field}=${c.app ?? ""}>${c.oracle}`).join("|");
+  }
+  if (tab === "disable" || tab === "enable") {
+    return [tab, i.isActive, i.oracle?.payRelease, i.oracle?.empStatus, i.oracle?.termApp?.slice(0, 10)].join("|");
+  }
+  return tab;
+}
+
+const todayStr = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+};
+/** expired / valid / none — for the Term filter */
+const termState = (i: DiffItem, today: string) =>
+  !i.oracle?.termApp ? "none" : i.oracle.termApp.slice(0, 10) < today ? "expired" : "valid";
 
 function inTab(item: DiffItem, tab: Tab, fieldFilter: string): boolean {
   switch (tab) {
@@ -125,7 +155,7 @@ export default function OracleSyncPage() {
       <AdminHeader />
       <div className="p-4 sm:p-6 flex-1">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Database className="h-6 w-6" /> Oracle Sync</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Database className="h-6 w-6" /> Sync</h1>
           <Button variant="outline" onClick={() => setLocation("/admin/settings")}>
             <ArrowLeft className="h-4 w-4 mr-2" /> Settings
           </Button>
@@ -153,25 +183,61 @@ function OracleSync() {
   const [busy, setBusy] = useState<"" | "fetch" | "apply" | "undo">("");
   const [confirm, setConfirm] = useState<{ title: string; text: string; run: () => Promise<void> } | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(50);
+  // Filters from the badges under each employee
+  const [statusF, setStatusF] = useState("");
+  const [releaseF, setReleaseF] = useState("");
+  const [paidF, setPaidF] = useState<"" | "yes" | "no">("");
+  const [termF, setTermF] = useState(""); // "" | expired | valid | none | yyyy-mm-dd
+  const [showHidden, setShowHidden] = useState(false);
+  const [openRun, setOpenRun] = useState<number | null>(null);
 
   const status = useQuery<StatusResponse>({ queryKey: ["/api/admin/oracle-sync/status"], staleTime: 0 });
   const diff = useQuery<DiffResponse>({ queryKey: ["/api/admin/oracle-sync/diff"], staleTime: Infinity });
   const runs = useQuery<Run[]>({ queryKey: ["/api/admin/oracle-sync/runs"], staleTime: 0 });
+  const hiddenQ = useQuery<Hidden>({ queryKey: ["/api/admin/oracle-sync/hidden"], staleTime: Infinity });
+  const hidden = hiddenQ.data ?? NO_HIDDEN;
 
   const items = diff.data?.items || [];
   const counts = diff.data?.counts;
   const departments = diff.data?.departments || [];
   const snapshot = diff.data?.snapshot || null;
+  const today = todayStr();
+
+  const isHidden = (i: DiffItem, t: Tab) => hidden[`${t}|${i.epid}`]?.sig === sigFor(i, t);
 
   // Reset selection when the view changes
-  useEffect(() => { setSelected(new Set()); setPage(0); }, [tab, search, dAst, fieldFilter, sortBy, snapshot?.id]);
+  useEffect(() => { setSelected(new Set()); setPage(0); },
+    [tab, search, dAst, fieldFilter, sortBy, snapshot?.id, statusF, releaseF, paidF, termF, showHidden, pageSize]);
+  // Hidden view and term date are per tab
+  useEffect(() => { setShowHidden(false); setTermF((t) => (/^\d/.test(t) ? "" : t)); }, [tab]);
 
-  // Tile numbers: employees each tab lists (same rule as the tab itself)
+  // Tile numbers: employees each tab lists (same rule as the tab itself, hidden rows left out)
   const tabCounts = useMemo(() => {
     const out = {} as Record<Tab, number>;
-    for (const t of TABS) out[t.key] = items.filter((i) => inTab(i, t.key, "")).length;
+    for (const t of TABS) out[t.key] = items.filter((i) => inTab(i, t.key, "") && !isHidden(i, t.key)).length;
     return out;
-  }, [items]);
+  }, [items, hidden]);
+
+  // Choices for the badge filters, from the rows of this tab
+  const badgeOptions = useMemo(() => {
+    const st = new Map<string, number>(), rel = new Map<string, number>(), terms = new Map<string, number>();
+    for (const i of items) {
+      if (!i.oracle || !inTab(i, tab, "")) continue;
+      const s = i.oracle.empStatusLabel || i.oracle.empStatus || "?";
+      st.set(s, (st.get(s) || 0) + 1);
+      const r = i.oracle.payRelease || "?";
+      rel.set(r, (rel.get(r) || 0) + 1);
+      if (i.oracle.termApp) { const d = i.oracle.termApp.slice(0, 10); terms.set(d, (terms.get(d) || 0) + 1); }
+    }
+    return {
+      statuses: [...st.entries()].sort(),
+      releases: [...rel.entries()].sort(),
+      terms: [...terms.entries()].sort(),
+    };
+  }, [items, tab]);
+  const badgeFilters = !!(statusF || releaseF || paidF || termF);
+  const clearBadgeFilters = () => { setStatusF(""); setReleaseF(""); setPaidF(""); setTermF(""); };
 
   const dAstOptions = useMemo(() => {
     const s = new Set<string>();
@@ -188,7 +254,12 @@ function OracleSync() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = items.filter((i) => inTab(i, tab, fieldFilter) &&
+      isHidden(i, tab) === showHidden &&
       (!dAst || (i.appDAst || i.oracleDAst) === dAst) &&
+      (!statusF || (i.oracle?.empStatusLabel || i.oracle?.empStatus || "?") === statusF) &&
+      (!releaseF || (i.oracle?.payRelease || "?") === releaseF) &&
+      (!paidF || (!!i.oracle && i.oracle.paidLastMonth === (paidF === "yes"))) &&
+      (!termF || (/^\d/.test(termF) ? i.oracle?.termApp?.slice(0, 10) === termF : termState(i, today) === termF)) &&
       (!q || i.epid.includes(q) || i.name.toLowerCase().includes(q) || (i.oracleName || "").toLowerCase().includes(q) ||
         (i.register || "").toLowerCase().includes(q) || (i.departmentName || "").toLowerCase().includes(q)));
     const key = (i: DiffItem) => {
@@ -201,10 +272,15 @@ function OracleSync() {
       }
     };
     return list.sort((a, b) => key(a).localeCompare(key(b)));
-  }, [items, tab, search, dAst, fieldFilter, sortBy]);
+  }, [items, tab, search, dAst, fieldFilter, sortBy, statusF, releaseF, paidF, termF, showHidden, hidden, today]);
 
-  const pageRows = rows.slice(page * PAGE, page * PAGE + PAGE);
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  // Hidden rows of this tab (with the other filters ignored) — for the "Show hidden" button
+  const hiddenInTab = useMemo(() => items.filter((i) => inTab(i, tab, "") && isHidden(i, tab)).length, [items, tab, hidden]);
+  // Last hidden row brought back → back to the normal list
+  useEffect(() => { if (showHidden && hiddenInTab === 0) setShowHidden(false); }, [showHidden, hiddenInTab]);
+
+  const pageRows = rows.slice(page * pageSize, page * pageSize + pageSize);
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
 
   const isChecked = (epid: string, c: FieldChange) => fieldChoice[`${epid}|${c.field}`] ?? c.suggested;
   const newOf = (i: DiffItem) => ({
@@ -341,7 +417,7 @@ function OracleSync() {
     XLSX.utils.book_append_sheet(wb, ws, tabLabel.slice(0, 31));
     const now = new Date();
     const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    XLSX.writeFile(wb, `oracle-sync-${tab}${dAst ? "-" + dAst : ""}-${stamp}.xlsx`);
+    XLSX.writeFile(wb, `sync-${tab}${dAst ? "-" + dAst : ""}-${stamp}.xlsx`);
   };
 
   const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.epid));
@@ -351,6 +427,56 @@ function OracleSync() {
   const svc = status.data?.service;
   const latest = svc?.latestPaybill;
   const actionTab = tab !== "missing";
+
+  /** Hide rows from this tab (or bring them back). Saved on the server, so it lasts. */
+  const setRowsHidden = async (list: DiffItem[], hide: boolean) => {
+    if (!list.length) return;
+    try {
+      const body = hide
+        ? { add: list.map((i) => ({ tab, epid: i.epid, sig: sigFor(i, tab) })) }
+        : { remove: list.map((i) => `${tab}|${i.epid}`) };
+      const r = await (await apiRequest("PUT", "/api/admin/oracle-sync/hidden", body)).json();
+      queryClient.setQueryData(["/api/admin/oracle-sync/hidden"], r);
+      setSelected(new Set());
+      toast({
+        title: hide ? `${list.length} hidden` : `${list.length} shown again`,
+        description: hide ? "They come back by themselves if Oracle or the app shows something different." : undefined,
+      });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not save", description: e.message });
+    }
+  };
+  const selectedRows = rows.filter((r) => selected.has(r.epid));
+
+  const actionBar = (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted-foreground">{rows.length.toLocaleString()} employees{showHidden ? " (hidden)" : ""}</span>
+      <Button size="sm" variant="outline" onClick={() => setSelected(new Set(rows.map((r) => r.epid)))} disabled={!rows.length}>
+        Select all {rows.length.toLocaleString()}
+      </Button>
+      {selected.size > 0 && <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>}
+      <div className="ml-auto flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={!selected.size || !!busy} onClick={() => setRowsHidden(selectedRows, !showHidden)}>
+          {showHidden ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
+          {showHidden ? "Unhide" : "Hide"} {selected.size} selected
+        </Button>
+        {actionTab && !showHidden && (
+          <Button size="sm" disabled={!selected.size || !!busy}
+            onClick={() => askApply(selectedPayload, `${selectedPayload.length} selected employees will be ${tab === "disable" ? "disabled" : tab === "enable" ? "made active" : tab === "new" ? "added" : "updated with the ticked fields"}`)}>
+            {busy === "apply" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {tab === "disable" ? "Disable" : tab === "enable" ? "Make active" : tab === "new" ? "Add" : "Update"} {selected.size} selected
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
+  const fieldLabels = useMemo(() => {
+    const m = new Map<string, string>(Object.entries(STATUS_LABELS));
+    for (const f of diff.data?.fields || []) m.set(f.field, f.label);
+    return m;
+  }, [diff.data]);
+  const sensitiveFields = useMemo(() => new Set((diff.data?.fields || []).filter((f) => f.sensitive).map((f) => f.field)), [diff.data]);
 
   return (
     <div className="space-y-4">
@@ -444,22 +570,50 @@ function OracleSync() {
                   </Button>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-muted-foreground">{rows.length.toLocaleString()} employees</span>
-                {actionTab && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => setSelected(new Set(rows.map((r) => r.epid)))} disabled={!rows.length}>
-                      Select all {rows.length.toLocaleString()}
+              {tab !== "missing" && (
+                <div className="flex flex-wrap gap-2 items-center">
+                  <select value={statusF} onChange={(e) => setStatusF(e.target.value)} className="h-9 rounded-md border px-2 text-sm bg-white" aria-label="Oracle employee status">
+                    <option value="">All emp status</option>
+                    {badgeOptions.statuses.map(([s, n]) => <option key={s} value={s}>{s} ({n})</option>)}
+                  </select>
+                  <select value={releaseF} onChange={(e) => setReleaseF(e.target.value)} className="h-9 rounded-md border px-2 text-sm bg-white" aria-label="Pay release">
+                    <option value="">All pay release</option>
+                    {badgeOptions.releases.map(([s, n]) => <option key={s} value={s}>Pay release {s} ({n})</option>)}
+                  </select>
+                  <select value={paidF} onChange={(e) => setPaidF(e.target.value as any)} className="h-9 rounded-md border px-2 text-sm bg-white" aria-label="Paid">
+                    <option value="">Paid / not paid</option>
+                    <option value="yes">Paid {snapshot ? MONTHS[snapshot.paybill.month - 1] : ""}</option>
+                    <option value="no">Not paid {snapshot ? MONTHS[snapshot.paybill.month - 1] : ""}</option>
+                  </select>
+                  <select value={termF} onChange={(e) => setTermF(e.target.value)} className="h-9 rounded-md border px-2 text-sm bg-white" aria-label="Term">
+                    <option value="">All terms</option>
+                    <option value="expired">Term expired</option>
+                    <option value="valid">Term not expired</option>
+                    <option value="none">No term</option>
+                    {badgeOptions.terms.length > 0 && (
+                      <optgroup label="Term on">
+                        {badgeOptions.terms.map(([d, n]) => <option key={d} value={d}>{fmtDate(d)} ({n})</option>)}
+                      </optgroup>
+                    )}
+                  </select>
+                  {badgeFilters && (
+                    <Button size="sm" variant="ghost" onClick={clearBadgeFilters}><X className="h-4 w-4 mr-1" /> Clear filters</Button>
+                  )}
+                  {(hiddenInTab > 0 || showHidden) && (
+                    <Button size="sm" variant={showHidden ? "secondary" : "ghost"} className="ml-auto" onClick={() => setShowHidden((v) => !v)}>
+                      {showHidden ? "Back to the list" : `Show hidden (${hiddenInTab.toLocaleString()})`}
                     </Button>
-                    {selected.size > 0 && <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>}
-                    <Button size="sm" className="ml-auto" disabled={!selected.size || !!busy}
-                      onClick={() => askApply(selectedPayload, `${selectedPayload.length} selected employees will be ${tab === "disable" ? "disabled" : tab === "enable" ? "made active" : tab === "new" ? "added" : "updated with the ticked fields"}`)}>
-                      {busy === "apply" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                      {tab === "disable" ? "Disable" : tab === "enable" ? "Make active" : tab === "new" ? "Add" : "Update"} {selected.size} selected
-                    </Button>
-                  </>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
+              {tab === "missing" && (hiddenInTab > 0 || showHidden) && (
+                <div className="flex">
+                  <Button size="sm" variant={showHidden ? "secondary" : "ghost"} className="ml-auto" onClick={() => setShowHidden((v) => !v)}>
+                    {showHidden ? "Back to the list" : `Show hidden (${hiddenInTab.toLocaleString()})`}
+                  </Button>
+                </div>
+              )}
+              {actionBar}
             </CardContent>
           </Card>
 
@@ -469,24 +623,20 @@ function OracleSync() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    {actionTab && (
-                      <th className="p-2 w-8">
-                        <Checkbox checked={allOnPageSelected} aria-label="Select page"
-                          onCheckedChange={(v) => setSelected((s) => { const n = new Set(s); pageRows.forEach((r) => v ? n.add(r.epid) : n.delete(r.epid)); return n; })} />
-                      </th>
-                    )}
+                    <th className="p-2 w-8">
+                      <Checkbox checked={allOnPageSelected} aria-label="Select page"
+                        onCheckedChange={(v) => setSelected((s) => { const n = new Set(s); pageRows.forEach((r) => v ? n.add(r.epid) : n.delete(r.epid)); return n; })} />
+                    </th>
                     <th className="p-2">Employee</th>
                     <th className="p-2">D.Ast · Register</th>
                     <th className="p-2">{tab === "new" ? "Add with" : tab === "changes" || tab === "fills" ? "App → Oracle" : "Why"}</th>
-                    {actionTab && <th className="p-2 w-24"></th>}
+                    <th className="p-2 w-28"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map((i) => (
                     <tr key={i.epid} className="border-t align-top">
-                      {actionTab && (
-                        <td className="p-2"><Checkbox checked={selected.has(i.epid)} onCheckedChange={(v) => toggleRow(i.epid, !!v)} aria-label={`Select ${i.epid}`} /></td>
-                      )}
+                      <td className="p-2"><Checkbox checked={selected.has(i.epid)} onCheckedChange={(v) => toggleRow(i.epid, !!v)} aria-label={`Select ${i.epid}`} /></td>
                       <td className="p-2 min-w-[200px]">
                         <div className="font-medium">{i.epid} · {i.name}</div>
                         {i.oracleName && i.oracleName !== i.name && tab !== "new" && <div className="text-xs text-muted-foreground">Oracle: {i.oracleName}</div>}
@@ -496,12 +646,22 @@ function OracleSync() {
                         </div>
                         {i.oracle && (
                           <div className="mt-1 flex flex-wrap gap-1">
-                            <Badge variant="outline" className="text-[10px]">{i.oracle.empStatusLabel || i.oracle.empStatus || "?"}</Badge>
-                            <Badge variant="outline" className={`text-[10px] ${i.oracle.payRelease === "Y" ? "" : "border-red-300 text-red-700"}`}>Pay release {i.oracle.payRelease || "?"}</Badge>
-                            <Badge variant="outline" className={`text-[10px] ${i.oracle.paidLastMonth ? "border-green-300 text-green-700" : "border-amber-300 text-amber-700"}`}>
-                              {i.oracle.paidLastMonth ? "Paid" : "Not paid"} {snapshot ? MONTHS[snapshot.paybill.month - 1] : ""}
-                            </Badge>
-                            {i.oracle.termApp && <Badge variant="outline" className="text-[10px]">Term {fmtDate(i.oracle.termApp)}</Badge>}
+                            <button type="button" title="Show only this status" onClick={() => setStatusF(i.oracle!.empStatusLabel || i.oracle!.empStatus || "?")}>
+                              <Badge variant="outline" className="text-[10px] hover:bg-slate-100">{i.oracle.empStatusLabel || i.oracle.empStatus || "?"}</Badge>
+                            </button>
+                            <button type="button" title="Show only this pay release" onClick={() => setReleaseF(i.oracle!.payRelease || "?")}>
+                              <Badge variant="outline" className={`text-[10px] hover:bg-slate-100 ${i.oracle.payRelease === "Y" ? "" : "border-red-300 text-red-700"}`}>Pay release {i.oracle.payRelease || "?"}</Badge>
+                            </button>
+                            <button type="button" title="Show only these" onClick={() => setPaidF(i.oracle!.paidLastMonth ? "yes" : "no")}>
+                              <Badge variant="outline" className={`text-[10px] hover:bg-slate-100 ${i.oracle.paidLastMonth ? "border-green-300 text-green-700" : "border-amber-300 text-amber-700"}`}>
+                                {i.oracle.paidLastMonth ? "Paid" : "Not paid"} {snapshot ? MONTHS[snapshot.paybill.month - 1] : ""}
+                              </Badge>
+                            </button>
+                            {i.oracle.termApp && (
+                              <button type="button" title="Show only this term date" onClick={() => setTermF(i.oracle!.termApp!.slice(0, 10))}>
+                                <Badge variant="outline" className={`text-[10px] hover:bg-slate-100 ${termState(i, today) === "expired" ? "border-red-300 text-red-700" : ""}`}>Term {fmtDate(i.oracle.termApp)}</Badge>
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -556,14 +716,22 @@ function OracleSync() {
                         )}
                         {tab === "missing" && <span className="text-xs text-muted-foreground">ECODE {i.epid} is not in the Oracle employee master — check the ECODE.</span>}
                       </td>
-                      {actionTab && (
-                        <td className="p-2">
-                          <Button size="sm" variant="outline" disabled={!!busy}
-                            onClick={() => { const p = payloadFor(i); askApply(p ? [p] : [], `${i.epid} · ${i.name}`); }}>
-                            {tab === "disable" ? "Disable" : tab === "enable" ? "Activate" : tab === "new" ? "Add" : "Update"}
+                      <td className="p-2">
+                        <div className="flex flex-col gap-1 items-stretch">
+                          {actionTab && !showHidden && (
+                            <Button size="sm" variant="outline" disabled={!!busy}
+                              onClick={() => { const p = payloadFor(i); askApply(p ? [p] : [], `${i.epid} · ${i.name}`); }}>
+                              {tab === "disable" ? "Disable" : tab === "enable" ? "Activate" : tab === "new" ? "Add" : "Update"}
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={!!busy}
+                            title={showHidden ? "Show in the list again" : "Remove from the list (nothing is changed)"}
+                            onClick={() => setRowsHidden([i], !showHidden)}>
+                            {showHidden ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
+                            {showHidden ? "Unhide" : "Hide"}
                           </Button>
-                        </td>
-                      )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {!pageRows.length && (
@@ -573,13 +741,20 @@ function OracleSync() {
               </table>
             </CardContent>
           </Card>
-          {pages > 1 && (
-            <div className="flex items-center justify-center gap-2 text-sm">
-              <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <span>Page {page + 1} of {pages}</span>
-              <Button size="sm" variant="outline" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)}>Next</Button>
-            </div>
-          )}
+          <Card>
+            <CardContent className="pt-4 pb-4 space-y-3">
+              {actionBar}
+              <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+                <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                <span>Page {page + 1} of {pages}</span>
+                <Button size="sm" variant="outline" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="h-9 rounded-md border px-2 text-sm bg-white ml-2" aria-label="Rows per page">
+                  {PAGE_SIZES.map((n) => <option key={n} value={n}>{n} per page</option>)}
+                </select>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -589,7 +764,8 @@ function OracleSync() {
         <CardContent className="space-y-2 text-sm">
           {!runs.data?.length && <p className="text-muted-foreground">No updates made yet.</p>}
           {runs.data?.map((r) => (
-            <div key={r.id} className="flex flex-col sm:flex-row sm:items-center gap-2 border rounded-md p-2">
+            <div key={r.id} className="border rounded-md p-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <div className="flex-1">
                 <div className="font-medium">#{r.id} · {fmtWhen(r.created_at)} · {r.created_by}</div>
                 <div className="text-xs text-muted-foreground">
@@ -601,11 +777,20 @@ function OracleSync() {
                   <div className="text-xs text-amber-700">Kept on undo: {r.undo_summary.keptBecauseChanged.slice(0, 5).join("; ")}{r.undo_summary.keptBecauseChanged.length > 5 ? " …" : ""}</div>
                 ) : null}
               </div>
-              {!r.undone_at && (
-                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => undo(r)}>
-                  <Undo2 className="h-4 w-4 mr-1" /> Undo
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setOpenRun((o) => (o === r.id ? null : r.id))} aria-expanded={openRun === r.id}>
+                  {openRun === r.id ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />} Details
                 </Button>
-              )}
+                {!r.undone_at && (
+                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => undo(r)}>
+                    <Undo2 className="h-4 w-4 mr-1" /> Undo
+                  </Button>
+                )}
+              </div>
+            </div>
+            {openRun === r.id && (
+              <RunDetails runId={r.id} labels={fieldLabels} sensitive={sensitiveFields} showSensitive={showSensitive} />
+            )}
             </div>
           ))}
         </CardContent>
@@ -626,6 +811,52 @@ function OracleSync() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ── What one sync run changed ───────────────────────────────────────────────
+function RunDetails({ runId, labels, sensitive, showSensitive }: {
+  runId: number; labels: Map<string, string>; sensitive: Set<string>; showSensitive: boolean;
+}) {
+  const q = useQuery<RunChange[]>({ queryKey: [`/api/admin/oracle-sync/runs/${runId}/changes`], staleTime: 0 });
+  const val = (field: string, v: string | null) => {
+    if (v === null || v === "") return <span className="text-muted-foreground italic">—</span>;
+    if (sensitive.has(field)) return mask(v, showSensitive);
+    if (field === "isActive") return v === "active" ? "Active" : "Inactive";
+    return fmtDate(v);
+  };
+  if (q.isLoading) return <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Loading…</div>;
+  if (q.error) return <p className="mt-2 text-xs text-red-600">{(q.error as Error).message}</p>;
+  const list = q.data || [];
+  if (!list.length) return <p className="mt-2 text-xs text-muted-foreground">No field changes recorded.</p>;
+  return (
+    <div className="mt-2 max-h-96 overflow-auto border-t">
+      <table className="w-full text-xs">
+        <thead className="text-left text-muted-foreground sticky top-0 bg-white">
+          <tr><th className="p-1.5">ECODE · Name</th><th className="p-1.5">Field</th><th className="p-1.5">Previous → New</th></tr>
+        </thead>
+        <tbody>
+          {list.map((c, n) => {
+            const first = n === 0 || list[n - 1].epid !== c.epid;
+            return (
+              <tr key={c.id} className={first ? "border-t" : ""}>
+                <td className="p-1.5 font-medium whitespace-nowrap">{first ? `${c.epid} · ${c.name}` : ""}</td>
+                <td className="p-1.5">{labels.get(c.field) || c.field}</td>
+                <td className="p-1.5">
+                  {c.field === "created" ? <span className="text-green-800">Added from Oracle</span> : (
+                    <>
+                      <span className="text-red-700 line-through decoration-red-300">{val(c.field, c.oldValue)}</span>
+                      {" → "}
+                      <span className="text-green-800 font-medium">{val(c.field, c.newValue)}</span>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -660,7 +891,7 @@ function ConfigDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Oracle Sync configuration</DialogTitle>
+          <DialogTitle>Sync configuration</DialogTitle>
           <DialogDescription>Decide what is compared and when Oracle and the app are taken to agree.</DialogDescription>
         </DialogHeader>
         {!cfg || !q.data ? (

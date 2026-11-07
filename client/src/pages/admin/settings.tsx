@@ -93,7 +93,7 @@ export default function AdminSettings() {
                     <CardContent className="pt-6 flex items-center gap-4">
                         <div className="p-2 rounded-full bg-slate-100 text-indigo-600"><Database className="h-5 w-5" /></div>
                         <div className="flex-1">
-                            <Label className="text-base font-medium">Oracle Sync</Label>
+                            <Label className="text-base font-medium">Sync</Label>
                             <p className="text-sm text-muted-foreground">
                                 Compare employees with the Oracle payroll master and update them (needs the oracle-sync container running).
                             </p>

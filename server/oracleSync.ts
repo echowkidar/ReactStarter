@@ -29,6 +29,16 @@ async function loadConfig(): Promise<SyncConfig> {
   try { return normaliseConfig(raw ? JSON.parse(raw) : null); } catch { return normaliseConfig(null); }
 }
 
+const HIDDEN_KEY = "oracle_sync_hidden";
+const HIDE_TABS = new Set(["changes", "fills", "disable", "enable", "new", "missing"]);
+type Hidden = Record<string, { sig: string; at: string }>;
+
+async function loadHidden(): Promise<Hidden> {
+  const r = await db.execute(sql`SELECT value FROM app_settings WHERE key = ${HIDDEN_KEY}`);
+  const raw = (r.rows[0] as any)?.value;
+  try { const v = raw ? JSON.parse(raw) : {}; return v && typeof v === "object" ? v : {}; } catch { return {}; }
+}
+
 const SERVICE_URL = () => (process.env.ORACLE_SYNC_URL || "http://oracle-sync:8000").replace(/\/+$/, "");
 const KEEP_SNAPSHOTS = 3;
 const MAX_ITEMS = 12000;
@@ -352,6 +362,57 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
              (SELECT COUNT(*) FROM oracle_sync_changes c WHERE c.run_id = r.id)::int AS change_count
       FROM oracle_sync_runs r ORDER BY r.id DESC LIMIT 30`);
     res.json(r.rows);
+  });
+
+  // What one run changed: employee, field, previous → new
+  app.get("/api/admin/oracle-sync/runs/:id/changes", ...guard, async (req, res) => {
+    try {
+      const r = await db.execute(sql`
+        SELECT c.id, c.epid, COALESCE(e.name, '') AS name, c.field AS "column", c.old_value, c.new_value
+        FROM oracle_sync_changes c LEFT JOIN employees e ON e.id = c.employee_id
+        WHERE c.run_id = ${Number(req.params.id)}
+        ORDER BY c.epid, c.id`);
+      res.json((r.rows as any[])
+        .filter((c) => !QUIET_COLUMNS.has(c.column))
+        .map((c) => ({
+          id: c.id, epid: c.epid, name: c.name,
+          field: c.column === "__created" ? "created" : HISTORY_FIELD[c.column] || c.column,
+          oldValue: c.old_value, newValue: c.new_value,
+        })));
+    } catch (e: any) {
+      console.error("[OracleSync] run changes failed:", e);
+      res.status(500).json({ message: "Could not load the changes of this run" });
+    }
+  });
+
+  // Rows the super admin chose to hide from the lists. Each entry remembers what
+  // the row looked like ("sig"); if Oracle later shows something different the
+  // row comes back by itself.
+  app.get("/api/admin/oracle-sync/hidden", ...guard, async (_req, res) => {
+    res.json(await loadHidden());
+  });
+
+  app.put("/api/admin/oracle-sync/hidden", ...guard, async (req, res) => {
+    try {
+      const add = Array.isArray(req.body?.add) ? req.body.add : [];
+      const remove = Array.isArray(req.body?.remove) ? req.body.remove.map(String) : [];
+      if (add.length + remove.length > MAX_ITEMS) return res.status(400).json({ message: "Too many items" });
+      const hidden = await loadHidden();
+      const at = new Date().toISOString();
+      for (const a of add) {
+        const tab = String(a?.tab || ""), epid = String(a?.epid || "").trim(), sig = String(a?.sig || "");
+        if (!HIDE_TABS.has(tab) || !epid || sig.length > 4000) continue;
+        hidden[`${tab}|${epid}`] = { sig, at };
+      }
+      for (const k of remove) delete hidden[k];
+      await db.execute(sql`
+        INSERT INTO app_settings (key, value) VALUES (${HIDDEN_KEY}, ${JSON.stringify(hidden)})
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+      res.json(hidden);
+    } catch (e: any) {
+      console.error("[OracleSync] save hidden failed:", e);
+      res.status(500).json({ message: "Could not save" });
+    }
   });
 
   // Put back everything one run changed — but only values nobody has changed since

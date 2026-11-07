@@ -40,7 +40,7 @@ const EXTRA_TITLES: Array<{ prefix: string; title: string; parent?: string }> = 
   { prefix: "/admin/missing-employees", title: "Missing Employees", parent: "/admin/attendance-reports" },
   { prefix: "/admin/transfer-requests", title: "Transfer Requests" },
   { prefix: "/admin/email", title: "Email Settings", parent: "/admin/mailbox" },
-  { prefix: "/admin/settings/oracle-sync", title: "Oracle Sync", parent: "/admin/settings" },
+  { prefix: "/admin/settings/oracle-sync", title: "Sync", parent: "/admin/settings" },
 ];
 
 function readAdmin() {

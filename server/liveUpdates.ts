@@ -113,6 +113,8 @@ const IGNORED_PREFIXES = [
   "/api/live/",
   "/api/admin/settings-pin",        // PIN checks change no shown data
   "/api/admin/oracle-sync/fetch",   // only stores an Oracle snapshot
+  "/api/admin/oracle-sync/config",  // sync page settings only
+  "/api/admin/oracle-sync/hidden",  // rows hidden on the sync page only
   "/api/heartbeat",
   "/api/visitors",
   "/api/auth",
