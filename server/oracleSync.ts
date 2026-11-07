@@ -54,13 +54,13 @@ const HISTORY_FIELD: Record<string, string> = {
   is_active: "isActive", disable_reason: "disableReason", disable_wef_date: "disableWefDate",
 };
 
-class ServiceError extends Error {
+export class ServiceError extends Error {
   constructor(message: string, public offline = false) { super(message); }
 }
 
 // Plain node:http (not fetch): every failure ends up in this promise and can
 // never take the app process down.
-function callService(path: string, timeoutMs: number): Promise<any> {
+export function callService(path: string, timeoutMs: number): Promise<any> {
   const key = process.env.ORACLE_SYNC_KEY;
   if (!key) return Promise.reject(new ServiceError("ORACLE_SYNC_KEY is not set in the app stack"));
   return new Promise((resolve, reject) => {

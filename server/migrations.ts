@@ -218,6 +218,91 @@ export async function runMigrations() {
       );
     `);
 
+    // Paybill history — a copy of Oracle T_PAYBILL_HIST + T_PAYBILL_HIST_ARCHIVE
+    // (22 columns). Oracle has no unique key, so a row is identified by
+    // src + month + sal_code + ecode + line_no (nth row of that employee in that
+    // bill, ordered by pay period). See server/paybillSync.ts.
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS paybill_history (
+          src CHAR(1) NOT NULL,              -- H = T_PAYBILL_HIST, A = T_PAYBILL_HIST_ARCHIVE
+          yr_no SMALLINT NOT NULL,
+          mth_no SMALLINT NOT NULL,
+          sal_code SMALLINT NOT NULL,
+          ecode VARCHAR(10) NOT NULL,
+          line_no SMALLINT NOT NULL,
+          cat_code VARCHAR(2),
+          emp_cat VARCHAR(2),
+          desig_code VARCHAR(10),
+          deptt VARCHAR(10),
+          basic_sal NUMERIC(12,2),
+          npa NUMERIC(12,2),
+          da NUMERIC(12,2),
+          hra NUMERIC(12,2),
+          ta NUMERIC(12,2),
+          pat_care NUMERIC(12,2),
+          nursing NUMERIC(12,2),
+          annual NUMERIC(12,2),
+          d_ast VARCHAR(10),
+          full_pay_fdate DATE,
+          full_pay_tdate DATE,
+          sal_no VARCHAR(12),
+          grade_pay NUMERIC(12,2),
+          sal_flag VARCHAR(2),
+          -- month first: period filters and "whole month" replacements use this index
+          PRIMARY KEY (yr_no, mth_no, src, sal_code, ecode, line_no)
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS paybill_history_ecode_idx ON paybill_history (ecode, yr_no, mth_no)`);
+      // Oracle's fingerprint (row count + ORA_HASH sum) of each month as last copied
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS paybill_months (
+          src CHAR(1) NOT NULL,
+          yr_no SMALLINT NOT NULL,
+          mth_no SMALLINT NOT NULL,
+          row_count INTEGER NOT NULL,
+          ora_hash TEXT NOT NULL,
+          synced_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (src, yr_no, mth_no)
+        )
+      `);
+      // Each button press: kind = new (add new months) | check (look for changes)
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS paybill_runs (
+          id SERIAL PRIMARY KEY,
+          kind TEXT NOT NULL,
+          status TEXT NOT NULL,               -- running | done | report | applied | failed
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_by TEXT NOT NULL,
+          finished_at TIMESTAMP,
+          summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+          error TEXT,
+          applied_at TIMESTAMP,
+          applied_by TEXT
+        )
+      `);
+      // What a "check" found: one row per paybill row added / removed / changed in Oracle
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS paybill_changes (
+          id BIGSERIAL PRIMARY KEY,
+          run_id INTEGER NOT NULL,
+          src CHAR(1) NOT NULL,
+          yr_no SMALLINT NOT NULL,
+          mth_no SMALLINT NOT NULL,
+          sal_code SMALLINT NOT NULL,
+          ecode VARCHAR(10) NOT NULL,
+          line_no SMALLINT NOT NULL,
+          kind TEXT NOT NULL,                 -- added | removed | changed
+          fields JSONB,                       -- changed: [{ field, old, new }]
+          new_row JSONB                       -- added / changed: the row as it is in Oracle now
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS paybill_changes_run_idx ON paybill_changes (run_id)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS paybill_changes_ecode_idx ON paybill_changes (ecode)`);
+    } catch (pbErr) {
+      console.error("[Migrations] paybill history tables failed (only the Paybill History page is affected):", pbErr);
+    }
+
     // Add department_id column to attendance_entries table
     await db.execute(sql`
       ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS department_id INTEGER;

@@ -29,6 +29,7 @@ import TransferRequests from "@/pages/admin/transfer-requests";
 import MissingEmployees from "@/pages/admin/missing-employees";
 import AdminSettings from "@/pages/admin/settings";
 import OracleSyncPage from "@/pages/admin/oracle-sync";
+import PaybillHistoryPage from "@/pages/admin/paybill-history";
 import AdminEditAttendance from "@/pages/admin/edit-attendance";
 import DepartmentContacts from "@/pages/admin/department-contacts";
 import AdminLPC from "@/pages/admin/lpc";
@@ -74,6 +75,7 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/notices" component={AdminNotices} />
       <ProtectedAdminRoute path="/admin/transfer-requests" component={TransferRequests} />
       <ProtectedAdminRoute path="/admin/settings" component={AdminSettings} />
+      <ProtectedAdminRoute path="/admin/settings/oracle-sync/paybill" component={PaybillHistoryPage} />
       <ProtectedAdminRoute path="/admin/settings/oracle-sync" component={OracleSyncPage} />
       <ProtectedAdminRoute path="/admin/department-contacts" component={DepartmentContacts} />
       <ProtectedAdminRoute path="/admin/lpc" component={AdminLPC} />

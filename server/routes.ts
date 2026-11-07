@@ -37,6 +37,7 @@ import {
 import { registerAdminPreferenceRoutes } from "./adminPreferences";
 import { registerSettingsPinRoutes, requireSettingsUnlock } from "./settingsPin";
 import { registerOracleSyncRoutes } from "./oracleSync";
+import { registerPaybillRoutes } from "./paybillSync";
 import { buildHistoryView } from "./employeeHistoryView";
 import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
 import { normaliseReportKind, findMainReport } from "../shared/reportKind";
@@ -7231,6 +7232,7 @@ export async function registerRoutes(app: Express) {
   registerAdminPreferenceRoutes(app, storage);
   registerSettingsPinRoutes(app, verifyAdminSession);
   registerOracleSyncRoutes(app, verifyAdminSession);
+  registerPaybillRoutes(app, verifyAdminSession);
 
   return httpServer;
 }

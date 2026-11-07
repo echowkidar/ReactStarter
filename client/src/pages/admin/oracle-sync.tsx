@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import AdminHeader from "@/components/layout/admin-header";
 import { SettingsPinGate } from "@/components/admin/settings-pin-gate";
+import { SyncTabs } from "@/components/admin/sync-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -171,6 +172,7 @@ export default function OracleSyncPage() {
           </Button>
         </div>
         <SettingsPinGate>
+          <SyncTabs />
           <OracleSync />
         </SettingsPinGate>
       </div>

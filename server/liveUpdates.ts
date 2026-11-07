@@ -115,6 +115,7 @@ const IGNORED_PREFIXES = [
   "/api/admin/oracle-sync/fetch",   // only stores an Oracle snapshot
   "/api/admin/oracle-sync/config",  // sync page settings only
   "/api/admin/oracle-sync/hidden",  // rows hidden on the sync page only
+  "/api/admin/paybill",             // paybill history copy — not shown to departments
   "/api/heartbeat",
   "/api/visitors",
   "/api/auth",
