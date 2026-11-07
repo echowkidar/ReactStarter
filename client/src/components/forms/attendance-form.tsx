@@ -97,9 +97,13 @@ const calculateDays = (fromDate: string, toDate: string): number => {
     return 0;
   }
 
-  const diffTime = end.getTime() - start.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  return dayNumber(end) - dayNumber(start) + 1;
 };
+
+// Whole calendar days since 1970, counted in UTC so a daylight-saving change in the
+// user's PC timezone (e.g. US clocks moving on 1 Nov) can never add or lose a day.
+const dayNumber = (d: Date): number =>
+  Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
 
 
 const shiftPeriodMonth = (fromDateStr: string, direction: number, limitMonth: number, limitYear: number) => {
@@ -752,7 +756,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         currentStart.setDate(currentStart.getDate() + 2);
 
         if (currentStart <= finalEnd) {
-          remainingDays = Math.ceil((finalEnd.getTime() - currentStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          remainingDays = dayNumber(finalEnd) - dayNumber(currentStart) + 1;
         } else {
           remainingDays = 0;
         }
