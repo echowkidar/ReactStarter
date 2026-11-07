@@ -24,7 +24,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { PoolClient } from "pg";
 import { db, pool } from "./db";
 import { requireSettingsUnlock } from "./settingsPin";
-import { callService } from "./oracleSync";
+import { callService, isoTime } from "./oracleSync";
 
 // ── Columns ──────────────────────────────────────────────────────────────────
 const KEY_COLS = ["src", "yr_no", "mth_no", "sal_code", "ecode", "line_no"] as const;
@@ -397,9 +397,10 @@ export function registerPaybillRoutes(app: Express, verifyAdminSession: any) {
                (SELECT COALESCE(SUM(row_count), 0) FROM paybill_months)::int AS rows,
                (SELECT MIN(yr_no * 100 + mth_no) FROM paybill_months)::int AS first_ym,
                (SELECT MAX(yr_no * 100 + mth_no) FROM paybill_months)::int AS last_ym,
-               (SELECT MAX(synced_at) FROM paybill_months) AS last_sync`)).rows[0] as any;
+               (SELECT ${isoTime("MAX(synced_at)")} FROM paybill_months) AS last_sync`)).rows[0] as any;
       const runs = (await db.execute(sql`
-        SELECT id, kind, status, created_at, created_by, finished_at, summary, error, applied_at, applied_by
+        SELECT id, kind, status, ${isoTime("created_at")} AS created_at, created_by, ${isoTime("finished_at")} AS finished_at,
+               summary, error, ${isoTime("applied_at")} AS applied_at, applied_by
         FROM paybill_runs ORDER BY id DESC LIMIT 20`)).rows;
       res.json({ job, stats: s, runs });
     } catch (e: any) {
@@ -563,7 +564,7 @@ export function registerPaybillRoutes(app: Express, verifyAdminSession: any) {
         SELECT ${ROW_SELECT} FROM paybill_history p WHERE p.ecode = ${ecode}
         ORDER BY p.yr_no, p.mth_no, p.sal_code, p.line_no`)).rows;
       const changes = (await db.execute(sql`
-        SELECT c.run_id, c.kind, c.yr_no, c.mth_no, c.sal_code, c.line_no, c.fields, r.status, r.created_at
+        SELECT c.run_id, c.kind, c.yr_no, c.mth_no, c.sal_code, c.line_no, c.fields, r.status, ${isoTime("r.created_at")} AS created_at
         FROM paybill_changes c JOIN paybill_runs r ON r.id = c.run_id
         WHERE c.ecode = ${ecode} ORDER BY c.id DESC LIMIT 200`)).rows;
       res.json({ ecode, rows, changes });

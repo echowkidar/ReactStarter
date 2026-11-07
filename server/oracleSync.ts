@@ -39,6 +39,15 @@ async function loadHidden(): Promise<Hidden> {
   try { const v = raw ? JSON.parse(raw) : {}; return v && typeof v === "object" ? v : {}; } catch { return {}; }
 }
 
+/**
+ * A TIMESTAMP column (no time zone, written with NOW() in the database's own zone)
+ * as an ISO time in UTC ("…Z"). Raw db.execute returns such columns as bare text
+ * like "2026-11-07 19:55", which the browser would wrongly read as Indian time.
+ * Only call with fixed column names.
+ */
+export const isoTime = (column: string) =>
+  sql.raw(`to_char((${column}) AT TIME ZONE current_setting('TimeZone') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`);
+
 const SERVICE_URL = () => (process.env.ORACLE_SYNC_URL || "http://oracle-sync:8000").replace(/\/+$/, "");
 const KEEP_SNAPSHOTS = 3;
 const MAX_ITEMS = 12000;
@@ -99,7 +108,7 @@ const adminEmail = (req: Request) => String((req as any).adminUser?.email || "un
 
 async function latestSnapshotMeta() {
   const r = await db.execute(sql`
-    SELECT id, fetched_at, fetched_by, paybill_year, paybill_month, row_count
+    SELECT id, ${isoTime("fetched_at")} AS fetched_at, fetched_by, paybill_year, paybill_month, row_count
     FROM oracle_snapshots ORDER BY id DESC LIMIT 1`);
   const s = r.rows[0] as any;
   return s ? {
@@ -358,7 +367,8 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
 
   app.get("/api/admin/oracle-sync/runs", ...guard, async (_req, res) => {
     const r = await db.execute(sql`
-      SELECT r.id, r.created_at, r.created_by, r.summary, r.undone_at, r.undone_by, r.undo_summary,
+      SELECT r.id, ${isoTime("r.created_at")} AS created_at, r.created_by, r.summary,
+             ${isoTime("r.undone_at")} AS undone_at, r.undone_by, r.undo_summary,
              (SELECT COUNT(*) FROM oracle_sync_changes c WHERE c.run_id = r.id)::int AS change_count
       FROM oracle_sync_runs r ORDER BY r.id DESC LIMIT 30`);
     res.json(r.rows);
