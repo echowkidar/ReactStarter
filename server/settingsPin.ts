@@ -12,7 +12,7 @@ import crypto from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 
-const UNLOCK_MINUTES = 15;
+const UNLOCK_MINUTES = 30;
 const MAX_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
 const PIN_RE = /^\d{4,8}$/;

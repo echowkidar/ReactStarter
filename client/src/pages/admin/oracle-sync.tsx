@@ -1,7 +1,7 @@
 // Oracle Sync — compare employees with the Oracle payroll master and update them.
 // Server side: server/oracleSync.ts (+ rules in server/oracleSyncDiff.ts).
 // Reached from Settings; needs the Settings PIN (SettingsPinGate).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import AdminHeader from "@/components/layout/admin-header";
@@ -178,14 +178,24 @@ export default function OracleSyncPage() {
   );
 }
 
+// The view (tab, filters, page) is kept for this browser tab, so a reload or a
+// trip to another page comes back to the same place.
+const VIEW_KEY = "syncPageView";
+function loadView(): Record<string, any> {
+  try { const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+}
+
 function OracleSync() {
   const { toast } = useToast();
-  const [tab, setTab] = useState<Tab>("changes");
-  const [search, setSearch] = useState("");
-  const [dAst, setDAst] = useState("");
-  const [fieldFilter, setFieldFilter] = useState("");
-  const [sortBy, setSortBy] = useState<"dast" | "register" | "department" | "epid" | "name">("dast");
-  const [page, setPage] = useState(0);
+  const [v0] = useState(loadView);
+  const str = (k: string, d = "") => (typeof v0[k] === "string" ? v0[k] : d);
+  const [tab, setTab] = useState<Tab>(TABS.some((t) => t.key === v0.tab) ? v0.tab : "changes");
+  const [search, setSearch] = useState(str("search"));
+  const [dAst, setDAst] = useState(str("dAst"));
+  const [fieldFilter, setFieldFilter] = useState(str("fieldFilter"));
+  const [sortBy, setSortBy] = useState<"dast" | "register" | "department" | "epid" | "name">(
+    ["dast", "register", "department", "epid", "name"].includes(v0.sortBy) ? v0.sortBy : "dast");
+  const [page, setPage] = useState<number>(Number.isInteger(v0.page) && v0.page >= 0 ? v0.page : 0);
   const [showSensitive, setShowSensitive] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [fieldChoice, setFieldChoice] = useState<Record<string, boolean>>({});
@@ -193,12 +203,12 @@ function OracleSync() {
   const [busy, setBusy] = useState<"" | "fetch" | "apply" | "undo">("");
   const [confirm, setConfirm] = useState<{ title: string; text: string; run: () => Promise<void> } | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZES.includes(v0.pageSize) ? v0.pageSize : 50);
   // Filters from the badges under each employee
-  const [statusF, setStatusF] = useState("");
-  const [releaseF, setReleaseF] = useState("");
-  const [paidF, setPaidF] = useState<"" | "yes" | "no">("");
-  const [termF, setTermF] = useState(""); // "" | expired | valid | none | yyyy-mm-dd
+  const [statusF, setStatusF] = useState(str("statusF"));
+  const [releaseF, setReleaseF] = useState(str("releaseF"));
+  const [paidF, setPaidF] = useState<"" | "yes" | "no">(v0.paidF === "yes" || v0.paidF === "no" ? v0.paidF : "");
+  const [termF, setTermF] = useState(str("termF")); // "" | expired | valid | none | yyyy-mm-dd
   const [showHidden, setShowHidden] = useState(false);
   const [openRun, setOpenRun] = useState<number | null>(null);
 
@@ -216,11 +226,34 @@ function OracleSync() {
 
   const isHidden = (i: DiffItem, t: Tab) => hidden[`${t}|${i.epid}`]?.sig === sigFor(i, t);
 
-  // Reset selection when the view changes
-  useEffect(() => { setSelected(new Set()); setPage(0); },
-    [tab, search, dAst, fieldFilter, sortBy, snapshot?.id, statusF, releaseF, paidF, termF, showHidden, pageSize]);
+  // Reset selection when the view changes (not on the first render: the saved
+  // view, page included, is put back as it was)
+  const viewKey = JSON.stringify([tab, search, dAst, fieldFilter, sortBy, statusF, releaseF, paidF, termF, showHidden, pageSize]);
+  const prevView = useRef<string | null>(null);
+  const prevSnap = useRef<number | undefined>(undefined);
+  const prevTab = useRef<Tab>(tab);
+  useEffect(() => {
+    const viewChanged = prevView.current !== null && prevView.current !== viewKey;
+    // the snapshot first arriving is not a change; a newer fetch is
+    const snapChanged = prevSnap.current !== undefined && snapshot?.id !== prevSnap.current;
+    prevView.current = viewKey;
+    if (snapshot?.id !== undefined) prevSnap.current = snapshot.id;
+    if (viewChanged || snapChanged) { setSelected(new Set()); setPage(0); }
+  }, [viewKey, snapshot?.id]);
   // Hidden view and term date are per tab
-  useEffect(() => { setShowHidden(false); setTermF((t) => (/^\d/.test(t) ? "" : t)); }, [tab]);
+  useEffect(() => {
+    if (prevTab.current === tab) return;
+    prevTab.current = tab;
+    setShowHidden(false); setTermF((t) => (/^\d/.test(t) ? "" : t));
+  }, [tab]);
+  // Remember the view for this browser tab
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(VIEW_KEY, JSON.stringify({
+        tab, search, dAst, fieldFilter, sortBy, page, pageSize, statusF, releaseF, paidF, termF,
+      }));
+    } catch { /* ignore */ }
+  }, [tab, search, dAst, fieldFilter, sortBy, page, pageSize, statusF, releaseF, paidF, termF]);
 
   // Tile numbers: employees each tab lists (same rule as the tab itself, hidden rows left out)
   const tabCounts = useMemo(() => {

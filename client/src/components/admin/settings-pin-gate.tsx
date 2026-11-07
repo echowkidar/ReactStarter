@@ -1,7 +1,8 @@
 // PIN lock in front of the Settings page (server side: server/settingsPin.ts).
 // Shows "set a PIN" the first time, then "enter PIN". While unlocked it shows the
-// page with a small bar: time left, Lock now, Change PIN.
-import { useEffect, useState, type ReactNode, type FormEvent } from "react";
+// page with a small bar: time left, Lock now, Change PIN. When it locks again the
+// page is only hidden (not thrown away), so after the PIN it carries on as it was.
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ export function SettingsPinGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [, tick] = useState(0);
+  const [opened, setOpened] = useState(!!getSettingsUnlock());
 
   const { data: status, isLoading, refetch } = useQuery<PinStatus>({
     queryKey: ["/api/admin/settings-pin/status"],
@@ -95,31 +97,55 @@ export function SettingsPinGate({ children }: { children: ReactNode }) {
     } finally { setBusy(false); }
   };
 
-  if (isLoading) return <Loading />;
+  // Once the page has been opened it stays mounted (only hidden) while locked,
+  // so filters, ticks and scroll position are all still there after the PIN.
+  useEffect(() => { if (unlock) setOpened(true); }, [unlock]);
 
-  if (unlock && mode !== "setup") {
-    return (
-      <>
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-          <LockOpen className="h-4 w-4" />
-          <span>Settings unlocked · locks again in about {minutesLeft(unlock.expiresAt)} min</span>
-          <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => { reset(); setMode("setup"); }}>
-              <KeyRound className="mr-1 h-4 w-4" /> Change PIN
-            </Button>
-            <Button size="sm" variant="outline" onClick={lockNow}>
-              <Lock className="mr-1 h-4 w-4" /> Lock now
-            </Button>
-          </div>
-        </div>
-        {children}
-      </>
-    );
-  }
+  const showPage = !!unlock && mode !== "setup";
 
+  // Remember where the page was scrolled to when it locked; go back there after the PIN
+  const savedScroll = useRef(0);
+  const wasShown = useRef(showPage);
+  useEffect(() => {
+    if (!showPage) return;
+    const onScroll = () => { savedScroll.current = window.scrollY; };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [showPage]);
+  useLayoutEffect(() => {
+    if (wasShown.current === showPage) return;
+    wasShown.current = showPage;
+    if (showPage) window.scrollTo(0, savedScroll.current);
+  }, [showPage]);
   const setup = mode === "setup" || !status?.pinSet;
   const lockedUntil = status?.locked ? status.lockedUntil : null;
 
+  return (
+    <>
+      {!showPage && (isLoading ? <Loading /> : pinCard())}
+      {opened && (
+        <div hidden={!showPage}>
+          {unlock && (
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+              <LockOpen className="h-4 w-4" />
+              <span>Settings unlocked · locks again in about {minutesLeft(unlock.expiresAt)} min</span>
+              <div className="ml-auto flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => { reset(); setMode("setup"); }}>
+                  <KeyRound className="mr-1 h-4 w-4" /> Change PIN
+                </Button>
+                <Button size="sm" variant="outline" onClick={lockNow}>
+                  <Lock className="mr-1 h-4 w-4" /> Lock now
+                </Button>
+              </div>
+            </div>
+          )}
+          {children}
+        </div>
+      )}
+    </>
+  );
+
+  function pinCard() {
   return (
     <Card className="mx-auto mt-10 max-w-sm">
       <CardHeader>
@@ -130,7 +156,9 @@ export function SettingsPinGate({ children }: { children: ReactNode }) {
         <p className="text-sm text-muted-foreground">
           {setup
             ? "Enter your login password and choose a PIN of 4 to 8 digits."
-            : "Enter your PIN to open Settings."}
+            : opened
+              ? "Enter your PIN to carry on — your work on this page is kept as it was."
+              : "Enter your PIN to open Settings."}
         </p>
       </CardHeader>
       <CardContent>
@@ -181,4 +209,5 @@ export function SettingsPinGate({ children }: { children: ReactNode }) {
       </CardContent>
     </Card>
   );
+  }
 }
