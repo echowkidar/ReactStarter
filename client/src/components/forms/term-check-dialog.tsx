@@ -148,10 +148,15 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
     }
   };
 
-  const applyBypass = () => {
-    const r = reason === "other" ? otherReason.trim() : reason;
-    if (!r) { setError("Please choose a reason."); return; }
-    onBypass(emp.id, r);
+  // A listed reason is applied as soon as it is clicked; "Other" on Enter / leaving the box
+  const chooseReason = (r: string) => {
+    setError("");
+    setReason(r);
+    if (r !== "other") onBypass(emp.id, r);
+  };
+  const applyOtherReason = () => {
+    const r = otherReason.trim();
+    if (r) onBypass(emp.id, r);
   };
 
   const fileInput = (label: string, onChange: (f: File | null) => void) => (
@@ -240,19 +245,19 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
         <div className="mt-3 rounded-md border bg-white p-3 space-y-2">
           <div className="flex flex-wrap gap-2">
             {[...TERM_BYPASS_REASONS, "other"].map((r) => (
-              <label key={r} className={`cursor-pointer rounded-md border px-2 py-1 text-xs ${reason === r ? "border-blue-600 bg-blue-50 text-blue-800" : ""}`}>
-                <input type="radio" className="sr-only" checked={reason === r} onChange={() => { setReason(r); setError(""); }} />
+              <button key={r} type="button"
+                className={`rounded-md border px-2 py-1 text-xs hover:border-blue-400 hover:bg-blue-50 ${reason === r ? "border-blue-600 bg-blue-50 text-blue-800" : ""}`}
+                onClick={() => chooseReason(r)}>
                 {r === "other" ? "Other…" : r}
-              </label>
+              </button>
             ))}
           </div>
           {reason === "other" && (
-            <Input className="h-9" placeholder="Write the reason" value={otherReason} maxLength={80}
-              onChange={(e) => setOtherReason(e.target.value)} />
+            <Input className="h-9" autoFocus placeholder="Write the reason and press Enter" value={otherReason} maxLength={80}
+              onChange={(e) => setOtherReason(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyOtherReason(); } }}
+              onBlur={applyOtherReason} />
           )}
-          <div className="flex justify-end">
-            <Button type="button" size="sm" onClick={applyBypass}>Write in Remarks &amp; continue</Button>
-          </div>
         </div>
       )}
 
