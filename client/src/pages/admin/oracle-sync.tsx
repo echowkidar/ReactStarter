@@ -88,7 +88,7 @@ type ConfigResponse = {
 type Tab = "changes" | "fills" | "disable" | "enable" | "new" | "missing";
 const TABS: Array<{ key: Tab; label: string; hint: string; tone: string }> = [
   { key: "changes", label: "Differences", hint: "App value differs from Oracle", tone: "text-amber-700" },
-  { key: "fills", label: "Fill empty fields", hint: "App field is empty, Oracle has it", tone: "text-sky-700" },
+  { key: "fills", label: "Fill empty fields", hint: "Only empty app fields, Oracle has them", tone: "text-sky-700" },
   { key: "disable", label: "Should be disabled", hint: "Active here, no salary in Oracle", tone: "text-red-700" },
   { key: "enable", label: "Should be active", hint: "Inactive here, salary made in Oracle", tone: "text-green-700" },
   { key: "new", label: "New employees", hint: "Salary made in Oracle, not in the app", tone: "text-violet-700" },
@@ -109,11 +109,21 @@ const mask = (v: string | null, show: boolean) => (!v ? "" : show || v.length <=
 const shown = (c: FieldChange, v: string | null, showSensitive: boolean) =>
   c.sensitive ? mask(v, showSensitive) : c.field === "termExpiry" ? fmtDate(v) : v || "";
 
-/** Changes shown on a tab: real differences or empty fields to fill (Oracle-only fields never shown) */
+/**
+ * Changes shown for an employee — always ALL of them together (differences and
+ * empty fields to fill), so one Update brings the whole employee in line.
+ * Differences tab: employees with at least one real difference.
+ * Fill empty fields tab: employees whose only changes are empty app fields.
+ * The field filter picks employees that have a change in that field.
+ * (Oracle-only bookkeeping fields are never shown.)
+ */
 function changesFor(item: DiffItem, tab: Tab, fieldFilter: string): FieldChange[] {
   if (tab !== "changes" && tab !== "fills") return [];
-  return item.changes.filter((c) => !c.quiet && (tab === "changes" ? !c.fill : c.fill) &&
-    (!fieldFilter || c.field === fieldFilter));
+  const visible = item.changes.filter((c) => !c.quiet);
+  const hasDifference = visible.some((c) => !c.fill);
+  if (tab === "changes" ? !hasDifference : hasDifference) return [];
+  if (fieldFilter && !visible.some((c) => c.field === fieldFilter)) return [];
+  return visible;
 }
 
 /**
@@ -673,12 +683,14 @@ function OracleSync() {
                         {(tab === "changes" || tab === "fills") && (
                           <div className="space-y-1">
                             {changesFor(i, tab, fieldFilter).map((c) => (
-                              <label key={c.field} className="flex items-start gap-2 cursor-pointer">
+                              <label key={c.field} className={`flex items-start gap-2 cursor-pointer rounded px-1 ${fieldFilter === c.field ? "bg-amber-50" : ""}`}>
                                 <Checkbox className="mt-0.5" checked={isChecked(i.epid, c)}
                                   onCheckedChange={(v) => setFieldChoice((m) => ({ ...m, [`${i.epid}|${c.field}`]: !!v }))} />
                                 <span>
                                   <span className="text-muted-foreground">{c.label}: </span>
-                                  {c.app !== null && <><span className="line-through decoration-red-400">{shown(c, c.app, showSensitive)}</span> → </>}
+                                  {c.app !== null
+                                    ? <><span className="line-through decoration-red-400">{shown(c, c.app, showSensitive)}</span> → </>
+                                    : <span className="text-xs text-sky-700">(empty) → </span>}
                                   <span className="font-medium text-green-800">{shown(c, c.oracle, showSensitive)}</span>
                                   {!c.suggested && <span className="text-xs text-amber-700"> (check)</span>}
                                 </span>
