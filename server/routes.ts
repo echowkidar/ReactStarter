@@ -41,7 +41,7 @@ import { registerOracleSyncRoutes } from "./oracleSync";
 import { registerPaybillRoutes } from "./paybillSync";
 import { rateLimit, safeUploadName } from "./security";
 import { createResetToken, isResetTokenValid, clearResetToken } from "./passwordReset";
-import { verifyAdminSession, requireBodyDepartment, passwordFingerprint, regenerateKeeping, saveSession, sessionAdmin, sessionDepartmentId, sessionStaff, SESSION_COOKIE } from "./auth";
+import { verifyAdminSession, requireBodyDepartment, passwordFingerprint, regenerateKeeping, saveSession, sessionAdmin, sessionDepartmentId, sessionStaff, SESSION_COOKIE, cookieDomainFor } from "./auth";
 import { findStaffForLogin, registerStaffRoutes } from "./dakStaff";
 import { buildHistoryView } from "./employeeHistoryView";
 import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
@@ -549,7 +549,10 @@ export async function registerRoutes(app: Express) {
     }
     if (!req.session.adminId && !req.session.departmentId) {
       return req.session.destroy(() => {
+        // Old host-only cookie and the shared-domain cookie
         res.clearCookie(SESSION_COOKIE);
+        const domain = cookieDomainFor(req);
+        if (domain) res.clearCookie(SESSION_COOKIE, { domain });
         res.json({ success: true });
       });
     }

@@ -98,6 +98,22 @@ async function fileInfo(rel: string): Promise<FileInfo> {
   return info;
 }
 
+/** 401 for a file: a short page when opened in a browser tab, JSON for the app */
+function loginNeeded(req: Request, res: Response) {
+  res.status(401);
+  if (req.accepts(["html", "json"]) === "html") {
+    res.removeHeader("Content-Disposition");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+    return res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login required</title><style>body{font-family:system-ui,Arial,sans-serif;background:#f8fafc;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+.box{background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);padding:28px 32px;max-width:420px;text-align:center}
+h1{font-size:20px;margin:0 0 8px}p{color:#475569;font-size:14px}a{display:inline-block;margin:6px;padding:8px 14px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-size:14px}</style></head>
+<body><div class="box"><h1>Login required</h1><p>This file can only be opened by a logged-in user who is allowed to see it. Please log in on this site and open the file again.</p>
+<a href="/admin/login">Admin login</a><a href="/">Department login</a></div></body></html>`);
+  }
+  return res.json({ message: "Please log in again", code: "AUTH_REQUIRED" });
+}
+
 /**
  * Departments that are party to the dak this file belongs to (sender, receiving office,
  * recipients). Empty list = not (yet) linked to a dak, e.g. a scan before saving.
@@ -144,6 +160,8 @@ export async function uploadsGuard(req: Request, res: Response, next: NextFuncti
 
   const ext = path.extname(rel).toLowerCase();
   res.setHeader("X-Content-Type-Options", "nosniff");
+  // Never kept by Cloudflare / shared caches: access is checked per person
+  res.setHeader("Cache-Control", "private, no-store");
   if (!INLINE_EXT.has(ext)) {
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("Content-Disposition", "attachment");
@@ -156,7 +174,7 @@ export async function uploadsGuard(req: Request, res: Response, next: NextFuncti
     const dakDepts = rel.startsWith("dispatch/") ? await dakFileDepartments(rel) : null;
     if (info.isPublic) return next();
     const deptId = await sessionDepartmentId(req);
-    if (!deptId) return res.status(401).json({ message: "Please log in again", code: "AUTH_REQUIRED" });
+    if (!deptId) return loginNeeded(req, res);
     if (isLpc) return res.status(403).json({ message: "You are not allowed to access this", code: "FORBIDDEN" });
     if (info.employeeDepts.length && !info.employeeDepts.includes(deptId)) {
       return res.status(403).json({ message: "You are not allowed to access this", code: "FORBIDDEN" });

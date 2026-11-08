@@ -67,6 +67,26 @@ export async function setupSessions(app: Express) {
       maxAge: SESSION_HOURS * 60 * 60 * 1000,
     },
   }));
+  // Logins made before the shared-domain cookie: give them the shared domain too
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    const domain = cookieDomainFor(req);
+    if (domain && req.session && (req.session.adminId || req.session.departmentId) && req.session.cookie.domain !== domain) {
+      req.session.cookie.domain = domain;
+    }
+    next();
+  });
+}
+
+/**
+ * Cookie domain shared by "www.<site>" and "<site>": the site is reachable on both,
+ * while stored file links use one of them. Without this, a login made on www is not
+ * sent to links without www (and the other way round). No domain for localhost / IPs.
+ */
+export function cookieDomainFor(req: Request): string | undefined {
+  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN;
+  const host = String(req.hostname || "").toLowerCase();
+  if (!host || host === "localhost" || !host.includes(".") || /^[\d.]+$/.test(host) || host.includes(":")) return undefined;
+  return host.startsWith("www.") ? host.slice(4) : host;
 }
 
 /** Start a fresh session id at login (no session fixation), keeping the other role's login */
@@ -80,6 +100,8 @@ export function regenerateKeeping(req: Request): Promise<void> {
     req.session.regenerate((err) => {
       if (err) return reject(err);
       Object.assign(req.session, keep);
+      const domain = cookieDomainFor(req);
+      if (domain) req.session.cookie.domain = domain;
       resolve();
     });
   });

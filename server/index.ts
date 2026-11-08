@@ -58,7 +58,7 @@ export async function initApp() {
     app.use(apiAuthGate);
 
     // Uploaded files: login / ownership check, then the files themselves
-    app.use('/uploads', uploadsGuard, express.static(path.join(__dirname, '../uploads'), { dotfiles: 'deny', index: false }));
+    app.use('/uploads', uploadsGuard, express.static(path.join(__dirname, '../uploads'), { dotfiles: 'deny', index: false, cacheControl: false }));
 
     // Live updates for department pages (SSE stream + change signals)
     registerLiveUpdateStream(app);
