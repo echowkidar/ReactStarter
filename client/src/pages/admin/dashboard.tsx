@@ -1,3 +1,4 @@
+import { serverLogout } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -1035,6 +1036,7 @@ export default function AdminDashboard() {
     }
 
     // Clear admin data from localStorage
+    serverLogout("admin");
     localStorage.removeItem("admin");
     localStorage.removeItem("adminType");
     localStorage.removeItem("adminEmail");

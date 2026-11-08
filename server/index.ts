@@ -7,6 +7,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrations";
 import { setupCronJobs } from "./cronJobs";
+import { securityHeaders, uploadsGuard } from "./security";
 import { registerLiveUpdateStream, liveChangeMiddleware, LIVE_PATH_PREFIX } from "./liveUpdates";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -16,6 +17,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.disable("x-powered-by");
+// Security headers on every response
+app.use(securityHeaders);
 // gzip API/JSON/HTML/JS responses (big lists were ~10x larger over the tunnel)
 // (never for the live-update stream — compression would buffer the events)
 app.use(compression({
@@ -24,49 +28,41 @@ app.use(compression({
 }));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 
 
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+      // Only method, path, status and time: response bodies can hold personal data
+      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 
   next();
 });
 
-// Live updates for department pages (SSE stream + change signals)
-registerLiveUpdateStream(app);
-app.use(liveChangeMiddleware);
-
 // Initialize app function
 export async function initApp() {
   try {
     // Run database migrations
     await runMigrations();
+
+    // Login sessions (cookie) + login check for every /api route — before any route
+    const { setupSessions, apiAuthGate } = await import("./auth");
+    await setupSessions(app);
+    app.use(apiAuthGate);
+
+    // Uploaded files: login / ownership check, then the files themselves
+    app.use('/uploads', uploadsGuard, express.static(path.join(__dirname, '../uploads'), { dotfiles: 'deny', index: false }));
+
+    // Live updates for department pages (SSE stream + change signals)
+    registerLiveUpdateStream(app);
+    app.use(liveChangeMiddleware);
 
     // Initialize PKI Certificate Authority for LPC PDF signing
     try {
@@ -86,6 +82,12 @@ export async function initApp() {
     const { registerDispatchRoutes } = await import("./dispatchRoutes");
     registerDispatchRoutes(app);
 
+    // e-Office: dak extras (My Dak, reports, registers, QR verify…) and e-files
+    const { registerDakExtraRoutes } = await import("./dakExtras");
+    registerDakExtraRoutes(app);
+    const { registerEfileRoutes } = await import("./efiles");
+    registerEfileRoutes(app);
+
     // Setup Cron Jobs
     setupCronJobs();
 
@@ -100,8 +102,10 @@ export async function initApp() {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
-      res.status(status).json({ message });
-      throw err;
+      if (status >= 500) console.error("[Error]", err);
+      if (res.headersSent) return;
+      // Hide internal error details from users
+      res.status(status).json({ message: status >= 500 ? "Internal Server Error" : message });
     });
 
     // Set up environment

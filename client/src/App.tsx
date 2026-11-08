@@ -14,6 +14,9 @@ import ReportDetails from "@/pages/dashboard/report-details";
 import Settings from "@/pages/dashboard/settings";
 import Documents from "@/pages/dashboard/documents";
 import Dispatch from "@/pages/dashboard/dispatch";
+import StaffPage from "@/pages/dashboard/staff";
+import EFiles from "@/pages/dashboard/efiles";
+import DakVerify from "@/pages/dak-verify";
 import Downloads from "@/pages/dashboard/downloads";
 import Help from "@/pages/help";
 import AdminLogin from "@/pages/admin/login";
@@ -56,6 +59,8 @@ function AppRouter() {
       <ProtectedRoute path="/dashboard/settings" component={Settings} />
       <ProtectedRoute path="/dashboard/documents" component={Documents} />
       <ProtectedRoute path="/dashboard/dispatch" component={Dispatch} />
+      <ProtectedRoute path="/dashboard/staff" component={StaffPage} />
+      <ProtectedRoute path="/dashboard/efiles" component={EFiles} />
       <ProtectedRoute path="/dashboard/downloads" component={Downloads} />
       <ProtectedRoute path="/dashboard/reports/:id" component={ReportDetails} />
       <ProtectedRoute path="/dashboard/help" component={Help} />
@@ -86,6 +91,7 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/email" component={EmailManagement} />
       <ProtectedAdminRoute path="/admin/mailbox" component={EmailClient} />
       <Route path="/lpc/verify/:id" component={LpcVerify} />
+      <Route path="/dak/verify/:token" component={DakVerify} />
       <Route component={NotFound} />
     </Switch>
   );

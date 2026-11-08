@@ -220,8 +220,10 @@ export default function Login() {
         throw new Error(data.message || "Invalid credentials");
       }
 
-      // Store department info
+      // Store department info (and the staff person, for staff logins)
       localStorage.setItem("department", JSON.stringify(data.department));
+      if (data.staff) localStorage.setItem("staff", JSON.stringify(data.staff));
+      else localStorage.removeItem("staff");
       setLocation("/dashboard");
     } catch (error) {
       toast({

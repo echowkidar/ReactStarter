@@ -16,11 +16,15 @@ import {
   Send, Inbox, FileUp, Upload, Scan, ArrowLeft, Loader2, Search, X, CheckCircle2,
   Eye, Clock, Forward, UserCheck, AlertTriangle, ChevronDown, ChevronUp,
   Download, Plus, Trash2, Users, Building2, ExternalLink, Lock, FileText,
-  Paperclip, ZoomIn, ZoomOut, RefreshCw, MailCheck, Archive, Undo2
+  Paperclip, ZoomIn, ZoomOut, RefreshCw, MailCheck, Archive, Undo2,
+  ShieldCheck, Ban, Printer, BarChart3, FolderOpen, Link2, Truck
 } from "lucide-react";
 import Sidebar from "@/components/layout/sidebar";
 import ScannerModal from "@/components/ScannerModal";
-import { getCurrentDepartment } from "@/lib/auth";
+import { getCurrentDepartment, getCurrentStaff } from "@/lib/auth";
+import DakReports from "@/components/dak/DakReports";
+import { MyDak, DakAttachments, Acknowledgements } from "@/components/dak/DakPanels";
+import { printAcknowledgementSlip } from "@/components/dak/dak-print";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -52,9 +56,50 @@ interface DispatchDoc {
   readAt?: string;
   markedToStaff?: string;
   markedBy?: string;
+  markedAt?: string;
   staffRemarks?: string;
+  actionDueDate?: string | null;
+  disposedAt?: string | null;
+  disposalType?: string | null;
+  disposalRemarks?: string | null;
+  fileNumber?: string | null;
   emailSent?: boolean;
   isPhysicalReceive?: boolean;
+}
+
+// Dak is "closed" for this department once it is disposed, forwarded or returned
+const CLOSED_STATUSES = ["disposed", "forwarded", "returned", "withdrawn", "cancelled"];
+const DISPATCH_MODES: Record<string, string> = {
+  electronic: "Electronic only", by_hand: "By hand", peon_book: "Peon book",
+  registered_post: "Registered post", speed_post: "Speed post", courier: "Courier", email: "E-mail",
+};
+const POSTAL_MODES = ["registered_post", "speed_post", "courier"];
+const DISPOSAL_TYPES = ["Filed", "Replied", "Action completed", "Noted (no action needed)", "Sent to other office", "Other"];
+type InboxFilter = "all" | "unreceived" | "pending" | "overdue" | "disposed";
+const STATUS_LABELS: Record<string, string> = {
+  dispatched: "Unreceived",
+  received: "Received",
+  read: "Received",
+  marked: "With staff",
+  forwarded: "Forwarded",
+  returned: "Returned",
+  disposed: "Disposed",
+  withdrawn: "Withdrawn",
+  cancelled: "Cancelled",
+};
+
+const todayStr = () => format(new Date(), "yyyy-MM-dd");
+const isOverdue = (d: { actionDueDate?: string | null; recipientStatus?: string; receivedAt?: string }) =>
+  !!d.actionDueDate && !!d.receivedAt && !CLOSED_STATUSES.includes(d.recipientStatus || "") && d.actionDueDate < todayStr();
+
+/** AI date ("DD/MM/YYYY", "DD-MM-YYYY" or ISO) → "YYYY-MM-DD", or "" when unknown */
+function toIsoDate(value: unknown): string {
+  const s = String(value ?? "").trim();
+  let m = /^(\d{2})[\/-](\d{2})[\/-](\d{4})$/.exec(s);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return "";
 }
 
 interface TrackingEntry {
@@ -66,9 +111,12 @@ interface TrackingEntry {
 }
 
 const DOCUMENT_TYPES = [
-  "Letter", "Office Memo", "Office Order", "Application", "Notification",
-  "Circular", "Notice", "File", "Note", "Report", "Minutes", "Resolution",
-  "Endorsement", "Certificate", "Last Pay Certificate", "Invoice", "Quotation", "Tender", "Other",
+  "Letter", "Forwarding Letter", "Office Memo", "Office Order", "Application", "Forwarded Application",
+  "Notification", "Circular", "Notice", "Reminder", "File", "Note", "Report", "Minutes", "Resolution",
+  "Endorsement", "Certificate", "Attendance Report", "Attendance Statement", "Salary Bill", "Arrear Bill",
+  "Pay Fixation", "Increment Order", "Promotion Order", "Transfer Order", "Joining Report", "Relieving Report",
+  "Last Pay Certificate", "Leave Application", "Leave Sanction", "Medical Reimbursement", "Experience Certificate",
+  "No Objection Certificate", "Pension Case", "Invoice", "Quotation", "Tender", "Other",
 ];
 
 // ─── Main Component ──────────────────────────────────────────────────────
@@ -135,6 +183,34 @@ export default function Dispatch() {
   const [recvConfidential, setRecvConfidential] = useState(false);
   const [recvMarkToStaff, setRecvMarkToStaff] = useState<string[]>([]);
   const [recvMarkToStaffRemarks, setRecvMarkToStaffRemarks] = useState("");
+  const [recvActionDueDate, setRecvActionDueDate] = useState("");
+  const [recvSenderRef, setRecvSenderRef] = useState<number | null>(null);
+  // New dispatch: physical mode, reply link, e-file
+  const [formMode, setFormMode] = useState("electronic");
+  const [formTrackingNo, setFormTrackingNo] = useState("");
+  const [formPostage, setFormPostage] = useState("");
+  const [formReplyTo, setFormReplyTo] = useState("");
+  const [formEfile, setFormEfile] = useState("");
+  const [disposeEfile, setDisposeEfile] = useState("");
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState("");
+  const [showCancelEntry, setShowCancelEntry] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const staff = getCurrentStaff();
+  const [recvReceiptNoSuggested, setRecvReceiptNoSuggested] = useState("");
+
+  // Inbox filter (pending / overdue / disposed …)
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");
+
+  // Dispose / Reopen / Edit dialogs
+  const [showDispose, setShowDispose] = useState(false);
+  const [disposeType, setDisposeType] = useState("");
+  const [disposeFileNo, setDisposeFileNo] = useState("");
+  const [disposeRemarks, setDisposeRemarks] = useState("");
+  const [showReopen, setShowReopen] = useState(false);
+  const [reopenRemarks, setReopenRemarks] = useState("");
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState({ senderName: "", documentType: "", subject: "", dispatchNumber: "", dispatchDate: "", referenceNumber: "", priority: "normal" });
   const [recvFileUrl, setRecvFileUrl] = useState("");
   const [recvFileType, setRecvFileType] = useState("image");
   const [recvIsUploading, setRecvIsUploading] = useState(false);
@@ -153,8 +229,9 @@ export default function Dispatch() {
 
   // Mark to Staff dialog
   const [showMarkStaff, setShowMarkStaff] = useState(false);
-  const [markStaffName, setMarkStaffName] = useState("");
+  const [markStaffNames, setMarkStaffNames] = useState<string[]>([]);
   const [markStaffRemarks, setMarkStaffRemarks] = useState("");
+  const [markStaffDueDate, setMarkStaffDueDate] = useState("");
 
   // RIO dialog
   const [showRioDialog, setShowRioDialog] = useState(false);
@@ -200,12 +277,24 @@ export default function Dispatch() {
     enabled: !!department?.id,
   });
 
-  const { data: stats } = useQuery<{ sent: number; received: number; unread: number }>({
+  const { data: stats } = useQuery<{ sent: number; received: number; unread: number; pendingAction?: number; overdue?: number }>({
     queryKey: [`/api/dispatch/stats/${department?.id}`],
     enabled: !!department?.id,
     refetchInterval: 30000,
   });
 
+  const { data: staffLogins = [] } = useQuery<any[]>({
+    queryKey: [`/api/departments/${department?.id}/staff?active=1`],
+    enabled: !!department?.id,
+  });
+  const { data: registeredDepartments = [] } = useQuery<any[]>({
+    queryKey: ["/api/departments?registeredOnly=true"],
+    enabled: !!department?.id,
+  });
+  const { data: openEfiles = [] } = useQuery<any[]>({
+    queryKey: [`/api/departments/${department?.id}/efiles?status=open`],
+    enabled: !!department?.id,
+  });
   const { data: departmentEmployees = [] } = useQuery<any[]>({
     queryKey: [`/api/departments/${department?.id}/employees`],
     enabled: !!department?.id,
@@ -226,6 +315,7 @@ export default function Dispatch() {
       fetchNextInwardNumber().then((res) => {
         if (res.data?.nextNumber) {
           setRecvReceiptNo(res.data.nextNumber);
+          setRecvReceiptNoSuggested(res.data.nextNumber);
         }
       });
     }
@@ -417,6 +507,37 @@ export default function Dispatch() {
   };
 
   // Handle scanned document from ScannerModal
+  /** Fill the Receive form from the AI result: sender's letter no./date go to their own fields */
+  // Mark-to options: staff logins ("staff:<id>") and, for staff without login, employee names
+  const markOptions = [
+    ...staffLogins.map((s: any) => ({ label: `${s.name} (${s.roleLabel})`, value: `staff:${s.id}` })),
+    ...departmentEmployees
+      .filter((e: any) => !staffLogins.some((s: any) => s.employeeId === e.id || s.name === e.name))
+      .map((e: any) => ({ label: e.name, value: e.name })),
+  ];
+  const splitMarks = (values: string[]) => ({
+    staffIds: values.filter((v) => v.startsWith("staff:")).map((v) => Number(v.slice(6))),
+    names: values.filter((v) => !v.startsWith("staff:")),
+  });
+  const marksFromRow = (row: any): string[] => {
+    const ids: number[] = row?.markedStaffIds || [];
+    const staffNames = staffLogins.filter((s: any) => ids.includes(s.id)).map((s: any) => s.name);
+    const others = String(row?.markedToStaff || "").split(",").map((x: string) => x.trim()).filter((n: string) => n && !staffNames.includes(n));
+    return [...ids.map((i) => `staff:${i}`), ...others];
+  };
+  // Own inward dak still open → can be answered by a new dispatch
+  const replyCandidates = inbox.filter((d) => d.inwardNumber && d.receivedAt && !CLOSED_STATUSES.includes(d.recipientStatus || ""));
+
+  const applyReceiveExtraction = (r: any) => {
+    if (r.document_type) setRecvDocType(DOCUMENT_TYPES.includes(r.document_type) ? r.document_type : "Other");
+    if (r.subject) setRecvSubject(r.subject);
+    if (r.sender_department) setRecvSenderInfo(r.sender_department);
+    if (r.dispatch_number) setRecvDispatchNo(String(r.dispatch_number));
+    const letterDate = toIsoDate(r.dispatch_date);
+    setRecvDispatchDate(letterDate && letterDate <= todayStr() ? letterDate : "");
+    if (r.reference_number) setRecvRefNo(String(r.reference_number));
+  };
+
   const handleScanComplete = async (file: File) => {
     setShowScanner(false);
 
@@ -439,34 +560,7 @@ export default function Dispatch() {
           setRecvExtractionFailed(true);
           toast({ title: "AI Extraction Failed", description: data.failureReason || "Please fill details manually.", variant: "destructive" });
         } else {
-          const r = data.result;
-          if (r.document_type) setRecvDocType(r.document_type);
-          if (r.subject) setRecvSubject(r.subject);
-          if (r.dispatch_number) setRecvRefNo(r.dispatch_number);
-          if (r.sender_department) setRecvSenderInfo(r.sender_department);
-          if (r.dispatch_date) {
-            let formattedDate = r.dispatch_date;
-            if (r.dispatch_date.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-              const [dd, mm, yyyy] = r.dispatch_date.split("/");
-              formattedDate = `${yyyy}-${mm}-${dd}`;
-            } else if (r.dispatch_date.match(/^\d{2}-\d{2}-\d{4}$/)) {
-              const [dd, mm, yyyy] = r.dispatch_date.split("-");
-              formattedDate = `${yyyy}-${mm}-${dd}`;
-            } else {
-              const d = new Date(r.dispatch_date);
-              if (!isNaN(d.getTime())) {
-                formattedDate = format(d, "yyyy-MM-dd");
-              }
-            }
-            if (formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-              setRecvDispatchDate(formattedDate);
-            } else {
-              setRecvDispatchDate(format(new Date(), "yyyy-MM-dd"));
-            }
-          } else {
-            setRecvDispatchDate(format(new Date(), "yyyy-MM-dd"));
-          }
-          if (r.reference_number) setRecvRefNo(r.reference_number);
+          applyReceiveExtraction(data.result);
           toast({ title: "✅ Scanned & Extracted", description: `AI Confidence: ${data.result.confidence || "N/A"}` });
         }
       } catch (err: any) {
@@ -566,6 +660,13 @@ export default function Dispatch() {
       formData.append("isConfidential", formConfidential.toString());
       formData.append("sendEmail", formSendEmail.toString());
       formData.append("recipients", JSON.stringify(selectedRecipients));
+      formData.append("dispatchMode", formMode);
+      if (POSTAL_MODES.includes(formMode)) {
+        if (formTrackingNo) formData.append("postalTrackingNo", formTrackingNo);
+        if (formPostage) formData.append("postageAmount", formPostage);
+      }
+      if (formReplyTo) formData.append("inReplyToRecipientId", formReplyTo);
+      if (formEfile) formData.append("efileId", formEfile);
 
       const res = await fetch("/api/dispatch", { method: "POST", body: formData });
       if (!res.ok) throw new Error((await res.json()).message);
@@ -603,12 +704,27 @@ export default function Dispatch() {
       if (recvDispatchNo) formData.append("dispatchNumber", recvDispatchNo);
       if (recvDispatchDate) formData.append("dispatchDate", recvDispatchDate);
       if (recvRefNo) formData.append("referenceNumber", recvRefNo);
+      if (recvReceiptDate > todayStr()) throw new Error("Receipt date cannot be in the future");
+      if (recvDispatchDate && recvDispatchDate > todayStr()) throw new Error("Letter date cannot be in the future");
+      formData.append("receiptDate", recvReceiptDate);
+      // Only a number the clerk typed is sent; the suggested one is given out by the server
+      // at save time (so two clerks never get the same number)
+      const typedNo = recvReceiptNo.trim();
+      if (typedNo && typedNo !== recvReceiptNoSuggested) formData.append("inwardNumber", typedNo);
       formData.append("priority", recvPriority);
       formData.append("isConfidential", recvConfidential.toString());
-      if (recvMarkToStaff && recvMarkToStaff.length > 0) formData.append("markedToStaff", recvMarkToStaff.join(", "));
+      if (recvMarkToStaff && recvMarkToStaff.length > 0) {
+        const { staffIds, names } = splitMarks(recvMarkToStaff);
+        if (names.length) formData.append("markedToStaff", names.join(", "));
+        formData.append("markedStaffIds", JSON.stringify(staffIds));
+        const ids = departmentEmployees.filter((e: any) => names.includes(e.name)).map((e: any) => e.id);
+        formData.append("markedToEmployeeIds", JSON.stringify(ids));
+      }
+      if (recvActionDueDate) formData.append("actionDueDate", recvActionDueDate);
+      if (recvSenderRef) formData.append("senderDepartmentRef", String(recvSenderRef));
       if (recvMarkToStaffRemarks) formData.append("staffRemarks", recvMarkToStaffRemarks);
 
-      const res = await fetch("/api/dispatch/receive-external", { method: "POST", body: formData });
+      const res = await fetch("/api/dispatch/receive-external", { method: "POST", body: formData, credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
@@ -635,14 +751,122 @@ export default function Dispatch() {
       });
       return res.json();
     },
-    onSuccess: () => {
-      refetchInbox();
-      if (selectedDispatch) {
-        queryClient.invalidateQueries({ queryKey: [`/api/dispatch/${selectedDispatch.id}`, department?.id] });
-      }
-      toast({ title: "Marked as Received" });
+    onSuccess: (data: any) => {
+      refreshDak();
+      toast({ title: "Marked as Received", description: data?.inwardNumber ? `R.No. ${data.inwardNumber}` : undefined });
     },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
+
+  // Refresh lists, counts and the open detail after any dak action
+  const refreshDak = () => {
+    refetchInbox();
+    refetchOutbox();
+    queryClient.invalidateQueries({ queryKey: [`/api/dispatch/stats/${department?.id}`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/dispatch/inbox-count/${department?.id}`] });
+    if (selectedDispatch) {
+      queryClient.invalidateQueries({ queryKey: [`/api/dispatch/${selectedDispatch.id}`, department?.id] });
+    }
+  };
+
+  const acknowledgeDak = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/dispatch/${selectedDispatch!.id}/acknowledge`, {})).json(),
+    onSuccess: () => { toast({ title: "Acknowledged" }); refreshDak(); queryClient.invalidateQueries({ queryKey: [`/api/dispatch/my/${department?.id}`] }); },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const withdrawDispatch = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/dispatch/${selectedDispatch!.id}/withdraw`, { reason: withdrawReason })).json(),
+    onSuccess: () => { toast({ title: "Dispatch withdrawn" }); setShowWithdraw(false); setWithdrawReason(""); refreshDak(); },
+    onError: (err: any) => toast({ title: "Cannot withdraw", description: err.message, variant: "destructive" }),
+  });
+
+  const cancelEntry = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/dispatch/${selectedDispatch!.id}/cancel-entry`, { reason: cancelReason })).json(),
+    onSuccess: () => { toast({ title: "Entry cancelled", description: "Its R.No. stays used in the register." }); setShowCancelEntry(false); setCancelReason(""); refreshDak(); },
+    onError: (err: any) => toast({ title: "Cannot cancel", description: err.message, variant: "destructive" }),
+  });
+
+  // Dispose (close) the dak in this department
+  const disposeDispatch = useMutation({
+    mutationFn: async () => {
+      if (!selectedDispatch) throw new Error("No document selected");
+      const res = await apiRequest("POST", `/api/dispatch/${selectedDispatch.id}/dispose`, {
+        departmentId: department!.id,
+        departmentName: department!.name,
+        disposalType: disposeType,
+        fileNumber: disposeFileNo,
+        efileId: disposeType === "Filed" && disposeEfile ? Number(disposeEfile) : undefined,
+        remarks: disposeRemarks,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Document disposed" });
+      setShowDispose(false);
+      setDisposeType("");
+      setDisposeFileNo("");
+      setDisposeEfile("");
+      setDisposeRemarks("");
+      refreshDak();
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const reopenDispatch = useMutation({
+    mutationFn: async () => {
+      if (!selectedDispatch) throw new Error("No document selected");
+      const res = await apiRequest("POST", `/api/dispatch/${selectedDispatch.id}/reopen`, {
+        departmentId: department!.id,
+        departmentName: department!.name,
+        remarks: reopenRemarks,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Document reopened" });
+      setShowReopen(false);
+      setReopenRemarks("");
+      refreshDak();
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  // Correct a register entry (typing mistakes)
+  const editDispatch = useMutation({
+    mutationFn: async () => {
+      if (!selectedDispatch) throw new Error("No document selected");
+      if (!editForm.documentType || !editForm.subject.trim()) throw new Error("Document type and subject are required");
+      if (editForm.dispatchDate && editForm.dispatchDate > todayStr()) throw new Error("Letter date cannot be in the future");
+      const res = await apiRequest("PATCH", `/api/dispatch/${selectedDispatch.id}/details`, {
+        departmentId: department!.id,
+        departmentName: department!.name,
+        ...editForm,
+        ...(dispatchDetail?.isPhysicalReceive ? {} : { senderName: undefined }),
+      });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast({ title: data?.changed ? "Entry corrected" : "Nothing changed" });
+      setShowEdit(false);
+      refreshDak();
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const openEdit = () => {
+    if (!dispatchDetail) return;
+    setEditForm({
+      senderName: dispatchDetail.senderName || "",
+      documentType: dispatchDetail.documentType || "",
+      subject: dispatchDetail.subject || "",
+      dispatchNumber: dispatchDetail.dispatchNumber || "",
+      dispatchDate: dispatchDetail.dispatchDate || "",
+      referenceNumber: dispatchDetail.referenceNumber || "",
+      priority: dispatchDetail.priority || "normal",
+    });
+    setShowEdit(true);
+  };
 
   const markRead = useMutation({
     mutationFn: async (dispatchId: number) => {
@@ -675,29 +899,35 @@ export default function Dispatch() {
       setShowForwardDialog(false);
       setForwardSelected([]);
       setForwardRemarks("");
-      refetchInbox();
+      refreshDak();
     },
+    onError: (err: any) => toast({ title: "Forward failed", description: err.message, variant: "destructive" }),
   });
 
-  // Mark to Staff
+  // Mark to Staff (one or more, with optional "action by" date)
   const markToStaff = useMutation({
     mutationFn: async () => {
-      if (!selectedDispatch || !markStaffName) throw new Error("Enter staff name");
+      if (!selectedDispatch || markStaffNames.length === 0) throw new Error("Select at least one staff member");
       const res = await apiRequest("POST", `/api/dispatch/${selectedDispatch.id}/mark-staff`, {
         departmentId: department!.id,
         departmentName: department!.name,
-        employeeName: markStaffName,
+        staffIds: splitMarks(markStaffNames).staffIds,
+        employeeNames: splitMarks(markStaffNames).names,
+        employeeIds: departmentEmployees.filter((e: any) => splitMarks(markStaffNames).names.includes(e.name)).map((e: any) => e.id),
         remarks: markStaffRemarks,
+        dueDate: markStaffDueDate || undefined,
       });
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Marked to Staff" });
       setShowMarkStaff(false);
-      setMarkStaffName("");
+      setMarkStaffNames([]);
       setMarkStaffRemarks("");
-      refetchInbox();
+      setMarkStaffDueDate("");
+      refreshDak();
     },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
 
   // Return In Original (RIO)
@@ -715,9 +945,10 @@ export default function Dispatch() {
       toast({ title: "Document Returned (RIO)" });
       setShowRioDialog(false);
       setRioRemarks("");
-      refetchInbox();
+      refreshDak();
       setShowDetail(false);
     },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
 
   // Upload for receive entry
@@ -748,23 +979,7 @@ export default function Dispatch() {
           variant: "destructive",
         });
       } else {
-        const r = data.result;
-        if (r.document_type) setRecvDocType(r.document_type);
-        if (r.subject) setRecvSubject(r.subject);
-        if (r.sender_department) setRecvSenderInfo(r.sender_department);
-        if (r.dispatch_date) {
-          let formattedDate = r.dispatch_date;
-          if (r.dispatch_date.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-            const [dd, mm, yyyy] = r.dispatch_date.split("/");
-            formattedDate = `${yyyy}-${mm}-${dd}`;
-          } else if (r.dispatch_date.match(/^\d{2}-\d{2}-\d{4}$/)) {
-            const [dd, mm, yyyy] = r.dispatch_date.split("-");
-            formattedDate = `${yyyy}-${mm}-${dd}`;
-          }
-          // We can optionally use the AI extracted date as Receipt Date or keep it as today.
-          // setRecvReceiptDate(formattedDate);
-        }
-        if (r.reference_number) setRecvRefNo(r.reference_number);
+        applyReceiveExtraction(data.result);
         toast({
           title: "✅ Document Extracted",
           description: `AI Confidence: ${data.result.confidence || "N/A"}. Please review and correct if needed.`,
@@ -808,13 +1023,21 @@ export default function Dispatch() {
     if (exportType === "inbox") {
       worksheetData = filteredData.map(item => ({
         "R.No.": item.inwardNumber || "-",
-        "Date": format(new Date(item.createdAt), "dd MMM yyyy, HH:mm"),
-        "Ref.No.": item.dispatchNumber || "-",
-        "Ref. Date": item.dispatchDate || "-",
-        "From": item.senderDepartmentId === 0 ? item.senderName : item.senderName,
+        "Receipt Date": item.receivedAt ? format(new Date(item.receivedAt), "dd MMM yyyy") : "-",
+        "Entry Date": format(new Date(item.createdAt), "dd MMM yyyy, HH:mm"),
+        "Letter No.": item.dispatchNumber || "-",
+        "Letter Date": item.dispatchDate || "-",
+        "Other Ref.": item.referenceNumber || "-",
+        "From": item.senderName,
         "Subject": item.subject,
         "Type": item.documentType,
-        "Status": item.recipientStatus || "dispatched"
+        "Priority": item.priority,
+        "Marked To": item.markedToStaff || "-",
+        "Action By": item.actionDueDate || "-",
+        "Status": STATUS_LABELS[item.recipientStatus || "dispatched"] || item.recipientStatus,
+        "Disposal": item.disposalType || "-",
+        "File No.": item.fileNumber || "-",
+        "Disposed On": item.disposedAt ? format(new Date(item.disposedAt), "dd MMM yyyy") : "-",
       }));
     } else {
       worksheetData = filteredData.map(item => ({
@@ -853,6 +1076,11 @@ export default function Dispatch() {
     setFormSendEmail(false);
     setSelectedRecipients([]);
     setDeptSearchQuery("");
+    setFormMode("electronic");
+    setFormTrackingNo("");
+    setFormPostage("");
+    setFormReplyTo("");
+    setFormEfile("");
   };
 
   const resetReceiveForm = () => {
@@ -874,6 +1102,9 @@ export default function Dispatch() {
     setRecvFileUrl("");
     setRecvMarkToStaff([]);
     setRecvMarkToStaffRemarks("");
+    setRecvActionDueDate("");
+    setRecvReceiptNoSuggested("");
+    setRecvSenderRef(null);
   };
 
   const addRecipient = (type: string, id: number, name: string) => {
@@ -892,8 +1123,8 @@ export default function Dispatch() {
   const openDetail = async (dispatch: DispatchDoc) => {
     setSelectedDispatch(dispatch);
     setShowDetail(true);
-    // Auto mark as read if inbox item and status is dispatched or received
-    if (activeTab === "inbox" && (dispatch.recipientStatus === "dispatched" || dispatch.recipientStatus === "received")) {
+    // First opening of an inbox item is recorded as "viewed"
+    if (activeTab === "inbox" && !dispatch.readAt) {
       markRead.mutate(dispatch.id);
     }
   };
@@ -903,13 +1134,15 @@ export default function Dispatch() {
     const colors: Record<string, string> = {
       dispatched: "bg-orange-500 text-white",
       received: "bg-yellow-100 text-yellow-700",
-      read: "bg-green-100 text-green-700",
+      read: "bg-yellow-100 text-yellow-700",
       forwarded: "bg-purple-100 text-purple-700",
       marked: "bg-indigo-100 text-indigo-700",
+      returned: "bg-red-100 text-red-700",
+      disposed: "bg-green-100 text-green-700",
     };
     return (
       <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${colors[status] || "bg-gray-100 text-gray-700"}`}>
-        {status === "dispatched" ? "Unreceived" : status}
+        {STATUS_LABELS[status] || status}
       </span>
     );
   };
@@ -950,7 +1183,17 @@ export default function Dispatch() {
     });
   };
 
-  const currentInboxItems = getSortedItems(searchResults !== null ? searchResults : inbox, 'inbox');
+  const matchesInboxFilter = (d: DispatchDoc) => {
+    const status = d.recipientStatus || "dispatched";
+    switch (inboxFilter) {
+      case "unreceived": return status === "dispatched";
+      case "pending": return !!d.receivedAt && !CLOSED_STATUSES.includes(status);
+      case "overdue": return isOverdue(d);
+      case "disposed": return status === "disposed";
+      default: return true;
+    }
+  };
+  const currentInboxItems = getSortedItems((searchResults !== null ? searchResults : inbox).filter(matchesInboxFilter), 'inbox');
   const currentOutboxItems = getSortedItems(searchResults !== null ? searchResults : outbox, 'outbox');
 
   const paginatedInboxItems = rowsPerPage === "all" ? currentInboxItems : currentInboxItems.slice((currentPageInbox - 1) * rowsPerPage, currentPageInbox * rowsPerPage);
@@ -995,23 +1238,35 @@ export default function Dispatch() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 cursor-pointer"
+              onClick={() => setActiveTab("outbox")}>
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-blue-700">{stats?.sent || 0}</div>
                 <div className="text-xs text-blue-600">Dispatched</div>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 cursor-pointer"
+              onClick={() => { setActiveTab("inbox"); setInboxFilter("all"); setCurrentPageInbox(1); }}>
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-green-700">{stats?.received || 0}</div>
                 <div className="text-xs text-green-600">Received</div>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 cursor-pointer"
+              onClick={() => { setActiveTab("inbox"); setInboxFilter("unreceived"); setCurrentPageInbox(1); }}>
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-orange-700">{stats?.unread || 0}</div>
-                <div className="text-xs text-orange-600">Unread</div>
+                <div className="text-xs text-orange-600">Unreceived (not yet taken in)</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-rose-50 to-rose-100 border-rose-200 cursor-pointer"
+              onClick={() => { setActiveTab("inbox"); setInboxFilter((stats?.overdue || 0) > 0 ? "overdue" : "pending"); setCurrentPageInbox(1); }}>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-rose-700">{stats?.pendingAction || 0}</div>
+                <div className="text-xs text-rose-600">
+                  Pending action{(stats?.overdue || 0) > 0 && <span className="font-semibold"> · {stats?.overdue} overdue</span>}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1027,9 +1282,20 @@ export default function Dispatch() {
                       <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">{stats?.unread}</span>
                     )}
                   </TabsTrigger>
+                  {staff && (
+                    <TabsTrigger value="mydak" className="flex items-center gap-2">
+                      <UserCheck className="h-4 w-4" /> My Dak
+                    </TabsTrigger>
+                  )}
                   <TabsTrigger value="outbox" className="flex items-center gap-2">
                     <Send className="h-4 w-4" />
                     Outbox
+                  </TabsTrigger>
+                  <TabsTrigger value="acks" className="flex items-center gap-2" title="Your physical letters other offices recorded as received">
+                    <ShieldCheck className="h-4 w-4" /> Acknowledged
+                  </TabsTrigger>
+                  <TabsTrigger value="reports" className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" /> Reports
                   </TabsTrigger>
                 </TabsList>
                 <Button
@@ -1090,6 +1356,26 @@ export default function Dispatch() {
 
             {/* ─── INBOX ──────────────────────────────────────────── */}
             <TabsContent value="inbox">
+              <div className="flex flex-wrap gap-2 mb-3">
+                {([
+                  ["all", "All"],
+                  ["unreceived", "Unreceived"],
+                  ["pending", "Pending action"],
+                  ["overdue", "Overdue"],
+                  ["disposed", "Disposed"],
+                ] as [InboxFilter, string][]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => { setInboxFilter(value); setCurrentPageInbox(1); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${inboxFilter === value
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               {inboxLoading ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -1098,8 +1384,8 @@ export default function Dispatch() {
                 <Card>
                   <CardContent className="py-12 text-center text-gray-500">
                     <Inbox className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-lg font-medium">{searchResults !== null ? "No documents found" : "No documents received"}</p>
-                    <p className="text-sm">{searchResults !== null ? "Try different search terms" : "Documents dispatched to your department will appear here"}</p>
+                    <p className="text-lg font-medium">{searchResults !== null || inboxFilter !== "all" ? "No documents found" : "No documents received"}</p>
+                    <p className="text-sm">{searchResults !== null ? "Try different search terms" : inboxFilter !== "all" ? "Nothing in this filter" : "Documents dispatched to your department will appear here"}</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -1146,14 +1432,14 @@ export default function Dispatch() {
                           >
                             <td className="px-3 py-2.5">
                               {item.inwardNumber ? (
-                                <span className="font-mono text-green-700 font-semibold">{item.inwardNumber}</span>
+                                <span className="font-mono text-green-700 font-semibold whitespace-nowrap">{item.inwardNumber}</span>
                               ) : (
                                 <span className="text-gray-300">-</span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap text-xs">
-                              {format(new Date(item.createdAt), "dd MMM yyyy")}
-                              <div className="text-[10px] text-gray-400">{format(new Date(item.createdAt), "HH:mm")}</div>
+                            <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap text-xs" title={item.receivedAt ? "Receipt date" : "Sent on (not yet received)"}>
+                              {format(new Date(item.receivedAt || item.createdAt), "dd MMM yyyy")}
+                              <div className="text-[10px] text-gray-400">{format(new Date(item.receivedAt || item.createdAt), "HH:mm")}</div>
                             </td>
                             <td className="px-3 py-2.5">
                               {item.dispatchNumber ? (
@@ -1194,6 +1480,15 @@ export default function Dispatch() {
                             </td>
                             <td className="px-3 py-2.5">
                               <StatusBadge status={item.recipientStatus || "dispatched"} />
+                              {isOverdue(item) && (
+                                <div className="mt-1 text-[10px] font-semibold text-red-600 whitespace-nowrap">Overdue ({item.actionDueDate})</div>
+                              )}
+                              {item.recipientStatus === "marked" && item.markedToStaff && (
+                                <div className="mt-1 text-[10px] text-indigo-600 truncate max-w-[120px]" title={item.markedToStaff}>→ {item.markedToStaff}</div>
+                              )}
+                              {item.recipientStatus === "disposed" && item.fileNumber && (
+                                <div className="mt-1 text-[10px] text-green-700 truncate max-w-[120px]" title={item.fileNumber}>File: {item.fileNumber}</div>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -1293,6 +1588,12 @@ export default function Dispatch() {
                               {item.dispatchNumber && (
                                 <div className="text-[10px] text-blue-600 font-mono mt-0.5">D: {item.dispatchNumber}</div>
                               )}
+                              {(item as any).cancelledAt && (
+                                <div className="text-[10px] font-semibold text-red-600 mt-0.5">Withdrawn</div>
+                              )}
+                              {(item as any).dispatchMode && (item as any).dispatchMode !== "electronic" && (
+                                <div className="text-[10px] text-gray-500 mt-0.5">{DISPATCH_MODES[(item as any).dispatchMode]}</div>
+                              )}
                             </td>
                             <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap text-xs">
                               {format(new Date(item.createdAt), "dd MMM yyyy")}
@@ -1366,6 +1667,15 @@ export default function Dispatch() {
                   )}
                 </div>
               )}
+            </TabsContent>
+            <TabsContent value="mydak">
+              {department && <MyDak departmentId={department.id} onOpen={(d) => { setSelectedDispatch(d); setShowDetail(true); }} />}
+            </TabsContent>
+            <TabsContent value="acks">
+              {department && <Acknowledgements departmentId={department.id} />}
+            </TabsContent>
+            <TabsContent value="reports">
+              {department && <DakReports departmentId={department.id} departmentName={department.name} />}
             </TabsContent>
           </Tabs>
         </div>
@@ -1605,6 +1915,58 @@ export default function Dispatch() {
                   )}
                 </div>
 
+                {/* How it goes out, what it answers, which file */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <Label className="text-xs flex items-center gap-1"><Truck className="h-3 w-3" /> Mode of dispatch</Label>
+                    <Select value={formMode} onValueChange={setFormMode}>
+                      <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(DISPATCH_MODES).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">In reply to (your R.No.)</Label>
+                    <Select value={formReplyTo || "none"} onValueChange={(v) => setFormReplyTo(v === "none" ? "" : v)}>
+                      <SelectTrigger className="bg-white"><SelectValue placeholder="Not a reply" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Not a reply</SelectItem>
+                        {replyCandidates.map((d) => (
+                          <SelectItem key={d.recipientId} value={String(d.recipientId)}>
+                            {d.inwardNumber} — {d.subject.slice(0, 50)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs flex items-center gap-1"><FolderOpen className="h-3 w-3" /> Put on e-file</Label>
+                    <Select value={formEfile || "none"} onValueChange={(v) => setFormEfile(v === "none" ? "" : v)}>
+                      <SelectTrigger className="bg-white"><SelectValue placeholder="No file" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No file</SelectItem>
+                        {openEfiles.map((f: any) => <SelectItem key={f.id} value={String(f.id)}>{f.fileNumber} — {f.subject.slice(0, 40)}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {POSTAL_MODES.includes(formMode) && (
+                    <>
+                      <div>
+                        <Label className="text-xs">Postal / courier tracking no.</Label>
+                        <Input className="bg-white" value={formTrackingNo} onChange={e => setFormTrackingNo(e.target.value)} placeholder="e.g. RK123456789IN" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Postage (Rs.)</Label>
+                        <Input className="bg-white" type="number" min="0" step="0.5" value={formPostage} onChange={e => setFormPostage(e.target.value)} />
+                      </div>
+                    </>
+                  )}
+                  {formReplyTo && (
+                    <p className="md:col-span-3 text-[11px] text-green-700">The inward dak will be marked “Disposed — Replied” automatically.</p>
+                  )}
+                </div>
+
                 {/* Send Email Toggle */}
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <Switch checked={formSendEmail} onCheckedChange={setFormSendEmail} />
@@ -1751,7 +2113,7 @@ export default function Dispatch() {
                       <div className="relative">
                         <Input
                           value={recvSenderInfo}
-                          onChange={e => setRecvSenderInfo(e.target.value)}
+                          onChange={e => { setRecvSenderInfo(e.target.value); setRecvSenderRef(null); }}
                           onFocus={() => setIsSenderFocused(true)}
                           onBlur={() => {
                             // slight delay to allow click on dropdown to process
@@ -1774,6 +2136,8 @@ export default function Dispatch() {
                                     onMouseDown={(e) => {
                                       e.preventDefault();
                                       setRecvSenderInfo(d.name);
+                                      const reg = registeredDepartments.find((x: any) => x.name === d.name);
+                                      setRecvSenderRef(reg && reg.id !== department?.id ? reg.id : null);
                                       setIsSenderFocused(false);
                                     }}
                                   >
@@ -1787,8 +2151,19 @@ export default function Dispatch() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Sender's Letter No. / D.No.</Label>
+                        <Input value={recvDispatchNo} onChange={e => setRecvDispatchNo(e.target.value)} placeholder="e.g. 142/2026" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Letter Date</Label>
+                        <Input type="date" max={todayStr()} value={recvDispatchDate} onChange={e => setRecvDispatchDate(e.target.value)} />
+                      </div>
+                    </div>
+
                     <div>
-                      <Label className="text-xs">Sender's Reference No. (Optional)</Label>
+                      <Label className="text-xs">Other Reference / File No. (Optional)</Label>
                       <Input value={recvRefNo} onChange={e => setRecvRefNo(e.target.value)} />
                     </div>
 
@@ -1810,11 +2185,16 @@ export default function Dispatch() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Receipt Number (R.No.)</Label>
-                        <Input value={recvReceiptNo} onChange={e => setRecvReceiptNo(e.target.value)} placeholder="Auto-generated" />
+                        <Input value={recvReceiptNo} onChange={e => setRecvReceiptNo(e.target.value)} placeholder="Auto (next free number)" />
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {recvReceiptNo.trim() && recvReceiptNo.trim() !== recvReceiptNoSuggested
+                            ? "Your own number will be used (must not be used already this year)"
+                            : "Next free number is given when you save"}
+                        </p>
                       </div>
                       <div>
                         <Label className="text-xs">Receipt Date</Label>
-                        <Input type="date" value={recvReceiptDate} onChange={e => setRecvReceiptDate(e.target.value)} />
+                        <Input type="date" max={todayStr()} value={recvReceiptDate} onChange={e => setRecvReceiptDate(e.target.value)} />
                       </div>
                     </div>
 
@@ -1822,7 +2202,7 @@ export default function Dispatch() {
                       <div>
                         <Label className="text-xs">Mark to Staff (Optional)</Label>
                         <MultiSelect
-                          options={departmentEmployees.map((emp: any) => ({ label: emp.name, value: emp.name }))}
+                          options={markOptions}
                           selected={recvMarkToStaff}
                           onChange={setRecvMarkToStaff}
                           placeholder="Select staff..."
@@ -1832,6 +2212,19 @@ export default function Dispatch() {
                         <Label className="text-xs">Staff Remarks (Optional)</Label>
                         <Input value={recvMarkToStaffRemarks} onChange={e => setRecvMarkToStaffRemarks(e.target.value)} placeholder="e.g. Please process this" />
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Action required by</Label>
+                        <Input type="date" min={todayStr()} value={recvActionDueDate} onChange={e => setRecvActionDueDate(e.target.value)} />
+                        <p className="text-[10px] text-gray-400 mt-0.5">Empty = by priority (Immediate 1 day, Urgent 3, Normal 7)</p>
+                      </div>
+                      {recvSenderRef && (
+                        <div className="text-[11px] text-green-700 mt-6 flex items-center gap-1">
+                          <Link2 className="h-3.5 w-3.5" /> The sender office will see that you received it
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -1968,22 +2361,168 @@ export default function Dispatch() {
                       </div>
                     )}
 
+                    {/* Mode, verification, reply links, e-files */}
+                    <div className="space-y-1 text-xs">
+                      {dispatchDetail.cancelledAt && (
+                        <div className="bg-red-50 border border-red-200 rounded px-2 py-1 text-red-700">
+                          <Ban className="h-3.5 w-3.5 inline mr-1" />
+                          {dispatchDetail.isPhysicalReceive ? "Entry cancelled" : "Withdrawn by the sender"}
+                          {dispatchDetail.cancelReason ? `: ${dispatchDetail.cancelReason}` : ""}
+                        </div>
+                      )}
+                      {dispatchDetail.dispatchMode && dispatchDetail.dispatchMode !== "electronic" && (
+                        <div><span className="text-gray-500">Sent:</span> {DISPATCH_MODES[dispatchDetail.dispatchMode] || dispatchDetail.dispatchMode}
+                          {dispatchDetail.postalTrackingNo && <> · <span className="font-mono">{dispatchDetail.postalTrackingNo}</span></>}
+                          {dispatchDetail.postageAmount && <> · Rs. {Number(dispatchDetail.postageAmount).toFixed(2)}</>}
+                        </div>
+                      )}
+                      {dispatchDetail.verifyUrl && (
+                        <div className="flex items-center gap-1">
+                          <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
+                          <a href={dispatchDetail.verifyUrl.replace(/^https?:\/\/[^/]+/, "")} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                            QR verification page
+                          </a>
+                        </div>
+                      )}
+                      {dispatchDetail.inReplyTo && (
+                        <div><span className="text-gray-500">In reply to:</span> R.No. <strong>{dispatchDetail.inReplyTo.inwardNumber}</strong> from {dispatchDetail.inReplyTo.senderName}</div>
+                      )}
+                      {dispatchDetail.replies?.length > 0 && (
+                        <div><span className="text-gray-500">Replied vide:</span> {dispatchDetail.replies.map((r: any) => r.outwardNumber).join(", ")}</div>
+                      )}
+                      {dispatchDetail.efiles?.length > 0 && (
+                        <div className="flex items-center gap-1"><FolderOpen className="h-3.5 w-3.5 text-amber-600" />
+                          <span className="text-gray-500">On file:</span> {dispatchDetail.efiles.map((f: any) => f.fileNumber).join(", ")}</div>
+                      )}
+                    </div>
+
+                    {dispatchDetail.canViewContent && selectedDispatch && department && (
+                      <DakAttachments
+                        dispatchId={selectedDispatch.id}
+                        departmentId={department.id}
+                        attachments={dispatchDetail.attachments || []}
+                        canAdd={!dispatchDetail.cancelledAt}
+                        onChanged={() => queryClient.invalidateQueries({ queryKey: [`/api/dispatch/${selectedDispatch.id}`, department.id] })}
+                      />
+                    )}
+
+                    {/* Person / slip / withdraw / cancel */}
+                    <div className="flex flex-wrap gap-2">
+                      {staff && dispatchDetail.myRecipient?.markedStaffIds?.includes(staff.id) && !dispatchDetail.myRecipient?.acknowledgedAt
+                        && !CLOSED_STATUSES.includes(dispatchDetail.myRecipient.status) && (
+                        <Button size="sm" variant="outline" onClick={() => acknowledgeDak.mutate()} disabled={acknowledgeDak.isPending}>
+                          <CheckCircle2 className="h-4 w-4 mr-1" /> Acknowledge
+                        </Button>
+                      )}
+                      {dispatchDetail.myRecipient?.receivedAt && (
+                        <Button size="sm" variant="ghost" onClick={() => printAcknowledgementSlip(department!.name, {
+                          inwardNumber: dispatchDetail.inwardNumber, receivedAt: dispatchDetail.myRecipient.receivedAt,
+                          senderName: dispatchDetail.senderName, subject: dispatchDetail.subject,
+                          dispatchNumber: dispatchDetail.dispatchNumber, dispatchDate: dispatchDetail.dispatchDate,
+                          documentType: dispatchDetail.documentType, receivedBy: staff ? staff.name : department!.name,
+                        })}>
+                          <Printer className="h-4 w-4 mr-1" /> Acknowledgement slip
+                        </Button>
+                      )}
+                      {dispatchDetail.canWithdraw && (
+                        <Button size="sm" variant="outline" className="text-red-600 border-red-200" onClick={() => setShowWithdraw(true)}>
+                          <Ban className="h-4 w-4 mr-1" /> Withdraw dispatch
+                        </Button>
+                      )}
+                      {dispatchDetail.canCancelEntry && (
+                        <Button size="sm" variant="outline" className="text-red-600 border-red-200" onClick={() => setShowCancelEntry(true)}>
+                          <Ban className="h-4 w-4 mr-1" /> Cancel entry
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* This department's handling of the dak */}
+                    {dispatchDetail.myRecipient && (() => {
+                      const my = dispatchDetail.myRecipient;
+                      const overdue = isOverdue({ actionDueDate: my.actionDueDate, recipientStatus: my.status, receivedAt: my.receivedAt });
+                      return (
+                        <div className="border rounded-lg p-3 bg-gray-50 space-y-1 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-gray-700">In this department</span>
+                            <StatusBadge status={my.status} />
+                          </div>
+                          {my.receivedAt && <div><span className="text-gray-500">Received on:</span> {format(new Date(my.receivedAt), "dd MMM yyyy, HH:mm")}</div>}
+                          {my.markedToStaff && (
+                            <div>
+                              <span className="text-gray-500">Marked to:</span> <strong>{my.markedToStaff}</strong>
+                              {my.markedAt && <span className="text-gray-400"> ({format(new Date(my.markedAt), "dd MMM yyyy")})</span>}
+                            </div>
+                          )}
+                          {my.staffRemarks && <div><span className="text-gray-500">Remarks:</span> {my.staffRemarks}</div>}
+                          {my.actionDueDate && (
+                            <div className={overdue ? "text-red-600 font-semibold" : ""}>
+                              <span className={overdue ? "" : "text-gray-500"}>Action by:</span> {my.actionDueDate}{overdue && " — overdue"}
+                            </div>
+                          )}
+                          {my.status === "disposed" && (
+                            <div className="pt-1 border-t mt-1">
+                              <span className="text-gray-500">Disposed:</span> <strong>{my.disposalType}</strong>
+                              {my.fileNumber && <> · <span className="text-gray-500">File No.</span> <strong>{my.fileNumber}</strong></>}
+                              {my.disposedAt && <span className="text-gray-400"> ({format(new Date(my.disposedAt), "dd MMM yyyy")})</span>}
+                              {my.disposalRemarks && <div className="text-gray-600">{my.disposalRemarks}</div>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {/* Actions for inbox items */}
-                    {activeTab === "inbox" && selectedDispatch && (
-                      <div className="flex gap-2 pt-2">
-                        {!dispatchDetail.inwardNumber && (
-                          <Button size="sm" variant="outline" onClick={() => markReceived.mutate(selectedDispatch.id)}>
-                            <CheckCircle2 className="h-4 w-4 mr-1" /> Mark Received
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => setShowForwardDialog(true)} disabled={!dispatchDetail.inwardNumber}>
-                          <Forward className="h-4 w-4 mr-1" /> Forward
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowMarkStaff(true)} disabled={!dispatchDetail.inwardNumber}>
-                          <UserCheck className="h-4 w-4 mr-1" /> Mark to Staff
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowRioDialog(true)} disabled={!dispatchDetail.inwardNumber}>
-                          <Undo2 className="h-4 w-4 mr-1" /> Return (RIO)
+                    {selectedDispatch && dispatchDetail.myRecipient && (() => {
+                      const my = dispatchDetail.myRecipient;
+                      const received = !!my.receivedAt;
+                      const open = received && !CLOSED_STATUSES.includes(my.status);
+                      return (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {!received && (
+                            <Button size="sm" onClick={() => markReceived.mutate(selectedDispatch.id)} disabled={markReceived.isPending}>
+                              <CheckCircle2 className="h-4 w-4 mr-1" /> Mark Received
+                            </Button>
+                          )}
+                          {open && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setMarkStaffNames(marksFromRow(my));
+                                setMarkStaffRemarks(my.staffRemarks || "");
+                                setMarkStaffDueDate(my.actionDueDate || "");
+                                setShowMarkStaff(true);
+                              }}>
+                                <UserCheck className="h-4 w-4 mr-1" /> {my.markedToStaff ? "Re-mark" : "Mark to Staff"}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setShowForwardDialog(true)}>
+                                <Forward className="h-4 w-4 mr-1" /> Forward
+                              </Button>
+                              {!dispatchDetail.isPhysicalReceive && dispatchDetail.senderDepartmentId > 0 && (
+                                <Button size="sm" variant="outline" onClick={() => setShowRioDialog(true)}>
+                                  <Undo2 className="h-4 w-4 mr-1" /> Return (RIO)
+                                </Button>
+                              )}
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setShowDispose(true)}>
+                                <Archive className="h-4 w-4 mr-1" /> Dispose
+                              </Button>
+                            </>
+                          )}
+                          {my.status === "disposed" && (
+                            <Button size="sm" variant="outline" onClick={() => setShowReopen(true)}>
+                              <RefreshCw className="h-4 w-4 mr-1" /> Reopen
+                            </Button>
+                          )}
+                          {dispatchDetail.canEdit && (
+                            <Button size="sm" variant="ghost" onClick={openEdit}>
+                              <FileText className="h-4 w-4 mr-1" /> Correct entry
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {!dispatchDetail.myRecipient && dispatchDetail.canEdit && (
+                      <div className="pt-2">
+                        <Button size="sm" variant="ghost" onClick={openEdit}>
+                          <FileText className="h-4 w-4 mr-1" /> Correct entry
                         </Button>
                       </div>
                     )}
@@ -2079,24 +2618,24 @@ export default function Dispatch() {
             </DialogHeader>
             <div className="space-y-3">
               <div>
-                <Label className="text-xs">Staff Member Name *</Label>
-                <Select value={markStaffName} onValueChange={setMarkStaffName}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select staff member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departmentEmployees.map((emp: any) => (
-                      <SelectItem key={emp.id} value={emp.name}>{emp.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">Staff Member(s) *</Label>
+                <MultiSelect
+                  options={markOptions}
+                  selected={markStaffNames}
+                  onChange={setMarkStaffNames}
+                  placeholder="Select staff..."
+                />
               </div>
               <div>
                 <Label className="text-xs">Remarks</Label>
                 <Textarea value={markStaffRemarks} onChange={e => setMarkStaffRemarks(e.target.value)}
                   rows={2} placeholder="Optional remarks" />
               </div>
-              <Button className="w-full" disabled={!markStaffName || markToStaff.isPending}
+              <div>
+                <Label className="text-xs">Action required by (Optional)</Label>
+                <Input type="date" min={todayStr()} value={markStaffDueDate} onChange={e => setMarkStaffDueDate(e.target.value)} />
+              </div>
+              <Button className="w-full" disabled={markStaffNames.length === 0 || markToStaff.isPending}
                 onClick={() => markToStaff.mutate()}>
                 {markToStaff.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
                 Mark
@@ -2134,6 +2673,170 @@ export default function Dispatch() {
                 {rioDispatch.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Undo2 className="h-4 w-4 mr-2" />}
                 Confirm Return
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Dispose Dialog ──────────────────────────────────────────── */}
+        <Dialog open={showDispose} onOpenChange={setShowDispose}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Archive className="h-5 w-5 text-green-600" /> Dispose Document
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">Close this dak in your department. It stays in the register and can be reopened.</p>
+              <div>
+                <Label className="text-xs">How was it disposed? *</Label>
+                <Select value={disposeType} onValueChange={setDisposeType}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {DISPOSAL_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {disposeType === "Filed" && openEfiles.length > 0 && (
+                <div>
+                  <Label className="text-xs">Put on e-file</Label>
+                  <Select value={disposeEfile || "none"} onValueChange={(v) => setDisposeEfile(v === "none" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="Paper file (type the number below)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Paper file (type the number below)</SelectItem>
+                      {openEfiles.map((f: any) => <SelectItem key={f.id} value={String(f.id)}>{f.fileNumber} — {f.subject.slice(0, 40)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {!(disposeType === "Filed" && disposeEfile) && (
+                <div>
+                  <Label className="text-xs">File No. {disposeType === "Filed" ? "*" : "(Optional)"}</Label>
+                  <Input value={disposeFileNo} onChange={e => setDisposeFileNo(e.target.value)} placeholder="e.g. SS/Estt/12/2026" />
+                </div>
+              )}
+              <div>
+                <Label className="text-xs">Remarks / Action taken</Label>
+                <Textarea value={disposeRemarks} onChange={e => setDisposeRemarks(e.target.value)} rows={2}
+                  placeholder="e.g. Reply sent vide D.No. 45/SSFAD" />
+              </div>
+              <Button className="w-full bg-green-600 hover:bg-green-700 text-white"
+                disabled={!disposeType || (disposeType === "Filed" && !disposeFileNo.trim() && !disposeEfile) || disposeDispatch.isPending}
+                onClick={() => disposeDispatch.mutate()}>
+                {disposeDispatch.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
+                Dispose
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Reopen Dialog ───────────────────────────────────────────── */}
+        <Dialog open={showReopen} onOpenChange={setShowReopen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5" /> Reopen Document
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Reason (Required)</Label>
+                <Textarea value={reopenRemarks} onChange={e => setReopenRemarks(e.target.value)} rows={2}
+                  placeholder="e.g. Further action needed" />
+              </div>
+              <Button className="w-full" disabled={!reopenRemarks.trim() || reopenDispatch.isPending}
+                onClick={() => reopenDispatch.mutate()}>
+                {reopenDispatch.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Reopen
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Correct Entry Dialog ────────────────────────────────────── */}
+        <Dialog open={showEdit} onOpenChange={setShowEdit}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" /> Correct Register Entry
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">Every correction is recorded in the tracking timeline.</p>
+              {dispatchDetail?.isPhysicalReceive && (
+                <div>
+                  <Label className="text-xs">From (Sender) *</Label>
+                  <Input value={editForm.senderName} onChange={e => setEditForm(f => ({ ...f, senderName: e.target.value }))} />
+                </div>
+              )}
+              <div>
+                <Label className="text-xs">Document Type *</Label>
+                <Select value={editForm.documentType} onValueChange={v => setEditForm(f => ({ ...f, documentType: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    {(DOCUMENT_TYPES.includes(editForm.documentType) || !editForm.documentType ? DOCUMENT_TYPES : [editForm.documentType, ...DOCUMENT_TYPES])
+                      .map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Subject *</Label>
+                <Input value={editForm.subject} onChange={e => setEditForm(f => ({ ...f, subject: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Letter No. / D.No.</Label>
+                  <Input value={editForm.dispatchNumber} onChange={e => setEditForm(f => ({ ...f, dispatchNumber: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Letter Date</Label>
+                  <Input type="date" max={todayStr()} value={editForm.dispatchDate} onChange={e => setEditForm(f => ({ ...f, dispatchDate: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Other Reference</Label>
+                  <Input value={editForm.referenceNumber} onChange={e => setEditForm(f => ({ ...f, referenceNumber: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Priority</Label>
+                  <Select value={editForm.priority} onValueChange={v => setEditForm(f => ({ ...f, priority: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value="immediate">Immediate</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button className="w-full" disabled={editDispatch.isPending} onClick={() => editDispatch.mutate()}>
+                {editDispatch.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                Save Correction
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Withdraw / Cancel entry ─────────────────────────────────── */}
+        <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Ban className="h-5 w-5 text-red-600" /> Withdraw Dispatch</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">Possible only while no recipient has received it. The outward number stays used.</p>
+              <Textarea rows={2} value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} placeholder="Reason (required)" />
+              <Button className="w-full bg-red-600 hover:bg-red-700 text-white" disabled={!withdrawReason.trim() || withdrawDispatch.isPending}
+                onClick={() => withdrawDispatch.mutate()}>Withdraw</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={showCancelEntry} onOpenChange={setShowCancelEntry}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Ban className="h-5 w-5 text-red-600" /> Cancel Entry</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">For a wrong or duplicate entry. It stays in the register struck off; its R.No. is not given again.</p>
+              <Textarea rows={2} value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Reason (required)" />
+              <Button className="w-full bg-red-600 hover:bg-red-700 text-white" disabled={!cancelReason.trim() || cancelEntry.isPending}
+                onClick={() => cancelEntry.mutate()}>Cancel Entry</Button>
             </div>
           </DialogContent>
         </Dialog>

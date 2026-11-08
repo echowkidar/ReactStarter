@@ -781,3 +781,21 @@ export async function sendDispatchNotificationEmail(
     return { success: false, error: String(error) };
   }
 }
+
+/** Plain HTML e-mail (dak reminders, e-Office notices). Never throws. */
+export async function sendSimpleEmail(
+  to: string,
+  subject: string,
+  html: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { success: false, error: "No valid e-mail address" };
+    const transporter = createTransporter();
+    const from = process.env.SMTP_FROM || '"AMU Dispatch System" <dispatch@salarysection.com>';
+    await transporter.sendMail({ from, to, subject, html });
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[Email] Failed to send "${subject}" to ${to}:`, error?.message || error);
+    return { success: false, error: String(error?.message || error) };
+  }
+}

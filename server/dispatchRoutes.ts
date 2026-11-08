@@ -6,6 +6,15 @@
  */
 
 import type { Express, Request, Response } from "express";
+import { safeUploadName } from "./security";
+import { requireBodyDepartment } from "./auth";
+import {
+  DAK_UPLOAD_DIR, CLOSED_STATUSES, CLOSED_SQL, DISPOSAL_TYPES, SLA_DAYS, slaDueDate, isoDateOrNull, receiptMoment,
+  lockRegister, usedInwardNumbers, nextInwardNumber, nextOutwardNumber, normalizeNo, myRecipientRow,
+  who, track, toInboxItem, linkDakToFile, queueOcr, createOutwardDispatch, sendDispatchEmails, DakError,
+  recipientsWithNames, publicBaseUrl, DISPATCH_MODES,
+} from "./dakCore";
+import { sessionStaff } from "./auth";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -27,16 +36,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ─── File Upload Config ───────────────────────────────────────────────────
-const uploadDir = path.join(__dirname, "../uploads/dispatch");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const uploadDir = DAK_UPLOAD_DIR;
 
 const dispatchStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "dispatch-" + uniqueSuffix + path.extname(file.originalname));
+    // Extension from the checked file type, never from the user's file name
+    cb(null, safeUploadName("dispatch", file));
   },
 });
 
@@ -52,38 +58,6 @@ const dispatchUpload = multer({
     }
   },
 });
-
-// ─── Helper: Generate short name from department name ─────────────────────
-function generateShortName(name: string): string {
-  const skipWords = new Set(["of", "the", "and", "&", "in", "for", "to", "a", "an", "f/o"]);
-  const words = name
-    .replace(/[()[\],]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 0 && !skipWords.has(w.toLowerCase()));
-  return words.map((w) => w[0].toUpperCase()).join("");
-}
-
-// ─── Helper: Generate outward number ──────────────────────────────────────
-async function generateOutwardNumber(departmentId: number, departmentName: string): Promise<string> {
-  const now = new Date();
-  const fyStart = now.getMonth() >= 3
-    ? new Date(now.getFullYear(), 3, 1)
-    : new Date(now.getFullYear() - 1, 3, 1);
-
-  const result = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(dispatchDocuments)
-    .where(
-      and(
-        eq(dispatchDocuments.senderDepartmentId, departmentId),
-        sql`${dispatchDocuments.createdAt} >= ${fyStart.toISOString()}`
-      )
-    );
-
-  const count = Number(result[0]?.count || 0) + 1;
-  const shortName = generateShortName(departmentName);
-  return `${count}/${shortName}`;
-}
 
 // ─── Helper: Convert PDF first page to image using sharp ──────────────────
 async function convertPdfToImage(pdfPath: string): Promise<string> {
@@ -466,211 +440,55 @@ EXAMPLES
   app.post(
     "/api/dispatch",
     dispatchUpload.single("file"),
+    requireBodyDepartment("senderDepartmentId"),
     async (req: any, res: Response) => {
       try {
-        const {
-          senderDepartmentId,
-          senderName,
-          documentType,
-          subject,
-          dispatchNumber,
-          dispatchDate,
-          referenceNumber,
-          isConfidential,
-          priority,
-          aiExtractedData,
-          aiConfidence,
-          recipients,
-          sendEmail,
-        } = req.body;
-
-        if (!senderDepartmentId || !senderName || !documentType || !subject) {
+        const b = req.body;
+        if (!b.senderDepartmentId || !b.senderName || !b.documentType || !b.subject) {
           return res.status(400).json({ message: "Missing required fields: senderDepartmentId, senderName, documentType, subject" });
         }
-
-        // Determine file URL
-        let fileUrl = req.body.fileUrl;
-        let fileType = req.body.fileType || "image";
+        let fileUrl = b.fileUrl;
+        let fileType = b.fileType || "image";
         if (req.file) {
           fileUrl = `/uploads/dispatch/${path.basename(req.file.path)}`;
           fileType = req.file.mimetype.includes("pdf") ? "pdf" : "image";
         }
-        if (!fileUrl) {
-          fileUrl = ""; // Use empty string instead of throwing error for manual dispatch
-        }
-
-        // Generate outward number
-        const outwardNumber = await generateOutwardNumber(
-          parseInt(senderDepartmentId),
-          senderName
-        );
-
-        // Store actual subject separately for confidential docs
-        const storedSubject = (isConfidential === "true" || isConfidential === true) ? "CONFIDENTIAL" : subject;
-
-        // Create dispatch document
-        const [dispatch] = await db
-          .insert(dispatchDocuments)
-          .values({
-            senderDepartmentId: parseInt(senderDepartmentId),
-            senderName,
-            documentType,
-            subject: storedSubject,
-            dispatchNumber: dispatchNumber || null,
-            dispatchDate: dispatchDate || null,
-            referenceNumber: referenceNumber || null,
-            outwardNumber,
-            fileUrl,
-            fileType,
-            isConfidential: isConfidential === "true" || isConfidential === true,
-            priority: priority || "normal",
-            aiExtractedData: aiExtractedData
-              ? {
-                  ...(typeof aiExtractedData === "string" ? JSON.parse(aiExtractedData) : aiExtractedData),
-                  _actualSubject: subject, // Always store real subject in AI data
-                }
-              : { _actualSubject: subject },
-            aiConfidence: aiConfidence || null,
-          })
-          .returning();
-
-        // Parse recipients and resolve groups
-        let parsedRecipients: Array<{ type: string; id: number }> = [];
+        let recipients: any[] = [];
         try {
-          const recipientData = typeof recipients === "string" ? JSON.parse(recipients) : recipients;
-          if (Array.isArray(recipientData)) {
-            for (const r of recipientData) {
-              if (r.type === "group") {
-                const members = await db
-                  .select({ departmentId: departmentGroupMembers.departmentId })
-                  .from(departmentGroupMembers)
-                  .where(eq(departmentGroupMembers.groupId, r.id));
-                for (const m of members) {
-                  if (m.departmentId !== parseInt(senderDepartmentId)) {
-                    parsedRecipients.push({ type: "department", id: m.departmentId });
-                  }
-                }
-              } else {
-                parsedRecipients.push({ type: r.type, id: r.id });
-              }
-            }
-          }
-        } catch (e) {
-          console.error("[Dispatch] Error parsing recipients:", e);
-        }
+          const parsed = typeof b.recipients === "string" ? JSON.parse(b.recipients) : b.recipients;
+          if (Array.isArray(parsed)) recipients = parsed;
+        } catch { /* bad list → no recipients */ }
+        let aiExtractedData: any = undefined;
+        try { aiExtractedData = typeof b.aiExtractedData === "string" ? JSON.parse(b.aiExtractedData) : b.aiExtractedData; } catch { /* ignore */ }
 
-        // Deduplicate
-        const seen = new Set<string>();
-        parsedRecipients = parsedRecipients.filter((r) => {
-          const key = `${r.type}-${r.id}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
+        const senderId = parseInt(b.senderDepartmentId);
+        const actor = await who(req, senderId, b.senderName);
+        const result = await createOutwardDispatch({
+          actor,
+          senderDepartmentId: senderId,
+          senderName: actor.departmentName || b.senderName,
+          documentType: b.documentType,
+          subject: b.subject,
+          dispatchNumber: b.dispatchNumber,
+          dispatchDate: b.dispatchDate,
+          referenceNumber: b.referenceNumber,
+          isConfidential: b.isConfidential === "true" || b.isConfidential === true,
+          priority: b.priority,
+          aiExtractedData,
+          aiConfidence: b.aiConfidence,
+          fileUrl,
+          fileType,
+          recipients,
+          sendEmail: b.sendEmail === "true" || b.sendEmail === true,
+          dispatchMode: b.dispatchMode,
+          postalTrackingNo: b.postalTrackingNo,
+          postageAmount: b.postageAmount,
+          inReplyToRecipientId: b.inReplyToRecipientId ? Number(b.inReplyToRecipientId) : null,
+          efileId: b.efileId ? Number(b.efileId) : null,
         });
-
-        // Insert recipients
-        if (parsedRecipients.length > 0) {
-          await db.insert(dispatchRecipients).values(
-            parsedRecipients.map((r) => ({
-              dispatchId: dispatch.id,
-              recipientType: r.type,
-              departmentId: r.type === "department" ? r.id : null,
-              externalContactId: r.type === "external" ? r.id : null,
-              status: "dispatched" as const,
-            }))
-          );
-        }
-
-        // Create tracking entry
-        await db.insert(dispatchTracking).values({
-          dispatchId: dispatch.id,
-          action: "created",
-          actionByDepartmentId: parseInt(senderDepartmentId),
-          actionByName: senderName,
-          details: `Dispatched to ${parsedRecipients.length} recipient(s). Outward No: ${outwardNumber}`,
-        });
-
-        if (sendEmail === "true" || sendEmail === true) {
-          try {
-            // Fetch sender's official email from departments table
-            const [senderDeptRecord] = await db
-              .select({ email: departments.email })
-              .from(departments)
-              .where(eq(departments.id, parseInt(senderDepartmentId)));
-            const senderOfficialEmail = senderDeptRecord?.email;
-
-            const { sendDispatchNotificationEmail } = await import("./emailService");
-            let emailsSentCount = 0;
-            
-            for (const r of parsedRecipients) {
-              if (r.type === "department") {
-                const [dept] = await db
-                  .select({ email: departments.email, name: departments.name })
-                  .from(departments)
-                  .where(eq(departments.id, r.id));
-                if (dept?.email && !dept.email.includes("example.com")) {
-                  try {
-                    const result = await sendDispatchNotificationEmail(
-                      dept.email,
-                      dispatch.isConfidential ? "CONFIDENTIAL" : subject,
-                      senderName,
-                      documentType,
-                      dispatchNumber || outwardNumber,
-                      dispatch.isConfidential,
-                      dispatch.fileUrl,
-                      senderOfficialEmail
-                    );
-                    
-                    if (result.success) {
-                      emailsSentCount++;
-                      await db
-                        .update(dispatchRecipients)
-                        .set({ emailSent: true, emailSentAt: new Date() })
-                        .where(
-                          and(
-                            eq(dispatchRecipients.dispatchId, dispatch.id),
-                            eq(dispatchRecipients.departmentId, r.id)
-                          )
-                        );
-                    } else {
-                      console.error(`[Dispatch] Email failed for ${dept.email}:`, result.error);
-                    }
-                  } catch (emailErr) {
-                    console.error(`[Dispatch] Email exception for ${dept.email}:`, emailErr);
-                  }
-                }
-              }
-            }
-
-            if (emailsSentCount > 0) {
-              await db.insert(dispatchTracking).values({
-                dispatchId: dispatch.id,
-                action: "email_sent",
-                actionByDepartmentId: parseInt(senderDepartmentId),
-                actionByName: senderName,
-                details: `Email notifications sent to ${emailsSentCount} recipient(s)`,
-              });
-            } else {
-              await db.insert(dispatchTracking).values({
-                dispatchId: dispatch.id,
-                action: "email_sent",
-                actionByDepartmentId: parseInt(senderDepartmentId),
-                actionByName: senderName,
-                details: `Email notifications failed to send`,
-              });
-            }
-          } catch (emailError) {
-            console.error("[Dispatch] Email notification error:", emailError);
-          }
-        }
-
-        res.json({
-          success: true,
-          dispatch: { ...dispatch, subject },
-          outwardNumber,
-          recipientCount: parsedRecipients.length,
-        });
+        res.json({ success: true, ...result });
       } catch (error: any) {
+        if (error instanceof DakError) return res.status(error.status).json({ message: error.message });
         console.error("[Dispatch] Create error:", error);
         res.status(500).json({ message: "Failed to create dispatch", error: error.message });
       }
@@ -678,127 +496,127 @@ EXAMPLES
   );
 
   // ─── Receive Document (Physical / External Inward Entry) ────────────────
-  // For documents physically received by a department (from outside, internal staff, etc.)
+  // Sender, letter no./date, other reference, receipt no. (auto when empty),
+  // receipt date, mark to staff logins (+ "action by" date; default by priority).
   app.post(
     "/api/dispatch/receive-external",
     dispatchUpload.single("file"),
+    requireBodyDepartment("receivingDepartmentId"),
     async (req: any, res: Response) => {
       try {
-        const {
-          receivingDepartmentId,
-          receivingDepartmentName,
-          documentType,
-          subject,
-          senderInfo,           // Free text: "UGC", "Staff Name", "External Org" etc.
-          dispatchNumber,
-          dispatchDate,
-          referenceNumber,
-          inwardNumber: providedInwardNumber,
-          priority,
-          isConfidential,
-          markedToStaff,
-          staffRemarks,
-        } = req.body;
-
-        if (!receivingDepartmentId || !receivingDepartmentName || !documentType || !subject) {
-          return res.status(400).json({ message: "Missing required fields" });
+        const b = req.body;
+        if (!b.receivingDepartmentId || !b.documentType || !b.subject || !b.senderInfo) {
+          return res.status(400).json({ message: "Missing required fields (sender, document type, subject)" });
         }
+        const deptId = parseInt(b.receivingDepartmentId);
+        const actor = await who(req, deptId, b.receivingDepartmentName);
+        const confidential = b.isConfidential === "true" || b.isConfidential === true;
+        const priority = ["normal", "urgent", "immediate"].includes(b.priority) ? b.priority : "normal";
 
-        let fileUrl = req.body.fileUrl;
-        let fileType = req.body.fileType || "image";
+        let fileUrl = b.fileUrl;
+        let fileType = b.fileType || "image";
         if (req.file) {
           fileUrl = `/uploads/dispatch/${path.basename(req.file.path)}`;
           fileType = req.file.mimetype.includes("pdf") ? "pdf" : "image";
         }
+        if (fileUrl && !/^\/uploads\/dispatch\/[A-Za-z0-9._-]+$/.test(String(fileUrl))) fileUrl = "";
 
-        // Generate inward number for receiving department
-        const now = new Date();
-        const fyStart = now.getMonth() >= 3
-          ? new Date(now.getFullYear(), 3, 1)
-          : new Date(now.getFullYear() - 1, 3, 1);
+        const parseIds = (v: any): number[] => {
+          try {
+            const parsed = typeof v === "string" ? JSON.parse(v) : v;
+            return Array.isArray(parsed) ? parsed.map(Number).filter(Number.isFinite) : [];
+          } catch { return []; }
+        };
+        // Staff logins (department_staff) + older free names (employees without login)
+        const staffIds = parseIds(b.markedStaffIds);
+        const staffRows = staffIds.length
+          ? (await db.execute(sql`SELECT id, name FROM department_staff WHERE department_id = ${deptId} AND is_active = true
+              AND id IN (${sql.join(staffIds.map((i) => sql`${i}`), sql`, `)})`)).rows as any[]
+          : [];
+        const extraNames = String(b.markedToStaff || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+        const names = [...staffRows.map((r) => r.name), ...extraNames.filter((n) => !staffRows.some((r) => r.name === n))];
+        const marked = names.join(", ");
+        const employeeIds = parseIds(b.markedToEmployeeIds);
 
-        const inwardCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(dispatchDocuments)
-          .where(
-            and(
-              sql`${dispatchDocuments.aiExtractedData}->>'_receivedByDepartmentId' = ${receivingDepartmentId.toString()}`,
-              sql`${dispatchDocuments.createdAt} >= ${fyStart.toISOString()}`
-            )
-          );
+        // Sender is a department on this system → it can see that its letter arrived
+        let senderRef: number | null = null;
+        if (b.senderDepartmentRef && Number(b.senderDepartmentRef) !== deptId) {
+          const exists = (await db.execute(sql`SELECT 1 FROM departments WHERE id = ${Number(b.senderDepartmentRef)}`)).rows.length > 0;
+          if (exists) senderRef = Number(b.senderDepartmentRef);
+        }
 
-        // Also count inward entries from dispatch_recipients
-        const inwardCount2 = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(dispatchRecipients)
-          .where(
-            and(
-              eq(dispatchRecipients.departmentId, parseInt(receivingDepartmentId)),
-              sql`${dispatchRecipients.receivedAt} IS NOT NULL`,
-              sql`${dispatchRecipients.receivedAt} >= ${fyStart.toISOString()}`
-            )
-          );
+        const receivedAt = receiptMoment(b.receiptDate);
+        const dueDate = isoDateOrNull(b.actionDueDate) || slaDueDate(priority, receivedAt);
 
-        const totalInward = Number(inwardCount[0]?.count || 0) + Number(inwardCount2[0]?.count || 0) + 1;
-        const shortName = generateShortName(receivingDepartmentName);
-        
-        const inwardNumber = providedInwardNumber ? providedInwardNumber : `${totalInward}/${shortName}`;
+        const result = await db.transaction(async (tx) => {
+          await lockRegister(tx, "in", deptId);
+          let inwardNumber: string;
+          const typed = String(b.inwardNumber || "").trim();
+          if (typed) {
+            const used = await usedInwardNumbers(tx, deptId, receivedAt);
+            if (used.some((n) => normalizeNo(n) === normalizeNo(typed))) return { conflict: typed } as const;
+            inwardNumber = typed;
+          } else {
+            inwardNumber = await nextInwardNumber(tx, deptId, receivedAt);
+          }
 
-        // Create dispatch document as a "received" entry
-        // senderDepartmentId = 0 means external/unknown sender
-        const [dispatch] = await db
-          .insert(dispatchDocuments)
-          .values({
+          const [dispatch] = await tx.insert(dispatchDocuments).values({
             senderDepartmentId: 0, // 0 = external/physical sender
-            senderName: senderInfo || "External",
-            documentType,
-            subject: (isConfidential === "true" || isConfidential === true) ? "CONFIDENTIAL" : subject,
-            dispatchNumber: dispatchNumber || null,
-            dispatchDate: dispatchDate || null,
-            referenceNumber: referenceNumber || null,
+            senderName: b.senderInfo || "External",
+            documentType: b.documentType,
+            subject: confidential ? "CONFIDENTIAL" : b.subject,
+            dispatchNumber: b.dispatchNumber || null,
+            dispatchDate: isoDateOrNull(b.dispatchDate),
+            referenceNumber: b.referenceNumber || null,
             inwardNumber,
             fileUrl: fileUrl || "",
             fileType: fileType || "image",
-            isConfidential: isConfidential === "true" || isConfidential === true,
-            priority: priority || "normal",
+            isConfidential: confidential,
+            priority,
+            senderDepartmentRef: senderRef,
             aiExtractedData: {
-              _actualSubject: subject,
-              _receivedByDepartmentId: receivingDepartmentId.toString(),
+              _actualSubject: b.subject,
+              _receivedByDepartmentId: deptId.toString(),
               _physicalReceive: true,
-              _senderInfo: senderInfo || "External",
+              _senderInfo: b.senderInfo || "External",
             },
-          })
-          .returning();
+          }).returning();
 
-        // Create recipient record with status = received
-        await db.insert(dispatchRecipients).values({
-          dispatchId: dispatch.id,
-          recipientType: "department",
-          departmentId: parseInt(receivingDepartmentId),
-          status: markedToStaff ? "marked" : "received",
-          receivedAt: new Date(),
-          markedToStaff: markedToStaff || null,
-          staffRemarks: staffRemarks || null,
-          markedBy: markedToStaff ? receivingDepartmentName : null,
-          markedAt: markedToStaff ? new Date() : null,
+          await tx.insert(dispatchRecipients).values({
+            dispatchId: dispatch.id,
+            recipientType: "department",
+            departmentId: deptId,
+            status: marked ? "marked" : "received",
+            receivedAt,
+            readAt: receivedAt,
+            inwardNumber,
+            markedToStaff: marked || null,
+            markedStaffIds: staffRows.length ? staffRows.map((r) => Number(r.id)) : null,
+            markedToEmployeeId: employeeIds[0] ?? null,
+            staffRemarks: b.staffRemarks || null,
+            markedBy: marked ? actor.label : null,
+            markedAt: marked ? new Date() : null,
+            actionDueDate: dueDate,
+          });
+
+          await track({
+            dispatchId: dispatch.id, action: "received_physical", actor, recipientDepartmentId: deptId,
+            details: `Physical document received from: ${b.senderInfo || "External"}. Inward No: ${inwardNumber}. Action by: ${dueDate}`,
+          }, tx);
+          if (marked) {
+            await track({
+              dispatchId: dispatch.id, action: "marked_to_staff", actor, recipientDepartmentId: deptId,
+              details: `Marked to: ${marked}${b.staffRemarks ? `. Remarks: ${b.staffRemarks}` : ""}`,
+            }, tx);
+          }
+          return { dispatch, inwardNumber } as const;
         });
 
-        // Create tracking entry
-        await db.insert(dispatchTracking).values({
-          dispatchId: dispatch.id,
-          action: markedToStaff ? "marked_to_staff" : "received_physical",
-          actionByDepartmentId: parseInt(receivingDepartmentId),
-          actionByName: receivingDepartmentName,
-          details: markedToStaff 
-            ? `Physical document received and marked to: ${markedToStaff}. Remarks: ${staffRemarks || "None"}. Inward No: ${inwardNumber}` 
-            : `Physical document received from: ${senderInfo || "External"}. Inward No: ${inwardNumber}`,
-        });
-
-        res.json({
-          success: true,
-          dispatch,
-          inwardNumber,
-        });
+        if ("conflict" in result) {
+          return res.status(409).json({ message: `Receipt No. ${result.conflict} is already used this year. Leave it empty for the next number.` });
+        }
+        queueOcr({ kind: "document", id: result.dispatch.id, fileUrl: result.dispatch.fileUrl });
+        res.json({ success: true, dispatch: result.dispatch, inwardNumber: result.inwardNumber });
       } catch (error: any) {
         console.error("[Dispatch] Receive external error:", error);
         res.status(500).json({ message: "Failed to record received document", error: error.message });
@@ -807,6 +625,7 @@ EXAMPLES
   );
 
   // ─── Get Outbox (Sent Dispatches) ───────────────────────────────────────
+  // Two queries in all (documents, then all their recipients) instead of one per row.
   app.get("/api/dispatch/outbox/:departmentId", async (req: Request, res: Response) => {
     try {
       const departmentId = parseInt(req.params.departmentId);
@@ -814,73 +633,26 @@ EXAMPLES
 
       const fy = req.query.fy as string;
       const conditions = [eq(dispatchDocuments.senderDepartmentId, departmentId)];
-
       if (fy && fy !== "all") {
         const year = parseInt(fy.split("-")[0]);
         if (!isNaN(year)) {
-          const start = new Date(year, 3, 1).toISOString();
-          const end = new Date(year + 1, 2, 31, 23, 59, 59, 999).toISOString();
-          conditions.push(sql`${dispatchDocuments.createdAt} >= ${start}`);
-          conditions.push(sql`${dispatchDocuments.createdAt} <= ${end}`);
+          conditions.push(sql`${dispatchDocuments.createdAt} >= ${new Date(year, 3, 1).toISOString()}`);
+          conditions.push(sql`${dispatchDocuments.createdAt} < ${new Date(year + 1, 3, 1).toISOString()}`);
         }
       }
+      const docs = await db.select().from(dispatchDocuments).where(and(...conditions)).orderBy(desc(dispatchDocuments.createdAt));
+      const recipients = await recipientsWithNames(docs.map((d) => d.id));
 
-      const dispatches = await db
-        .select()
-        .from(dispatchDocuments)
-        .where(and(...conditions))
-        .orderBy(desc(dispatchDocuments.createdAt));
-
-      const results = await Promise.all(
-        dispatches.map(async (d) => {
-          const recipients = await db
-            .select({
-              id: dispatchRecipients.id,
-              recipientType: dispatchRecipients.recipientType,
-              departmentId: dispatchRecipients.departmentId,
-              externalContactId: dispatchRecipients.externalContactId,
-              status: dispatchRecipients.status,
-              emailSent: dispatchRecipients.emailSent,
-              readAt: dispatchRecipients.readAt,
-            })
-            .from(dispatchRecipients)
-            .where(eq(dispatchRecipients.dispatchId, d.id));
-
-          const recipientDetails = await Promise.all(
-            recipients.map(async (r) => {
-              if (r.recipientType === "department" && r.departmentId) {
-                const [dept] = await db
-                  .select({ name: departments.name })
-                  .from(departments)
-                  .where(eq(departments.id, r.departmentId));
-                return { ...r, name: dept?.name || "Unknown" };
-              } else if (r.recipientType === "external" && r.externalContactId) {
-                const [ext] = await db
-                  .select({ name: externalContacts.name })
-                  .from(externalContacts)
-                  .where(eq(externalContacts.id, r.externalContactId));
-                return { ...r, name: ext?.name || "Unknown External" };
-              }
-              return { ...r, name: "Unknown" };
-            })
-          );
-
-          // Return actual subject for sender's own dispatches
-          const actualSubject = d.isConfidential && d.aiExtractedData
-            ? (d.aiExtractedData as any)?._actualSubject || d.subject
-            : d.subject;
-
-          return {
-            ...d,
-            subject: actualSubject,
-            recipients: recipientDetails,
-            recipientCount: recipients.length,
-            readCount: recipients.filter((r) => r.readAt !== null && r.readAt !== undefined).length,
-          };
-        })
-      );
-
-      res.json(results);
+      res.json(docs.map(({ ocrText: _o, ...d }) => {
+        const list = recipients.filter((r) => r.dispatchId === d.id);
+        return {
+          ...d,
+          subject: d.isConfidential ? ((d.aiExtractedData as any)?._actualSubject || d.subject) : d.subject,
+          recipients: list,
+          recipientCount: list.length,
+          readCount: list.filter((r) => r.readAt).length,
+        };
+      }));
     } catch (error: any) {
       console.error("[Dispatch] Outbox error:", error);
       res.status(500).json({ message: error.message });
@@ -896,61 +668,22 @@ EXAMPLES
       const fy = req.query.fy as string;
       const conditions = [
         eq(dispatchRecipients.departmentId, departmentId),
-        eq(dispatchRecipients.recipientType, "department")
+        eq(dispatchRecipients.recipientType, "department"),
       ];
-
       if (fy && fy !== "all") {
         const year = parseInt(fy.split("-")[0]);
         if (!isNaN(year)) {
-          const start = new Date(year, 3, 1).toISOString();
-          const end = new Date(year + 1, 2, 31, 23, 59, 59, 999).toISOString();
-          conditions.push(sql`${dispatchRecipients.createdAt} >= ${start}`);
-          conditions.push(sql`${dispatchRecipients.createdAt} <= ${end}`);
+          conditions.push(sql`${dispatchRecipients.createdAt} >= ${new Date(year, 3, 1).toISOString()}`);
+          conditions.push(sql`${dispatchRecipients.createdAt} < ${new Date(year + 1, 3, 1).toISOString()}`);
         }
       }
-
-      const recipientRecords = await db
-        .select()
+      const rows = await db
+        .select({ r: dispatchRecipients, d: dispatchDocuments })
         .from(dispatchRecipients)
+        .innerJoin(dispatchDocuments, eq(dispatchDocuments.id, dispatchRecipients.dispatchId))
         .where(and(...conditions))
         .orderBy(desc(dispatchRecipients.createdAt));
-
-      const results = await Promise.all(
-        recipientRecords.map(async (r) => {
-          const [dispatch] = await db
-            .select()
-            .from(dispatchDocuments)
-            .where(eq(dispatchDocuments.id, r.dispatchId));
-
-          if (!dispatch) return null;
-
-          // For confidential docs: show actual subject to recipient
-          let subject = dispatch.subject;
-          if (dispatch.isConfidential && dispatch.aiExtractedData) {
-            subject = (dispatch.aiExtractedData as any)?._actualSubject || "CONFIDENTIAL";
-          }
-
-          // Check if this is a physically received external document
-          const isPhysicalReceive = (dispatch.aiExtractedData as any)?._physicalReceive === true;
-
-            return {
-              ...dispatch,
-              subject,
-              inwardNumber: r.inwardNumber || dispatch.inwardNumber,
-              recipientStatus: r.status,
-              recipientId: r.id,
-              receivedAt: r.receivedAt,
-              readAt: r.readAt,
-              markedToStaff: r.markedToStaff,
-              markedBy: r.markedBy,
-              staffRemarks: r.staffRemarks,
-              emailSent: r.emailSent,
-              isPhysicalReceive,
-            };
-        })
-      );
-
-      res.json(results.filter(Boolean));
+      res.json(rows.map((x) => toInboxItem(x.r, x.d)));
     } catch (error: any) {
       console.error("[Dispatch] Inbox error:", error);
       res.status(500).json({ message: error.message });
@@ -958,23 +691,18 @@ EXAMPLES
   });
 
   // ─── Get Inbox Count (for sidebar badge) ────────────────────────────────
+  // count = not yet received; myPending = open dak marked to this staff login, not acknowledged
   app.get("/api/dispatch/inbox-count/:departmentId", async (req: Request, res: Response) => {
     try {
       const departmentId = parseInt(req.params.departmentId);
       if (isNaN(departmentId)) return res.status(400).json({ message: "Invalid department ID" });
-
-      const result = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(dispatchRecipients)
-        .where(
-          and(
-            eq(dispatchRecipients.departmentId, departmentId),
-            eq(dispatchRecipients.recipientType, "department"),
-            eq(dispatchRecipients.status, "dispatched")
-          )
-        );
-
-      res.json({ count: Number(result[0]?.count || 0) });
+      const actor = await who(req, departmentId);
+      const row = (await db.execute(sql`
+        SELECT COUNT(*) FILTER (WHERE status = 'dispatched')::int AS unreceived,
+               COUNT(*) FILTER (WHERE ${actor.staffId ?? 0} = ANY(COALESCE(marked_staff_ids, '{}'))
+                                  AND acknowledged_at IS NULL AND status NOT IN ${CLOSED_SQL})::int AS my_pending
+        FROM dispatch_recipients WHERE department_id = ${departmentId} AND recipient_type = 'department'`)).rows[0] as any;
+      res.json({ count: Number(row?.unreceived || 0), myPending: actor.staffId ? Number(row?.my_pending || 0) : 0 });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -986,39 +714,8 @@ EXAMPLES
       const departmentId = parseInt(req.params.departmentId);
       if (isNaN(departmentId)) return res.status(400).json({ message: "Invalid department ID" });
       
-      const departmentName = req.query.name as string;
-      if (!departmentName) return res.status(400).json({ message: "Missing department name" });
-
-      const now = new Date();
-      const fyStart = now.getMonth() >= 3 
-        ? new Date(now.getFullYear(), 3, 1) 
-        : new Date(now.getFullYear() - 1, 3, 1);
-
-      const inwardCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(dispatchDocuments)
-        .where(
-          and(
-            sql`${dispatchDocuments.aiExtractedData}->>'_receivedByDepartmentId' = ${departmentId.toString()}`,
-            sql`${dispatchDocuments.createdAt} >= ${fyStart.toISOString()}`
-          )
-        );
-
-      const inwardCount2 = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(dispatchRecipients)
-        .where(
-          and(
-            eq(dispatchRecipients.departmentId, departmentId),
-            sql`${dispatchRecipients.receivedAt} IS NOT NULL`,
-            sql`${dispatchRecipients.receivedAt} >= ${fyStart.toISOString()}`
-          )
-        );
-
-      const totalInward = Number(inwardCount[0]?.count || 0) + Number(inwardCount2[0]?.count || 0) + 1;
-      const shortName = generateShortName(departmentName);
-      
-      res.json({ nextNumber: `${totalInward}/${shortName}` });
+      // Optional ?date=YYYY-MM-DD (receipt date) picks the financial year
+      res.json({ nextNumber: await nextInwardNumber(db, departmentId, receiptMoment(req.query.date)) });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -1030,28 +727,7 @@ EXAMPLES
       const departmentId = parseInt(req.params.departmentId);
       if (isNaN(departmentId)) return res.status(400).json({ message: "Invalid department ID" });
       
-      const departmentName = req.query.name as string;
-      if (!departmentName) return res.status(400).json({ message: "Missing department name" });
-
-      const now = new Date();
-      const fyStart = now.getMonth() >= 3 
-        ? new Date(now.getFullYear(), 3, 1) 
-        : new Date(now.getFullYear() - 1, 3, 1);
-
-      const outwardCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(dispatchDocuments)
-        .where(
-          and(
-            eq(dispatchDocuments.senderDepartmentId, departmentId),
-            sql`${dispatchDocuments.createdAt} >= ${fyStart.toISOString()}`
-          )
-        );
-
-      const totalOutward = Number(outwardCount[0]?.count || 0) + 1;
-      const shortName = generateShortName(departmentName);
-      
-      res.json({ nextNumber: `${totalOutward}/${shortName}` });
+      res.json({ nextNumber: await nextOutwardNumber(db, departmentId, new Date()) });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -1110,71 +786,78 @@ EXAMPLES
   app.get("/api/dispatch/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      const requestingDeptId = parseInt(req.query.departmentId as string);
+      const actor = await who(req, req.query.departmentId);
+      const requestingDeptId = actor.departmentId || parseInt(req.query.departmentId as string);
 
-      const [dispatch] = await db
-        .select()
-        .from(dispatchDocuments)
-        .where(eq(dispatchDocuments.id, id));
-
+      const [dispatch] = await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.id, id));
       if (!dispatch) return res.status(404).json({ message: "Dispatch not found" });
 
-      const recipients = await db
-        .select()
-        .from(dispatchRecipients)
-        .where(eq(dispatchRecipients.dispatchId, id));
+      const recipientDetails = await recipientsWithNames([id]);
+      const extra = (dispatch.aiExtractedData as any) || {};
+      const isPhysicalReceive = extra._physicalReceive === true;
+      const isSender = !isPhysicalReceive && dispatch.senderDepartmentId === requestingDeptId;
+      const isRecipient = recipientDetails.some((r) => r.departmentId === requestingDeptId);
+      const canViewContent = !dispatch.isConfidential || isSender || isRecipient;
 
-      const recipientDetails = await Promise.all(
-        recipients.map(async (r) => {
-          if (r.recipientType === "department" && r.departmentId) {
-            const [dept] = await db
-              .select({ name: departments.name, email: departments.email })
-              .from(departments)
-              .where(eq(departments.id, r.departmentId));
-            return { ...r, name: dept?.name || "Unknown", email: dept?.email };
-          } else if (r.recipientType === "external" && r.externalContactId) {
-            const [ext] = await db
-              .select({ name: externalContacts.name, email: externalContacts.email })
-              .from(externalContacts)
-              .where(eq(externalContacts.id, r.externalContactId));
-            return { ...r, name: ext?.name || "Unknown External", email: ext?.email };
-          }
-          return { ...r, name: "Unknown" };
-        })
-      );
+      let tracking = await db.select().from(dispatchTracking).where(eq(dispatchTracking.dispatchId, id)).orderBy(asc(dispatchTracking.createdAt));
+      if (!canViewContent) tracking = tracking.map((t) => ({ ...t, details: "Confidential" }));
 
-      const tracking = await db
-        .select()
-        .from(dispatchTracking)
-        .where(eq(dispatchTracking.dispatchId, id))
-        .orderBy(asc(dispatchTracking.createdAt));
+      const subject = dispatch.isConfidential
+        ? (canViewContent ? (extra._actualSubject || dispatch.subject) : "CONFIDENTIAL")
+        : dispatch.subject;
 
-      const isSender = dispatch.senderDepartmentId === requestingDeptId;
-      const isRecipient = recipients.some((r) => r.departmentId === requestingDeptId);
+      // This department's own (latest) row: drives the actions shown to it
+      const userRecipient = [...recipientDetails].sort((a, b) => b.id - a.id).find((r) => r.departmentId === requestingDeptId);
+      const canEdit = isPhysicalReceive
+        ? String(extra._receivedByDepartmentId) === String(requestingDeptId)
+        : dispatch.senderDepartmentId === requestingDeptId;
 
-      let subject = dispatch.subject;
-      let fileUrl = dispatch.fileUrl;
+      const attachments = canViewContent ? (await db.execute(sql`
+        SELECT id, file_url AS "fileUrl", file_type AS "fileType", original_name AS "originalName", added_by AS "addedBy",
+               (ocr_text IS NOT NULL) AS "hasText",
+               to_char(added_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "addedAt"
+        FROM dispatch_attachments WHERE dispatch_id = ${id} ORDER BY id`)).rows : [];
 
-      if (dispatch.isConfidential) {
-        if (isSender || isRecipient) {
-          subject = (dispatch.aiExtractedData as any)?._actualSubject || dispatch.subject;
-        } else {
-          subject = "CONFIDENTIAL";
-          fileUrl = "";
-        }
+      // Reply links: what this letter answers, and the letters that answer it
+      let inReplyTo: any = null;
+      if (dispatch.inReplyToRecipientId && isSender) {
+        const [rr] = await db.select().from(dispatchRecipients).where(eq(dispatchRecipients.id, dispatch.inReplyToRecipientId));
+        const [od] = rr ? await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.id, rr.dispatchId)) : [];
+        if (rr && od) inReplyTo = {
+          dispatchId: od.id,
+          inwardNumber: rr.inwardNumber || od.inwardNumber,
+          senderName: od.senderName,
+          subject: od.isConfidential ? ((od.aiExtractedData as any)?._actualSubject || "CONFIDENTIAL") : od.subject,
+        };
       }
+      const replies = (await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.inReplyToDispatchId, id)))
+        .filter((r) => r.senderDepartmentId === requestingDeptId || isRecipient || isSender)
+        .map((r) => ({ id: r.id, outwardNumber: r.outwardNumber, senderName: r.senderName, createdAt: r.createdAt, cancelled: !!r.cancelledAt }));
 
-      const userRecipient = recipients.find(r => r.departmentId === requestingDeptId);
-      const recipientInwardNumber = userRecipient?.inwardNumber || dispatch.inwardNumber;
+      const efiles = requestingDeptId ? (await db.execute(sql`
+        SELECT DISTINCT f.id, f.file_number AS "fileNumber", f.subject FROM efile_entries e JOIN efiles f ON f.id = e.efile_id
+        WHERE e.dispatch_id = ${id} AND f.department_id = ${requestingDeptId}`)).rows : [];
 
+      const { ocrText: _o, ...rest } = dispatch;
       res.json({
-        ...dispatch,
-        inwardNumber: recipientInwardNumber,
+        ...rest,
+        inwardNumber: userRecipient?.inwardNumber || (userRecipient ? dispatch.inwardNumber : null),
         subject,
-        fileUrl,
+        fileUrl: canViewContent ? dispatch.fileUrl : "",
         recipients: recipientDetails,
         tracking,
-        canViewContent: !dispatch.isConfidential || isSender || isRecipient,
+        canViewContent,
+        isPhysicalReceive,
+        canEdit,
+        canWithdraw: isSender && !dispatch.cancelledAt && !recipientDetails.some((r) => r.receivedAt),
+        canCancelEntry: isPhysicalReceive && canEdit && !dispatch.cancelledAt && actor.isSupervisor,
+        myRecipient: userRecipient || null,
+        attachments,
+        inReplyTo,
+        replies,
+        efiles,
+        verifyUrl: dispatch.verifyToken ? `${publicBaseUrl()}/dak/verify/${dispatch.verifyToken}` : null,
+        me: { staffId: actor.staffId, isSupervisor: actor.isSupervisor, role: actor.role },
       });
     } catch (error: any) {
       console.error("[Dispatch] Detail error:", error);
@@ -1183,95 +866,40 @@ EXAMPLES
   });
 
   // ─── Mark as Received ───────────────────────────────────────────────────
+  // Gives the next receipt number (R.No.) and a default "action by" date (by priority).
   app.patch("/api/dispatch/:id/receive", async (req: Request, res: Response) => {
     try {
       const dispatchId = parseInt(req.params.id);
-      const { departmentId, departmentName } = req.body;
+      const departmentId = Number(req.body.departmentId);
+      const actor = await who(req, departmentId, req.body.departmentName);
 
-      const [recipientRow] = await db
-        .select()
-        .from(dispatchRecipients)
-        .where(
-          and(
-            eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, departmentId)
-          )
-        );
+      const result = await db.transaction(async (tx) => {
+        await lockRegister(tx, "in", departmentId);
+        const [row] = await tx.select().from(dispatchRecipients)
+          .where(and(eq(dispatchRecipients.dispatchId, dispatchId), eq(dispatchRecipients.departmentId, departmentId)))
+          .orderBy(desc(dispatchRecipients.id)).limit(1);
+        if (!row) return { notFound: true } as const;
+        if (row.inwardNumber) return { inwardNumber: row.inwardNumber } as const;
+        if (row.status === "withdrawn") return { withdrawn: true } as const;
+        const [doc] = await tx.select({ priority: dispatchDocuments.priority }).from(dispatchDocuments).where(eq(dispatchDocuments.id, dispatchId));
 
-      if (!recipientRow) {
-        return res.status(404).json({ message: "Recipient not found" });
-      }
-
-      if (recipientRow.inwardNumber) {
-        return res.json({ success: true, inwardNumber: recipientRow.inwardNumber });
-      }
-
-      const now = new Date();
-      const fyStart = now.getMonth() >= 3
-        ? new Date(now.getFullYear(), 3, 1)
-        : new Date(now.getFullYear() - 1, 3, 1);
-
-      const inwardCount1 = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(dispatchDocuments)
-        .where(
-          and(
-            sql`${dispatchDocuments.aiExtractedData}->>'_receivedByDepartmentId' = ${departmentId.toString()}`,
-            sql`${dispatchDocuments.createdAt} >= ${fyStart.toISOString()}`
-          )
-        );
-
-      const inwardCount2 = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(dispatchRecipients)
-        .where(
-          and(
-            eq(dispatchRecipients.departmentId, departmentId),
-            sql`${dispatchRecipients.receivedAt} IS NOT NULL`,
-            sql`${dispatchRecipients.receivedAt} >= ${fyStart.toISOString()}`
-          )
-        );
-
-      const totalInward = Number(inwardCount1[0]?.count || 0) + Number(inwardCount2[0]?.count || 0) + 1;
-      const inwardNumber = `${totalInward}/${generateShortName(departmentName || "DEPT")}`;
-
-      const newStatus = (recipientRow.status === "dispatched" || recipientRow.status === "read") 
-        ? "received" 
-        : recipientRow.status;
-
-      console.log(`[Dispatch Receive] Updating dispatchId=${dispatchId} deptId=${departmentId}`);
-      console.log(`[Dispatch Receive] Setting inwardNumber=${inwardNumber}, status=${newStatus}`);
-
-      const updateResult = await db
-        .update(dispatchRecipients)
-        .set({ 
-          status: newStatus, 
-          receivedAt: new Date(),
-          inwardNumber: inwardNumber 
-        })
-        .where(
-          and(
-            eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, departmentId)
-          )
-        )
-        .returning();
-      
-      console.log(`[Dispatch Receive] Update result:`, updateResult);
-
-
-
-      await db.insert(dispatchTracking).values({
-        dispatchId,
-        action: "received",
-        actionByDepartmentId: departmentId,
-        actionByName: departmentName || "Department",
-        details: `Document received. Inward No: ${inwardNumber}`,
-        recipientDepartmentId: departmentId,
+        const receivedAt = new Date();
+        const inwardNumber = await nextInwardNumber(tx, departmentId, receivedAt);
+        const dueDate = row.actionDueDate || slaDueDate(doc?.priority, receivedAt);
+        await tx.update(dispatchRecipients).set({
+          status: (row.status === "dispatched" || row.status === "read") ? "received" : row.status,
+          receivedAt, inwardNumber, readAt: row.readAt || receivedAt, actionDueDate: dueDate,
+        }).where(eq(dispatchRecipients.id, row.id));
+        await track({ dispatchId, action: "received", actor, recipientDepartmentId: departmentId,
+          details: `Document received. Inward No: ${inwardNumber}. Action by: ${dueDate}` }, tx);
+        return { inwardNumber } as const;
       });
 
-      res.json({ success: true, inwardNumber });
+      if ("notFound" in result) return res.status(404).json({ message: "Recipient not found" });
+      if ("withdrawn" in result) return res.status(400).json({ message: "The sender has withdrawn this document" });
+      res.json({ success: true, inwardNumber: result.inwardNumber });
     } catch (error: any) {
+      console.error("[Dispatch] Receive error:", error);
       res.status(500).json({ message: error.message });
     }
   });
@@ -1280,142 +908,114 @@ EXAMPLES
   app.patch("/api/dispatch/:id/read", async (req: Request, res: Response) => {
     try {
       const dispatchId = parseInt(req.params.id);
-      const { departmentId, departmentName } = req.body;
-
-      const [recipient] = await db
-        .select()
-        .from(dispatchRecipients)
-        .where(
-          and(
-            eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, departmentId)
-          )
-        );
-
-      if (recipient) {
-        const updateData: any = {};
-        let isFirstRead = false;
-
-        if (!recipient.readAt) {
-          updateData.readAt = new Date();
-          isFirstRead = true;
-        }
-
-        if (recipient.status === "received") {
-          updateData.status = "read";
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          await db
-            .update(dispatchRecipients)
-            .set(updateData)
-            .where(eq(dispatchRecipients.id, recipient.id));
-
-          if (isFirstRead) {
-            await db.insert(dispatchTracking).values({
-              dispatchId,
-              action: "read",
-              actionByDepartmentId: departmentId,
-              actionByName: departmentName || "Department",
-              details: `Document viewed`,
-              recipientDepartmentId: departmentId,
-            });
-          }
-        }
+      const departmentId = Number(req.body.departmentId);
+      const recipient = await myRecipientRow(dispatchId, departmentId);
+      if (recipient && !recipient.readAt) {
+        const actor = await who(req, departmentId, req.body.departmentName);
+        await db.update(dispatchRecipients).set({ readAt: new Date() }).where(eq(dispatchRecipients.id, recipient.id));
+        await track({ dispatchId, action: "read", actor, details: "Document viewed", recipientDepartmentId: departmentId });
       }
-
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
 
+  /** Row of this department that it has received and not closed (forward / mark / RIO / dispose need it) */
+  async function openReceivedRow(dispatchId: number, departmentId: number, res: Response) {
+    const row = await myRecipientRow(dispatchId, departmentId);
+    if (!row) { res.status(404).json({ message: "This document is not in your inbox" }); return null; }
+    if (row.status === "withdrawn") { res.status(400).json({ message: "The sender has withdrawn this document" }); return null; }
+    if (row.status === "cancelled") { res.status(400).json({ message: "This entry was cancelled" }); return null; }
+    if (!row.receivedAt) { res.status(400).json({ message: "Please mark the document as received first" }); return null; }
+    if (row.status === "disposed") { res.status(400).json({ message: "This document is disposed. Reopen it first." }); return null; }
+    if (row.status === "returned") { res.status(400).json({ message: "This document was returned to the sender" }); return null; }
+    return row;
+  }
+
   // ─── Forward Dispatch ───────────────────────────────────────────────────
   app.post("/api/dispatch/:id/forward", async (req: Request, res: Response) => {
     try {
       const dispatchId = parseInt(req.params.id);
-      const { departmentId, departmentName, forwardTo, remarks } = req.body;
+      const departmentId = Number(req.body.departmentId);
+      const actor = await who(req, departmentId, req.body.departmentName);
+      const { forwardTo, remarks } = req.body;
 
       const forwardRecipients = typeof forwardTo === "string" ? JSON.parse(forwardTo) : forwardTo;
       if (!Array.isArray(forwardRecipients) || forwardRecipients.length === 0) {
         return res.status(400).json({ message: "No forward recipients specified" });
       }
+      const row = await openReceivedRow(dispatchId, departmentId, res);
+      if (!row) return;
 
-      await db.insert(dispatchRecipients).values(
-        forwardRecipients.map((r: any) => ({
-          dispatchId,
-          recipientType: r.type || "department",
-          departmentId: r.type === "department" ? r.id : null,
-          externalContactId: r.type === "external" ? r.id : null,
-          status: "dispatched" as const,
-        }))
-      );
+      const existing = await db.select({ departmentId: dispatchRecipients.departmentId, status: dispatchRecipients.status })
+        .from(dispatchRecipients).where(eq(dispatchRecipients.dispatchId, dispatchId));
+      const holding = new Set(existing.filter((e) => e.status !== "returned").map((e) => e.departmentId));
+      const targets = forwardRecipients
+        .filter((r: any) => (r.type || "department") === "department")
+        .map((r: any) => Number(r.id))
+        .filter((id: number, i: number, all: number[]) => Number.isFinite(id) && id !== departmentId && !holding.has(id) && all.indexOf(id) === i);
+      if (targets.length === 0) return res.status(400).json({ message: "The selected department(s) already have this document" });
 
-      await db
-        .update(dispatchRecipients)
-        .set({ status: "forwarded" })
-        .where(
-          and(
-            eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, departmentId)
-          )
-        );
+      await db.insert(dispatchRecipients).values(targets.map((id: number) => ({
+        dispatchId, recipientType: "department", departmentId: id, status: "dispatched" as const,
+      })));
+      await db.update(dispatchRecipients).set({ status: "forwarded" }).where(eq(dispatchRecipients.id, row.id));
 
-      const forwardNames: string[] = [];
-      for (const r of forwardRecipients) {
-        if (r.type === "department") {
-          const [dept] = await db.select({ name: departments.name }).from(departments).where(eq(departments.id, r.id));
-          forwardNames.push(dept?.name || "Unknown");
-        }
-      }
+      const names = (await db.select({ name: departments.name }).from(departments).where(inArray(departments.id, targets))).map((d) => d.name);
+      await track({ dispatchId, action: "forwarded", actor, recipientDepartmentId: departmentId,
+        details: `Forwarded to: ${names.join(", ")}${remarks ? `. Remarks: ${remarks}` : ""}` });
 
-      await db.insert(dispatchTracking).values({
-        dispatchId,
-        action: "forwarded",
-        actionByDepartmentId: departmentId,
-        actionByName: departmentName || "Department",
-        details: `Forwarded to: ${forwardNames.join(", ")}${remarks ? `. Remarks: ${remarks}` : ""}`,
-        recipientDepartmentId: departmentId,
-      });
+      // Tell the new recipients by e-mail (in the background)
+      const [doc] = await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.id, dispatchId));
+      if (doc) sendDispatchEmails(doc, targets, actor).catch(() => {});
 
-      res.json({ success: true, forwardedTo: forwardRecipients.length });
+      res.json({ success: true, forwardedTo: targets.length });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
 
   // ─── Mark to Staff ──────────────────────────────────────────────────────
+  // Staff logins (staffIds) and/or names of staff without login; optional "action by" date.
   app.post("/api/dispatch/:id/mark-staff", async (req: Request, res: Response) => {
     try {
       const dispatchId = parseInt(req.params.id);
-      const { departmentId, departmentName, employeeId, employeeName, remarks } = req.body;
+      const departmentId = Number(req.body.departmentId);
+      const actor = await who(req, departmentId, req.body.departmentName);
+      const { employeeName, employeeNames, employeeId, employeeIds, staffIds, remarks, dueDate } = req.body;
 
-      await db
-        .update(dispatchRecipients)
-        .set({
-          status: "marked",
-          markedToStaff: employeeName,
-          markedToEmployeeId: employeeId || null,
-          markedAt: new Date(),
-          markedBy: departmentName,
-          staffRemarks: remarks || null,
-        })
-        .where(
-          and(
-            eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, departmentId)
-          )
-        );
+      const ids: number[] = (Array.isArray(staffIds) ? staffIds : []).map(Number).filter(Number.isFinite);
+      const staffRows = ids.length
+        ? (await db.execute(sql`SELECT id, name FROM department_staff WHERE department_id = ${departmentId} AND is_active = true
+            AND id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})`)).rows as any[]
+        : [];
+      const freeNames: string[] = Array.isArray(employeeNames)
+        ? employeeNames.map((n: any) => String(n).trim()).filter(Boolean)
+        : String(employeeName || "").split(",").map((n) => n.trim()).filter(Boolean);
+      const names = [...staffRows.map((r) => r.name), ...freeNames.filter((n) => !staffRows.some((r) => r.name === n))];
+      if (names.length === 0) return res.status(400).json({ message: "Select at least one staff member" });
+      const empIds: number[] = (Array.isArray(employeeIds) ? employeeIds : [employeeId]).map(Number).filter(Number.isFinite);
 
-      await db.insert(dispatchTracking).values({
-        dispatchId,
-        action: "marked_to_staff",
-        actionByDepartmentId: departmentId,
-        actionByName: departmentName || "Department",
-        details: `Marked to: ${employeeName}${remarks ? `. Remarks: ${remarks}` : ""}`,
-        recipientDepartmentId: departmentId,
-      });
+      const row = await openReceivedRow(dispatchId, departmentId, res);
+      if (!row) return;
 
+      const due = isoDateOrNull(dueDate) || row.actionDueDate;
+      await db.update(dispatchRecipients).set({
+        status: "marked",
+        markedToStaff: names.join(", "),
+        markedStaffIds: staffRows.length ? staffRows.map((r) => Number(r.id)) : null,
+        markedToEmployeeId: empIds[0] ?? null,
+        markedAt: new Date(),
+        markedBy: actor.label,
+        staffRemarks: remarks || null,
+        actionDueDate: due,
+        acknowledgedAt: null,
+        acknowledgedBy: null,
+      }).where(eq(dispatchRecipients.id, row.id));
+
+      await track({ dispatchId, action: "marked_to_staff", actor, recipientDepartmentId: departmentId,
+        details: `Marked to: ${names.join(", ")}${remarks ? `. Remarks: ${remarks}` : ""}${due ? `. Action by: ${due}` : ""}` });
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1426,66 +1026,164 @@ EXAMPLES
   app.post("/api/dispatch/:id/rio", async (req: Request, res: Response) => {
     try {
       const dispatchId = parseInt(req.params.id);
-      const { departmentId, departmentName, remarks } = req.body;
+      const departmentId = Number(req.body.departmentId);
+      const actor = await who(req, departmentId, req.body.departmentName);
+      const { remarks } = req.body;
+      if (!String(remarks || "").trim()) return res.status(400).json({ message: "Please give the reason for returning" });
 
-      const [dispatch] = await db
-        .select()
-        .from(dispatchDocuments)
-        .where(eq(dispatchDocuments.id, dispatchId));
-
+      const [dispatch] = await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.id, dispatchId));
       if (!dispatch) return res.status(404).json({ message: "Dispatch not found" });
-      if (!dispatch.senderDepartmentId) {
-        return res.status(400).json({ message: "Cannot RIO external or unknown sender documents" });
-      }
+      if (!dispatch.senderDepartmentId) return res.status(400).json({ message: "Cannot RIO external or unknown sender documents" });
+      const row = await openReceivedRow(dispatchId, departmentId, res);
+      if (!row) return;
 
       const senderDeptId = dispatch.senderDepartmentId;
-
-      await db
-        .update(dispatchRecipients)
-        .set({ status: "returned", staffRemarks: remarks || null })
-        .where(
-          and(
-            eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, departmentId)
-          )
-        );
-
-      const [existingSenderRecipient] = await db
-        .select()
-        .from(dispatchRecipients)
-        .where(
-          and(
-            eq(dispatchRecipients.dispatchId, dispatchId),
-            eq(dispatchRecipients.departmentId, senderDeptId)
-          )
-        );
-
+      await db.update(dispatchRecipients).set({ status: "returned", staffRemarks: remarks || null }).where(eq(dispatchRecipients.id, row.id));
+      const existingSenderRecipient = await myRecipientRow(dispatchId, senderDeptId);
       if (existingSenderRecipient) {
-        await db
-          .update(dispatchRecipients)
-          .set({ status: "dispatched" })
+        await db.update(dispatchRecipients)
+          .set({ status: "dispatched", receivedAt: null, inwardNumber: null, readAt: null, disposedAt: null, disposalType: null, disposalRemarks: null })
           .where(eq(dispatchRecipients.id, existingSenderRecipient.id));
       } else {
-        await db.insert(dispatchRecipients).values({
-          dispatchId,
-          recipientType: "department",
-          departmentId: senderDeptId,
-          status: "dispatched"
-        });
+        await db.insert(dispatchRecipients).values({ dispatchId, recipientType: "department", departmentId: senderDeptId, status: "dispatched" });
       }
-
-      await db.insert(dispatchTracking).values({
-        dispatchId,
-        action: "returned",
-        actionByDepartmentId: departmentId,
-        actionByName: departmentName || "Department",
-        details: `Returned in Original (RIO) to Sender. Remarks: ${remarks || "None"}`,
-        recipientDepartmentId: senderDeptId,
-      });
-
+      await track({ dispatchId, action: "returned", actor, recipientDepartmentId: senderDeptId,
+        details: `Returned in Original (RIO) to Sender. Remarks: ${remarks || "None"}` });
       res.json({ success: true });
     } catch (error: any) {
       console.error("[Dispatch] RIO error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ─── Dispose (close the dak in this department) ─────────────────────────
+  // Dealing assistants / diary clerks may dispose only dak marked to them.
+  // "Filed" needs a file number or an e-file of the department.
+  app.post("/api/dispatch/:id/dispose", async (req: Request, res: Response) => {
+    try {
+      const dispatchId = parseInt(req.params.id);
+      const departmentId = Number(req.body.departmentId);
+      const actor = await who(req, departmentId, req.body.departmentName);
+      const disposalType = String(req.body.disposalType || "").trim();
+      const remarks = String(req.body.remarks || "").trim();
+      let fileNumber = String(req.body.fileNumber || "").trim();
+      const efileId = req.body.efileId ? Number(req.body.efileId) : null;
+
+      if (!DISPOSAL_TYPES.includes(disposalType)) return res.status(400).json({ message: "Please choose how the document was disposed" });
+      if (disposalType === "Filed" && !fileNumber && !efileId) {
+        return res.status(400).json({ message: "File number (or an e-file) is required when the document is filed" });
+      }
+      const row = await openReceivedRow(dispatchId, departmentId, res);
+      if (!row) return;
+      if (actor.staffId && !actor.isSupervisor && !(row.markedStaffIds || []).includes(actor.staffId)) {
+        return res.status(403).json({ message: "Only dak marked to you can be disposed by you. Ask the Section Officer / HOD." });
+      }
+      if (efileId) {
+        const linked = await linkDakToFile(efileId, dispatchId, actor, `Dak ${row.inwardNumber || ""} placed on file`);
+        if (!linked) return res.status(400).json({ message: "The e-file is not an open file of your department" });
+        fileNumber = linked;
+      }
+
+      await db.update(dispatchRecipients).set({
+        status: "disposed", disposedAt: new Date(), disposalType,
+        disposalRemarks: remarks || null, fileNumber: fileNumber || null, disposedBy: actor.label,
+      }).where(eq(dispatchRecipients.id, row.id));
+      await track({ dispatchId, action: "disposed", actor, recipientDepartmentId: departmentId,
+        details: `Disposed: ${disposalType}${fileNumber ? `. File No: ${fileNumber}` : ""}${remarks ? `. Remarks: ${remarks}` : ""}` });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Dispatch] Dispose error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ─── Reopen a disposed dak ──────────────────────────────────────────────
+  app.post("/api/dispatch/:id/reopen", async (req: Request, res: Response) => {
+    try {
+      const dispatchId = parseInt(req.params.id);
+      const departmentId = Number(req.body.departmentId);
+      const actor = await who(req, departmentId, req.body.departmentName);
+      const remarks = String(req.body.remarks || "").trim();
+      if (!remarks) return res.status(400).json({ message: "Please give the reason for reopening" });
+
+      const row = await myRecipientRow(dispatchId, departmentId);
+      if (!row || row.status !== "disposed") return res.status(400).json({ message: "Only a disposed document can be reopened" });
+      await db.update(dispatchRecipients).set({
+        status: row.markedToStaff ? "marked" : "received",
+        disposedAt: null, disposalType: null, disposalRemarks: null, disposedBy: null,
+      }).where(eq(dispatchRecipients.id, row.id));
+      await track({ dispatchId, action: "reopened", actor, recipientDepartmentId: departmentId, details: `Reopened. Reason: ${remarks}` });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ─── Correct the register entry (typing mistakes) ───────────────────────
+  // Physical receipts: the receiving department. Own dispatches: the sender.
+  app.patch("/api/dispatch/:id/details", async (req: Request, res: Response) => {
+    try {
+      const dispatchId = parseInt(req.params.id);
+      const departmentId = Number(req.body.departmentId);
+      const actor = await who(req, departmentId, req.body.departmentName);
+
+      const [dispatch] = await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.id, dispatchId));
+      if (!dispatch) return res.status(404).json({ message: "Document not found" });
+      const extra = (dispatch.aiExtractedData as any) || {};
+      const isPhysical = extra._physicalReceive === true;
+      const allowed = isPhysical
+        ? String(extra._receivedByDepartmentId) === String(departmentId)
+        : dispatch.senderDepartmentId === departmentId;
+      if (!allowed) return res.status(403).json({ message: "Only the department that made this entry can correct it" });
+      if (dispatch.cancelledAt) return res.status(400).json({ message: "A cancelled / withdrawn entry cannot be changed" });
+
+      const b = req.body;
+      const changes: string[] = [];
+      const updates: Record<string, any> = {};
+      const setIf = (key: string, label: string, value: any, current: any) => {
+        if (value === undefined) return;
+        const v = value === "" ? null : value;
+        if ((v ?? null) !== (current ?? null)) {
+          updates[key] = v;
+          changes.push(`${label}: "${current ?? "-"}" → "${v ?? "-"}"`);
+        }
+      };
+      if (b.documentType !== undefined && !String(b.documentType).trim()) return res.status(400).json({ message: "Document type is required" });
+      if (b.subject !== undefined && !String(b.subject).trim()) return res.status(400).json({ message: "Subject is required" });
+      setIf("documentType", "Type", b.documentType, dispatch.documentType);
+      setIf("dispatchNumber", "Letter No.", b.dispatchNumber, dispatch.dispatchNumber);
+      setIf("dispatchDate", "Letter Date", b.dispatchDate === undefined ? undefined : isoDateOrNull(b.dispatchDate), dispatch.dispatchDate);
+      setIf("referenceNumber", "Reference", b.referenceNumber, dispatch.referenceNumber);
+      if (b.priority !== undefined && ["normal", "urgent", "immediate"].includes(b.priority)) setIf("priority", "Priority", b.priority, dispatch.priority);
+      if (!isPhysical) {
+        if (b.dispatchMode !== undefined && b.dispatchMode in DISPATCH_MODES) setIf("dispatchMode", "Mode", b.dispatchMode, dispatch.dispatchMode);
+        setIf("postalTrackingNo", "Postal tracking no.", b.postalTrackingNo, dispatch.postalTrackingNo);
+        if (b.postageAmount !== undefined) {
+          const n = String(b.postageAmount).trim() === "" ? null : Number(b.postageAmount);
+          if (n !== null && (!Number.isFinite(n) || n < 0)) return res.status(400).json({ message: "Postage must be a positive amount" });
+          setIf("postageAmount", "Postage", n === null ? null : n.toFixed(2), dispatch.postageAmount);
+        }
+      }
+      if (isPhysical && b.senderName !== undefined && String(b.senderName).trim()) setIf("senderName", "From", String(b.senderName).trim(), dispatch.senderName);
+      let newExtra: any = null;
+      if (b.subject !== undefined) {
+        const actual = extra._actualSubject || dispatch.subject;
+        if (String(b.subject).trim() !== actual) {
+          changes.push(dispatch.isConfidential ? "Subject changed" : `Subject: "${actual}" → "${String(b.subject).trim()}"`);
+          newExtra = { ...extra, _actualSubject: String(b.subject).trim() };
+          if (!dispatch.isConfidential) updates.subject = String(b.subject).trim();
+        }
+      }
+      if (isPhysical && updates.senderName) newExtra = { ...(newExtra || extra), _senderInfo: updates.senderName };
+      if (newExtra) updates.aiExtractedData = newExtra;
+      if (changes.length === 0) return res.json({ success: true, changed: 0 });
+
+      updates.updatedAt = new Date();
+      await db.update(dispatchDocuments).set(updates).where(eq(dispatchDocuments.id, dispatchId));
+      await track({ dispatchId, action: "edited", actor, details: `Entry corrected. ${changes.join("; ")}` });
+      res.json({ success: true, changed: changes.length });
+    } catch (error: any) {
+      console.error("[Dispatch] Edit error:", error);
       res.status(500).json({ message: error.message });
     }
   });
@@ -1777,10 +1475,20 @@ EXAMPLES
           )
         );
 
+      // Received but not yet closed here (disposed / forwarded / returned close it)
+      const pending = (await db.execute(sql`
+        SELECT COUNT(*)::int AS pending,
+               COUNT(*) FILTER (WHERE action_due_date IS NOT NULL AND action_due_date < CURRENT_DATE)::int AS overdue
+        FROM dispatch_recipients
+        WHERE department_id = ${departmentId} AND recipient_type = 'department'
+          AND received_at IS NOT NULL AND status NOT IN ${CLOSED_SQL}`)).rows[0] as any;
+
       res.json({
         sent: Number(sentCount?.count || 0),
         received: Number(receivedCount?.count || 0),
         unread: Number(unreadCount?.count || 0),
+        pendingAction: Number(pending?.pending || 0),
+        overdue: Number(pending?.overdue || 0),
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1864,7 +1572,10 @@ EXAMPLES
                 sql`${dispatchDocuments.referenceNumber} ILIKE ${searchTerm}`,
                 sql`CAST(${dispatchDocuments.dispatchDate} AS TEXT) ILIKE ${searchTerm}`,
                 sql`TO_CHAR(${dispatchDocuments.createdAt}, 'DD Mon YYYY') ILIKE ${searchTerm}`,
-                sql`${dispatchDocuments.aiExtractedData}->>'_actualSubject' ILIKE ${searchTerm}`
+                sql`${dispatchDocuments.aiExtractedData}->>'_actualSubject' ILIKE ${searchTerm}`,
+                // text read from the scanned file and its attachments (OCR)
+                sql`${dispatchDocuments.ocrText} ILIKE ${searchTerm}`,
+                sql`EXISTS (SELECT 1 FROM dispatch_attachments a WHERE a.dispatch_id = ${dispatchDocuments.id} AND a.ocr_text ILIKE ${searchTerm})`
               )
             )
           )
@@ -1904,6 +1615,7 @@ EXAMPLES
 
             return {
               ...d,
+              ocrText: undefined,
               subject: actualSubject,
               recipients: recipientDetails,
               recipientCount: recipients.length,
@@ -1947,7 +1659,10 @@ EXAMPLES
                 sql`${dispatchDocuments.referenceNumber} ILIKE ${searchTerm}`,
                 sql`CAST(${dispatchDocuments.dispatchDate} AS TEXT) ILIKE ${searchTerm}`,
                 sql`TO_CHAR(${dispatchDocuments.createdAt}, 'DD Mon YYYY') ILIKE ${searchTerm}`,
-                sql`${dispatchDocuments.aiExtractedData}->>'_actualSubject' ILIKE ${searchTerm}`
+                sql`${dispatchDocuments.aiExtractedData}->>'_actualSubject' ILIKE ${searchTerm}`,
+                // text read from the scanned file and its attachments (OCR)
+                sql`${dispatchDocuments.ocrText} ILIKE ${searchTerm}`,
+                sql`EXISTS (SELECT 1 FROM dispatch_attachments a WHERE a.dispatch_id = ${dispatchDocuments.id} AND a.ocr_text ILIKE ${searchTerm})`
               )
             )
           )
@@ -1956,7 +1671,7 @@ EXAMPLES
 
         // Enrich with recipient status
         const enriched = results.map((dispatch) => {
-          const r = recipientRecords.find(rec => rec.dispatchId === dispatch.id);
+          const r = recipientRecords.filter(rec => rec.dispatchId === dispatch.id).sort((a, b) => b.id - a.id)[0];
           const isPhysicalReceive = (dispatch.aiExtractedData as any)?._physicalReceive === true;
 
           let subject = dispatch.subject;
@@ -1966,14 +1681,22 @@ EXAMPLES
 
           return {
             ...dispatch,
+            ocrText: undefined,
             subject,
+            inwardNumber: r?.inwardNumber || dispatch.inwardNumber,
             recipientStatus: r?.status || "dispatched",
             recipientId: r?.id,
             receivedAt: r?.receivedAt,
             readAt: r?.readAt,
             markedToStaff: r?.markedToStaff,
             markedBy: r?.markedBy,
+            markedAt: r?.markedAt,
             staffRemarks: r?.staffRemarks,
+            actionDueDate: r?.actionDueDate,
+            disposedAt: r?.disposedAt,
+            disposalType: r?.disposalType,
+            disposalRemarks: r?.disposalRemarks,
+            fileNumber: r?.fileNumber,
             emailSent: r?.emailSent,
             isPhysicalReceive,
           };

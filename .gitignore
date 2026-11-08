@@ -6,3 +6,12 @@ vite.config.ts.*
 *.tar.gz
 uploads/
 .env    
+# local env files (keep only the example)
+.env.*
+!.env.example
+# scratch / build output / local data exports
+build/
+debug_*.txt
+/export.xls
+/Master_*.xlsx
+*.lnk

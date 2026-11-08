@@ -5,6 +5,16 @@ import { eq, and, isNotNull, sql } from 'drizzle-orm';
 import { sendAttendanceReminder } from './emailService';
 
 export function setupCronJobs() {
+    // Dak: overdue / due-today reminders to departments and staff (09:30 every day)
+    cron.schedule('30 9 * * *', async () => {
+        try {
+            const { runDakReminders } = await import('./dakExtras');
+            await runDakReminders();
+        } catch (err) {
+            console.error('[Dak] reminder job failed:', err);
+        }
+    });
+
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
     // Run every day at 09:00 AM IST

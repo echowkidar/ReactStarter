@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { settingsUnlockHeader } from "./settings-unlock";
+import { checkSessionExpired } from "./session-expired";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -7,6 +8,8 @@ async function throwIfResNotOk(res: Response) {
     // Try to parse JSON and extract message for cleaner error display
     try {
       const json = JSON.parse(text);
+      // Login gone on the server (expired / logged out elsewhere) → back to the login page
+      checkSessionExpired(res.status, json);
       if (json.message) {
         throw new Error(json.message);
       }

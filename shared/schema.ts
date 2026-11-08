@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, date, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, date, timestamp, boolean, jsonb, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -641,6 +641,23 @@ export const dispatchDocuments = pgTable("dispatch_documents", {
   priority: text("priority").notNull().default("normal"),
   aiExtractedData: jsonb("ai_extracted_data"),
   aiConfidence: text("ai_confidence"),
+  // Physical outward: by hand / peon book / registered post / speed post / courier / email
+  dispatchMode: text("dispatch_mode"),
+  postalTrackingNo: text("postal_tracking_no"),
+  postageAmount: numeric("postage_amount", { precision: 10, scale: 2 }),
+  // Reply linking: this outward letter answers that inward dak
+  inReplyToDispatchId: integer("in_reply_to_dispatch_id"),
+  inReplyToRecipientId: integer("in_reply_to_recipient_id"),
+  efileId: integer("efile_id"),
+  // Physical receipt from a department that is on this system
+  senderDepartmentRef: integer("sender_department_ref"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelReason: text("cancel_reason"),
+  cancelledBy: text("cancelled_by"),
+  // Public QR verification of outward documents
+  verifyToken: text("verify_token"),
+  fileSha256: text("file_sha256"),
+  ocrText: text("ocr_text"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -672,6 +689,19 @@ export const dispatchRecipients = pgTable("dispatch_recipients", {
   markedAt: timestamp("marked_at"),
   markedBy: text("marked_by"),
   staffRemarks: text("staff_remarks"),
+  // Action expected by (set when marking to staff); overdue when past and not disposed
+  actionDueDate: date("action_due_date"),
+  // Disposal (closing the dak in this department): filed / replied / action completed …
+  disposedAt: timestamp("disposed_at"),
+  disposalType: text("disposal_type"),
+  disposalRemarks: text("disposal_remarks"),
+  fileNumber: text("file_number"),
+  disposedBy: text("disposed_by"),
+  // Staff login accounts (department_staff.id) the dak is marked to
+  markedStaffIds: integer("marked_staff_ids").array(),
+  acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+  acknowledgedBy: text("acknowledged_by"),
+  reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -692,6 +722,7 @@ export const dispatchTracking = pgTable("dispatch_tracking", {
   actionByName: text("action_by_name").notNull(),
   details: text("details"),
   recipientDepartmentId: integer("recipient_department_id"),
+  actionByStaffId: integer("action_by_staff_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

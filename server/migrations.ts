@@ -507,6 +507,127 @@ export async function runMigrations() {
       console.error("[Migrations] admin_preferences table creation failed (only register ordering is affected):", prefErr);
     }
 
+    // ─── Dak (dispatch) lifecycle: action due date + disposal ────────────────
+    // ADDITIVE: nullable columns only. Failure affects just the new dak features.
+    try {
+      await db.execute(sql`
+        ALTER TABLE dispatch_recipients
+          ADD COLUMN IF NOT EXISTS action_due_date DATE,
+          ADD COLUMN IF NOT EXISTS disposed_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS disposal_type TEXT,
+          ADD COLUMN IF NOT EXISTS disposal_remarks TEXT,
+          ADD COLUMN IF NOT EXISTS file_number TEXT,
+          ADD COLUMN IF NOT EXISTS disposed_by TEXT;
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dispatch_recipients_dept ON dispatch_recipients (department_id, dispatch_id)`);
+    } catch (dakErr) {
+      console.error("[Migrations] dispatch_recipients lifecycle columns failed (only dak disposal is affected):", dakErr);
+    }
+
+    // ─── e-Office: staff logins, e-files, dak attachments, reply links ────────
+    // New tables use TIMESTAMPTZ (no time-zone shifts). Existing columns are only
+    // added to (nullable), never changed. Failure affects just these features.
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS department_staff (
+          id SERIAL PRIMARY KEY,
+          department_id INTEGER NOT NULL,
+          employee_id INTEGER,
+          name TEXT NOT NULL,
+          designation TEXT,
+          email TEXT NOT NULL,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'dealing_assistant',
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          last_login TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_department_staff_email ON department_staff (LOWER(email))`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_department_staff_dept ON department_staff (department_id)`);
+
+      await db.execute(sql`
+        ALTER TABLE dispatch_recipients
+          ADD COLUMN IF NOT EXISTS marked_staff_ids INTEGER[],
+          ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS acknowledged_by TEXT,
+          ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+      `);
+      await db.execute(sql`ALTER TABLE dispatch_tracking ADD COLUMN IF NOT EXISTS action_by_staff_id INTEGER`);
+      await db.execute(sql`
+        ALTER TABLE dispatch_documents
+          ADD COLUMN IF NOT EXISTS dispatch_mode TEXT,
+          ADD COLUMN IF NOT EXISTS postal_tracking_no TEXT,
+          ADD COLUMN IF NOT EXISTS postage_amount NUMERIC(10,2),
+          ADD COLUMN IF NOT EXISTS in_reply_to_dispatch_id INTEGER,
+          ADD COLUMN IF NOT EXISTS in_reply_to_recipient_id INTEGER,
+          ADD COLUMN IF NOT EXISTS efile_id INTEGER,
+          ADD COLUMN IF NOT EXISTS sender_department_ref INTEGER,
+          ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS cancel_reason TEXT,
+          ADD COLUMN IF NOT EXISTS cancelled_by TEXT,
+          ADD COLUMN IF NOT EXISTS verify_token TEXT,
+          ADD COLUMN IF NOT EXISTS file_sha256 TEXT,
+          ADD COLUMN IF NOT EXISTS ocr_text TEXT;
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_dispatch_verify_token ON dispatch_documents (verify_token) WHERE verify_token IS NOT NULL`);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS dispatch_attachments (
+          id SERIAL PRIMARY KEY,
+          dispatch_id INTEGER NOT NULL,
+          file_url TEXT NOT NULL,
+          file_type TEXT NOT NULL DEFAULT 'image',
+          original_name TEXT,
+          ocr_text TEXT,
+          added_by TEXT,
+          added_by_department_id INTEGER,
+          added_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dispatch_attachments_dispatch ON dispatch_attachments (dispatch_id)`);
+
+      // e-Files: file register (A/B/C/D record category), noting/movement/correspondence entries
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS efiles (
+          id SERIAL PRIMARY KEY,
+          department_id INTEGER NOT NULL,
+          file_number TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'C',
+          status TEXT NOT NULL DEFAULT 'open',
+          current_holder_staff_id INTEGER,
+          current_holder_name TEXT,
+          created_by TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          closed_at TIMESTAMPTZ,
+          retention_until DATE,
+          record_remarks TEXT,
+          UNIQUE (department_id, file_number)
+        );
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS efile_entries (
+          id SERIAL PRIMARY KEY,
+          efile_id INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          para_no INTEGER,
+          body TEXT,
+          dispatch_id INTEGER,
+          to_staff_id INTEGER,
+          to_name TEXT,
+          by_staff_id INTEGER,
+          by_name TEXT NOT NULL,
+          draft_status TEXT,
+          draft_meta JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_efile_entries_file ON efile_entries (efile_id, id)`);
+    } catch (officeErr) {
+      console.error("[Migrations] e-Office tables failed (staff logins / e-files / attachments affected):", officeErr);
+    }
+
     console.log("Database migrations completed successfully");
 
   } catch (error) {

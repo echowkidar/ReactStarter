@@ -1,4 +1,5 @@
 import { apiRequest } from "./queryClient";
+export { handleSessionExpired } from "./session-expired";
 import { Department } from "@shared/schema";
 
 interface LoginCredentials {
@@ -32,6 +33,26 @@ export async function register(departmentData: Record<string, string>) {
   }
 }
 
+/** End the server login (cookie session) for admin or department. Fire-and-forget. */
+export function serverLogout(who: "admin" | "department") {
+  const body = JSON.stringify({ who });
+  try {
+    if (navigator.sendBeacon(
+      "/api/auth/logout",
+      new Blob([body], { type: "application/json" }),
+    )) return;
+  } catch {
+    // fall through to fetch
+  }
+  fetch("/api/auth/logout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    credentials: "include",
+    keepalive: true,
+  }).catch(() => { });
+}
+
 export function logout(redirectToLogin = true) {
   // Send logout signal to remove from active users
   const sessionId = sessionStorage.getItem('heartbeat_session_id');
@@ -54,13 +75,48 @@ export function logout(redirectToLogin = true) {
     sessionStorage.removeItem('heartbeat_session_id');
   }
 
+  // End the department login on the server too
+  serverLogout("department");
+
   // Clear all auth-related data
   localStorage.removeItem("department");
+  localStorage.removeItem("staff");
 
   // Force page reload to reset application state
   if (redirectToLogin) {
     window.location.href = "/";
   }
+}
+
+export interface StaffInfo {
+  id: number;
+  name: string;
+  role: "hod" | "section_officer" | "dealing_assistant" | "diary_clerk";
+  email?: string;
+  designation?: string | null;
+}
+
+export const STAFF_ROLE_LABELS: Record<string, string> = {
+  hod: "HOD",
+  section_officer: "Section Officer",
+  dealing_assistant: "Dealing Assistant",
+  diary_clerk: "Diary Clerk",
+};
+
+/** Staff person logged in inside the department (null = the department login itself) */
+export function getCurrentStaff(): StaffInfo | null {
+  try {
+    const data = localStorage.getItem("staff");
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Department login, HOD and Section Officer may manage staff and approve */
+export function isDeptSupervisor(): boolean {
+  const staff = getCurrentStaff();
+  return !staff || staff.role === "hod" || staff.role === "section_officer";
 }
 
 export function getCurrentDepartment(): Department | null {

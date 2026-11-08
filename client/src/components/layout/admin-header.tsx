@@ -1,3 +1,4 @@
+import { serverLogout } from "@/lib/auth";
 // Admin top bar — shared by every admin page
 // ─────────────────────────────────────────────────────────────────────────────
 // Left: who is logged in. Right: the admin menu (same on every page, the open
@@ -60,6 +61,7 @@ export function logoutAdmin(navigate: (to: string) => void) {
     }
     sessionStorage.removeItem("heartbeat_session_id");
   }
+  serverLogout("admin");
   localStorage.removeItem("admin");
   localStorage.removeItem("adminType");
   localStorage.removeItem("adminEmail");

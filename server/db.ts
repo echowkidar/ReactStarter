@@ -2,7 +2,6 @@ import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 import 'dotenv/config';
-import { Socket } from 'net';
 
 
 // Check for database URL with helpful error message
@@ -56,9 +55,3 @@ export async function testDbConnection() {
     if (client) client.release();
   }
 }
-
-const socket = new Socket();
-socket.setTimeout(10000);
-socket.connect(5432, '167.71.230.230', () => console.log('Connected!'));
-socket.on('timeout', () => console.log('Connection timed out'));
-socket.on('error', (err) => console.log('Socket error:', err));

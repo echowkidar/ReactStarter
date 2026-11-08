@@ -15,13 +15,28 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Check authentication status
+    // Check authentication status: stored login AND a live server session for it
     const department = getCurrentDepartment();
-    if (department) {
-      setIsAuthenticated(true);
-    } else {
+    if (!department) {
       setIsAuthenticated(false);
+      return;
     }
+    fetch("/api/auth/session", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((data) => {
+        if (Number(data?.departmentId) === Number(department.id)) {
+          if (data.staff) localStorage.setItem("staff", JSON.stringify(data.staff));
+          else localStorage.removeItem("staff");
+          setIsAuthenticated(true);
+        } else {
+          // Server login missing or for another department → log in again
+          localStorage.removeItem("department");
+          localStorage.removeItem("staff");
+          setIsAuthenticated(false);
+        }
+      })
+      // Network error: let the page open; API calls will still be checked by the server
+      .catch(() => setIsAuthenticated(true));
   }, []);
 
   // Show nothing during the authentication check

@@ -16,6 +16,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import AdminHeader from "@/components/layout/admin-header";
+import AdminDakTracking from "@/components/dak/AdminDakTracking";
 import {
   ArrowLeft, Send, Inbox, Users, Plus, Pencil, Trash2, Search,
   Building2, UserPlus, Eye, Loader2, CheckCircle2, Clock, X,
@@ -119,19 +120,22 @@ export default function AdminDispatch() {
   });
 
   // Member search
+  // (depends on the member ids as a string: `groupMembers` is a new [] on every
+  // render while its query is off, which made this effect loop forever)
+  const memberIdsKey = groupMembers.map(m => m.departmentId).join(",");
   useEffect(() => {
-    if (memberSearch.length < 2) { setMemberSearchResults([]); return; }
+    if (memberSearch.length < 2) { setMemberSearchResults(prev => (prev.length ? [] : prev)); return; }
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/dispatch/search-departments?q=${encodeURIComponent(memberSearch)}`);
         const data = await res.json();
         // Filter out already-added members
-        const existingIds = groupMembers.map(m => m.departmentId);
+        const existingIds = memberIdsKey ? memberIdsKey.split(",").map(Number) : [];
         setMemberSearchResults(data.filter((d: any) => !existingIds.includes(d.id)));
       } catch { setMemberSearchResults([]); }
     }, 300);
     return () => clearTimeout(timer);
-  }, [memberSearch, groupMembers]);
+  }, [memberSearch, memberIdsKey]);
 
   // ─── Group Mutations ────────────────────────────────────────────────
   const createGroup = useMutation({
@@ -320,6 +324,9 @@ export default function AdminDispatch() {
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" /> Overview
             </TabsTrigger>
+            <TabsTrigger value="tracking" className="flex items-center gap-2">
+              <Search className="h-4 w-4" /> Tracking
+            </TabsTrigger>
             <TabsTrigger value="groups" className="flex items-center gap-2">
               <Users className="h-4 w-4" /> Dispatch Groups
             </TabsTrigger>
@@ -327,6 +334,10 @@ export default function AdminDispatch() {
               <Globe className="h-4 w-4" /> External Contacts
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="tracking">
+            <AdminDakTracking />
+          </TabsContent>
 
           {/* ─── OVERVIEW TAB ──────────────────────────────────────── */}
           <TabsContent value="overview">

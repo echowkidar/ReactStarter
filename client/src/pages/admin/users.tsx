@@ -1,3 +1,4 @@
+import { serverLogout } from "@/lib/auth";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -434,6 +435,7 @@ export default function AdminUsers() {
 
   const handleLogout = () => {
     // Clear admin data from localStorage
+    serverLogout("admin");
     localStorage.removeItem("admin");
     localStorage.removeItem("adminType");
     localStorage.removeItem("adminEmail");

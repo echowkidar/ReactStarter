@@ -26,6 +26,7 @@ import {
 } from "../shared/schema";
 import { splitPeriodAtMonthStart, isHandEnteredDaysDesignation } from "../shared/entryPeriods";
 import fs from "fs";
+import crypto from "crypto";
 import { sql, eq, and, isNotNull, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
@@ -38,6 +39,10 @@ import { registerAdminPreferenceRoutes } from "./adminPreferences";
 import { registerSettingsPinRoutes, requireSettingsUnlock } from "./settingsPin";
 import { registerOracleSyncRoutes } from "./oracleSync";
 import { registerPaybillRoutes } from "./paybillSync";
+import { rateLimit, safeUploadName } from "./security";
+import { createResetToken, isResetTokenValid, clearResetToken } from "./passwordReset";
+import { verifyAdminSession, requireBodyDepartment, passwordFingerprint, regenerateKeeping, saveSession, sessionAdmin, sessionDepartmentId, sessionStaff, SESSION_COOKIE } from "./auth";
+import { findStaffForLogin, registerStaffRoutes } from "./dakStaff";
 import { buildHistoryView } from "./employeeHistoryView";
 import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
 import { normaliseReportKind, findMainReport } from "../shared/reportKind";
@@ -162,19 +167,6 @@ export const parseDDMMYY = (dateStr: string): Date | null => {
 import { v4 as uuid } from "uuid";
 import { setupTestEmailAccount, sendPasswordResetEmail, sendAttendanceNotification, sendNoticeEmail, sendTicketResolutionEmail } from "./emailService";
 
-// Add custom type for Request with session
-interface RequestWithSession extends Request {
-  session: {
-    department?: Department;
-    [key: string]: any;
-  };
-}
-
-// Add type declaration for global adminResetTokens
-declare global {
-  var adminResetTokens: Map<string, { token: string; expiry: Date }>;
-}
-
 // Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -189,7 +181,8 @@ const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 // Verify Cloudflare Turnstile token
 async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
   // Allow development bypass tokens from localhost
-  if (token === 'development-bypass' || token === 'error-bypass') {
+  // Test tokens only work on a developer machine, never in production
+  if ((token === 'development-bypass' || token === 'error-bypass') && process.env.NODE_ENV !== 'production') {
     return true;
   }
 
@@ -215,6 +208,13 @@ async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
     console.error('Turnstile verification error:', error);
     return false;
   }
+}
+
+// Lock key = email + client IP: wrong passwords from one place cannot lock the
+// account for the real user somewhere else.
+function lockKey(email: unknown, req: Request): string {
+  const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
+  return `${String(email || '').trim().toLowerCase()}|${ip}`;
 }
 
 // Check if account is locked
@@ -361,58 +361,15 @@ export async function registerRoutes(app: Express) {
 
   // NOTE: Admin seeding removed for security - passwords should not be in source code
   // Admins must be manually created in the database 'admins' table
-  // Function to verify admin session from header
-  const verifyAdminSession = async (req: Request, res: any, next: any) => {
-    let sessionToken = req.headers['x-session-token'];
+  // Admin check (verifyAdminSession) now uses the login session — see auth.ts
 
-    if (!sessionToken && req.query.token) {
-      sessionToken = req.query.token as string;
-    }
-
-    if (!sessionToken || typeof sessionToken !== 'string') {
-      return res.status(401).json({ message: "Unauthorized: No session token" });
-    }
-
-    try {
-      const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
-      const parts = decoded.split(':');
-
-      if (parts.length < 2) {
-        return res.status(401).json({ message: "Unauthorized: Invalid token format" });
-      }
-
-      const email = parts[0];
-      const password = parts.slice(1).join(':');
-
-      const admin = await storage.getAdminByEmail(email);
-
-      if (!admin || admin.password !== password) {
-        return res.status(401).json({ message: "Unauthorized: Invalid credentials" });
-      }
-
-      // Attach admin info to request
-      (req as any).adminUser = admin;
-
-      // CRITICAL: Block write operations for 'VEW' user code
-      const writeMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
-
-      // Exception: Allow nasir to use the mark-exported API and bulk-export-date PATCH even if VEW
-      const isNasirExporting = admin.email === 'nasir@amu.ac.in' && (
-        (req.path === '/api/admin/attendance/mark-exported' && req.method === 'POST') ||
-        (req.path === '/api/admin/attendance/bulk-export-date' && req.method === 'PATCH') ||
-        (/^\/api\/admin\/attendance\/entry\/\d+\/exported$/.test(req.path) && req.method === 'POST')
-      );
-
-      if (admin.userCode === 'VEW' && writeMethods.includes(req.method) && !isNasirExporting) {
-        return res.status(403).json({ message: "Forbidden: View-only access" });
-      }
-
-      next();
-    } catch (error) {
-      console.error("Auth error:", error);
-      return res.status(401).json({ message: "Unauthorized: Token validation failed" });
-    }
-  };
+  // Rate limits per client IP (on top of the per-account lock)
+  app.use(["/api/auth/login", "/api/auth/admin/login"],
+    rateLimit({ windowMs: 15 * 60_000, max: 30, message: "Too many login attempts from this network. Please wait 15 minutes." }));
+  app.use(["/api/auth/forgot-password", "/api/auth/admin/forgot-password"],
+    rateLimit({ windowMs: 60 * 60_000, max: 10, message: "Too many reset requests. Please try again later." }));
+  app.use(["/api/auth/reset-password", "/api/auth/admin/reset-password", "/api/auth/verify-reset-token"],
+    rateLimit({ windowMs: 15 * 60_000, max: 30 }));
 
   // Initialize notices tables
   try {
@@ -498,7 +455,7 @@ export async function registerRoutes(app: Express) {
 
     try {
       // Check if account is locked
-      const lockStatus = await isAccountLocked(email);
+      const lockStatus = await isAccountLocked(lockKey(email, req));
       if (lockStatus.locked) {
         const remainingMinutes = Math.ceil((lockStatus.remainingMs || 0) / 60000);
         return res.status(429).json({
@@ -523,7 +480,7 @@ export async function registerRoutes(app: Express) {
 
       // Verify password
       if (!admin || admin.password !== password) {
-        const attemptResult = await recordFailedAttempt(email);
+        const attemptResult = await recordFailedAttempt(lockKey(email, req));
         if (attemptResult.locked) {
           return res.status(429).json({
             message: "Too many failed attempts. Account locked for 30 minutes.",
@@ -538,13 +495,18 @@ export async function registerRoutes(app: Express) {
       }
 
       // Clear failed attempts on successful login
-      await clearLoginAttempts(email);
+      await clearLoginAttempts(lockKey(email, req));
 
       // Map DB role to frontend adminType
       const adminType = (admin.role === 'salary_admin' || admin.role === 'salary') ? 'salary' : 'super';
 
-      // Create session token
-      const sessionToken = Buffer.from(`${admin.email}:${admin.password}`).toString('base64');
+      // Start the login session (httpOnly cookie). The token below is only a
+      // "logged in" marker for the browser; it carries no password.
+      await regenerateKeeping(req);
+      req.session.adminId = admin.id;
+      req.session.adminPwFp = passwordFingerprint(admin.password);
+      await saveSession(req);
+      const sessionToken = crypto.randomBytes(24).toString('base64url');
 
       return res.json({
         role: "admin",
@@ -561,24 +523,45 @@ export async function registerRoutes(app: Express) {
   });
 
   // Verify admin session (called on page load)
-  app.post("/api/auth/admin/verify-session", async (req, res) => {
-    const { email, sessionToken } = req.body;
-
+  // Who is logged in on this browser (used by the pages on load)
+  app.get("/api/auth/session", async (req, res) => {
     try {
-      if (!email || !sessionToken) {
-        return res.status(401).json({ valid: false, message: "Missing credentials" });
-      }
+      const admin = await sessionAdmin(req);
+      const departmentId = await sessionDepartmentId(req);
+      res.json({
+        admin: admin ? { id: admin.id, email: admin.email, name: admin.name, role: admin.role, userCode: admin.userCode } : null,
+        departmentId,
+        staff: departmentId ? sessionStaff(req) : null,
+      });
+    } catch (error) {
+      console.error("Session check error:", error);
+      res.status(500).json({ message: "Could not check the login" });
+    }
+  });
 
-      const admin = await storage.getAdminByEmail(email);
+  // Log out: { who: "admin" | "department" } ends that login; without it, both
+  app.post("/api/auth/logout", async (req, res) => {
+    const who = req.body?.who;
+    if (who === "admin" || !who) { delete req.session.adminId; delete req.session.adminPwFp; }
+    if (who === "department" || !who) {
+      delete req.session.departmentId; delete req.session.deptPwFp;
+      delete req.session.staffId; delete req.session.staffPwFp;
+    }
+    if (!req.session.adminId && !req.session.departmentId) {
+      return req.session.destroy(() => {
+        res.clearCookie(SESSION_COOKIE);
+        res.json({ success: true });
+      });
+    }
+    await saveSession(req).catch(() => {});
+    res.json({ success: true });
+  });
+
+  app.post("/api/auth/admin/verify-session", async (req, res) => {
+    try {
+      const admin = await sessionAdmin(req);
       if (!admin) {
-        return res.status(401).json({ valid: false, message: "Admin not found" });
-      }
-
-      // Verify session token matches current password
-      const expectedToken = Buffer.from(`${admin.email}:${admin.password}`).toString('base64');
-
-      if (sessionToken !== expectedToken) {
-        return res.status(401).json({ valid: false, message: "Session expired - password changed" });
+        return res.status(401).json({ valid: false, message: "Session expired - please log in again" });
       }
 
       // Map DB role to frontend adminType
@@ -842,10 +825,10 @@ export async function registerRoutes(app: Express) {
     const { email } = req.body;
 
     try {
-      // Check if email exists in departments
+      // Check if email exists in departments (same answer either way: no account guessing)
       const department = await storage.getDepartmentByEmail(email);
       if (!department) {
-        return res.status(404).json({ message: "Email not found" });
+        return res.json({ message: "If this email is registered, a password reset link has been sent to it" });
       }
 
       // Generate reset token (expires in 1 hour)
@@ -901,7 +884,7 @@ export async function registerRoutes(app: Express) {
       // Find department by email
       const department = await storage.getDepartmentByEmail(email);
       if (!department) {
-        return res.status(404).json({ message: "Email not found" });
+        return res.status(400).json({ message: "Invalid or expired token" });
       }
 
       // Verify token validity
@@ -928,23 +911,15 @@ export async function registerRoutes(app: Express) {
     const { email } = req.body;
 
     try {
-      // Query database for admin email
-      const admin = await storage.getAdminByEmail(email);
+      // Query database for admin email (same answer either way: no account guessing)
+      const admin = typeof email === 'string' ? await storage.getAdminByEmail(email) : undefined;
 
       if (!admin) {
-        return res.status(404).json({ message: "Admin email not found" });
+        return res.json({ message: "If this email is registered, a password reset link has been sent to it" });
       }
 
-      // Generate reset token (expires in 1 hour)
-      const resetToken = uuid();
-      const tokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
-
-      // Store token (in a real app this would be in the database)
-      // For demo, we'll use a global Map to store tokens
-      if (!global.adminResetTokens) {
-        global.adminResetTokens = new Map();
-      }
-      global.adminResetTokens.set(email, { token: resetToken, expiry: tokenExpiry });
+      // Reset token (1 hour), stored hashed in the database
+      const resetToken = await createResetToken('admin', admin.email);
 
       // Create reset URL
       const baseUrl = process.env.NODE_ENV === 'production'
@@ -984,33 +959,22 @@ export async function registerRoutes(app: Express) {
     const { email, token, newPassword } = req.body;
 
     try {
-      // Validate that all required fields are present 
-      if (!email || !token || !newPassword) {
+      // Validate that all required fields are present
+      if (!email || !token || !newPassword || typeof newPassword !== 'string') {
         return res.status(400).json({ message: "Missing required fields" });
       }
-
-      // For demo purposes only
-      const ADMIN_EMAIL = "admin@amu.ac.in";
-      const SALARY_ADMIN_EMAIL = "salary@amu.ac.in";
-
-      if (email !== ADMIN_EMAIL && email !== SALARY_ADMIN_EMAIL) {
-        return res.status(404).json({ message: "Admin email not found" });
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
 
-      // Check if token is valid
-      if (!global.adminResetTokens || !global.adminResetTokens.has(email)) {
+      const admin = await storage.getAdminByEmail(email);
+      if (!admin || !(await isResetTokenValid('admin', admin.email, token))) {
         return res.status(400).json({ message: "Invalid or expired token" });
       }
 
-      const tokenData = global.adminResetTokens.get(email);
-      if (!tokenData || tokenData.token !== token || tokenData.expiry < new Date()) {
-        return res.status(400).json({ message: "Invalid or expired token" });
-      }
-
-      // In a real app, you would update the admin password in the database
-
-      // Clear used token
-      global.adminResetTokens.delete(email);
+      // Save the new password; old logins of this admin end (session check)
+      await storage.updateAdmin(admin.id, { password: newPassword });
+      await clearResetToken('admin', admin.email);
 
       return res.json({ message: "Admin password has been reset successfully" });
     } catch (error) {
@@ -1029,26 +993,14 @@ export async function registerRoutes(app: Express) {
 
     try {
       if (isAdmin) {
-        // Validation for Admin
-        if (!global.adminResetTokens || !global.adminResetTokens.has(email)) {
-          return res.status(200).json({ valid: false, message: "Invalid or expired token" });
-        }
-
-        const tokenData = global.adminResetTokens.get(email);
-        if (!tokenData || tokenData.token !== token) {
-          return res.status(200).json({ valid: false, message: "Invalid token" });
-        }
-
-        if (tokenData.expiry < new Date()) {
-          return res.status(200).json({ valid: false, message: "Token expired" });
-        }
-
-        return res.status(200).json({ valid: true });
+        // Validation for Admin (token stored hashed in the database)
+        const valid = await isResetTokenValid('admin', email, token);
+        return res.status(200).json(valid ? { valid: true } : { valid: false, message: "Invalid or expired token" });
       } else {
         // Validation for Department
         const department = await storage.getDepartmentByEmail(email);
         if (!department) {
-          return res.status(200).json({ valid: false, message: "Email not found" });
+          return res.status(200).json({ valid: false, message: "Invalid or expired token" });
         }
 
         const isValid = await storage.validateResetToken(department.id, token);
@@ -1063,60 +1015,10 @@ export async function registerRoutes(app: Express) {
   });
 
   // Auth routes
-  app.post("/api/auth/register", async (req, res) => {
-
-    try {
-      const { id: departmentNameId, name, hodTitle, hodName, email, password } = req.body;
-
-      if (!name || !hodTitle || !hodName || !email || !password) {
-        return res.status(400).json({
-          message: "Missing required fields",
-          required: ["name", "hodTitle", "hodName", "email", "password"]
-        });
-      }
-
-      // First check if email is already registered
-      const existingDepartment = await storage.getDepartmentByEmail(email);
-      if (existingDepartment) {
-        return res.status(400).json({ message: "Email already registered" });
-      }
-
-      // Check if department with same name exists (case insensitive)
-      const departments = await storage.getAllDepartments();
-      const existingDeptByName = departments.find(
-        dept => dept.name.toLowerCase() === name.toLowerCase()
-      );
-
-      if (existingDeptByName) {
-        // Update the existing department with new credentials
-        const updatedDepartment = await storage.updateDepartment(existingDeptByName.id, {
-          hodTitle,
-          hodName,
-          email,
-          password
-        });
-        return res.status(200).json(updatedDepartment);
-      }
-
-      // Create new department
-      const department = await storage.createDepartment({
-        name,
-        hodTitle,
-        hodName,
-        email,
-        password
-      });
-
-
-      res.status(201).json(department);
-    } catch (error) {
-      console.error('[POST /api/auth/register] Error:', error);
-      // Send a proper error response
-      res.status(400).json({
-        message: "Failed to register department",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
+  // Self-registration is closed: it could take over an existing department's login.
+  // Department logins are created by an admin (Users page).
+  app.post("/api/auth/register", (_req, res) => {
+    res.status(403).json({ message: "Registration is closed. Please contact the Salary Section to get a login." });
   });
 
   // Auth routes
@@ -1126,7 +1028,7 @@ export async function registerRoutes(app: Express) {
       const clientIp = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
 
       // Check if account is locked
-      const lockStatus = await isAccountLocked(email);
+      const lockStatus = await isAccountLocked(lockKey(email, req));
       if (lockStatus.locked) {
         const remainingMinutes = Math.ceil((lockStatus.remainingMs || 0) / 60000);
         return res.status(429).json({
@@ -1148,8 +1050,34 @@ export async function registerRoutes(app: Express) {
 
       const department = await storage.getDepartmentByEmail(email);
 
+      // Not a department e-mail: maybe a staff login of a department (e-Office)
       if (!department) {
-        const attemptResult = await recordFailedAttempt(email);
+        const staff = await findStaffForLogin(email, String(password ?? ""));
+        if (staff) {
+          await clearLoginAttempts(lockKey(email, req));
+          await regenerateKeeping(req);
+          req.session.departmentId = Number(staff.department_id);
+          req.session.staffId = Number(staff.id);
+          req.session.staffPwFp = passwordFingerprint(staff.password_hash);
+          delete req.session.deptPwFp;
+          await saveSession(req);
+          const dept = await storage.getDepartment(Number(staff.department_id));
+          return res.json({
+            success: true,
+            department: {
+              id: dept!.id,
+              name: dept!.name,
+              email: dept!.email,
+              hodName: dept!.hodName,
+              hodTitle: dept!.hodTitle
+            },
+            staff: { id: Number(staff.id), name: staff.name, role: staff.role, email: staff.email, designation: staff.designation },
+          });
+        }
+      }
+
+      if (!department) {
+        const attemptResult = await recordFailedAttempt(lockKey(email, req));
         if (attemptResult.locked) {
           return res.status(429).json({
             message: "Too many failed attempts. Account locked for 30 minutes.",
@@ -1168,7 +1096,7 @@ export async function registerRoutes(app: Express) {
       const providedPassword = String(password);
 
       if (storedPassword !== providedPassword) {
-        const attemptResult = await recordFailedAttempt(email);
+        const attemptResult = await recordFailedAttempt(lockKey(email, req));
         if (attemptResult.locked) {
           return res.status(429).json({
             message: "Too many failed attempts. Account locked for 30 minutes.",
@@ -1183,7 +1111,13 @@ export async function registerRoutes(app: Express) {
       }
 
       // Clear failed attempts on successful login
-      await clearLoginAttempts(email);
+      await clearLoginAttempts(lockKey(email, req));
+
+      // Start the login session (httpOnly cookie)
+      await regenerateKeeping(req);
+      req.session.departmentId = department.id;
+      req.session.deptPwFp = passwordFingerprint(department.password);
+      await saveSession(req);
 
       // Update last login timestamp
       try {
@@ -1238,9 +1172,8 @@ export async function registerRoutes(app: Express) {
       cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const safeFileName = file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname);
-      cb(null, safeFileName);
+      // Extension from the checked file type, never from the user's file name
+      cb(null, safeUploadName(file.fieldname.replace(/[^A-Za-z0-9_-]/g, ''), file));
     }
   });
 
@@ -1262,10 +1195,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Serve uploaded files statically with appropriate MIME types
-  app.use('/uploads', (req, res, next) => {
-    next();
-  }, express.static(uploadDir));
+  // Uploaded files are served in index.ts (behind the login / ownership check)
 
   // Multi-file upload fields configuration
   const documentFields = [
@@ -2146,7 +2076,7 @@ export async function registerRoutes(app: Express) {
       }
 
       const lockedUsers = (result.rows as any[]).map(row => {
-        const email = String(row.identifier || '').trim().toLowerCase();
+        const email = String(row.identifier || '').split('|')[0].trim().toLowerCase();
         const dept = deptMap.get(email);
         const adm = adminMap.get(email);
         const remainingMinutes = Math.max(1, Math.round(Number(row.remaining_minutes) || 1));
@@ -2208,10 +2138,11 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Email is required" });
       }
 
-      const normalizedEmail = email.trim().toLowerCase();
+      // Identifier is "email|ip" (older rows: just the email) -> unlock every place
+      const normalizedEmail = email.split('|')[0].trim().toLowerCase();
       await db.execute(sql`
-        DELETE FROM login_attempts 
-        WHERE LOWER(TRIM(identifier)) = ${normalizedEmail}
+        DELETE FROM login_attempts
+        WHERE SPLIT_PART(LOWER(TRIM(identifier)), '|', 1) = ${normalizedEmail}
       `);
 
       return res.json({ 
@@ -2457,6 +2388,10 @@ export async function registerRoutes(app: Express) {
         }
 
         const updatedAdmin = await storage.updateAdmin(userId, updates);
+        // Own password changed: keep this login (other logins of this admin end)
+        if (updates.password && req.session.adminId === userId) {
+          req.session.adminPwFp = passwordFingerprint(updatedAdmin.password);
+        }
         return res.json({
           id: updatedAdmin.id,
           name: updatedAdmin.name,
@@ -4636,6 +4571,10 @@ export async function registerRoutes(app: Express) {
 
       // Update department
       const updatedDepartment = await storage.updateDepartment(departmentId, updates);
+      // Own password changed: keep this login (other logins of this department end)
+      if (password && req.session.departmentId === departmentId) {
+        req.session.deptPwFp = passwordFingerprint(updatedDepartment.password);
+      }
 
       // Return updated department data (excluding sensitive info)
       const { password: _, ...safeData } = updatedDepartment;
@@ -4714,7 +4653,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Upload new document
-  app.post("/api/documents", documentUpload.single('documentImage'), async (req: any, res) => {
+  app.post("/api/documents", documentUpload.single('documentImage'), requireBodyDepartment('departmentId'), async (req: any, res) => {
     try {
       const { documentType, issuingAuthority, subject, refNo, date, departmentId, departmentName } = req.body;
 
@@ -5047,7 +4986,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Create ticket (department side)
-  app.post("/api/tickets", ticketUpload.single('screenshot'), async (req: any, res) => {
+  app.post("/api/tickets", ticketUpload.single('screenshot'), requireBodyDepartment('departmentId'), async (req: any, res) => {
     try {
       const { departmentId, subject, description, priority } = req.body;
 
@@ -5562,30 +5501,6 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get outbound transfer requests (initiated by this department OR request releases from others)
-  app.get("/api/departments/:departmentId/transfer-requests/outgoing", async (req, res) => {
-    try {
-      const departmentId = Number(req.params.departmentId);
-      const requests = await storage.getTransferRequestsForDepartment(departmentId, 'outgoing');
-
-      // Enrich with employee and department names
-      const enrichedRequests = await Promise.all(requests.map(async (req) => {
-        const employee = await storage.getEmployee(req.employeeId);
-        const toDept = await storage.getDepartment(req.toDepartmentId);
-        return {
-          ...req,
-          employeeName: employee?.name || 'Unknown',
-          employeeEpid: employee?.epid || 'Unknown',
-          toDepartmentName: toDept?.name || 'Unknown' // For outgoing, we want to know where it's going
-        };
-      }));
-
-      res.json(enrichedRequests);
-    } catch (error) {
-      console.error("Error fetching outgoing transfer requests:", error);
-      res.status(500).json({ message: "Failed to fetch outgoing requests" });
-    }
-  });
-
   // Reject transfer request
   app.post("/api/departments/:departmentId/transfer-requests/:requestId/reject", async (req, res) => {
     try {
@@ -6345,7 +6260,7 @@ export async function registerRoutes(app: Express) {
   if (!fs.existsSync(lpcUploadDir)) fs.mkdirSync(lpcUploadDir, { recursive: true });
   const lpcScannedStorage = multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, lpcUploadDir),
-    filename: (_req, file, cb) => cb(null, `scan-${Date.now()}-${file.originalname}`),
+    filename: (_req, file, cb) => cb(null, safeUploadName('scan', file)),
   });
   const lpcUpload = multer({
     storage: lpcScannedStorage,
@@ -6690,7 +6605,7 @@ export async function registerRoutes(app: Express) {
   });
 
   app.get("/uploads/lpc/:filename", verifyAdminSession, (req, res) => {
-    const filePath = path.join(lpcUploadDir, req.params.filename);
+    const filePath = path.join(lpcUploadDir, path.basename(req.params.filename));
     if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found" });
     res.setHeader('Content-Type', 'application/pdf');
     res.sendFile(path.resolve(filePath));
@@ -7234,6 +7149,7 @@ export async function registerRoutes(app: Express) {
   // ================= ADMIN PREFERENCES (salary register order) =================
   registerAdminPreferenceRoutes(app, storage);
   registerSettingsPinRoutes(app, verifyAdminSession);
+  registerStaffRoutes(app);
   registerOracleSyncRoutes(app, verifyAdminSession);
   registerPaybillRoutes(app, verifyAdminSession);
 

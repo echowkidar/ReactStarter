@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
-import { logout, getCurrentDepartment, checkDepartmentName } from "@/lib/auth";
+import { logout, getCurrentDepartment, checkDepartmentName, getCurrentStaff, isDeptSupervisor, STAFF_ROLE_LABELS } from "@/lib/auth";
+import { FolderOpen, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,11 +115,13 @@ const navigation = [
   { name: "Attendance", href: "/dashboard/attendance", icon: ClipboardList },
   { name: "Email", href: "/dashboard/mailbox", icon: Mail },
   { name: "Dak Receive/Dispatch", href: "/dashboard/dispatch", icon: Send },
+  { name: "E-Files", href: "/dashboard/efiles", icon: FolderOpen },
   { name: "Global Search", href: "/dashboard/global-search", icon: Search },
   { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
   { name: "Useful Downloads", href: "/dashboard/downloads", icon: DownloadCloud },
   { name: "Support Tickets", href: "/dashboard/tickets", icon: Ticket },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Staff Logins", href: "/dashboard/staff", icon: UserCog, supervisorOnly: true },
   { name: "Help", href: "/dashboard/help", icon: HelpCircle },
 ];
 
@@ -211,7 +214,8 @@ export default function Sidebar({ className }: SidebarProps) {
     enabled: !!department?.id,
     refetchInterval: 60000,
   });
-  const unreadDispatchCount = unreadDispatchData?.count || 0;
+  const unreadDispatchCount = (unreadDispatchData?.count || 0) + ((unreadDispatchData as any)?.myPending || 0);
+  const staffPerson = getCurrentStaff();
 
   // Send heartbeat for active user tracking
   useHeartbeat({
@@ -244,8 +248,13 @@ export default function Sidebar({ className }: SidebarProps) {
         <p className="mb-2 px-4 text-xs text-gray-500">
           {department?.email ? `${department.email}` : ""}
         </p>
+        {staffPerson && (
+          <p className="mb-2 mx-4 px-2 py-1 rounded bg-indigo-50 text-xs text-indigo-700">
+            {staffPerson.name} · {STAFF_ROLE_LABELS[staffPerson.role] || staffPerson.role}
+          </p>
+        )}
         <div className="space-y-0.5">
-          {navigation.map((item) => (
+          {navigation.filter((item: any) => !item.supervisorOnly || isDeptSupervisor()).map((item) => (
             <Link key={item.name} href={item.href}>
               <Button
                 variant="ghost"

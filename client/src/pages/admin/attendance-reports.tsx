@@ -1,3 +1,4 @@
+import { serverLogout } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getReportPrefix } from "@shared/reportKind";
 import { useLocation } from "wouter";
@@ -1373,6 +1374,7 @@ export default function AttendanceReports() {
 
   const handleLogout = () => {
     // Clear admin data from localStorage
+    serverLogout("admin");
     localStorage.removeItem("admin");
     localStorage.removeItem("adminType");
     localStorage.removeItem("adminEmail");

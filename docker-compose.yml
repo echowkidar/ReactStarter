@@ -77,6 +77,9 @@ services:
       RECEIVE_OLLAMA_API_KEY: ${RECEIVE_OLLAMA_API_KEY:-}
       RECEIVE_OLLAMA_MODEL: ${RECEIVE_OLLAMA_MODEL:-}
       LPC_DISPATCH_EMAILS: ${LPC_DISPATCH_EMAILS:-}
+      # Login cookie signing key (32+ chars). Optional: without it a random key is
+      # kept in the database table app_secrets.
+      SESSION_SECRET: ${SESSION_SECRET:-}
       # Settings PIN unlock tokens stay valid across restarts when this is set
       SETTINGS_PIN_SECRET: ${SETTINGS_PIN_SECRET:-}
       # Oracle sync container (separate stack, oracle-sync/docker-compose.yml)
