@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { logout, getCurrentDepartment, checkDepartmentName, getCurrentStaff, isDeptSupervisor, STAFF_ROLE_LABELS } from "@/lib/auth";
 import { FolderOpen, UserCog } from "lucide-react";
+import NotificationBell from "@/components/dak/NotificationBell";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -241,9 +242,10 @@ export default function Sidebar({ className }: SidebarProps) {
       <div className="px-3 py-1">
         <div className="mb-2 px-4 flex items-center gap-2">
           <img src="/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto" />
-          <h2 className="text-base font-semibold leading-tight">
+          <h2 className="text-base font-semibold leading-tight flex-1">
             {department?.name}
           </h2>
+          <NotificationBell />
         </div>
         <p className="mb-2 px-4 text-xs text-gray-500">
           {department?.email ? `${department.email}` : ""}

@@ -9,6 +9,7 @@ import { db } from "./db";
 import { dispatchDocuments, dispatchRecipients } from "../shared/schema";
 import { deptActor } from "./dakStaff";
 import { safeUploadName } from "./security";
+import { notify } from "./notify";
 import {
   DAK_UPLOAD_DIR, CLOSED_SQL, DISPATCH_MODES, who, track, toInboxItem, queueOcr, recipientsWithNames,
   escapeHtml, publicBaseUrl, ymd, fyBounds,
@@ -106,6 +107,14 @@ export function registerDakExtraRoutes(app: Express) {
       await db.update(dispatchDocuments).set({ cancelledAt: new Date(), cancelReason: reason, cancelledBy: actor.label }).where(eq(dispatchDocuments.id, dispatchId));
       await db.update(dispatchRecipients).set({ status: "withdrawn" }).where(eq(dispatchRecipients.dispatchId, dispatchId));
       await track({ dispatchId, action: "withdrawn", actor, details: `Dispatch withdrawn. Reason: ${reason}` });
+      const deptIds = recipients.filter((r) => r.departmentId).map((r) => Number(r.departmentId));
+      if (deptIds.length) {
+        void notify("dak.withdrawn", deptIds.map((id) => ({ kind: "department" as const, departmentId: id })), {
+          title: `Dak withdrawn by ${actor.departmentName}`,
+          text: `${doc.outwardNumber}: ${doc.isConfidential ? "CONFIDENTIAL" : doc.subject} — ${reason}`,
+          link: "/dashboard/dispatch",
+        });
+      }
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -391,13 +400,12 @@ export function registerDakExtraRoutes(app: Express) {
 // One e-mail per department (escalated items first) and one per staff login with
 // dak marked to them. A dak is reminded at most once in 20 hours.
 export async function runDakReminders(): Promise<{ departments: number; staff: number; items: number; reminded?: number }> {
-  const { sendSimpleEmail } = await import("./emailService");
   const rows = (await db.execute(sql`
     SELECT r.id, r.department_id AS "deptId", r.marked_staff_ids AS "staffIds", r.marked_to_staff AS "markedTo",
       r.action_due_date::text AS due, (CURRENT_DATE - r.action_due_date)::int AS "daysOver",
       COALESCE(r.inward_number, x.inward_number) AS "rNo", x.sender_name AS "from", x.priority,
       CASE WHEN x.is_confidential THEN 'CONFIDENTIAL' ELSE x.subject END AS subject,
-      dp.name AS "deptName", dp.email AS "deptEmail"
+      dp.name AS "deptName"
     FROM dispatch_recipients r
     JOIN dispatch_documents x ON x.id = r.dispatch_id
     JOIN departments dp ON dp.id = r.department_id
@@ -405,7 +413,7 @@ export async function runDakReminders(): Promise<{ departments: number; staff: n
       AND r.action_due_date IS NOT NULL AND r.action_due_date <= CURRENT_DATE
       AND (r.reminder_sent_at IS NULL OR r.reminder_sent_at < NOW() - INTERVAL '20 hours')
     ORDER BY "daysOver" DESC`)).rows as any[];
-  if (rows.length === 0) return { departments: 0, staff: 0, items: 0 };
+  if (rows.length === 0) return { departments: 0, staff: 0, items: 0, reminded: 0 };
 
   const table = (items: any[]) => `
     <table style="border-collapse:collapse;width:100%;font-size:13px">
@@ -421,12 +429,13 @@ export async function runDakReminders(): Promise<{ departments: number; staff: n
       </tr>`).join("")}
     </table>`;
   const link = `${publicBaseUrl()}/dashboard/dispatch`;
+  const reminded = new Set<number>();
+  const delivered = (s: { sent: number; stubbed: number }) => s.sent + s.stubbed > 0;
 
   // Departments (escalation: more than 3 days late listed first)
   const byDept = new Map<number, any[]>();
   for (const r of rows) byDept.set(r.deptId, [...(byDept.get(r.deptId) || []), r]);
-  let deptMails = 0;
-  const reminded = new Set<number>();
+  let deptCount = 0;
   for (const items of Array.from(byDept.values())) {
     const escalated = items.filter((i) => i.daysOver > 3);
     const html = `<div style="font-family:Arial,sans-serif;max-width:760px">
@@ -435,15 +444,20 @@ export async function runDakReminders(): Promise<{ departments: number; staff: n
       <p>${items.length} dak item(s) are due today or overdue.</p>${table(items.filter((i) => i.daysOver <= 3))}
       <p><a href="${link}">Open Dak Receive / Dispatch</a></p>
       <p style="color:#6b7280;font-size:12px">Automatic daily reminder of the AMU Dak system.</p></div>`;
-    const r = await sendSimpleEmail(items[0].deptEmail, `[DAK] ${items.length} item(s) pending action${escalated.length ? ` — ${escalated.length} escalated` : ""}`, html);
-    if (r.success) { deptMails++; items.forEach((i) => reminded.add(Number(i.id))); }
+    const result = await notify("dak.overdue", [{ kind: "department", departmentId: items[0].deptId }], {
+      title: `[DAK] ${items.length} item(s) pending action${escalated.length ? ` — ${escalated.length} escalated` : ""}`,
+      text: `${items.length} dak item(s) due today or overdue${escalated.length ? `, ${escalated.length} more than 3 days late` : ""}. Oldest: ${items[0].rNo} (${items[0].due}).`,
+      html,
+      link: "/dashboard/dispatch",
+    });
+    if (delivered(result)) { deptCount++; items.forEach((i) => reminded.add(Number(i.id))); }
   }
 
   // Staff logins with dak marked to them
   const staffIds = Array.from(new Set(rows.flatMap((r) => (r.staffIds || []).map(Number))));
-  let staffMails = 0;
+  let staffCount = 0;
   if (staffIds.length) {
-    const staff = (await db.execute(sql`SELECT id, name, email FROM department_staff WHERE is_active = true
+    const staff = (await db.execute(sql`SELECT id, name FROM department_staff WHERE is_active = true
       AND id IN (${sql.join(staffIds.map((i) => sql`${i}`), sql`, `)})`)).rows as any[];
     for (const s of staff) {
       const items = rows.filter((r) => (r.staffIds || []).map(Number).includes(Number(s.id)));
@@ -451,16 +465,21 @@ export async function runDakReminders(): Promise<{ departments: number; staff: n
         <h2>Dak marked to you, ${escapeHtml(s.name)}</h2>
         <p>${items.length} item(s) are due today or overdue.</p>${table(items)}
         <p><a href="${link}">Open My Dak</a></p></div>`;
-      const r = await sendSimpleEmail(s.email, `[DAK] ${items.length} item(s) marked to you need action`, html);
-      if (r.success) { staffMails++; items.forEach((i) => reminded.add(Number(i.id))); }
+      const result = await notify("dak.overdue", [{ kind: "staff", staffId: Number(s.id) }], {
+        title: `[DAK] ${items.length} item(s) marked to you need action`,
+        text: `${items.length} dak item(s) marked to you are due today or overdue. Oldest: ${items[0].rNo} (${items[0].due}).`,
+        html,
+        link: "/dashboard/dispatch",
+      });
+      if (delivered(result)) { staffCount++; items.forEach((i) => reminded.add(Number(i.id))); }
     }
   }
 
-  // Only items somebody was actually told about; failed mails are tried again next day
+  // Only items somebody was actually told about; otherwise tried again next run
   if (reminded.size) {
     await db.execute(sql`UPDATE dispatch_recipients SET reminder_sent_at = NOW()
       WHERE id IN (${sql.join(Array.from(reminded).map((id) => sql`${id}`), sql`, `)})`);
   }
-  console.log(`[Dak] reminders: ${rows.length} item(s), ${deptMails} department mail(s), ${staffMails} staff mail(s)`);
-  return { departments: deptMails, staff: staffMails, items: rows.length, reminded: reminded.size };
+  console.log(`[Dak] reminders: ${rows.length} item(s), ${deptCount} department(s), ${staffCount} staff notified`);
+  return { departments: deptCount, staff: staffCount, items: rows.length, reminded: reminded.size };
 }

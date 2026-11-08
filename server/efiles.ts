@@ -12,6 +12,7 @@ import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { who, linkDakToFile, createOutwardDispatch, buildLetterPdf, DakError, DISPATCH_MODES, type Actor } from "./dakCore";
+import { notify, supervisorsOf } from "./notify";
 
 const CATEGORY_YEARS: Record<string, number | null> = { A: null, B: null, C: 10, D: 5 };
 const iso = (col: string) => sql.raw(`to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`);
@@ -159,6 +160,11 @@ export function registerEfileRoutes(app: Express) {
       if (!staff) return res.status(400).json({ message: "Choose an active staff login of your department" });
       await db.execute(sql`UPDATE efiles SET current_holder_staff_id = ${staff.id}, current_holder_name = ${staff.name} WHERE id = ${file.id}`);
       await addEntry(file.id, actor, "movement", { toStaffId: staff.id, toName: staff.name, body: String(req.body.remarks || "").trim() || null });
+      void notify("efile.moved", [{ kind: "staff", staffId: Number(staff.id) }], {
+        title: `File ${file.file_number} sent to you`,
+        text: `${file.subject} — from ${actor.label}${String(req.body.remarks || "").trim() ? `: ${String(req.body.remarks).trim()}` : ""}`,
+        link: "/dashboard/efiles",
+      });
       res.json({ success: true });
     } catch (error) { fail(res, error, "move the file"); }
   });
@@ -202,6 +208,11 @@ export function registerEfileRoutes(app: Express) {
         version: 1,
       };
       const id = await addEntry(file.id, actor, "draft", { body, draftStatus: "pending", draftMeta: meta });
+      void notify("efile.draft_put_up", await supervisorsOf(Number(file.department_id)), {
+        title: `Draft for approval on file ${file.file_number}`,
+        text: `${subject} — put up by ${actor.label}`,
+        link: "/dashboard/efiles",
+      });
       res.status(201).json({ id });
     } catch (error) { fail(res, error, "save the draft"); }
   });
@@ -242,6 +253,13 @@ export function registerEfileRoutes(app: Express) {
       await db.execute(sql`UPDATE efile_entries SET draft_status = ${decision === "approve" ? "approved" : "returned"}, draft_meta = ${JSON.stringify(meta)}::jsonb WHERE id = ${draft.id}`);
       await addEntry(file.id, actor, decision === "approve" ? "approval" : "returned", {
         body: `${decision === "approve" ? "Draft approved" : "Draft returned"}: ${meta.subject}${remarks ? `. ${remarks}` : ""}`,
+      });
+      void notify("efile.draft_decided", draft.by_staff_id
+        ? [{ kind: "staff", staffId: Number(draft.by_staff_id) }]
+        : [{ kind: "department", departmentId: Number(file.department_id) }], {
+        title: `Draft ${decision === "approve" ? "approved" : "returned"} — file ${file.file_number}`,
+        text: `${meta.subject}${remarks ? ` — ${remarks}` : ""} (${actor.label})`,
+        link: "/dashboard/efiles",
       });
       res.json({ success: true });
     } catch (error) { fail(res, error, "record the decision"); }

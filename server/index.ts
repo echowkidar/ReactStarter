@@ -87,6 +87,8 @@ export async function initApp() {
     registerDakExtraRoutes(app);
     const { registerEfileRoutes } = await import("./efiles");
     registerEfileRoutes(app);
+    const { registerNotificationRoutes } = await import("./notify");
+    registerNotificationRoutes(app);
 
     // Setup Cron Jobs
     setupCronJobs();

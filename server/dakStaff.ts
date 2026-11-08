@@ -12,6 +12,7 @@ import crypto from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { sessionDepartmentId, sessionStaff, passwordFingerprint, saveSession } from "./auth";
+import { normalizeMobile } from "./notify";
 
 export const STAFF_ROLES = ["hod", "section_officer", "dealing_assistant", "diary_clerk"] as const;
 export type StaffRole = typeof STAFF_ROLES[number];
@@ -92,6 +93,7 @@ const publicStaff = (r: any) => ({
   name: r.name,
   designation: r.designation,
   email: r.email,
+  mobile: r.mobile || null,
   role: r.role,
   roleLabel: ROLE_LABELS[r.role] || r.role,
   isActive: r.is_active,
@@ -143,10 +145,12 @@ export function registerStaffRoutes(app: Express) {
       if (taken) return res.status(409).json({ message: "This e-mail is already used for a login" });
 
       const employeeId = req.body.employeeId ? Number(req.body.employeeId) : null;
+      const mobile = String(req.body.mobile || "").trim() || null;
+      if (mobile && !normalizeMobile(mobile)) return res.status(400).json({ message: "Mobile number is not valid (10 digits, or +country code)" });
       const row = (await db.execute(sql`
-        INSERT INTO department_staff (department_id, employee_id, name, designation, email, password_hash, role)
+        INSERT INTO department_staff (department_id, employee_id, name, designation, email, password_hash, role, mobile)
         VALUES (${departmentId}, ${employeeId}, ${name}, ${String(req.body.designation || "").trim() || null},
-                ${email}, ${hashPassword(password)}, ${role})
+                ${email}, ${hashPassword(password)}, ${role}, ${mobile})
         RETURNING *`)).rows[0];
       res.status(201).json(publicStaff(row));
     } catch (error: any) {
@@ -178,6 +182,7 @@ export function registerStaffRoutes(app: Express) {
       const role = b.role !== undefined ? String(b.role) : current.role;
       if (!name) return res.status(400).json({ message: "Name is required" });
       if (!STAFF_ROLES.includes(role as StaffRole)) return res.status(400).json({ message: "Invalid role" });
+      if (b.mobile && !normalizeMobile(b.mobile)) return res.status(400).json({ message: "Mobile number is not valid (10 digits, or +country code)" });
       let passwordHash = current.password_hash;
       if (b.password) {
         if (String(b.password).length < 8) return res.status(400).json({ message: "Password must be at least 8 characters" });
@@ -190,6 +195,7 @@ export function registerStaffRoutes(app: Express) {
           role = ${role},
           is_active = ${b.isActive !== undefined ? !!b.isActive : current.is_active},
           employee_id = ${b.employeeId !== undefined ? (b.employeeId ? Number(b.employeeId) : null) : current.employee_id},
+          mobile = ${b.mobile !== undefined ? (String(b.mobile).trim() || null) : current.mobile},
           password_hash = ${passwordHash}
         WHERE id = ${staffId} RETURNING *`)).rows[0];
       res.json(publicStaff(row));

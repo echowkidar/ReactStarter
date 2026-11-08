@@ -624,6 +624,27 @@ export async function runMigrations() {
         );
       `);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_efile_entries_file ON efile_entries (efile_id, id)`);
+      // Notifications: in-app inbox + delivery log of e-mail / SMS / WhatsApp
+      await db.execute(sql`ALTER TABLE department_staff ADD COLUMN IF NOT EXISTS mobile TEXT`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id SERIAL PRIMARY KEY,
+          event TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          adapter TEXT NOT NULL,
+          department_id INTEGER,
+          staff_id INTEGER,
+          address TEXT,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          link TEXT,
+          status TEXT NOT NULL,
+          error TEXT,
+          read_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_notifications_inbox ON notifications (department_id, channel, read_at, id)`);
     } catch (officeErr) {
       console.error("[Migrations] e-Office tables failed (staff logins / e-files / attachments affected):", officeErr);
     }

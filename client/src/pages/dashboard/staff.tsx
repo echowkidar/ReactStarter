@@ -23,6 +23,7 @@ interface StaffRow {
   name: string;
   designation: string | null;
   email: string;
+  mobile: string | null;
   role: string;
   roleLabel: string;
   isActive: boolean;
@@ -30,7 +31,7 @@ interface StaffRow {
 }
 
 const ROLES = Object.entries(STAFF_ROLE_LABELS);
-const emptyForm = { name: "", designation: "", email: "", password: "", role: "dealing_assistant", employeeId: "" };
+const emptyForm = { name: "", designation: "", email: "", mobile: "", password: "", role: "dealing_assistant", employeeId: "" };
 
 export default function StaffPage() {
   const department = getCurrentDepartment();
@@ -57,6 +58,7 @@ export default function StaffPage() {
         name: form.name,
         designation: form.designation,
         role: form.role,
+        mobile: form.mobile,
         employeeId: form.employeeId || null,
       };
       if (form.password) body.password = form.password;
@@ -97,7 +99,7 @@ export default function StaffPage() {
   const openNew = () => { setEditing(null); setForm({ ...emptyForm }); setShowForm(true); };
   const openEdit = (row: StaffRow) => {
     setEditing(row);
-    setForm({ name: row.name, designation: row.designation || "", email: row.email, password: "", role: row.role, employeeId: row.employeeId ? String(row.employeeId) : "" });
+    setForm({ name: row.name, designation: row.designation || "", email: row.email, mobile: row.mobile || "", password: "", role: row.role, employeeId: row.employeeId ? String(row.employeeId) : "" });
     setShowForm(true);
   };
 
@@ -159,7 +161,7 @@ export default function StaffPage() {
                           {row.designation && <div className="text-xs text-gray-500">{row.designation}</div>}
                         </td>
                         <td className="px-4 py-2.5">{row.roleLabel}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs">{row.email}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs">{row.email}{row.mobile && <div className="text-gray-500">{row.mobile}</div>}</td>
                         <td className="px-4 py-2.5 text-xs">{row.lastLogin ? format(new Date(row.lastLogin), "dd MMM yyyy, HH:mm") : "Never"}</td>
                         <td className="px-4 py-2.5">
                           <Switch checked={row.isActive} disabled={!canManage || me?.id === row.id || toggleActive.isPending}
@@ -224,6 +226,11 @@ export default function StaffPage() {
                 <Label className="text-xs">Login e-mail *</Label>
                 <Input type="email" value={form.email} disabled={!!editing}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Mobile (for SMS / WhatsApp alerts)</Label>
+                <Input type="tel" value={form.mobile} placeholder="10-digit mobile"
+                  onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} />
               </div>
               <div>
                 <Label className="text-xs">{editing ? "New password (leave empty to keep)" : "Password * (min. 8 characters)"}</Label>

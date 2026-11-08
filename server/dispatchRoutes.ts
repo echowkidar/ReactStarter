@@ -15,6 +15,7 @@ import {
   recipientsWithNames, publicBaseUrl, DISPATCH_MODES,
 } from "./dakCore";
 import { sessionStaff } from "./auth";
+import { notify, type Recipient } from "./notify";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -58,6 +59,16 @@ const dispatchUpload = multer({
     }
   },
 });
+
+/** Tell staff logins that a dak was marked to them */
+function notifyMarked(staffIds: number[], by: string, inwardNumber: string | null, doc: any, remarks?: string | null, due?: string | null) {
+  const subject = doc?.isConfidential ? "CONFIDENTIAL" : ((doc?.aiExtractedData as any)?._actualSubject || doc?.subject || "");
+  return notify("dak.marked", staffIds.map((id): Recipient => ({ kind: "staff", staffId: id })), {
+    title: `Dak ${inwardNumber || ""} marked to you`,
+    text: `${subject} (from ${doc?.senderName || "-"})${remarks ? ` — ${remarks}` : ""}${due ? `. Action by ${due}` : ""}. Marked by ${by}`,
+    link: "/dashboard/dispatch",
+  });
+}
 
 // ─── Helper: Convert PDF first page to image using sharp ──────────────────
 async function convertPdfToImage(pdfPath: string): Promise<string> {
@@ -616,6 +627,9 @@ EXAMPLES
           return res.status(409).json({ message: `Receipt No. ${result.conflict} is already used this year. Leave it empty for the next number.` });
         }
         queueOcr({ kind: "document", id: result.dispatch.id, fileUrl: result.dispatch.fileUrl });
+        if (staffRows.length) {
+          void notifyMarked(staffRows.map((r) => Number(r.id)), actor.label, result.inwardNumber, result.dispatch, b.staffRemarks, dueDate);
+        }
         res.json({ success: true, dispatch: result.dispatch, inwardNumber: result.inwardNumber });
       } catch (error: any) {
         console.error("[Dispatch] Receive external error:", error);
@@ -966,9 +980,16 @@ EXAMPLES
       await track({ dispatchId, action: "forwarded", actor, recipientDepartmentId: departmentId,
         details: `Forwarded to: ${names.join(", ")}${remarks ? `. Remarks: ${remarks}` : ""}` });
 
-      // Tell the new recipients by e-mail (in the background)
+      // Tell the new recipients by e-mail (in the background) and on the other channels
       const [doc] = await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.id, dispatchId));
-      if (doc) sendDispatchEmails(doc, targets, actor).catch(() => {});
+      if (doc) {
+        sendDispatchEmails(doc, targets, actor).catch(() => {});
+        void notify("dak.forwarded_in", targets.map((id: number) => ({ kind: "department" as const, departmentId: id })), {
+          title: `Dak forwarded by ${actor.departmentName}`,
+          text: `${doc.documentType}: ${doc.isConfidential ? "CONFIDENTIAL" : ((doc.aiExtractedData as any)?._actualSubject || doc.subject)}${remarks ? ` — ${remarks}` : ""}`,
+          link: "/dashboard/dispatch",
+        });
+      }
 
       res.json({ success: true, forwardedTo: targets.length });
     } catch (error: any) {
@@ -1016,6 +1037,10 @@ EXAMPLES
 
       await track({ dispatchId, action: "marked_to_staff", actor, recipientDepartmentId: departmentId,
         details: `Marked to: ${names.join(", ")}${remarks ? `. Remarks: ${remarks}` : ""}${due ? `. Action by: ${due}` : ""}` });
+      if (staffRows.length) {
+        const [doc] = await db.select().from(dispatchDocuments).where(eq(dispatchDocuments.id, dispatchId));
+        void notifyMarked(staffRows.map((r) => Number(r.id)), actor.label, row.inwardNumber, doc, remarks, due);
+      }
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ message: error.message });

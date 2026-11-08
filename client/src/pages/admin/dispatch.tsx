@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import AdminHeader from "@/components/layout/admin-header";
 import AdminDakTracking from "@/components/dak/AdminDakTracking";
+import AdminNotificationLog from "@/components/dak/AdminNotificationLog";
 import {
   ArrowLeft, Send, Inbox, Users, Plus, Pencil, Trash2, Search,
   Building2, UserPlus, Eye, Loader2, CheckCircle2, Clock, X,
@@ -327,6 +328,9 @@ export default function AdminDispatch() {
             <TabsTrigger value="tracking" className="flex items-center gap-2">
               <Search className="h-4 w-4" /> Tracking
             </TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Mail className="h-4 w-4" /> Notifications
+            </TabsTrigger>
             <TabsTrigger value="groups" className="flex items-center gap-2">
               <Users className="h-4 w-4" /> Dispatch Groups
             </TabsTrigger>
@@ -337,6 +341,9 @@ export default function AdminDispatch() {
 
           <TabsContent value="tracking">
             <AdminDakTracking />
+          </TabsContent>
+          <TabsContent value="notifications">
+            <AdminNotificationLog />
           </TabsContent>
 
           {/* ─── OVERVIEW TAB ──────────────────────────────────────── */}

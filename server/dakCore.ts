@@ -18,6 +18,7 @@ import {
 } from "../shared/schema";
 import { deptActor } from "./dakStaff";
 import { sessionAdmin } from "./auth";
+import { notify } from "./notify";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DAK_UPLOAD_DIR = path.join(__dirname, "../uploads/dispatch");
@@ -576,6 +577,16 @@ export async function createOutwardDispatch(p: OutwardInput) {
       externalContactId: r.type === "external" ? r.id : null,
       status: "dispatched" as const,
     })));
+  }
+
+  // In-app / SMS / WhatsApp to the recipient departments (e-mail: "Send email" tick box below)
+  const deptIds = recipients.filter((r) => r.type === "department").map((r) => r.id);
+  if (deptIds.length) {
+    void notify("dak.incoming", deptIds.map((id) => ({ kind: "department" as const, departmentId: id })), {
+      title: `New dak from ${p.senderName}`,
+      text: `${p.documentType} ${outwardNumber}: ${confidential ? "CONFIDENTIAL" : p.subject}`,
+      link: "/dashboard/dispatch",
+    });
   }
 
   await track({
