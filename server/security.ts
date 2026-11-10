@@ -5,18 +5,34 @@ import crypto from "crypto";
 import path from "path";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
-import { sessionAdmin, sessionDepartmentId } from "./auth";
+import { sessionAdmin, sessionDepartmentId, cookieDomainFor } from "./auth";
 
 // ── Headers ──────────────────────────────────────────────────────────────────
 // No full script CSP yet (the app loads Turnstile, Google fonts, OpenCV, a local
 // scanner websocket…); these directives are safe for all pages.
+
+/**
+ * This site on both hosts ("<site>" and "www.<site>"): stored file links use one of
+ * them while the page may be open on the other, so PDFs shown in <object>/<iframe>
+ * must be allowed from both.
+ */
+function siteSources(req: Request): string {
+  const domain = cookieDomainFor(req);
+  return domain ? `'self' https://${domain} https://www.${domain}` : "'self'";
+}
+
 export function securityHeaders(req: Request, res: Response, next: NextFunction) {
+  const site = siteSources(req);
   res.setHeader("X-Content-Type-Options", "nosniff");
+  // Old browsers only; modern ones use frame-ancestors below (which wins over this)
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), payment=(), usb=()");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  res.setHeader("Content-Security-Policy", "frame-ancestors 'self'; object-src 'none'; base-uri 'self'");
+  // object-src must allow this site: the report / document viewers show PDFs with
+  // <object data="/uploads/…pdf">, and object-src 'none' made every one of them
+  // show "Unable to display PDF". Flash/other plugins from other sites stay blocked.
+  res.setHeader("Content-Security-Policy", `frame-ancestors ${site}; object-src ${site}; base-uri 'self'`);
   if (req.secure) res.setHeader("Strict-Transport-Security", "max-age=15552000");
   res.removeHeader("X-Powered-By");
   next();
@@ -165,6 +181,10 @@ export async function uploadsGuard(req: Request, res: Response, next: NextFuncti
   if (!INLINE_EXT.has(ext)) {
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("Content-Disposition", "attachment");
+  } else {
+    // PDFs / pictures: shown inside the app's pages (both hosts); no object-src here,
+    // Chrome's PDF viewer is itself a plugin and would be blocked by it.
+    res.setHeader("Content-Security-Policy", `frame-ancestors ${siteSources(req)}; base-uri 'none'`);
   }
 
   try {
