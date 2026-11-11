@@ -17,7 +17,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { ExternalLink, Loader2, Printer, Undo2, Upload } from "lucide-react";
 import { ClaimStatusBadge, EVENT_LABELS } from "@/pages/claim-forms";
-import { CLAIM_FORM_DEFS, DEPARTMENT_ACTIONABLE, HRA_OPTIONS, formatClaimDate, localToday, type ClaimForm, type ClaimStatus } from "@shared/claimForms";
+import {
+  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, DEPARTMENT_ACTIONABLE, HRA_OPTIONS, claimSummary, formatClaimDate, localToday, monthLabel,
+  type ClaimForm, type ClaimStatus,
+} from "@shared/claimForms";
 
 const TABS: Array<{ key: string; label: string; statuses: ClaimStatus[] }> = [
   { key: "waiting", label: "Waiting for signed form", statuses: ["submitted", "returned_department"] },
@@ -56,7 +59,7 @@ export default function DepartmentClaimForms() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold">Claim Forms</h1>
-          <p className="text-sm text-slate-600">NPA and HRA forms filled online by your employees. After the signed form is received, upload it with the dispatch number and date.</p>
+          <p className="text-sm text-slate-600">NPA, HRA and Conveyance Allowance forms filled online by your employees. After the signed form is received, upload it with the dispatch number and date.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -81,7 +84,7 @@ export default function DepartmentClaimForms() {
                 <TableHead>Form</TableHead>
                 <TableHead>Employee</TableHead>
                 <TableHead>Designation</TableHead>
-                <TableHead>With effect from</TableHead>
+                <TableHead>For</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Dispatch</TableHead>
                 <TableHead>Status</TableHead>
@@ -97,7 +100,7 @@ export default function DepartmentClaimForms() {
                   <TableCell>{CLAIM_FORM_DEFS[c.formType]?.shortTitle}</TableCell>
                   <TableCell><span className="font-medium">{c.snapshot.name}</span><span className="text-xs text-slate-500 block">ID {c.epid}</span></TableCell>
                   <TableCell>{c.snapshot.designation}</TableCell>
-                  <TableCell>{formatClaimDate(c.data.wefDate)}</TableCell>
+                  <TableCell>{claimSummary(c)}</TableCell>
                   <TableCell className="text-xs">{dateTime(c.submittedAt)}</TableCell>
                   <TableCell className="text-xs">{c.dispatchNo ? `${c.dispatchNo} / ${formatClaimDate(c.dispatchDate)}` : "—"}</TableCell>
                   <TableCell><ClaimStatusBadge status={c.status} /></TableCell>
@@ -201,7 +204,18 @@ function ClaimDialog({ departmentId, claimId, onClose, onChanged }: { department
               <dt className="text-slate-500">Name</dt><dd className="font-medium">{claim.snapshot.name}</dd>
               <dt className="text-slate-500">ID No.</dt><dd>{claim.epid}</dd>
               <dt className="text-slate-500">Designation</dt><dd>{claim.snapshot.designation}</dd>
-              <dt className="text-slate-500">With effect from</dt><dd>{formatClaimDate(claim.data.wefDate)}</dd>
+              {claim.formType === "conveyance" ? (
+                <>
+                  <dt className="text-slate-500">Period</dt><dd>{claimSummary(claim)}</dd>
+                  <dt className="text-slate-500">Vehicle</dt><dd>{claim.data.vehicleType}, {claim.data.vehicleRegNo}</dd>
+                  <dt className="text-slate-500">Address</dt><dd>{claim.data.address}</dd>
+                  <dt className="text-slate-500">Months</dt>
+                  <dd>{(claim.data.months || []).map((m: any) => `${monthLabel(m.month).split(" ")[0]}: ${m.amount > 0 ? `${m.visits} visits` : CONVEYANCE_MONTH_REASONS[m.reason as keyof typeof CONVEYANCE_MONTH_REASONS] || "not claimed"}`).join(" · ")}</dd>
+                  <dt className="text-slate-500">Amount of Claim</dt><dd className="font-medium">Rs. {Number(claim.data.amount || 0).toLocaleString("en-IN")}</dd>
+                </>
+              ) : (
+                <><dt className="text-slate-500">With effect from</dt><dd>{formatClaimDate(claim.data.wefDate)}</dd></>
+              )}
               {claim.formType === "hra" && <><dt className="text-slate-500">Certified</dt><dd>{HRA_OPTIONS[claim.data.option as keyof typeof HRA_OPTIONS]}</dd></>}
               {claim.dispatchNo && <><dt className="text-slate-500">Dispatch</dt><dd>{claim.dispatchNo}, dated {formatClaimDate(claim.dispatchDate)}</dd></>}
             </dl>

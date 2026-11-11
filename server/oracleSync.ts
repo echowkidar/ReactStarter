@@ -161,6 +161,31 @@ const setExpr = (column: string, value: string | null) => {
 };
 
 /**
+ * What the online claim forms have from the payroll master: for how many active
+ * employees, and when it was last refreshed. Shown on the Sync page, because these
+ * values are not part of the reviewed differences (they refresh on every fetch).
+ */
+async function claimDetailsSummary() {
+  try {
+    const r = (await db.execute(sql`
+      SELECT COUNT(*) FILTER (WHERE payroll_flags_at IS NOT NULL)::int AS refreshed,
+             COUNT(*) FILTER (WHERE payroll_joining_date IS NOT NULL)::int AS joining,
+             COUNT(*) FILTER (WHERE UPPER(COALESCE(conveyance_flag, '')) = 'Y')::int AS conveyance,
+             COUNT(*)::int AS active,
+             ${isoTime("MAX(payroll_flags_at) AT TIME ZONE current_setting('TimeZone')")} AS refreshed_at
+      FROM employees WHERE is_active = 'active'`)).rows[0] as any;
+    const paid = (await db.execute(sql`SELECT COUNT(*)::int AS n FROM conveyance_paid`)).rows[0] as any;
+    return {
+      active: Number(r.active), refreshed: Number(r.refreshed), withJoiningDate: Number(r.joining),
+      conveyanceEntitled: Number(r.conveyance), refreshedAt: r.refreshed_at || null, conveyancePaidRows: Number(paid.n),
+    };
+  } catch (error) {
+    console.error("[OracleSync] claim details summary failed:", error);
+    return null;
+  }
+}
+
+/**
  * Payroll-master values the online claim forms read (eligibility flags, joining and
  * confirmation dates, spouse, bank code). They live in their own employee columns,
  * are not part of the reviewed differences and are simply refreshed on every fetch,
@@ -209,6 +234,35 @@ export async function refreshPayrollFlags(rows: OracleRow[]): Promise<number> {
   return updated;
 }
 
+/**
+ * Copy of the conveyance allowance periods already paid through the payroll
+ * (table conveyance_paid). Replaced as a whole on every fetch, in one transaction.
+ */
+export async function refreshConveyancePaid(): Promise<number> {
+  const reply = await callService("/conveyance-paid", 120_000);
+  const day = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : null);
+  const list = (Array.isArray(reply?.rows) ? reply.rows : [])
+    .map((r: any) => ({
+      epid: String(r.ecode || "").trim(),
+      from: day(r.period_from),
+      to: day(r.period_to),
+      amount: r.amt === null || r.amt === undefined ? null : Number(r.amt),
+      vehicle: r.type_of_veh === null || r.type_of_veh === undefined ? null : String(r.type_of_veh),
+    }))
+    .filter((r: any) => r.epid && r.from);
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM conveyance_paid`);
+    for (let i = 0; i < list.length; i += 2000) {
+      await tx.execute(sql`
+        INSERT INTO conveyance_paid (epid, period_from, period_to, amount, vehicle_type)
+        SELECT x.epid, x."from"::date, x."to"::date, x.amount, x.vehicle
+        FROM jsonb_to_recordset(${JSON.stringify(list.slice(i, i + 2000))}::jsonb)
+          AS x(epid text, "from" text, "to" text, amount numeric, vehicle text)`);
+    }
+  });
+  return list.length;
+}
+
 export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) {
   const guard = [verifyAdminSession, requireSettingsUnlock];
 
@@ -221,7 +275,7 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
     } catch (e: any) {
       service = { online: false, error: e.message, stopped: !!e.offline };
     }
-    res.json({ service, snapshot: await latestSnapshotMeta() });
+    res.json({ service, snapshot: await latestSnapshotMeta(), claimDetails: await claimDetailsSummary() });
   });
 
   // Read the payroll master through the container and keep a copy here
@@ -247,7 +301,15 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
       } catch (flagError) {
         console.error("[OracleSync] payroll flags not refreshed:", flagError);
       }
-      res.json({ ok: true, id: Number((ins.rows[0] as any).id), oracleRows: rows.length, kept: kept.length, payrollFlags });
+      // Conveyance allowance already paid: so a paid period cannot be claimed again online
+      let conveyancePaid: number | null = null;
+      try {
+        conveyancePaid = await refreshConveyancePaid();
+      } catch (paidError: any) {
+        // an older sync container has no such endpoint: the existing copy is kept
+        console.warn("[OracleSync] paid conveyance periods not refreshed:", paidError?.message || paidError);
+      }
+      res.json({ ok: true, id: Number((ins.rows[0] as any).id), oracleRows: rows.length, kept: kept.length, payrollFlags, conveyancePaid });
     } catch (e: any) {
       console.error("[OracleSync] fetch failed:", e);
       res.status(e instanceof ServiceError ? 503 : 500).json({ message: e.message || "Fetch failed" });

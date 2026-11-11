@@ -735,6 +735,26 @@ export async function runMigrations() {
       `);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_claim_form_events_claim ON claim_form_events (claim_id, id)`);
 
+      // Conveyance allowance already paid through the payroll (copied by the Oracle sync on
+      // every fetch): a paid period cannot be claimed again online.
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS conveyance_paid (
+          id SERIAL PRIMARY KEY,
+          epid TEXT NOT NULL,
+          period_from DATE NOT NULL,
+          period_to DATE,
+          amount NUMERIC(12,2),
+          vehicle_type TEXT,
+          synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_conveyance_paid_epid ON conveyance_paid (epid, period_from)`);
+      // Rate of the conveyance allowance and the DA on it, each from a month onwards
+      await db.execute(sql`
+        INSERT INTO app_settings (key, value)
+        VALUES ('conveyance_rates', '[{"from":"2000-01","amount":3300,"daPercent":103}]')
+        ON CONFLICT (key) DO NOTHING`);
+
       // The forms are switched OFF until the super admin turns them on
       await db.execute(sql`
         INSERT INTO app_settings (key, value) VALUES ('claim_forms_enabled', 'false')

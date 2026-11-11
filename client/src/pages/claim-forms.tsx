@@ -11,8 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CheckCircle2, FileText, Loader2, LogOut, Printer, Search, Upload } from "lucide-react";
 import {
-  CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS, EMPLOYEE_EDITABLE, HRA_OPTIONS, formatClaimDate, localToday,
-  type ClaimForm, type ClaimFormType, type ClaimStatus,
+  CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS, CONVEYANCE_VEHICLES, DEFAULT_CONVEYANCE_RATES, EMPLOYEE_EDITABLE, HRA_OPTIONS,
+  claimSummary, conveyanceAmounts, localToday, monthLabel, quarterMonths,
+  type ClaimForm, type ClaimFormType, type ClaimStatus, type ConveyanceMonthReason, type ConveyanceRate,
 } from "@shared/claimForms";
 
 const TURNSTILE_SITE_KEY = "0x4AAAAAACZTOpxqkHGef-Qz";
@@ -179,7 +180,26 @@ export default function ClaimFormsPage() {
         </>
       )}
 
-      {view.kind === "new" && (
+      {view.kind === "new" && view.type === "conveyance" && (
+        <ConveyanceEditor
+          employee={employee} onCancel={() => setView({ kind: "home" })} onError={fail}
+          onSave={async (bills) => {
+            // one bill per quarter; a quarter that fails is reported, the others are kept
+            const made: ClaimForm[] = [];
+            try {
+              for (const data of bills) {
+                const claim = await api("POST", "/claims", { formType: "conveyance", data });
+                made.push(claim);
+                putClaim(claim);
+              }
+            } catch (e) { fail(e); }
+            if (made.length === 1 && bills.length === 1) setView({ kind: "claim", id: made[0].id });
+            else if (made.length) setView({ kind: "home" });
+          }}
+        />
+      )}
+
+      {view.kind === "new" && view.type !== "conveyance" && (
         <ClaimEditor
           info={forms.find((f) => f.type === view.type)!} employee={employee}
           onCancel={() => setView({ kind: "home" })}
@@ -193,7 +213,20 @@ export default function ClaimFormsPage() {
         />
       )}
 
-      {view.kind === "claim" && openClaim && view.edit && (
+      {view.kind === "claim" && openClaim && view.edit && openClaim.formType === "conveyance" && (
+        <ConveyanceEditor
+          employee={employee} initial={openClaim.data} fixedQuarter={openClaim.data.quarter}
+          onCancel={() => setView({ kind: "claim", id: openClaim.id })} onError={fail}
+          onSave={async (bills) => {
+            try {
+              putClaim(await api("PUT", `/claims/${openClaim.id}`, { data: bills[0] }));
+              setView({ kind: "claim", id: openClaim.id });
+            } catch (e) { fail(e); }
+          }}
+        />
+      )}
+
+      {view.kind === "claim" && openClaim && view.edit && openClaim.formType !== "conveyance" && (
         <ClaimEditor
           info={forms.find((f) => f.type === openClaim.formType)!} employee={employee} initial={openClaim.data}
           onCancel={() => setView({ kind: "claim", id: openClaim.id })}
@@ -272,7 +305,7 @@ function Identify({ onDone }: { onDone: (e: Employee, claims: ClaimForm[]) => vo
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Fill a claim form</CardTitle>
-        <p className="text-sm text-slate-600">NPA and HRA forms can be filled here. Enter your details to begin.</p>
+        <p className="text-sm text-slate-600">NPA, HRA and Conveyance Allowance forms can be filled here. Enter your details to begin.</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4 max-w-sm">
@@ -435,6 +468,199 @@ function ClaimEditor({ info, employee, initial, onSave, onCancel }: {
   );
 }
 
+// ── Conveyance Allowance Bill ────────────────────────────────────────────────
+
+type ConveyanceInfo = {
+  eligible: boolean; message?: string; rates?: ConveyanceRate[]; vacationStaff?: boolean;
+  quarters?: Array<{ start: string; label: string; months: string[]; claimedRef: string | null; paidMonths: string[] }>;
+  last?: { address: string; vehicleType: string; vehicleRegNo: string } | null;
+};
+type MonthEntry = { visits: string; reason: ConveyanceMonthReason | null };
+
+const CONVEYANCE_STATEMENTS = [
+  "My residence is a distance of more than one Km. from the place of visit.",
+  "The visits were out side duty hours and no vehicle was provided by the hospital.",
+  "I did not avail leave for than 15 days in the month of claim I have visited hospital for patient care for more than twenty times in a month besides my normal duty hours.",
+  "No other type of conveyance Allowance is being drawn by me.",
+  "I am maintaining a visit book of the visits made by me indicating the date, time and place of visit and it has been certified by the Chairman.",
+  "I have not claimed the said allowance before, for the aforesaid period nor I will claim it a subsequently.",
+];
+
+/**
+ * Fill one bill, or several quarters at once (each quarter becomes its own bill with its
+ * own reference). `fixedQuarter` = changing an existing bill: its quarter stays.
+ */
+function ConveyanceEditor({ employee, initial, fixedQuarter, onSave, onCancel, onError }: {
+  employee: Employee; initial?: Record<string, any>; fixedQuarter?: string;
+  onSave: (bills: Record<string, any>[]) => Promise<void>; onCancel: () => void; onError: (e: any) => void;
+}) {
+  const [info, setInfo] = useState<ConveyanceInfo | null>(null);
+  const [chosen, setChosen] = useState<string[]>(fixedQuarter ? [fixedQuarter] : []);
+  const [entries, setEntries] = useState<Record<string, MonthEntry>>(() => {
+    const start: Record<string, MonthEntry> = {};
+    for (const m of (initial?.months || []) as any[]) start[m.month] = { visits: String(m.visits ?? ""), reason: m.amount > 0 ? null : m.reason };
+    return start;
+  });
+  const [address, setAddress] = useState<string>(initial?.address || "");
+  const [vehicleType, setVehicleType] = useState<string>(initial?.vehicleType || "");
+  const [vehicleRegNo, setVehicleRegNo] = useState<string>(initial?.vehicleRegNo || "");
+  const [declared, setDeclared] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api("GET", "/conveyance").then((r: ConveyanceInfo) => {
+      setInfo(r);
+      // details of the last bill save typing them again
+      if (!initial && r.last) {
+        setAddress(r.last.address || "");
+        setVehicleType(r.last.vehicleType || "");
+        setVehicleRegNo(r.last.vehicleRegNo || "");
+      }
+    }).catch(onError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!info) return <Card><CardContent className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin inline text-slate-400" /></CardContent></Card>;
+  if (!info.eligible) {
+    return (
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-lg">Conveyance Allowance Bill</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{info.message}</p>
+          <Button variant="outline" onClick={onCancel}>Back</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const rates = info.rates || DEFAULT_CONVEYANCE_RATES;
+  const quarters = info.quarters || [];
+  const entry = (month: string): MonthEntry => entries[month] || { visits: "", reason: null };
+  const setEntry = (month: string, change: Partial<MonthEntry>) => setEntries((all) => ({ ...all, [month]: { ...entry(month), ...change } }));
+  const bill = (quarter: string) => {
+    const months = quarterMonths(quarter).map((month) => ({ month, visits: Number(entry(month).visits) || 0, reason: entry(month).reason }));
+    return conveyanceAmounts(months, rates);
+  };
+  const bills = chosen.map((q) => ({ quarter: q, ...bill(q) }));
+  const total = bills.reduce((sum, b) => sum + b.amount, 0);
+  const ready = chosen.length > 0 && bills.every((b) => b.eligibleMonths > 0) && address.trim().length >= 5 && !!vehicleType && vehicleRegNo.trim().length >= 4 && declared;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-lg">Conveyance Allowance Bill</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm rounded border bg-slate-50 px-3 py-2">
+          <dt className="text-slate-500">Name of the Doctor</dt><dd className="font-medium">{employee.name}</dd>
+          <dt className="text-slate-500">Perm. I.D. No.</dt><dd className="font-medium">{employee.epid}</dd>
+          <dt className="text-slate-500">Designation</dt><dd className="font-medium">{employee.designation}</dd>
+          <dt className="text-slate-500">Deptt.</dt><dd className="font-medium">{employee.departmentName}</dd>
+        </dl>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="ca-address">Local Residential Address</Label>
+            <Input id="ca-address" value={address} maxLength={120} onChange={(e) => setAddress(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ca-vehicle">Type of Vehicle</Label>
+            <select id="ca-vehicle" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <option value="">Choose…</option>
+              {CONVEYANCE_VEHICLES.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ca-reg">Reg. No.</Label>
+            <Input id="ca-reg" value={vehicleRegNo} maxLength={20} onChange={(e) => setVehicleRegNo(e.target.value.toUpperCase())} />
+          </div>
+        </div>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Period for which Conveyance Allowance is claimed</legend>
+          {!fixedQuarter && <p className="text-xs text-slate-500">A quarter can be claimed after it is over. You may choose more than one; each becomes a separate bill.</p>}
+          <div className="space-y-2">
+            {quarters.filter((q) => !fixedQuarter || q.start === fixedQuarter).map((q) => {
+              const allPaid = q.paidMonths.length === q.months.length;
+              const taken = (!!q.claimedRef && !fixedQuarter) || allPaid;
+              const on = chosen.includes(q.start);
+              const worked = on ? bill(q.start) : null;
+              return (
+                <div key={q.start} className={`rounded border ${on ? "border-blue-500 bg-blue-50/40" : "bg-white"}`}>
+                  <label className={`flex items-center gap-2 px-3 py-2 text-sm ${taken ? "text-slate-400" : "cursor-pointer"}`}>
+                    <input type="checkbox" checked={on} disabled={taken || !!fixedQuarter}
+                      onChange={(e) => setChosen((list) => (e.target.checked ? [...list, q.start] : list.filter((x) => x !== q.start)).sort())} />
+                    <span className="font-medium">{q.label}</span>
+                    {taken && <span className="text-xs">{allPaid ? "— already paid" : `— already filled (${q.claimedRef})`}</span>}
+                  </label>
+                  {on && (
+                    <div className="px-3 pb-3 space-y-2">
+                      {q.months.map((month) => {
+                        const paid = q.paidMonths.includes(month);
+                        const x = entry(month);
+                        return (
+                          <div key={month} className="grid grid-cols-[7rem_1fr] sm:grid-cols-[8rem_7rem_1fr] items-center gap-2 text-sm">
+                            <span>{monthLabel(month)}</span>
+                            {paid ? <span className="col-span-1 sm:col-span-2 text-amber-800">Already paid — cannot be claimed</span> : (
+                              <>
+                                <Input type="number" inputMode="numeric" min={0} max={200} placeholder="Visits" aria-label={`Number of visits in ${monthLabel(month)}`}
+                                  value={x.reason ? "" : x.visits} disabled={!!x.reason} onChange={(e) => setEntry(month, { visits: e.target.value })} />
+                                <select aria-label={`${monthLabel(month)}: claimed or not`} value={x.reason || ""}
+                                  onChange={(e) => setEntry(month, { reason: (e.target.value || null) as ConveyanceMonthReason | null })}
+                                  className="col-span-2 sm:col-span-1 h-10 rounded-md border border-input bg-background px-2 text-sm">
+                                  <option value="">Claimed (more than 20 visits)</option>
+                                  <option value="vacation">Not claimed — on vacation</option>
+                                  <option value="leave">Not claimed — leave for more than 15 days</option>
+                                  <option value="visits">Not claimed — 20 visits or fewer</option>
+                                </select>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {worked && (
+                        <p className={`text-sm ${worked.eligibleMonths ? "text-slate-700" : "text-red-700"}`}>
+                          {worked.eligibleMonths
+                            ? <>Amount of Claim: <span className="font-semibold">Rs. {worked.amount.toLocaleString("en-IN")}</span> for {worked.eligibleMonths} month{worked.eligibleMonths > 1 ? "s" : ""}</>
+                            : "Enter more than 20 visits for at least one month of this quarter."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {chosen.length > 1 && <p className="text-sm font-medium">Total of {chosen.length} bills: Rs. {total.toLocaleString("en-IN")}</p>}
+          <p className="text-xs text-slate-500">Dearness allowance on this amount is added by the Salary Section.</p>
+        </fieldset>
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium">CERTIFIED THAT :</p>
+          <ol className="text-sm space-y-1 list-decimal pl-6">
+            {CONVEYANCE_STATEMENTS.map((line) => <li key={line}>{line}</li>)}
+          </ol>
+        </div>
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <Checkbox checked={declared} onCheckedChange={(v) => setDeclared(v === true)} className="mt-0.5"
+            aria-label="I hereby declare that the above statement is true to the best of my knowledge and belief and based on record" />
+          <span>I hereby declare that the above statement is true to the best of my knowledge and belief and based on record.</span>
+        </label>
+
+        <div className="flex gap-2">
+          <Button disabled={!ready || busy} onClick={async () => {
+            setBusy(true);
+            await onSave(bills.map((b) => ({ quarter: b.quarter, address: address.trim(), vehicleType, vehicleRegNo: vehicleRegNo.trim(), months: b.months, declared: true })));
+            setBusy(false);
+          }}>
+            {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save and continue
+          </Button>
+          <Button variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── One form: print, sign, upload, submit, status ────────────────────────────
 
 function Step({ n, done, title, children }: { n: number; done?: boolean; title: string; children?: React.ReactNode }) {
@@ -473,7 +699,10 @@ function ClaimView({ claim, info, onBack, onEdit, onChange, onError }: {
           <CardTitle className="text-lg flex-1">{info.title}</CardTitle>
           <ClaimStatusBadge status={claim.status} />
         </div>
-        <p className="text-sm text-slate-600">Reference <span className="font-mono font-medium">{claim.refNo}</span> · With effect from {formatClaimDate(claim.data.wefDate)}</p>
+        <p className="text-sm text-slate-600">
+          Reference <span className="font-mono font-medium">{claim.refNo}</span> · {claimSummary(claim)}
+          {claim.formType === "conveyance" && <> · Amount of Claim Rs. {Number(claim.data.amount || 0).toLocaleString("en-IN")}</>}
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {claim.status === "returned_employee" && (
@@ -489,7 +718,7 @@ function ClaimView({ claim, info, onBack, onEdit, onChange, onError }: {
 
         {editable ? (
           <ol>
-            <Step n={1} title={info.needsUndertaking ? "Print the certificate and the undertaking" : "Print the certificate"}>
+            <Step n={1} title={info.needsUndertaking ? "Print the certificate and the undertaking" : "Print the form"}>
               <p>{info.needsUndertaking ? "Both pages are in one file. Print on A4 paper." : "Print on A4 paper."}</p>
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="outline" size="sm"><a href={pdfUrl} target="_blank" rel="noopener"><Printer className="h-4 w-4 mr-1" /> Open to print</a></Button>
@@ -533,7 +762,7 @@ function ClaimView({ claim, info, onBack, onEdit, onChange, onError }: {
                     {busy === "submit" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Submit the form
                   </Button>
                 </Step>
-                <Step n={3} title="Sign the printed certificate and hand it to your department">
+                <Step n={3} title="Sign the printed form and hand it to your department">
                   <p>Your department will get it signed by the Chairman / Head and send it to the Salary Section.</p>
                 </Step>
               </>

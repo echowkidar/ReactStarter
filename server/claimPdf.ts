@@ -6,7 +6,10 @@
 // the department writes by hand. Signatures are always left blank.
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import crypto from "crypto";
-import { CLAIM_FORM_DEFS, formatClaimDate, type ClaimForm } from "@shared/claimForms";
+import {
+  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, formatClaimDate, monthLabel, quarterRange,
+  type ClaimForm, type ConveyanceMonth,
+} from "@shared/claimForms";
 
 const A4 = { w: 595.28, h: 841.89 };
 const BLACK = rgb(0, 0, 0);
@@ -109,7 +112,7 @@ function paragraph(page: PDFPage, value: string, o: ParagraphOptions): number {
 /** "Label: value" on a ruled blank; an empty value leaves the blank for handwriting */
 function blank(page: PDFPage, label: string, value: string, x: number, top: number, endX: number, fonts: Fonts, size: number, filler: "-" | "." = "-") {
   text(page, label, x, top, fonts.regular, size);
-  let cursor = x + fonts.regular.widthOfTextAtSize(safe(label) + " ", size);
+  let cursor = x + fonts.regular.widthOfTextAtSize(safe(label), size) + size * 0.45;
   if (value) {
     const v = safe(value);
     text(page, v, cursor, top, fonts.bold, size);
@@ -263,6 +266,104 @@ function undertakingPage(page: PDFPage, claim: ClaimForm, f: Fonts) {
   text(page, ".".repeat(46), 124, 500, f.regular, size);
 }
 
+/** Conveyance Allowance Bill — wording, order and spelling exactly as on the office's bill */
+function conveyancePage(page: PDFPage, claim: ClaimForm, f: Fonts) {
+  const s = claim.snapshot;
+  const d = claim.data;
+  const size = 11;
+  const L = 60, R = 535, MID = 330, COL2 = 345;
+
+  const title = "CONVEYANCE ALLOWANCE BILL";
+  centred(page, title, A4.w / 2, 72, f.bold, 12.5);
+  const tw = f.bold.widthOfTextAtSize(title, 12.5);
+  page.drawLine({ start: { x: A4.w / 2 - tw / 2, y: fromTop(72) - 2 }, end: { x: A4.w / 2 + tw / 2, y: fromTop(72) - 2 }, thickness: 0.8, color: BLACK });
+  centred(page, "(To be submitted at an interval of three month starting from March each year", A4.w / 2, 90, f.bold, 10.5);
+  centred(page, "alongwith attendance report)", A4.w / 2, 105, f.bold, 10.5);
+
+  const months: ConveyanceMonth[] = Array.isArray(d.months) ? d.months : [];
+  const counted = months.filter((m) => m.amount > 0);
+  const short = (ym: string) => monthLabel(ym).slice(0, 3);
+  const [from, to] = quarterRange(String(d.quarter));
+  const visits = counted.map((m) => `${short(m.month)} ${m.visits}`).join(", ");
+  const sameRate = counted.every((m) => m.amount === counted[0]?.amount);
+  const amount = sameRate && counted.length ? `${counted[0].amount} x ${counted.length} = ${d.amount}` : `${d.amount}`;
+
+  let top = 142;
+  const row = 20;
+  blank(page, "1.    Name of the Doctor", s.name, L, top, MID, f, size, ".");
+  blank(page, "Perm. I.D. No.", s.epid, COL2, top, R, f, size, ".");
+  top += row;
+  blank(page, "2.    Designation", s.designation, L, top, MID, f, size, ".");
+  blank(page, "3.  Deptt.", s.departmentName, COL2, top, R, f, size, ".");
+  top += row;
+  blank(page, "4.    Local Residential Address", String(d.address || ""), L, top, R, f, size, ".");
+  top += row;
+  blank(page, "5.    Type of Vehicle", String(d.vehicleType || ""), L, top, MID, f, size, ".");
+  blank(page, "6.  Reg. No.", String(d.vehicleRegNo || ""), COL2, top, R, f, size, ".");
+  top += row;
+  text(page, "7.    Period for which Conveyance", L, top, f.regular, size);
+  top += row;
+  blank(page, "Allowance is claimed / from", formatClaimDate(from), L + 22, top, MID, f, size, ".");
+  blank(page, "to", formatClaimDate(to), COL2, top, R, f, size, ".");
+  top += row;
+  blank(page, "8.    No. of visit", visits, L, top, MID, f, size, ".");
+  blank(page, "9.  Amount of Claim", amount, COL2, top, R, f, size, ".");
+  top += 18;
+
+  // Months of the quarter that are not claimed, with the reason (as written by hand on the paper bill)
+  const left = months.filter((m) => m.amount === 0);
+  if (left.length) {
+    const byReason = new Map<string, string[]>();
+    for (const m of left) {
+      const reason = CONVEYANCE_MONTH_REASONS[(m.reason || "visits") as keyof typeof CONVEYANCE_MONTH_REASONS];
+      byReason.set(reason, [...(byReason.get(reason) || []), monthLabel(m.month).split(" ")[0]]);
+    }
+    const note = "(" + Array.from(byReason.entries()).map(([reason, names]) => `${names.join(" & ")}: ${reason.toLowerCase()}`).join("; ") + ")";
+    const nw = f.italic.widthOfTextAtSize(safe(note), 10);
+    text(page, note, R - nw, top, f.italic, 10);
+  }
+  top += 26;
+
+  text(page, "CERTIFIED THAT :", L, top, f.bold, size);
+  top += 24;
+  const items = [
+    "My residence is a distance of more than one Km. from the place of visit.",
+    "The visits were out side duty hours and no vehicle was provided by the hospital.",
+    "I did not avail leave for than 15 days in the month of claim I have visited hospital for patient care for more than twenty times in a month besides my normal duty hours.",
+    "No other type of conveyance Allowance is being drawn by me.",
+    "I am maintaining a visit book of the visits made by me indicating the date, time and place of visit and it has been certified by the Chairman.",
+    "I have not claimed the said allowance before, for the aforesaid period nor I will claim it a subsequently.",
+  ];
+  items.forEach((line, i) => {
+    text(page, `${i + 1}.`, L, top, f.regular, size);
+    top = paragraph(page, line, { x: L + 22, top, width: R - L - 22, font: f.regular, size, lineHeight: 18.5 });
+  });
+  text(page, "I hereby declare that the above statement is ture to the best of my knowledge and belief and based", L + 48, top, f.regular, size);
+  top += 18.5;
+  text(page, "on record.", L + 20, top, f.regular, size);
+
+  top += 40;
+  blank(page, "DATED", "", L, top, L + 150, f, size, ".");
+  centred(page, "(Signature of the Claimant)", 450, top - 8, f.regular, size);
+
+  top += 36;
+  text(page, "Certified that above claim for the aforesaid period is correct has not been claimed before.", L + 45, top, f.regular, size);
+  top += 30;
+  text(page, "The claim has been entered on page No.", L + 45, top, f.regular, size);
+  const dotsFrom = L + 45 + f.regular.widthOfTextAtSize("The claim has been entered on page No. ", size);
+  const tail = "of the conveyance";
+  const tailX = R - f.regular.widthOfTextAtSize(tail, size);
+  const unit = f.regular.widthOfTextAtSize(".", size);
+  text(page, ".".repeat(Math.max(3, Math.floor((tailX - dotsFrom - 2) / unit))), dotsFrom, top, f.regular, size);
+  text(page, tail, tailX, top, f.regular, size);
+  top += 18.5;
+  text(page, "allowance Register.", L + 12, top, f.regular, size);
+
+  top += 44;
+  centred(page, "(Signature of the Chairman", 455, top, f.italic, size);
+  centred(page, "of the Deptt. & Seal)", 455, top + 16, f.italic, size);
+}
+
 /** The whole print of one claim: the form itself and, for NPA, the undertaking */
 export async function buildClaimPdf(claim: ClaimForm): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
@@ -276,9 +377,19 @@ export async function buildClaimPdf(claim: ClaimForm): Promise<Uint8Array> {
   pdf.setProducer("AMU Salary Section");
 
   const page = pdf.addPage([A4.w, A4.h]);
-  if (claim.formType === "npa") npaPage(page, claim, fonts);
-  else hraPage(page, claim, fonts);
-  await footer(pdf, page, claim, fonts, def.needsUndertaking ? `${def.shortTitle} certificate (page 1 of 2)` : `${def.shortTitle} certificate`);
+  if (claim.formType === "conveyance") {
+    // the office's bill is set in a serif face
+    conveyancePage(page, claim, {
+      regular: await pdf.embedFont(StandardFonts.TimesRoman),
+      bold: await pdf.embedFont(StandardFonts.TimesRomanBold),
+      italic: await pdf.embedFont(StandardFonts.TimesRomanItalic),
+    });
+    await footer(pdf, page, claim, fonts, "Conveyance Allowance Bill");
+  } else {
+    if (claim.formType === "npa") npaPage(page, claim, fonts);
+    else hraPage(page, claim, fonts);
+    await footer(pdf, page, claim, fonts, def.needsUndertaking ? `${def.shortTitle} certificate (page 1 of 2)` : `${def.shortTitle} certificate`);
+  }
 
   if (def.needsUndertaking) {
     const second = pdf.addPage([A4.w, A4.h]);

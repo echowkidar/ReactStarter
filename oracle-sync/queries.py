@@ -129,10 +129,25 @@ SELECT 'A' AS src, yr_no, mth_no, COUNT(*) AS n, SUM(ORA_HASH({_PAYBILL_ROW_SIGN
 FROM amu_pay.t_paybill_hist_archive WHERE {_RANGE} GROUP BY yr_no, mth_no
 """
 
+# Conveyance allowance already paid (T_CONV), last four years: employee, period, amount.
+# Used by the online Conveyance Allowance Bill so a paid period cannot be claimed again.
+CONVEYANCE_PAID = """
+SELECT ecode,
+       TO_CHAR(prd_fr, 'YYYY-MM-DD') AS period_from,
+       TO_CHAR(prd_to, 'YYYY-MM-DD') AS period_to,
+       type_of_veh,
+       amt,
+       mon,
+       yr
+FROM amu_pay.t_conv
+WHERE prd_fr >= ADD_MONTHS(TRUNC(SYSDATE), -48)
+"""
+
 ALL_QUERIES = {
     "LATEST_PAYBILL_MONTH": LATEST_PAYBILL_MONTH,
     "EMPLOYEE_SNAPSHOT": EMPLOYEE_SNAPSHOT,
     "DB_PING": DB_PING,
+    "CONVEYANCE_PAID": CONVEYANCE_PAID,
     "PAYBILL_FINGERPRINTS": PAYBILL_FINGERPRINTS,
     "PAYBILL_HIST_ROWS": PAYBILL_HIST_ROWS,
     "PAYBILL_ARCHIVE_ROWS": PAYBILL_ARCHIVE_ROWS,

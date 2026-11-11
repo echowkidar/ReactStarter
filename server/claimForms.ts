@@ -25,8 +25,9 @@ import { notify } from "./notify";
 import { buildClaimPdf, claimPrintCode, claimPrintRef } from "./claimPdf";
 import {
   CLAIM_DATA_SCHEMAS, CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS,
-  DEPARTMENT_ACTIONABLE, EMPLOYEE_EDITABLE, appointmentKey, formatClaimDate, isClaimFormType,
-  type ClaimForm, type ClaimFormType, type ClaimSnapshot, type ClaimStatus,
+  DEFAULT_CONVEYANCE_RATES, DEPARTMENT_ACTIONABLE, EMPLOYEE_EDITABLE, appointmentKey, claimableQuarters,
+  conveyanceAmounts, formatClaimDate, isClaimFormType, monthLabel, quarterLabel, quarterMonths,
+  type ClaimForm, type ClaimFormType, type ClaimSnapshot, type ClaimStatus, type ConveyanceRate,
 } from "@shared/claimForms";
 
 declare module "express-session" {
@@ -188,13 +189,14 @@ type EmployeeRow = {
   id: number; epid: string; name: string; designation: string; department_id: number; pay_level: string | null;
   salary_register_no: string | null; salary_asstt: string | null; is_active: string; bank_account: string | null;
   bank_name: string | null; bank_code: string | null; joining_date: string | null; payroll_joining_date: string | null;
+  conveyance_flag: string | null; vacation_code: string | null;
   department_name: string | null; hod_title: string | null; host_department_id: number | null;
   host_department_name: string | null; host_hod_title: string | null;
 };
 
 const EMPLOYEE_SELECT = sql`
   SELECT e.id, e.epid, e.name, e.designation, e.department_id, e.pay_level, e.salary_register_no, e.salary_asstt,
-         e.is_active, e.bank_account, e.bank_name, e.bank_code,
+         e.is_active, e.bank_account, e.bank_name, e.bank_code, e.conveyance_flag, e.vacation_code,
          e.joining_date::text AS joining_date, e.payroll_joining_date::text AS payroll_joining_date,
          d.name AS department_name, d.hod_title,
          h.id AS host_department_id, h.name AS host_department_name, h.hod_title AS host_hod_title
@@ -266,19 +268,87 @@ async function claimsOfEmployee(employeeId: number): Promise<ClaimForm[]> {
   return Promise.all(r.rows.map(toClaim).map(async (c) => forEmployee(await withDetail(c))));
 }
 
-/** Checks the filled data of a form; returns the clean data or an error message */
-function checkData(formType: ClaimFormType, raw: unknown, e: EmployeeRow): { data?: Record<string, any>; error?: string } {
+// ── Conveyance allowance: rates, eligibility, periods already paid ──────────
+
+/** Rates of the conveyance allowance (admin-editable, each from a month onwards) */
+async function conveyanceRates(): Promise<ConveyanceRate[]> {
+  const r = await db.execute(sql`SELECT value FROM app_settings WHERE key = 'conveyance_rates'`);
+  try {
+    const list = JSON.parse(String((r.rows[0] as any)?.value || "[]"));
+    const ok = (Array.isArray(list) ? list : []).filter((x: any) =>
+      /^\d{4}-(0[1-9]|1[0-2])$/.test(String(x?.from)) && Number(x?.amount) > 0 && Number(x?.daPercent) >= 0)
+      .map((x: any) => ({ from: String(x.from), amount: Number(x.amount), daPercent: Number(x.daPercent) }));
+    return ok.length ? ok : DEFAULT_CONVEYANCE_RATES;
+  } catch {
+    return DEFAULT_CONVEYANCE_RATES;
+  }
+}
+
+/** Marked in the payroll master as entitled to the conveyance allowance */
+function conveyanceEligible(e: EmployeeRow): boolean {
+  return ["Y", "YES", "1", "T"].includes(clean(e.conveyance_flag).toUpperCase());
+}
+
+/** Months ("YYYY-MM") for which conveyance allowance was already paid through the payroll */
+async function conveyancePaidMonths(epid: string, months: string[]): Promise<string[]> {
+  if (!months.length) return [];
+  const rows = (await db.execute(sql`
+    SELECT period_from::text AS f, COALESCE(period_to, period_from)::text AS t
+    FROM conveyance_paid WHERE epid = ${epid}`)).rows as any[];
+  return months.filter((m) => rows.some((r) => String(r.f).slice(0, 7) <= m && String(r.t).slice(0, 7) >= m));
+}
+
+type Checked = { data?: Record<string, any>; periodKey?: string; periodLabel?: string; error?: string; status?: number };
+
+/**
+ * Checks the filled data of a form against the rules of that form. Returns the clean
+ * data (amounts are always worked out here, never taken from the browser) and what
+ * the claim is for (its period), or an error message.
+ */
+async function checkData(formType: ClaimFormType, raw: unknown, e: EmployeeRow): Promise<Checked> {
   const parsed = CLAIM_DATA_SCHEMAS[formType].safeParse(raw);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message || "Please fill the form completely" };
   const data = parsed.data as Record<string, any>;
+  const joined = [realDate(e.payroll_joining_date), realDate(e.joining_date)].filter(Boolean).sort()[0] as string | undefined;
+
+  if (formType === "conveyance") {
+    if (!conveyanceEligible(e)) return { error: NOT_ELIGIBLE, status: 403 };
+    const quarter = String(data.quarter);
+    if (!claimableQuarters(todayIst(), 6).includes(quarter)) {
+      return { error: "This quarter cannot be claimed here: it is either not over yet or too old." };
+    }
+    const months = quarterMonths(quarter);
+    if (data.months.some((m: any, i: number) => m.month !== months[i])) return { error: "The months do not belong to the chosen quarter." };
+    const worked = conveyanceAmounts(data.months, await conveyanceRates());
+    if (worked.eligibleMonths === 0) {
+      return { error: "No month of this quarter qualifies (more than twenty visits are needed in a month, with no vacation and not more than 15 days of leave)." };
+    }
+    const counted = worked.months.filter((m) => m.amount > 0).map((m) => m.month);
+    const early = joined ? counted.find((m) => m < joined.slice(0, 7)) : undefined;
+    if (early) return { error: `${monthLabel(early)} is before your date of joining and cannot be claimed.` };
+    const paid = await conveyancePaidMonths(e.epid, counted);
+    if (paid.length) {
+      return { error: `Conveyance allowance for ${paid.map(monthLabel).join(", ")} has already been paid. If this is not correct, please contact the Salary Section.` };
+    }
+    return {
+      data: {
+        quarter, address: data.address, vehicleType: data.vehicleType,
+        vehicleRegNo: String(data.vehicleRegNo).toUpperCase().replace(/\s+/g, " "),
+        months: worked.months, eligibleMonths: worked.eligibleMonths,
+        amount: worked.amount, da: worked.da, payable: worked.payable, declared: true,
+      },
+      periodKey: `q:${quarter}`, periodLabel: quarterLabel(quarter),
+    };
+  }
+
+  // NPA / HRA: once for each appointment
   const wef = String(data.wefDate);
   if (Number.isNaN(Date.parse(wef))) return { error: "Please choose a valid date" };
   // "With effect from" cannot be before the employee joined, nor far in the future
-  const joined = [realDate(e.payroll_joining_date), realDate(e.joining_date)].filter(Boolean).sort()[0] as string | undefined;
   if (joined && wef < joined) return { error: "The date \"With Effect From\" cannot be before your date of joining." };
   const limit = new Date(Date.now() + 62 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   if (wef > limit) return { error: "The date \"With Effect From\" is too far in the future." };
-  return { data };
+  return { data, periodKey: appointmentKey(e.designation), periodLabel: clean(e.designation) };
 }
 
 // ── AI check of the signed scan (same OCR service as the signed attendance report) ──
@@ -481,6 +551,32 @@ export function registerClaimFormRoutes(app: Express) {
     });
   }));
 
+  // What the Conveyance Allowance Bill needs to know: entitled or not, the quarters that
+  // can be claimed (and which are already claimed or paid), the rate, last used details.
+  app.get("/api/public/forms/conveyance", wrap(async (req, res) => {
+    const e = await claimant(req);
+    if (!e) return res.status(401).json({ message: "Please enter your details again.", code: "CLAIMANT_REQUIRED" });
+    if (!conveyanceEligible(e)) return res.json({ eligible: false, message: NOT_ELIGIBLE });
+    const quarters = claimableQuarters(todayIst(), 6);
+    const mine = (await db.execute(sql`
+      SELECT period_key, ref_no, status, data FROM claim_forms
+      WHERE employee_id = ${e.id} AND form_type = 'conveyance' ORDER BY id DESC`)).rows as any[];
+    const live = mine.filter((c) => !["rejected", "cancelled"].includes(c.status));
+    const paid = await conveyancePaidMonths(e.epid, quarters.flatMap(quarterMonths));
+    const last = mine[0] ? (typeof mine[0].data === "string" ? JSON.parse(mine[0].data) : mine[0].data) : null;
+    res.json({
+      eligible: true,
+      rates: await conveyanceRates(),
+      vacationStaff: !!clean(e.vacation_code) && !["N", "NO", "0"].includes(clean(e.vacation_code).toUpperCase()),
+      quarters: quarters.map((q) => ({
+        start: q, label: quarterLabel(q), months: quarterMonths(q),
+        claimedRef: live.find((c) => c.period_key === `q:${q}`)?.ref_no || null,
+        paidMonths: quarterMonths(q).filter((m) => paid.includes(m)),
+      })),
+      last: last ? { address: last.address, vehicleType: last.vehicleType, vehicleRegNo: last.vehicleRegNo } : null,
+    });
+  }));
+
   /** The claimant's own claim (404 for anyone else's) */
   const ownClaim = async (req: Request, res: Response): Promise<{ e: EmployeeRow; claim: ClaimForm } | null> => {
     const e = await claimant(req);
@@ -498,31 +594,32 @@ export function registerClaimFormRoutes(app: Express) {
     const formType = req.body?.formType;
     if (!isClaimFormType(formType)) return res.status(400).json({ message: "Unknown form." });
     if (separateCheque(e)) return res.status(403).json({ message: NOT_ELIGIBLE, code: "NOT_ELIGIBLE" });
-    const checked = checkData(formType, req.body?.data, e);
-    if (checked.error) return res.status(400).json({ message: checked.error });
+    const checked = await checkData(formType, req.body?.data, e);
+    if (checked.error) return res.status(checked.status || 400).json({ message: checked.error, code: checked.status === 403 ? "NOT_ELIGIBLE" : undefined });
 
     const def = CLAIM_FORM_DEFS[formType];
     const dept = certifyingDepartment(e);
-    const periodKey = appointmentKey(e.designation);
+    const periodKey = checked.periodKey!;
+    const already = formType === "conveyance"
+      ? `You have already filled the Conveyance Allowance Bill for ${checked.periodLabel}.`
+      : `You have already filled the ${def.shortTitle} form for your present appointment (${e.designation}). A new form is needed only on a fresh appointment.`;
     const existing = (await db.execute(sql`
       SELECT ref_no, status FROM claim_forms
       WHERE employee_id = ${e.id} AND form_type = ${formType} AND period_key = ${periodKey}
         AND status NOT IN ('rejected', 'cancelled') LIMIT 1`)).rows[0] as any;
     if (existing) {
-      return res.status(409).json({
-        message: `You have already filled the ${def.shortTitle} form for your present appointment (${e.designation}). Reference: ${existing.ref_no}. A new form is needed only on a fresh appointment.`,
-      });
+      return res.status(409).json({ message: `${already} Reference: ${existing.ref_no}.` });
     }
     let id: number;
     try {
       const ins = await db.execute(sql`
         INSERT INTO claim_forms (form_type, employee_id, epid, department_id, period_key, period_label, status, data, snapshot)
-        VALUES (${formType}, ${e.id}, ${e.epid}, ${dept.id}, ${periodKey}, ${clean(e.designation)}, 'draft',
+        VALUES (${formType}, ${e.id}, ${e.epid}, ${dept.id}, ${periodKey}, ${checked.periodLabel || null}, 'draft',
                 ${JSON.stringify(checked.data)}::jsonb, ${JSON.stringify(snapshotOf(e))}::jsonb)
         RETURNING id`);
       id = Number((ins.rows[0] as any).id);
     } catch (error: any) {
-      if (error?.code === "23505") return res.status(409).json({ message: `You have already filled the ${def.shortTitle} form for your present appointment.` });
+      if (error?.code === "23505") return res.status(409).json({ message: already });
       throw error;
     }
     const refNo = `${def.code}/${new Date().getFullYear()}/${String(id).padStart(6, "0")}`;
@@ -538,8 +635,12 @@ export function registerClaimFormRoutes(app: Express) {
     if (!own) return;
     const { e, claim } = own;
     if (!EMPLOYEE_EDITABLE.includes(claim.status)) return res.status(409).json({ message: "This form can no longer be changed." });
-    const checked = checkData(claim.formType, req.body?.data, e);
-    if (checked.error) return res.status(400).json({ message: checked.error });
+    const checked = await checkData(claim.formType, req.body?.data, e);
+    if (checked.error) return res.status(checked.status || 400).json({ message: checked.error });
+    // what the claim is for (the quarter) stays as it is: another quarter is another form
+    if (claim.formType === "conveyance" && checked.periodKey !== claim.periodKey) {
+      return res.status(400).json({ message: "The quarter of a bill cannot be changed. Please fill a new bill for the other quarter." });
+    }
     if (JSON.stringify(checked.data) === JSON.stringify(claim.data)) return res.json(forEmployee(await withDetail(claim)));
     const r = await db.execute(sql`
       UPDATE claim_forms SET data = ${JSON.stringify(checked.data)}::jsonb, revision = revision + 1, updated_at = NOW()
@@ -757,6 +858,31 @@ export function registerClaimFormRoutes(app: Express) {
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
     enabledCache = null;
     res.json({ enabled });
+  }));
+
+  // Rate of the conveyance allowance and the DA on it, each from a month onwards
+  app.get("/api/admin/claim-forms/conveyance-rates", wrap(async (_req, res) => {
+    res.json({ rates: await conveyanceRates() });
+  }));
+  app.post("/api/admin/claim-forms/conveyance-rates", wrap(async (req, res) => {
+    const admin = await sessionAdmin(req);
+    if (!isSuper(admin)) return res.status(403).json({ message: "Only a super admin can change the rates." });
+    const list = Array.isArray(req.body?.rates) ? req.body.rates : [];
+    const rates: ConveyanceRate[] = [];
+    for (const x of list) {
+      const from = clean(x?.from), amount = Number(x?.amount), daPercent = Number(x?.daPercent);
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(from) || !(amount > 0 && amount < 1_000_000) || !(daPercent >= 0 && daPercent <= 1000)) {
+        return res.status(400).json({ message: "Each rate needs a month, an amount and a DA percentage." });
+      }
+      rates.push({ from, amount: Math.round(amount), daPercent });
+    }
+    if (!rates.length) return res.status(400).json({ message: "At least one rate is needed." });
+    if (new Set(rates.map((r) => r.from)).size !== rates.length) return res.status(400).json({ message: "Two rates start in the same month." });
+    rates.sort((a, b) => a.from.localeCompare(b.from));
+    await db.execute(sql`
+      INSERT INTO app_settings (key, value) VALUES ('conveyance_rates', ${JSON.stringify(rates)})
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+    res.json({ rates });
   }));
 
   app.get("/api/admin/claim-forms/:id", wrap(async (req, res) => {

@@ -8,6 +8,7 @@ every request must carry the shared key (header X-Sync-Key).
 Endpoints (GET only):
   /health                  -> is Oracle reachable, database version, latest paybill month
   /snapshot                -> all rows of M_EMP_MAST (selected columns) + "paid last month"
+  /conveyance-paid         -> conveyance allowance already paid (T_CONV), last four years
   /paybill/fingerprints    -> per month of T_PAYBILL_HIST(_ARCHIVE): row count + hash sum
   /paybill/rows?src=&yr=&m1=&m2=
                            -> months m1..m2 of one year of T_PAYBILL_HIST (src=H) or
@@ -163,6 +164,13 @@ class Handler(BaseHTTPRequestHandler):
                     "paybill": {"year": yr, "month": mth},
                     "rows": data,
                 })
+            if path == "/conveyance-paid":
+                started = time.time()
+                _, res = run_queries([(queries.CONVEYANCE_PAID, None)])
+                cols, rows = res[0]
+                data = [dict(zip(cols, (to_json_value(v) for v in r))) for r in rows]
+                log.info("conveyance paid: %d rows, %.1fs", len(data), time.time() - started)
+                return self.send_json(200, {"rows": data})
             if path == "/paybill/fingerprints":
                 started = time.time()
                 _, res = run_queries([(queries.PAYBILL_FINGERPRINTS, None)], timeout_ms=600_000)

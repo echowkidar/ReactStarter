@@ -18,8 +18,9 @@ import { Check, CheckCheck, ExternalLink, Loader2, Printer, Undo2, X } from "luc
 import { getAdminAccess } from "@/lib/admin-access";
 import { ClaimStatusBadge, EVENT_LABELS } from "@/pages/claim-forms";
 import {
-  CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_LABELS, HRA_OPTIONS, formatClaimDate, localToday,
-  type ClaimForm, type ClaimStatus,
+  CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_LABELS, CONVEYANCE_MONTH_REASONS, HRA_OPTIONS,
+  claimSummary, conveyanceRateFor, formatClaimDate, localToday, monthLabel,
+  type ClaimForm, type ClaimStatus, type ConveyanceRate,
 } from "@shared/claimForms";
 
 const LIST_KEY = ["/api/admin/claim-forms"];
@@ -88,8 +89,9 @@ export default function AdminClaimForms() {
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex-1 min-w-[260px]">
             <h1 className="text-2xl font-semibold">Claim Forms</h1>
-            <p className="text-sm text-slate-600">NPA and HRA forms, signed and uploaded by the departments.</p>
+            <p className="text-sm text-slate-600">NPA, HRA and Conveyance Allowance forms, signed and uploaded by the departments.</p>
           </div>
+          <ConveyanceRates canEdit={access.settings} />
           {settings && (
             <label className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
               <Switch checked={settings.enabled} disabled={!access.settings} onCheckedChange={setOpen} aria-label="Forms open for employees" />
@@ -142,7 +144,7 @@ export default function AdminClaimForms() {
                 <TableHead>Employee</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>D. Asst.</TableHead>
-                <TableHead>With effect from</TableHead>
+                <TableHead>For</TableHead>
                 <TableHead>Dispatch</TableHead>
                 <TableHead>Received</TableHead>
                 <TableHead>Status</TableHead>
@@ -159,7 +161,7 @@ export default function AdminClaimForms() {
                   <TableCell><span className="font-medium">{c.snapshot.name}</span><span className="text-xs text-slate-500 block">ID {c.epid} · {c.snapshot.designation}</span></TableCell>
                   <TableCell>{c.currentDepartmentName || c.snapshot.departmentName}</TableCell>
                   <TableCell>{c.currentDealingAssistant || "—"}</TableCell>
-                  <TableCell>{formatClaimDate(c.data.wefDate)}</TableCell>
+                  <TableCell>{claimSummary(c)}{c.formType === "conveyance" && <span className="text-xs text-slate-500 block">Rs. {Number(c.data.amount || 0).toLocaleString("en-IN")}</span>}</TableCell>
                   <TableCell className="text-xs">{c.dispatchNo} / {formatClaimDate(c.dispatchDate)}</TableCell>
                   <TableCell className="text-xs">{dateTime(c.sentAt)}</TableCell>
                   <TableCell><ClaimStatusBadge status={c.status} /></TableCell>
@@ -175,6 +177,75 @@ export default function AdminClaimForms() {
           onChanged={() => queryClient.invalidateQueries({ queryKey: LIST_KEY })} />
       )}
     </div>
+  );
+}
+
+
+// ── Rate of the conveyance allowance (super admin) ───────────────────────────
+
+function ConveyanceRates({ canEdit }: { canEdit: boolean }) {
+  const { toast } = useToast();
+  const key = ["/api/admin/claim-forms/conveyance-rates"];
+  const { data } = useQuery<{ rates: ConveyanceRate[] }>({ queryKey: key, queryFn: async () => (await apiRequest("GET", key[0])).json() });
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<Array<{ from: string; amount: string; daPercent: string }>>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const rates = data?.rates || [];
+  const current = rates.length ? conveyanceRateFor(rates, localToday().slice(0, 7)) : null;
+
+  const start = () => {
+    setRows(rates.map((r) => ({ from: r.from, amount: String(r.amount), daPercent: String(r.daPercent) })));
+    setError("");
+    setOpen(true);
+  };
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await apiRequest("POST", key[0], { rates: rows.map((r) => ({ from: r.from, amount: Number(r.amount), daPercent: Number(r.daPercent) })) });
+      queryClient.invalidateQueries({ queryKey: key });
+      toast({ title: "Conveyance allowance rates saved" });
+      setOpen(false);
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <>
+      <button type="button" onClick={start} className="rounded-lg border bg-white px-3 py-2 text-sm text-left hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+        <span className="block text-xs text-slate-500">Conveyance allowance rate</span>
+        <span className="font-medium">{current ? `Rs. ${current.amount.toLocaleString("en-IN")} a month + DA ${current.daPercent}%` : "—"}</span>
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Conveyance allowance rates</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-slate-600">Each rate applies from its month until the next one starts. Bills already filled keep the amount they were filled with.</p>
+            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+              <Label className="text-xs">From month</Label><Label className="text-xs">Rs. a month</Label><Label className="text-xs">DA %</Label><span />
+              {rows.map((r, i) => (
+                <div key={i} className="contents">
+                  <Input type="month" value={r.from} disabled={!canEdit} aria-label={`Rate ${i + 1}: from month`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))} />
+                  <Input type="number" min={1} value={r.amount} disabled={!canEdit} aria-label={`Rate ${i + 1}: rupees a month`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
+                  <Input type="number" min={0} step="0.01" value={r.daPercent} disabled={!canEdit} aria-label={`Rate ${i + 1}: DA percent`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, daPercent: e.target.value } : x)))} />
+                  <Button variant="ghost" size="sm" disabled={!canEdit || rows.length === 1} aria-label={`Remove rate ${i + 1}`} onClick={() => setRows((all) => all.filter((_, j) => j !== i))}><X className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </div>
+            {canEdit ? (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => setRows((all) => [...all, { from: localToday().slice(0, 7), amount: all[all.length - 1]?.amount || "3300", daPercent: all[all.length - 1]?.daPercent || "0" }])}>Add a rate</Button>
+                <Button size="sm" disabled={busy} onClick={save}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save</Button>
+              </div>
+            ) : <p className="text-slate-500">Only a super admin can change the rates.</p>}
+            {error && <p role="alert" className="text-red-700">{error}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -234,11 +305,44 @@ function AdminClaimDialog({ claimId, onClose, onChanged }: { claimId: number; on
                 <dt className="text-slate-500">Department</dt><dd>{claim.snapshot.departmentName}</dd>
                 <dt className="text-slate-500">Register No.</dt><dd>{claim.snapshot.salaryRegisterNo || "—"}</dd>
                 <dt className="text-slate-500">Dealing assistant</dt><dd>{claim.currentDealingAssistant || "Not assigned"}</dd>
-                <dt className="text-slate-500">With effect from</dt><dd className="font-medium">{formatClaimDate(claim.data.wefDate)}</dd>
+                {claim.formType === "conveyance" ? (
+                  <>
+                    <dt className="text-slate-500">Period</dt><dd className="font-medium">{claimSummary(claim)}</dd>
+                    <dt className="text-slate-500">Vehicle</dt><dd>{claim.data.vehicleType}, {claim.data.vehicleRegNo}</dd>
+                    <dt className="text-slate-500">Address</dt><dd>{claim.data.address}</dd>
+                  </>
+                ) : (
+                  <><dt className="text-slate-500">With effect from</dt><dd className="font-medium">{formatClaimDate(claim.data.wefDate)}</dd></>
+                )}
                 {claim.formType === "hra" && <><dt className="text-slate-500">Certified</dt><dd>{HRA_OPTIONS[claim.data.option as keyof typeof HRA_OPTIONS]}</dd></>}
                 <dt className="text-slate-500">Dispatch</dt><dd>{claim.dispatchNo}, dated {formatClaimDate(claim.dispatchDate)}</dd>
                 {claim.processedMonth && <><dt className="text-slate-500">Paybill month</dt><dd>{claim.processedMonth}</dd></>}
               </dl>
+
+              {claim.formType === "conveyance" && (
+                <div className="rounded border px-3 py-2">
+                  <p className="font-medium mb-1">Months of the quarter</p>
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-slate-500"><th className="font-normal">Month</th><th className="font-normal">Visits</th><th className="font-normal text-right">Allowance</th><th className="font-normal text-right">DA</th></tr></thead>
+                    <tbody>
+                      {(claim.data.months || []).map((m: any) => (
+                        <tr key={m.month}>
+                          <td>{monthLabel(m.month)}</td>
+                          <td>{m.amount > 0 ? m.visits : CONVEYANCE_MONTH_REASONS[m.reason as keyof typeof CONVEYANCE_MONTH_REASONS] || "Not claimed"}</td>
+                          <td className="text-right">{m.amount > 0 ? m.amount.toLocaleString("en-IN") : "—"}</td>
+                          <td className="text-right">{m.amount > 0 ? m.da.toLocaleString("en-IN") : "—"}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t font-medium">
+                        <td colSpan={2}>Amount of Claim / DA</td>
+                        <td className="text-right">{Number(claim.data.amount || 0).toLocaleString("en-IN")}</td>
+                        <td className="text-right">{Number(claim.data.da || 0).toLocaleString("en-IN")}</td>
+                      </tr>
+                      <tr className="font-semibold"><td colSpan={3}>Payable with DA</td><td className="text-right">Rs. {Number(claim.data.payable || 0).toLocaleString("en-IN")}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {ai && (
                 <div className="rounded border px-3 py-2">
