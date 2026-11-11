@@ -160,6 +160,55 @@ const setExpr = (column: string, value: string | null) => {
   return DATE_COLUMNS.has(column) ? sql`${sql.raw(column)} = ${value}::date` : sql`${sql.raw(column)} = ${value}`;
 };
 
+/**
+ * Payroll-master values the online claim forms read (eligibility flags, joining and
+ * confirmation dates, spouse, bank code). They live in their own employee columns,
+ * are not part of the reviewed differences and are simply refreshed on every fetch,
+ * so a flag changed in payroll is known here after the next fetch. No other column
+ * of an employee is touched. Rows from an older sync container (without these
+ * values) are skipped, so nothing is ever blanked by accident.
+ */
+export async function refreshPayrollFlags(rows: OracleRow[]): Promise<number> {
+  const flag = (v: unknown) => {
+    const s = v === null || v === undefined ? "" : String(v).trim().toUpperCase();
+    return s || null;
+  };
+  const day = (v: unknown) => {
+    const s = v === null || v === undefined ? "" : String(v).trim().slice(0, 10);
+    const year = Number(s.slice(0, 4));
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) && year >= 1950 && year <= 2100 ? s : null;
+  };
+  const list = rows
+    .filter((o) => "con_flg" in o)
+    .map((o) => ({
+      epid: String(o.ecode).trim(),
+      joining: day(o.date_of_join),
+      confirm: day(o.confirm_date),
+      con: flag(o.con_flg),
+      hra: flag(o.hra_flg),
+      pca: flag(o.pca_flg),
+      npa: flag(o.medico),
+      vac: flag(o.vacation_code),
+      spouse: flag(o.wife_ecode),
+      bank: flag(o.bank_code),
+    }));
+  let updated = 0;
+  for (let i = 0; i < list.length; i += 2000) {
+    const r = await db.execute(sql`
+      UPDATE employees e SET
+        payroll_joining_date = x.joining::date,
+        payroll_confirm_date = x.confirm::date,
+        conveyance_flag = x.con, hra_flag = x.hra, pca_flag = x.pca, npa_flag = x.npa,
+        vacation_code = x.vac, spouse_epid = x.spouse, bank_code = x.bank,
+        payroll_flags_at = NOW()
+      FROM jsonb_to_recordset(${JSON.stringify(list.slice(i, i + 2000))}::jsonb)
+        AS x(epid text, joining text, confirm text, con text, hra text, pca text, npa text, vac text, spouse text, bank text)
+      WHERE e.epid = x.epid`);
+    updated += Number((r as any).rowCount || 0);
+  }
+  return updated;
+}
+
 export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) {
   const guard = [verifyAdminSession, requireSettingsUnlock];
 
@@ -191,7 +240,14 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
         RETURNING id`);
       await db.execute(sql`
         DELETE FROM oracle_snapshots WHERE id NOT IN (SELECT id FROM oracle_snapshots ORDER BY id DESC LIMIT ${KEEP_SNAPSHOTS})`);
-      res.json({ ok: true, id: Number((ins.rows[0] as any).id), oracleRows: rows.length, kept: kept.length });
+      // Payroll values used by the online claim forms: refreshed on every fetch
+      let payrollFlags = 0;
+      try {
+        payrollFlags = await refreshPayrollFlags(kept);
+      } catch (flagError) {
+        console.error("[OracleSync] payroll flags not refreshed:", flagError);
+      }
+      res.json({ ok: true, id: Number((ins.rows[0] as any).id), oracleRows: rows.length, kept: kept.length, payrollFlags });
     } catch (e: any) {
       console.error("[OracleSync] fetch failed:", e);
       res.status(e instanceof ServiceError ? 503 : 500).json({ message: e.message || "Fetch failed" });

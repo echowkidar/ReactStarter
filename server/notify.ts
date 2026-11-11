@@ -86,6 +86,9 @@ export const EVENT_CHANNELS: Record<string, Channel[]> = {
   "efile.moved": ["inapp", "sms"],
   "efile.draft_put_up": ["inapp"],
   "efile.draft_decided": ["inapp", "email"],
+  // Online claim forms (server/claimForms.ts)
+  "claim.submitted": ["inapp", "email"],
+  "claim.returned_department": ["inapp", "email"],
 };
 
 export type Recipient = { kind: "department"; departmentId: number } | { kind: "staff"; staffId: number };

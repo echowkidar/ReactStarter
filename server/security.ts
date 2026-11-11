@@ -156,12 +156,25 @@ async function dakFileDepartments(rel: string): Promise<number[]> {
 }
 
 /**
+ * Department of the claim form a file under uploads/claims/ belongs to
+ * (undertakings, signed forms). null = no such file on record.
+ */
+async function claimFileDepartment(rel: string): Promise<number | null> {
+  const r = await db.execute(sql`
+    SELECT c.department_id FROM claim_form_files f JOIN claim_forms c ON c.id = f.claim_id
+    WHERE f.file_url = ${"/uploads/" + rel} LIMIT 1`);
+  const row = r.rows[0] as any;
+  return row ? Number(row.department_id) : null;
+}
+
+/**
  * Who may open a file under /uploads:
  *   admins → everything;
  *   anyone → login-page downloads and notice pictures;
  *   LPC files → admins only;
  *   employee documents (PAN, Aadhaar, bank…) → only that employee's department;
  *   dak files → only departments that are party to that dak;
+ *   claim form files (undertakings, signed forms) → only the department of that claim;
  *   other files (tickets, reports…) → any logged-in user.
  * Also: files are never run as web pages (nosniff, sandbox, download for other types).
  */
@@ -189,6 +202,15 @@ export async function uploadsGuard(req: Request, res: Response, next: NextFuncti
 
   try {
     if (await sessionAdmin(req)) return next();
+    // Claim forms: never public, and only the department that certifies the claim
+    if (rel.startsWith("claims/")) {
+      const deptId = await sessionDepartmentId(req);
+      if (!deptId) return loginNeeded(req, res);
+      if ((await claimFileDepartment(rel)) !== deptId) {
+        return res.status(403).json({ message: "You are not allowed to access this", code: "FORBIDDEN" });
+      }
+      return next();
+    }
     const isLpc = rel.startsWith("lpc/");
     const info = isLpc ? { isPublic: false, employeeDepts: [] } : await fileInfo(rel);
     const dakDepts = rel.startsWith("dispatch/") ? await dakFileDepartments(rel) : null;

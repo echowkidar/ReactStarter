@@ -15,3 +15,6 @@ debug_*.txt
 /export.xls
 /Master_*.xlsx
 *.lnk
+
+# One-time Oracle dictionary reports (payroll structure) - never commit
+oracle-sync/discovery_*.txt

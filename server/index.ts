@@ -90,6 +90,10 @@ export async function initApp() {
     const { registerNotificationRoutes } = await import("./notify");
     registerNotificationRoutes(app);
 
+    // Online claim forms (NPA, HRA …): employee without login → department → Salary Section
+    const { registerClaimFormRoutes } = await import("./claimForms");
+    registerClaimFormRoutes(app);
+
     // Setup Cron Jobs
     setupCronJobs();
 

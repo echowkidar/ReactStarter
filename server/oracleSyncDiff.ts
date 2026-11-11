@@ -39,6 +39,14 @@ export type OracleRow = {
   suspend: string | null;
   pay_grade: string | null;
   order_no: string | null;
+  // Read for the online claim forms (absent when the sync container is an older version)
+  confirm_date?: string | null;
+  con_flg?: string | null;
+  hra_flg?: string | null;
+  pca_flg?: string | null;
+  medico?: string | null;
+  vacation_code?: string | null;
+  wife_ecode?: string | null;
   paid_last_month: number;
 };
 

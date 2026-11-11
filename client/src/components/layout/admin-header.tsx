@@ -13,7 +13,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   User, ShieldCheck, Briefcase, LayoutDashboard, FileCheck, Users, Mail, FileImage, ScrollText,
-  Send, Ticket, Megaphone, UserCog, Phone, Settings, LogOut, Menu, ChevronRight,
+  Send, Ticket, Megaphone, UserCog, Phone, Settings, LogOut, Menu, ChevronRight, FileSignature,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/queryClient";
@@ -111,6 +111,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
     { href: "/admin/documents", label: "Documents", icon: FileImage },
     { href: "/admin/lpc", label: "LPC", icon: ScrollText },
     { href: "/admin/dispatch", label: "Dak", icon: Send },
+    { href: "/admin/claim-forms", label: "Claim Forms", icon: FileSignature },
     ...(access.tickets ? [{ href: "/admin/tickets", label: "Tickets", icon: Ticket, badge: "tickets" as const }] : []),
     ...(access.notices ? [{ href: "/admin/notices", label: "Notices", icon: Megaphone }] : []),
     ...(access.contacts ? [{ href: "/admin/department-contacts", label: "Contacts", icon: Phone }] : []),

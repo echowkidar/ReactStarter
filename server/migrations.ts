@@ -649,6 +649,100 @@ export async function runMigrations() {
       console.error("[Migrations] e-Office tables failed (staff logins / e-files / attachments affected):", officeErr);
     }
 
+    // ── Online claim forms (NPA / HRA / PCA / Conveyance / CEA) ──────────────
+    // Only NEW tables and NEW nullable columns: nothing existing is changed, so the
+    // app version without claim forms keeps working on the same database.
+    try {
+      // Payroll-master values the forms need. Filled by the Oracle sync on every
+      // "Fetch" (server/oracleSync.ts → refreshPayrollFlags); never edited in forms.
+      await db.execute(sql`
+        ALTER TABLE employees
+          ADD COLUMN IF NOT EXISTS payroll_joining_date DATE,
+          ADD COLUMN IF NOT EXISTS payroll_confirm_date DATE,
+          ADD COLUMN IF NOT EXISTS conveyance_flag TEXT,
+          ADD COLUMN IF NOT EXISTS hra_flag TEXT,
+          ADD COLUMN IF NOT EXISTS pca_flag TEXT,
+          ADD COLUMN IF NOT EXISTS npa_flag TEXT,
+          ADD COLUMN IF NOT EXISTS vacation_code TEXT,
+          ADD COLUMN IF NOT EXISTS spouse_epid TEXT,
+          ADD COLUMN IF NOT EXISTS bank_code TEXT,
+          ADD COLUMN IF NOT EXISTS payroll_flags_at TIMESTAMPTZ;
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS claim_forms (
+          id SERIAL PRIMARY KEY,
+          form_type TEXT NOT NULL,               -- npa | hra | pca | conveyance | cea
+          ref_no TEXT UNIQUE,                    -- e.g. NPA/2026/000123 (set right after insert)
+          revision INTEGER NOT NULL DEFAULT 1,   -- +1 on every change of the data: old prints stop matching
+          employee_id INTEGER NOT NULL,
+          epid TEXT NOT NULL,
+          department_id INTEGER NOT NULL,        -- department that certifies and uploads (where attendance comes from)
+          period_key TEXT NOT NULL,              -- what the claim is for (appointment / half-year / quarter …)
+          period_label TEXT,
+          status TEXT NOT NULL DEFAULT 'draft',  -- draft | submitted | sent | returned_department | returned_employee | accepted | processed | rejected | cancelled
+          data JSONB NOT NULL DEFAULT '{}'::jsonb,       -- what the employee filled in
+          snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,   -- name / designation / department … as they were at that time
+          dispatch_no TEXT,
+          dispatch_date DATE,
+          ai_check JSONB,
+          return_reason TEXT,
+          returned_by TEXT,
+          decided_by TEXT,
+          processed_month TEXT,                  -- paybill month in which it was given effect, 'YYYY-MM'
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          submitted_at TIMESTAMPTZ,
+          sent_at TIMESTAMPTZ,
+          decided_at TIMESTAMPTZ
+        );
+      `);
+      // One live claim per employee + form + period (rejected / cancelled ones do not count)
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_claim_forms_live ON claim_forms (employee_id, form_type, period_key)
+        WHERE status NOT IN ('rejected', 'cancelled')`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_claim_forms_department ON claim_forms (department_id, status)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_claim_forms_status ON claim_forms (status, form_type)`);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS claim_form_files (
+          id SERIAL PRIMARY KEY,
+          claim_id INTEGER NOT NULL,
+          kind TEXT NOT NULL,                    -- undertaking | signed_form | …
+          file_url TEXT NOT NULL,
+          revision INTEGER NOT NULL DEFAULT 1,
+          uploaded_by TEXT NOT NULL,
+          is_current BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_claim_form_files_claim ON claim_form_files (claim_id, kind)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_claim_form_files_url ON claim_form_files (file_url)`);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS claim_form_events (
+          id SERIAL PRIMARY KEY,
+          claim_id INTEGER NOT NULL,
+          action TEXT NOT NULL,
+          from_status TEXT,
+          to_status TEXT,
+          actor_type TEXT NOT NULL,              -- employee | department | staff | admin | system
+          actor_name TEXT NOT NULL,
+          remarks TEXT,
+          ip TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_claim_form_events_claim ON claim_form_events (claim_id, id)`);
+
+      // The forms are switched OFF until the super admin turns them on
+      await db.execute(sql`
+        INSERT INTO app_settings (key, value) VALUES ('claim_forms_enabled', 'false')
+        ON CONFLICT (key) DO NOTHING`);
+    } catch (claimErr) {
+      console.error("[Migrations] claim form tables failed (online claim forms affected):", claimErr);
+    }
+
     console.log("Database migrations completed successfully");
 
   } catch (error) {

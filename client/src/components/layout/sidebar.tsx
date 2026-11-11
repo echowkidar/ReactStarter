@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { logout, getCurrentDepartment, checkDepartmentName, getCurrentStaff, isDeptSupervisor, STAFF_ROLE_LABELS } from "@/lib/auth";
-import { FolderOpen, UserCog } from "lucide-react";
+import { FolderOpen, UserCog, FileSignature } from "lucide-react";
 import NotificationBell from "@/components/dak/NotificationBell";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -117,6 +117,7 @@ const navigation = [
   { name: "Email", href: "/dashboard/mailbox", icon: Mail },
   { name: "Dak Receive/Dispatch", href: "/dashboard/dispatch", icon: Send },
   { name: "E-Files", href: "/dashboard/efiles", icon: FolderOpen },
+  { name: "Claim Forms", href: "/dashboard/forms", icon: FileSignature },
   { name: "Global Search", href: "/dashboard/global-search", icon: Search },
   { name: "Document Gallery", href: "/dashboard/documents", icon: FileImage },
   { name: "Useful Downloads", href: "/dashboard/downloads", icon: DownloadCloud },
@@ -216,6 +217,18 @@ export default function Sidebar({ className }: SidebarProps) {
     refetchInterval: 60000,
   });
   const unreadDispatchCount = (unreadDispatchData?.count || 0) + ((unreadDispatchData as any)?.myPending || 0);
+  // Claim forms waiting for the department (signed form to be uploaded)
+  const { data: claimFormData } = useQuery<{ pending: number; enabled: boolean }>({
+    queryKey: [`/api/departments/${department?.id}/claim-forms/count`],
+    queryFn: async () => {
+      const res = await fetch(`/api/departments/${department?.id}/claim-forms/count`);
+      if (!res.ok) throw new Error("Network error");
+      return res.json();
+    },
+    enabled: !!department?.id,
+    refetchInterval: 60000,
+  });
+  const pendingClaimForms = claimFormData?.pending || 0;
   const staffPerson = getCurrentStaff();
 
   // Send heartbeat for active user tracking
@@ -256,7 +269,9 @@ export default function Sidebar({ className }: SidebarProps) {
           </p>
         )}
         <div className="space-y-0.5">
-          {navigation.filter((item: any) => !item.supervisorOnly || isDeptSupervisor()).map((item) => (
+          {navigation.filter((item: any) => (!item.supervisorOnly || isDeptSupervisor())
+            // Claim Forms shows once the forms are open (or something is already waiting)
+            && (item.name !== "Claim Forms" || claimFormData?.enabled || pendingClaimForms > 0)).map((item) => (
             <Link key={item.name} href={item.href}>
               <Button
                 variant="ghost"
@@ -274,6 +289,11 @@ export default function Sidebar({ className }: SidebarProps) {
                 {item.name === "Email" && unreadEmailCount > 0 && (
                   <span className="absolute right-2 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
                     {unreadEmailCount > 99 ? '99+' : unreadEmailCount}
+                  </span>
+                )}
+                {item.name === "Claim Forms" && pendingClaimForms > 0 && (
+                  <span className="absolute right-2 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                    {pendingClaimForms > 99 ? '99+' : pendingClaimForms}
                   </span>
                 )}
                 {item.name === "Dak Receive/Dispatch" && unreadDispatchCount > 0 && (

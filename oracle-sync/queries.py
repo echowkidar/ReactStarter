@@ -70,6 +70,13 @@ SELECT m.ecode,
        m.suspend,
        m.pay_grade,
        m.order_no,
+       TO_CHAR(m.confirm_date, 'YYYY-MM-DD')       AS confirm_date,
+       m.con_flg,
+       m.hra_flg,
+       m.pca_flg,
+       m.medico,
+       m.vacation_code,
+       m.wife_ecode,
        CASE WHEN p.ecode IS NULL THEN 0 ELSE 1 END AS paid_last_month
 FROM amu_pay.m_emp_mast m
 LEFT JOIN amu_pay.m_desig_mast d ON d.desig = m.desig_code

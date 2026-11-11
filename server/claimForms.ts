@@ -1,0 +1,828 @@
+// Online claim forms (NPA, HRA — later PCA, Conveyance, CEA).
+// ─────────────────────────────────────────────────────────────────────────────
+// Three groups of routes:
+//   /api/public/forms/*                      the employee, without a login
+//       (Permanent ID + date of joining; a short "claimant" session after that)
+//   /api/departments/:departmentId/claim-forms/*   the department that certifies
+//       (prints, uploads the signed scan with dispatch no. / date, or returns it)
+//   /api/admin/claim-forms/*                 the Salary Section
+//       (sees a claim only after the department uploaded the signed form)
+// Rules of the forms themselves are in shared/claimForms.ts, prints in claimPdf.ts.
+//
+// The public routes are open in the /api gate (auth.ts → "/api/public/"), so every
+// one of them checks the claimant session here. Nothing here reads Oracle: employee
+// data comes from the app's own tables (kept current by the Oracle sync).
+import type { Express, Request, Response, NextFunction } from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { sql } from "drizzle-orm";
+import { db } from "./db";
+import { sessionAdmin, sessionDepartmentId, sessionStaff, regenerateKeeping, saveSession } from "./auth";
+import { rateLimit, safeUploadName } from "./security";
+import { notify } from "./notify";
+import { buildClaimPdf, claimPrintCode, claimPrintRef } from "./claimPdf";
+import {
+  CLAIM_DATA_SCHEMAS, CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS,
+  DEPARTMENT_ACTIONABLE, EMPLOYEE_EDITABLE, appointmentKey, formatClaimDate, isClaimFormType,
+  type ClaimForm, type ClaimFormType, type ClaimSnapshot, type ClaimStatus,
+} from "@shared/claimForms";
+
+declare module "express-session" {
+  interface SessionData {
+    // Employee who proved who they are on the public forms page (employees.id)
+    claimEmployeeId?: number;
+    claimAt?: number;
+  }
+}
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CLAIM_UPLOAD_DIR = path.join(__dirname, "../uploads/claims");
+const CLAIMANT_IDLE_MS = 30 * 60 * 1000;
+const MAX_WRONG_TRIES = 5;
+const NOT_ELIGIBLE = "You cannot fill this form online. Please contact your Department and the Salary Section.";
+const ADMIN_VISIBLE: ClaimStatus[] = ["sent", "returned_department", "accepted", "processed", "rejected"];
+
+// ── Small helpers ────────────────────────────────────────────────────────────
+
+const clean = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
+const clientIp = (req: Request) => String(req.ip || req.socket.remoteAddress || "unknown");
+const isIsoDate = (v: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+const todayIst = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+
+let enabledCache: { at: number; value: boolean } | null = null;
+export async function claimFormsEnabled(): Promise<boolean> {
+  if (enabledCache && Date.now() - enabledCache.at < 10_000) return enabledCache.value;
+  const r = await db.execute(sql`SELECT value FROM app_settings WHERE key = 'claim_forms_enabled'`);
+  const value = String((r.rows[0] as any)?.value || "false") === "true";
+  enabledCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Same Cloudflare check as the login pages; skipped when no key is configured (local testing) */
+async function captchaOk(token: unknown, ip: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true;
+  if (!token || typeof token !== "string") return false;
+  try {
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ secret, response: token, remoteip: ip }),
+    });
+    return !!((await r.json()) as any).success;
+  } catch (error) {
+    console.error("[ClaimForms] captcha check failed:", error);
+    return false;
+  }
+}
+
+// Wrong tries are counted per Permanent ID + network, in the same table as the logins
+const tryKey = (epid: string, req: Request) => `claim|${epid}|${clientIp(req)}`;
+async function lockedMinutes(key: string): Promise<number> {
+  const r = await db.execute(sql`
+    SELECT CEIL(EXTRACT(EPOCH FROM (locked_until - NOW())) / 60)::int AS minutes
+    FROM login_attempts WHERE identifier = ${key} AND locked_until > NOW()`);
+  return Number((r.rows[0] as any)?.minutes || 0);
+}
+async function wrongTry(key: string): Promise<void> {
+  const r = await db.execute(sql`
+    UPDATE login_attempts SET attempt_count = attempt_count + 1, last_attempt_at = NOW(),
+      locked_until = CASE WHEN attempt_count + 1 >= ${MAX_WRONG_TRIES} THEN NOW() + INTERVAL '30 minutes' ELSE NULL END
+    WHERE identifier = ${key} RETURNING id`);
+  if (!r.rows.length) {
+    await db.execute(sql`INSERT INTO login_attempts (identifier, attempt_count, last_attempt_at) VALUES (${key}, 1, NOW())`);
+  }
+}
+const clearTries = (key: string) => db.execute(sql`DELETE FROM login_attempts WHERE identifier = ${key}`);
+
+// ── Reading claims ───────────────────────────────────────────────────────────
+
+/** A TIMESTAMPTZ column as ISO text in UTC ("…Z"); only ever called with fixed column names */
+function utc(column: string) {
+  return sql.raw(`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`);
+}
+
+const CLAIM_COLUMNS = sql`
+  c.id, c.form_type AS "formType", c.ref_no AS "refNo", c.revision, c.employee_id AS "employeeId", c.epid,
+  c.department_id AS "departmentId", c.period_key AS "periodKey", c.period_label AS "periodLabel", c.status,
+  c.data, c.snapshot, c.dispatch_no AS "dispatchNo", c.dispatch_date::text AS "dispatchDate", c.ai_check AS "aiCheck",
+  c.return_reason AS "returnReason", c.returned_by AS "returnedBy", c.decided_by AS "decidedBy",
+  c.processed_month AS "processedMonth", ${utc("c.created_at")} AS "createdAt", ${utc("c.updated_at")} AS "updatedAt",
+  ${utc("c.submitted_at")} AS "submittedAt", ${utc("c.sent_at")} AS "sentAt", ${utc("c.decided_at")} AS "decidedAt"`;
+
+function toClaim(row: any): ClaimForm {
+  const iso = (v: any) => (v instanceof Date ? v.toISOString() : v ? String(v) : null);
+  return {
+    ...row,
+    id: Number(row.id),
+    revision: Number(row.revision),
+    employeeId: Number(row.employeeId),
+    departmentId: Number(row.departmentId),
+    data: typeof row.data === "string" ? JSON.parse(row.data) : row.data || {},
+    snapshot: typeof row.snapshot === "string" ? JSON.parse(row.snapshot) : row.snapshot || {},
+    aiCheck: typeof row.aiCheck === "string" ? JSON.parse(row.aiCheck) : row.aiCheck || null,
+    createdAt: iso(row.createdAt)!, updatedAt: iso(row.updatedAt)!,
+    submittedAt: iso(row.submittedAt), sentAt: iso(row.sentAt), decidedAt: iso(row.decidedAt),
+  };
+}
+
+async function getClaim(id: number): Promise<ClaimForm | null> {
+  if (!Number.isFinite(id)) return null;
+  const r = await db.execute(sql`SELECT ${CLAIM_COLUMNS} FROM claim_forms c WHERE c.id = ${id}`);
+  return r.rows[0] ? toClaim(r.rows[0]) : null;
+}
+
+async function withDetail(claim: ClaimForm): Promise<ClaimForm> {
+  const files = (await db.execute(sql`
+    SELECT id, kind, file_url AS "fileUrl", revision, uploaded_by AS "uploadedBy", is_current AS "isCurrent", ${utc("created_at")} AS "createdAt"
+    FROM claim_form_files WHERE claim_id = ${claim.id} ORDER BY id DESC`)).rows as any[];
+  const events = (await db.execute(sql`
+    SELECT id, action, from_status AS "fromStatus", to_status AS "toStatus", actor_type AS "actorType",
+           actor_name AS "actorName", remarks, ${utc("created_at")} AS "createdAt"
+    FROM claim_form_events WHERE claim_id = ${claim.id} ORDER BY id`)).rows as any[];
+  return {
+    ...claim,
+    files: files.map((f) => ({ ...f, id: Number(f.id), revision: Number(f.revision) })),
+    events: events.map((e) => ({ ...e, id: Number(e.id) })),
+    hasUndertaking: files.some((f) => f.kind === "undertaking" && f.isCurrent && Number(f.revision) === claim.revision),
+  };
+}
+
+/** What the employee may see of a claim: no file addresses (they have no login to open them) */
+function forEmployee(claim: ClaimForm): ClaimForm {
+  return {
+    ...claim,
+    aiCheck: null,
+    files: claim.files?.map((f) => ({ ...f, fileUrl: "" })),
+    events: claim.events?.map((e) => ({ ...e, actorName: e.actorType === "employee" ? e.actorName : e.actorType === "admin" ? "Salary Section" : "Department" })),
+  };
+}
+
+type Actor = { type: "employee" | "department" | "staff" | "admin" | "system"; name: string };
+
+async function logEvent(req: Request | null, claimId: number, action: string, from: string | null, to: string | null, actor: Actor, remarks?: string | null) {
+  await db.execute(sql`
+    INSERT INTO claim_form_events (claim_id, action, from_status, to_status, actor_type, actor_name, remarks, ip)
+    VALUES (${claimId}, ${action}, ${from}, ${to}, ${actor.type}, ${actor.name}, ${remarks || null}, ${req ? clientIp(req) : null})`);
+}
+
+/**
+ * Move a claim from one of `from` to `to` — in one statement, so two people acting
+ * at the same moment cannot both succeed. Returns the claim, or null if its status
+ * had already changed.
+ */
+async function move(claimId: number, from: ClaimStatus[], to: ClaimStatus, extra: ReturnType<typeof sql>[] = []): Promise<ClaimForm | null> {
+  const sets = [sql`status = ${to}`, sql`updated_at = NOW()`, ...extra];
+  const r = await db.execute(sql`
+    UPDATE claim_forms SET ${sql.join(sets, sql`, `)}
+    WHERE id = ${claimId} AND status IN (${sql.join(from.map((s) => sql`${s}`), sql`, `)})
+    RETURNING id`);
+  return r.rows.length ? getClaim(claimId) : null;
+}
+
+// ── Employee (claimant) ──────────────────────────────────────────────────────
+
+type EmployeeRow = {
+  id: number; epid: string; name: string; designation: string; department_id: number; pay_level: string | null;
+  salary_register_no: string | null; salary_asstt: string | null; is_active: string; bank_account: string | null;
+  bank_name: string | null; bank_code: string | null; joining_date: string | null; payroll_joining_date: string | null;
+  department_name: string | null; hod_title: string | null; host_department_id: number | null;
+  host_department_name: string | null; host_hod_title: string | null;
+};
+
+const EMPLOYEE_SELECT = sql`
+  SELECT e.id, e.epid, e.name, e.designation, e.department_id, e.pay_level, e.salary_register_no, e.salary_asstt,
+         e.is_active, e.bank_account, e.bank_name, e.bank_code,
+         e.joining_date::text AS joining_date, e.payroll_joining_date::text AS payroll_joining_date,
+         d.name AS department_name, d.hod_title,
+         h.id AS host_department_id, h.name AS host_department_name, h.hod_title AS host_hod_title
+  FROM employees e
+  LEFT JOIN departments d ON d.id = e.department_id
+  LEFT JOIN LATERAL (
+    SELECT r.host_department_id FROM reporting_employees r
+    WHERE r.employee_id = e.id AND r.status = 'active' ORDER BY r.id DESC LIMIT 1
+  ) rep ON true
+  LEFT JOIN departments h ON h.id = rep.host_department_id`;
+
+async function employeeById(id: number): Promise<EmployeeRow | null> {
+  const r = await db.execute(sql`${EMPLOYEE_SELECT} WHERE e.id = ${id}`);
+  return (r.rows[0] as any) || null;
+}
+
+/** A real date of joining (placeholders and typing mistakes do not count) */
+function realDate(v: string | null): string | null {
+  if (!v || !isIsoDate(v)) return null;
+  const year = Number(v.slice(0, 4));
+  return year >= 1950 && year <= new Date().getFullYear() ? v : null;
+}
+
+/** Paid by separate cheque: these employees do not use the online forms */
+function separateCheque(e: EmployeeRow): boolean {
+  return clean(e.bank_code).toUpperCase() === "SP" || /separate\s+cheque/i.test(clean(e.bank_name));
+}
+
+/** The department that certifies: where the employee's attendance comes from */
+function certifyingDepartment(e: EmployeeRow): { id: number; name: string; hodTitle: string | null } {
+  if (e.host_department_id) return { id: Number(e.host_department_id), name: clean(e.host_department_name), hodTitle: e.host_hod_title };
+  return { id: Number(e.department_id), name: clean(e.department_name), hodTitle: e.hod_title };
+}
+
+function employeeSummary(e: EmployeeRow) {
+  const dept = certifyingDepartment(e);
+  return {
+    name: e.name, epid: e.epid, designation: e.designation, departmentName: dept.name,
+    payLevel: e.pay_level, joiningDate: realDate(e.payroll_joining_date) || realDate(e.joining_date),
+  };
+}
+
+function snapshotOf(e: EmployeeRow): ClaimSnapshot {
+  const dept = certifyingDepartment(e);
+  return {
+    name: clean(e.name), epid: clean(e.epid), designation: clean(e.designation), departmentName: dept.name,
+    payLevel: e.pay_level, salaryRegisterNo: e.salary_register_no, dealingAssistant: clean(e.salary_asstt).toUpperCase() || null,
+    hodTitle: dept.hodTitle,
+  };
+}
+
+/** The identified employee of this request, or null (also ends an idle claimant session) */
+async function claimant(req: Request): Promise<EmployeeRow | null> {
+  const id = req.session?.claimEmployeeId;
+  if (!id) return null;
+  if (!req.session.claimAt || Date.now() - req.session.claimAt > CLAIMANT_IDLE_MS) {
+    delete req.session.claimEmployeeId;
+    delete req.session.claimAt;
+    return null;
+  }
+  const e = await employeeById(id);
+  if (!e || e.is_active !== "active") return null;
+  req.session.claimAt = Date.now();
+  return e;
+}
+
+async function claimsOfEmployee(employeeId: number): Promise<ClaimForm[]> {
+  const r = await db.execute(sql`SELECT ${CLAIM_COLUMNS} FROM claim_forms c WHERE c.employee_id = ${employeeId} ORDER BY c.id DESC`);
+  return Promise.all(r.rows.map(toClaim).map(async (c) => forEmployee(await withDetail(c))));
+}
+
+/** Checks the filled data of a form; returns the clean data or an error message */
+function checkData(formType: ClaimFormType, raw: unknown, e: EmployeeRow): { data?: Record<string, any>; error?: string } {
+  const parsed = CLAIM_DATA_SCHEMAS[formType].safeParse(raw);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message || "Please fill the form completely" };
+  const data = parsed.data as Record<string, any>;
+  const wef = String(data.wefDate);
+  if (Number.isNaN(Date.parse(wef))) return { error: "Please choose a valid date" };
+  // "With effect from" cannot be before the employee joined, nor far in the future
+  const joined = [realDate(e.payroll_joining_date), realDate(e.joining_date)].filter(Boolean).sort()[0] as string | undefined;
+  if (joined && wef < joined) return { error: "The date \"With Effect From\" cannot be before your date of joining." };
+  const limit = new Date(Date.now() + 62 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  if (wef > limit) return { error: "The date \"With Effect From\" is too far in the future." };
+  return { data };
+}
+
+// ── AI check of the signed scan (same OCR service as the signed attendance report) ──
+
+type AiCheck = {
+  configured: boolean; checkedAt: string; qualityOk: boolean | null; refFound: boolean | null; otherRef: string | null;
+  dispatchNoFound: boolean | null; dispatchDateFound: boolean | null; message: string | null;
+};
+
+async function aiCheckSignedForm(file: Express.Multer.File, claim: ClaimForm): Promise<AiCheck> {
+  const result: AiCheck = {
+    configured: false, checkedAt: new Date().toISOString(), qualityOk: null, refFound: null, otherRef: null,
+    dispatchNoFound: null, dispatchDateFound: null, message: null,
+  };
+  const url = process.env.OCR_API_URL;
+  const token = process.env.OCR_API_TOKEN;
+  if (!url || !token || token === "CHANGE_ME") return result;
+  result.configured = true;
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([file.buffer], { type: file.mimetype }), file.originalname || "claim.pdf");
+    const upstream = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form as any });
+    if (!upstream.ok) {
+      result.message = "The checking service did not answer. The scan was not checked.";
+      return result;
+    }
+    const data: any = await upstream.json();
+    const message = String(data.message || "").toLowerCase();
+    // The service was trained on attendance reports and calls other papers a "wrong document":
+    // that is not a quality problem. Only real image problems count here.
+    const imageProblem = /blurr|dark|blank|low resolution|landscape|unreadable/.test(message);
+    result.qualityOk = !(data.quality_acceptable === false && imageProblem);
+    result.dispatchNoFound = data.dispatch_number_found ?? null;
+    result.dispatchDateFound = data.dispatch_date_found ?? null;
+
+    // Is this the print of THIS claim (and of its latest revision)? O/0 and I/1 are often mixed up by OCR.
+    const squash = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+    const textRead = squash(`${data.region_ocr_text || ""} ${data.text || ""} ${data.transaction_id_extracted || ""}`);
+    if (textRead.length > 20) {
+      const wanted = [squash(claimPrintRef(claim.refNo, claim.revision)), squash(claimPrintCode(claim.refNo, claim.revision))];
+      result.refFound = wanted.some((w) => textRead.includes(w));
+      if (!result.refFound) {
+        const other = new RegExp(`${squash(CLAIM_FORM_DEFS[claim.formType].code)}20\\d{2}\\d{6}R\\d+`).exec(textRead);
+        result.otherRef = other ? other[0] : null;
+      }
+    }
+    result.message = imageProblem ? String(data.message || "The scan is not clear.") : null;
+  } catch (error: any) {
+    console.error("[ClaimForms] AI check failed:", error?.message || error);
+    result.message = "The checking service could not be reached. The scan was not checked.";
+  }
+  return result;
+}
+
+// ── Uploads ──────────────────────────────────────────────────────────────────
+
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, ["application/pdf", "image/jpeg", "image/png"].includes(file.mimetype)),
+});
+
+/** The file really is a PDF / JPEG / PNG (first bytes), whatever its name says */
+function realFileType(buffer: Buffer): "application/pdf" | "image/jpeg" | "image/png" | null {
+  if (buffer.length < 8) return null;
+  if (buffer.subarray(0, 5).toString("latin1") === "%PDF-") return "application/pdf";
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  return null;
+}
+
+async function saveClaimFile(claim: ClaimForm, kind: string, file: Express.Multer.File, uploadedBy: string): Promise<string> {
+  const mimetype = realFileType(file.buffer);
+  if (!mimetype) throw Object.assign(new Error("Only PDF, JPG or PNG files can be uploaded."), { status: 400 });
+  await fs.promises.mkdir(CLAIM_UPLOAD_DIR, { recursive: true });
+  const name = safeUploadName(`${claim.formType}-${kind}-${claim.id}`, { mimetype, originalname: "" });
+  await fs.promises.writeFile(path.join(CLAIM_UPLOAD_DIR, name), file.buffer);
+  const fileUrl = `/uploads/claims/${name}`;
+  await db.execute(sql`UPDATE claim_form_files SET is_current = false WHERE claim_id = ${claim.id} AND kind = ${kind}`);
+  await db.execute(sql`
+    INSERT INTO claim_form_files (claim_id, kind, file_url, revision, uploaded_by)
+    VALUES (${claim.id}, ${kind}, ${fileUrl}, ${claim.revision}, ${uploadedBy})`);
+  return fileUrl;
+}
+
+function sendPdf(res: Response, claim: ClaimForm, bytes: Uint8Array) {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${claim.refNo.replace(/[^A-Za-z0-9]+/g, "-")}-R${claim.revision}.pdf"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(Buffer.from(bytes));
+}
+
+const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response, _next: NextFunction) => {
+  try {
+    await fn(req, res);
+  } catch (error: any) {
+    if (error?.status && error.status < 500) return res.status(error.status).json({ message: error.message });
+    console.error("[ClaimForms]", req.method, req.path, error);
+    if (!res.headersSent) res.status(500).json({ message: "Something went wrong. Please try again." });
+  }
+};
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+export function registerClaimFormRoutes(app: Express) {
+  // ═══ Employee (no login) ═══════════════════════════════════════════════════
+  app.use("/api/public/forms/identify",
+    rateLimit({ windowMs: 15 * 60_000, max: 20, message: "Too many attempts from this network. Please wait 15 minutes." }));
+  app.use("/api/public/forms/track", rateLimit({ windowMs: 15 * 60_000, max: 30 }));
+  app.use("/api/public/forms", rateLimit({ windowMs: 60_000, max: 120 }));
+
+  // Everything public is closed while the forms are switched off
+  app.use("/api/public/forms", async (req, res, next) => {
+    try {
+      if (req.path === "/config" || (await claimFormsEnabled())) return next();
+      res.status(403).json({ message: "Online forms are not open at present.", code: "FORMS_CLOSED" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/public/forms/config", wrap(async (_req, res) => {
+    res.json({
+      enabled: await claimFormsEnabled(),
+      forms: CLAIM_FORM_TYPES.map((t) => {
+        const d = CLAIM_FORM_DEFS[t];
+        return { type: d.type, title: d.title, shortTitle: d.shortTitle, description: d.description, needsUndertaking: d.needsUndertaking };
+      }),
+    });
+  }));
+
+  // Permanent ID + date of joining (or, where no date of joining is on record, the
+  // last four digits of the salary account). The answer never says which part was wrong.
+  app.post("/api/public/forms/identify", wrap(async (req, res) => {
+    const epid = clean(req.body?.epid);
+    const joiningDate = clean(req.body?.joiningDate);
+    const accountLast4 = clean(req.body?.accountLast4).replace(/\D/g, "");
+    if (!/^\d{5}$/.test(epid)) return res.status(400).json({ message: "Permanent ID Number must be 5 digits." });
+    if (!isIsoDate(joiningDate) && accountLast4.length !== 4) {
+      return res.status(400).json({ message: "Please enter your date of joining." });
+    }
+    if (!(await captchaOk(req.body?.turnstileToken, clientIp(req)))) {
+      return res.status(400).json({ message: "Security check failed. Please try again." });
+    }
+    const key = tryKey(epid, req);
+    const minutes = await lockedMinutes(key);
+    if (minutes > 0) return res.status(429).json({ message: `Too many wrong attempts. Please try again after ${minutes} minutes.` });
+
+    const row = (await db.execute(sql`${EMPLOYEE_SELECT} WHERE e.epid = ${epid} AND e.is_active = 'active' ORDER BY e.id LIMIT 1`)).rows[0] as any as EmployeeRow | undefined;
+    let ok = false;
+    if (row) {
+      const dates = [realDate(row.payroll_joining_date), realDate(row.joining_date)].filter(Boolean);
+      if (dates.length) {
+        ok = isIsoDate(joiningDate) && dates.includes(joiningDate);
+      } else {
+        // no date of joining on record: last four digits of the salary account
+        const account = clean(row.bank_account).replace(/\D/g, "");
+        ok = accountLast4.length === 4 && account.length >= 4 && account.slice(-4) === accountLast4;
+      }
+    }
+    if (!row || !ok) {
+      await wrongTry(key);
+      return res.status(401).json({ message: "These details do not match our records. Please check and try again, or contact your Department." });
+    }
+    await clearTries(key);
+    if (separateCheque(row)) return res.status(403).json({ message: NOT_ELIGIBLE, code: "NOT_ELIGIBLE" });
+
+    await regenerateKeeping(req);
+    req.session.claimEmployeeId = Number(row.id);
+    req.session.claimAt = Date.now();
+    await saveSession(req);
+    res.json({ employee: employeeSummary(row), claims: await claimsOfEmployee(Number(row.id)) });
+  }));
+
+  app.get("/api/public/forms/me", wrap(async (req, res) => {
+    const e = await claimant(req);
+    if (!e) return res.status(401).json({ message: "Please enter your details again.", code: "CLAIMANT_REQUIRED" });
+    res.json({ employee: employeeSummary(e), claims: await claimsOfEmployee(Number(e.id)) });
+  }));
+
+  app.post("/api/public/forms/logout", wrap(async (req, res) => {
+    delete req.session.claimEmployeeId;
+    delete req.session.claimAt;
+    await saveSession(req);
+    res.json({ ok: true });
+  }));
+
+  // Status by reference number (no session): only the status, nothing personal
+  app.post("/api/public/forms/track", wrap(async (req, res) => {
+    const refNo = clean(req.body?.refNo).toUpperCase().replace(/\/R\d+$/, "");
+    const epid = clean(req.body?.epid);
+    const r = await db.execute(sql`
+      SELECT form_type, status, ${utc("updated_at")} AS updated_at FROM claim_forms WHERE UPPER(ref_no) = ${refNo} AND epid = ${epid}`);
+    const row = r.rows[0] as any;
+    if (!row) return res.status(404).json({ message: "No form found with this reference number and Permanent ID." });
+    const status = row.status as ClaimStatus;
+    res.json({
+      refNo, form: CLAIM_FORM_DEFS[row.form_type as ClaimFormType]?.title || row.form_type,
+      status, statusLabel: CLAIM_STATUS_LABELS[status], help: CLAIM_STATUS_HELP[status], updatedAt: row.updated_at,
+    });
+  }));
+
+  /** The claimant's own claim (404 for anyone else's) */
+  const ownClaim = async (req: Request, res: Response): Promise<{ e: EmployeeRow; claim: ClaimForm } | null> => {
+    const e = await claimant(req);
+    if (!e) { res.status(401).json({ message: "Please enter your details again.", code: "CLAIMANT_REQUIRED" }); return null; }
+    const claim = await getClaim(Number(req.params.id));
+    if (!claim || claim.employeeId !== Number(e.id)) { res.status(404).json({ message: "Form not found." }); return null; }
+    return { e, claim };
+  };
+  const employeeActor = (e: EmployeeRow): Actor => ({ type: "employee", name: `${e.name} (${e.epid})` });
+
+  // Start a form (kept as a draft until it is submitted)
+  app.post("/api/public/forms/claims", wrap(async (req, res) => {
+    const e = await claimant(req);
+    if (!e) return res.status(401).json({ message: "Please enter your details again.", code: "CLAIMANT_REQUIRED" });
+    const formType = req.body?.formType;
+    if (!isClaimFormType(formType)) return res.status(400).json({ message: "Unknown form." });
+    if (separateCheque(e)) return res.status(403).json({ message: NOT_ELIGIBLE, code: "NOT_ELIGIBLE" });
+    const checked = checkData(formType, req.body?.data, e);
+    if (checked.error) return res.status(400).json({ message: checked.error });
+
+    const def = CLAIM_FORM_DEFS[formType];
+    const dept = certifyingDepartment(e);
+    const periodKey = appointmentKey(e.designation);
+    const existing = (await db.execute(sql`
+      SELECT ref_no, status FROM claim_forms
+      WHERE employee_id = ${e.id} AND form_type = ${formType} AND period_key = ${periodKey}
+        AND status NOT IN ('rejected', 'cancelled') LIMIT 1`)).rows[0] as any;
+    if (existing) {
+      return res.status(409).json({
+        message: `You have already filled the ${def.shortTitle} form for your present appointment (${e.designation}). Reference: ${existing.ref_no}. A new form is needed only on a fresh appointment.`,
+      });
+    }
+    let id: number;
+    try {
+      const ins = await db.execute(sql`
+        INSERT INTO claim_forms (form_type, employee_id, epid, department_id, period_key, period_label, status, data, snapshot)
+        VALUES (${formType}, ${e.id}, ${e.epid}, ${dept.id}, ${periodKey}, ${clean(e.designation)}, 'draft',
+                ${JSON.stringify(checked.data)}::jsonb, ${JSON.stringify(snapshotOf(e))}::jsonb)
+        RETURNING id`);
+      id = Number((ins.rows[0] as any).id);
+    } catch (error: any) {
+      if (error?.code === "23505") return res.status(409).json({ message: `You have already filled the ${def.shortTitle} form for your present appointment.` });
+      throw error;
+    }
+    const refNo = `${def.code}/${new Date().getFullYear()}/${String(id).padStart(6, "0")}`;
+    await db.execute(sql`UPDATE claim_forms SET ref_no = ${refNo} WHERE id = ${id}`);
+    await logEvent(req, id, "created", null, "draft", employeeActor(e));
+    res.status(201).json(forEmployee(await withDetail((await getClaim(id))!)));
+  }));
+
+  // Change a draft (or a form returned for correction). A change makes a new revision:
+  // papers printed or signed before it no longer belong to the form.
+  app.put("/api/public/forms/claims/:id", wrap(async (req, res) => {
+    const own = await ownClaim(req, res);
+    if (!own) return;
+    const { e, claim } = own;
+    if (!EMPLOYEE_EDITABLE.includes(claim.status)) return res.status(409).json({ message: "This form can no longer be changed." });
+    const checked = checkData(claim.formType, req.body?.data, e);
+    if (checked.error) return res.status(400).json({ message: checked.error });
+    if (JSON.stringify(checked.data) === JSON.stringify(claim.data)) return res.json(forEmployee(await withDetail(claim)));
+    const r = await db.execute(sql`
+      UPDATE claim_forms SET data = ${JSON.stringify(checked.data)}::jsonb, revision = revision + 1, updated_at = NOW()
+      WHERE id = ${claim.id} AND status IN ('draft', 'returned_employee') RETURNING id`);
+    if (!r.rows.length) return res.status(409).json({ message: "This form can no longer be changed." });
+    await db.execute(sql`UPDATE claim_form_files SET is_current = false WHERE claim_id = ${claim.id}`);
+    await logEvent(req, claim.id, "edited", claim.status, claim.status, employeeActor(e), `Revision ${claim.revision + 1}`);
+    res.json(forEmployee(await withDetail((await getClaim(claim.id))!)));
+  }));
+
+  app.get("/api/public/forms/claims/:id/pdf", wrap(async (req, res) => {
+    const own = await ownClaim(req, res);
+    if (!own) return;
+    if (own.claim.status === "cancelled") return res.status(409).json({ message: "This form was cancelled." });
+    sendPdf(res, own.claim, await buildClaimPdf(own.claim));
+  }));
+
+  // Signed undertaking (NPA): needed before the form can be submitted
+  app.post("/api/public/forms/claims/:id/undertaking", memoryUpload.single("file"), wrap(async (req, res) => {
+    const own = await ownClaim(req, res);
+    if (!own) return;
+    const { e, claim } = own;
+    if (!CLAIM_FORM_DEFS[claim.formType].needsUndertaking) return res.status(400).json({ message: "This form has no undertaking." });
+    if (!EMPLOYEE_EDITABLE.includes(claim.status)) return res.status(409).json({ message: "This form can no longer be changed." });
+    if (!req.file) return res.status(400).json({ message: "Please choose the signed undertaking (PDF, JPG or PNG, up to 10 MB)." });
+    await saveClaimFile(claim, "undertaking", req.file, employeeActor(e).name);
+    await logEvent(req, claim.id, "undertaking_uploaded", claim.status, claim.status, employeeActor(e));
+    res.json(forEmployee(await withDetail((await getClaim(claim.id))!)));
+  }));
+
+  app.post("/api/public/forms/claims/:id/submit", wrap(async (req, res) => {
+    const own = await ownClaim(req, res);
+    if (!own) return;
+    const { e, claim } = own;
+    if (!EMPLOYEE_EDITABLE.includes(claim.status)) return res.status(409).json({ message: "This form has already been submitted." });
+    const def = CLAIM_FORM_DEFS[claim.formType];
+    if (def.needsUndertaking && !(await withDetail(claim)).hasUndertaking) {
+      return res.status(400).json({ message: "Please upload the undertaking signed by you and counter-signed by the Chairman before submitting." });
+    }
+    const moved = await move(claim.id, EMPLOYEE_EDITABLE, "submitted", [sql`submitted_at = NOW()`, sql`return_reason = NULL`, sql`returned_by = NULL`]);
+    if (!moved) return res.status(409).json({ message: "This form has already been submitted." });
+    await logEvent(req, claim.id, "submitted", claim.status, "submitted", employeeActor(e));
+    await notify("claim.submitted", [{ kind: "department", departmentId: claim.departmentId }], {
+      title: `${def.shortTitle} claim form submitted`,
+      text: `${e.name} (${e.epid}) has submitted the ${def.shortTitle} claim form ${claim.refNo}. After the signed form is received, upload it with the dispatch number and date.`,
+      link: "/dashboard/forms",
+    });
+    res.json(forEmployee(await withDetail(moved)));
+  }));
+
+  // Withdraw a form the Salary Section has not received yet
+  app.post("/api/public/forms/claims/:id/cancel", wrap(async (req, res) => {
+    const own = await ownClaim(req, res);
+    if (!own) return;
+    const moved = await move(own.claim.id, ["draft", "submitted", "returned_employee"], "cancelled");
+    if (!moved) return res.status(409).json({ message: "This form has already been sent to the Salary Section and cannot be cancelled here." });
+    await logEvent(req, own.claim.id, "cancelled", own.claim.status, "cancelled", employeeActor(own.e));
+    res.json(forEmployee(await withDetail(moved)));
+  }));
+
+  // ═══ Department ════════════════════════════════════════════════════════════
+  // The department id in the address is checked by the /api gate (own department only).
+
+  const departmentActor = async (req: Request, departmentId: number): Promise<Actor> => {
+    const admin = await sessionAdmin(req);
+    if (admin) return { type: "admin", name: admin.name || admin.email };
+    await sessionDepartmentId(req);
+    const staff = sessionStaff(req);
+    if (staff) return { type: "staff", name: staff.name };
+    const d = (await db.execute(sql`SELECT name FROM departments WHERE id = ${departmentId}`)).rows[0] as any;
+    return { type: "department", name: d?.name || `Department ${departmentId}` };
+  };
+
+  const departmentClaim = async (req: Request, res: Response): Promise<ClaimForm | null> => {
+    const claim = await getClaim(Number(req.params.claimId));
+    // drafts belong to the employee alone
+    if (!claim || claim.departmentId !== Number(req.params.departmentId) || claim.status === "draft") {
+      res.status(404).json({ message: "Form not found." });
+      return null;
+    }
+    return claim;
+  };
+
+  // All forms of the department's employees (submitted and later): inbox and history
+  app.get("/api/departments/:departmentId/claim-forms", wrap(async (req, res) => {
+    const departmentId = Number(req.params.departmentId);
+    const r = await db.execute(sql`
+      SELECT ${CLAIM_COLUMNS} FROM claim_forms c
+      WHERE c.department_id = ${departmentId} AND c.status <> 'draft'
+      ORDER BY c.id DESC LIMIT 2000`);
+    res.json(r.rows.map(toClaim));
+  }));
+
+  app.get("/api/departments/:departmentId/claim-forms/count", wrap(async (req, res) => {
+    const r = await db.execute(sql`
+      SELECT COUNT(*)::int AS n FROM claim_forms
+      WHERE department_id = ${Number(req.params.departmentId)} AND status IN ('submitted', 'returned_department')`);
+    res.json({ pending: Number((r.rows[0] as any).n), enabled: await claimFormsEnabled() });
+  }));
+
+  app.get("/api/departments/:departmentId/claim-forms/:claimId", wrap(async (req, res) => {
+    const claim = await departmentClaim(req, res);
+    if (claim) res.json(await withDetail(claim));
+  }));
+
+  app.get("/api/departments/:departmentId/claim-forms/:claimId/pdf", wrap(async (req, res) => {
+    const claim = await departmentClaim(req, res);
+    if (claim) sendPdf(res, claim, await buildClaimPdf(claim));
+  }));
+
+  // Upload the signed form with the dispatch number and date → goes to the Salary Section
+  app.post("/api/departments/:departmentId/claim-forms/:claimId/upload", memoryUpload.single("file"), wrap(async (req, res) => {
+    const claim = await departmentClaim(req, res);
+    if (!claim) return;
+    if (!DEPARTMENT_ACTIONABLE.includes(claim.status)) return res.status(409).json({ message: "This form is not waiting for the signed copy." });
+    const dispatchNo = clean(req.body?.dispatchNo).slice(0, 60);
+    const dispatchDate = clean(req.body?.dispatchDate);
+    if (!dispatchNo) return res.status(400).json({ message: "Please enter the dispatch number written on the form." });
+    if (!isIsoDate(dispatchDate) || dispatchDate > todayIst()) return res.status(400).json({ message: "Please enter the dispatch date written on the form (not a future date)." });
+    if (claim.submittedAt && dispatchDate < claim.submittedAt.slice(0, 10) && claim.status === "submitted") {
+      // a form cannot have been dispatched before the employee submitted it (one day of slack for time zones)
+      const dayBefore = new Date(Date.parse(claim.submittedAt) - 24 * 3600 * 1000).toISOString().slice(0, 10);
+      if (dispatchDate < dayBefore) return res.status(400).json({ message: "The dispatch date is before the date on which the form was submitted." });
+    }
+    if (!req.file) return res.status(400).json({ message: "Please choose the scanned signed form (PDF, JPG or PNG, up to 10 MB)." });
+    if (!realFileType(req.file.buffer)) return res.status(400).json({ message: "Only PDF, JPG or PNG files can be uploaded." });
+
+    const ai = await aiCheckSignedForm(req.file, claim);
+    if (ai.qualityOk === false) {
+      return res.status(422).json({ message: ai.message || "The scan is not clear. Please scan the form again.", aiCheck: ai });
+    }
+    if (ai.otherRef) {
+      return res.status(422).json({ message: "This scan seems to be of a different form (or an older print of this form). Please upload the latest signed print.", aiCheck: ai });
+    }
+    // The reference could not be read: the department must confirm it is the right paper
+    if (ai.configured && ai.refFound === false && String(req.body?.confirm) !== "true") {
+      return res.status(409).json({
+        message: `The reference ${claimPrintRef(claim.refNo, claim.revision)} could not be read on the scan. If this is the correct signed form, confirm and upload again.`,
+        code: "CONFIRM_NEEDED", aiCheck: ai,
+      });
+    }
+
+    const actor = await departmentActor(req, claim.departmentId);
+    const moved = await move(claim.id, DEPARTMENT_ACTIONABLE, "sent", [
+      sql`sent_at = NOW()`, sql`dispatch_no = ${dispatchNo}`, sql`dispatch_date = ${dispatchDate}::date`,
+      sql`ai_check = ${JSON.stringify(ai)}::jsonb`, sql`return_reason = NULL`, sql`returned_by = NULL`,
+    ]);
+    if (!moved) return res.status(409).json({ message: "This form is not waiting for the signed copy." });
+    await saveClaimFile(claim, "signed_form", req.file, actor.name);
+    await logEvent(req, claim.id, "signed_form_uploaded", claim.status, "sent", actor, `D. No. ${dispatchNo}, dated ${formatClaimDate(dispatchDate)}`);
+    res.json(await withDetail(moved));
+  }));
+
+  // Something on the form itself is wrong: back to the employee for correction
+  app.post("/api/departments/:departmentId/claim-forms/:claimId/return", wrap(async (req, res) => {
+    const claim = await departmentClaim(req, res);
+    if (!claim) return;
+    const reason = clean(req.body?.reason).slice(0, 500);
+    if (reason.length < 5) return res.status(400).json({ message: "Please write the reason for returning the form." });
+    const actor = await departmentActor(req, claim.departmentId);
+    const moved = await move(claim.id, DEPARTMENT_ACTIONABLE, "returned_employee", [sql`return_reason = ${reason}`, sql`returned_by = ${actor.name}`]);
+    if (!moved) return res.status(409).json({ message: "This form cannot be returned now." });
+    await logEvent(req, claim.id, "returned_to_employee", claim.status, "returned_employee", actor, reason);
+    res.json(await withDetail(moved));
+  }));
+
+  // ═══ Salary Section (admin) ════════════════════════════════════════════════
+  // /api/admin/* is admin-only in the /api gate; view-only admins cannot write there.
+
+  const isSuper = (admin: any) => ["super", "super_admin", "superadmin"].includes(admin?.role) || admin?.email === "admin@amu.ac.in";
+  /** A dealing assistant acts on the claims of their own employees; super admins on all */
+  const mayDecide = (admin: any, dealingAssistant: string | null): boolean => {
+    if (isSuper(admin)) return true;
+    const code = clean(admin?.userCode).toUpperCase();
+    return !!code && code !== "ALL" && code !== "VEW" && code === clean(dealingAssistant).toUpperCase();
+  };
+
+  const adminClaim = async (req: Request, res: Response, write: boolean): Promise<{ claim: ClaimForm; admin: any; dealingAssistant: string | null } | null> => {
+    const admin = await sessionAdmin(req);
+    const claim = await getClaim(Number(req.params.id));
+    if (!claim || !ADMIN_VISIBLE.includes(claim.status)) { res.status(404).json({ message: "Form not found." }); return null; }
+    const e = (await db.execute(sql`SELECT salary_asstt FROM employees WHERE id = ${claim.employeeId}`)).rows[0] as any;
+    const dealingAssistant = clean(e?.salary_asstt).toUpperCase() || claim.snapshot.dealingAssistant || null;
+    if (write && !mayDecide(admin, dealingAssistant)) {
+      res.status(403).json({ message: "Only the dealing assistant of this employee (or a super admin) can do this." });
+      return null;
+    }
+    return { claim, admin, dealingAssistant };
+  };
+  const adminActor = (admin: any): Actor => ({ type: "admin", name: admin?.name || admin?.email || "Admin" });
+
+  app.get("/api/admin/claim-forms", wrap(async (_req, res) => {
+    const r = await db.execute(sql`
+      SELECT ${CLAIM_COLUMNS}, UPPER(TRIM(COALESCE(e.salary_asstt, ''))) AS "currentDealingAssistant", d.name AS "currentDepartmentName"
+      FROM claim_forms c
+      LEFT JOIN employees e ON e.id = c.employee_id
+      LEFT JOIN departments d ON d.id = c.department_id
+      WHERE c.status IN (${sql.join(ADMIN_VISIBLE.map((s) => sql`${s}`), sql`, `)})
+      ORDER BY c.sent_at DESC NULLS LAST, c.id DESC LIMIT 5000`);
+    res.json(r.rows.map((row: any) => ({ ...toClaim(row), currentDealingAssistant: row.currentDealingAssistant || null })));
+  }));
+
+  app.get("/api/admin/claim-forms/settings", wrap(async (_req, res) => {
+    const counts = (await db.execute(sql`SELECT status, COUNT(*)::int AS n FROM claim_forms GROUP BY status`)).rows as any[];
+    res.json({ enabled: await claimFormsEnabled(), counts: Object.fromEntries(counts.map((c) => [c.status, Number(c.n)])) });
+  }));
+
+  // Open / close the forms for employees (super admin)
+  app.post("/api/admin/claim-forms/settings", wrap(async (req, res) => {
+    const admin = await sessionAdmin(req);
+    if (!isSuper(admin)) return res.status(403).json({ message: "Only a super admin can open or close the forms." });
+    const enabled = req.body?.enabled === true;
+    await db.execute(sql`
+      INSERT INTO app_settings (key, value) VALUES ('claim_forms_enabled', ${String(enabled)})
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+    enabledCache = null;
+    res.json({ enabled });
+  }));
+
+  app.get("/api/admin/claim-forms/:id", wrap(async (req, res) => {
+    const found = await adminClaim(req, res, false);
+    if (!found) return;
+    res.json({ ...(await withDetail(found.claim)), currentDealingAssistant: found.dealingAssistant, mayDecide: mayDecide(found.admin, found.dealingAssistant) });
+  }));
+
+  app.get("/api/admin/claim-forms/:id/pdf", wrap(async (req, res) => {
+    const found = await adminClaim(req, res, false);
+    if (found) sendPdf(res, found.claim, await buildClaimPdf(found.claim));
+  }));
+
+  // Objection: back to the department (which uploads again, or returns it to the employee)
+  app.post("/api/admin/claim-forms/:id/return", wrap(async (req, res) => {
+    const found = await adminClaim(req, res, true);
+    if (!found) return;
+    const reason = clean(req.body?.reason).slice(0, 500);
+    if (reason.length < 5) return res.status(400).json({ message: "Please write the objection." });
+    const actor = adminActor(found.admin);
+    const moved = await move(found.claim.id, ["sent", "accepted"], "returned_department", [sql`return_reason = ${reason}`, sql`returned_by = ${actor.name}`]);
+    if (!moved) return res.status(409).json({ message: "This form cannot be returned now." });
+    await logEvent(req, moved.id, "returned_to_department", found.claim.status, "returned_department", actor, reason);
+    const def = CLAIM_FORM_DEFS[moved.formType];
+    await notify("claim.returned_department", [{ kind: "department", departmentId: moved.departmentId }], {
+      title: `${def.shortTitle} claim form returned`,
+      text: `The Salary Section has returned the ${def.shortTitle} claim form ${moved.refNo} of ${moved.snapshot.name} (${moved.epid}). Objection: ${reason}`,
+      link: "/dashboard/forms",
+    });
+    res.json(await withDetail(moved));
+  }));
+
+  app.post("/api/admin/claim-forms/:id/accept", wrap(async (req, res) => {
+    const found = await adminClaim(req, res, true);
+    if (!found) return;
+    const actor = adminActor(found.admin);
+    const moved = await move(found.claim.id, ["sent"], "accepted", [sql`decided_at = NOW()`, sql`decided_by = ${actor.name}`]);
+    if (!moved) return res.status(409).json({ message: "This form cannot be accepted now." });
+    await logEvent(req, moved.id, "accepted", "sent", "accepted", actor);
+    res.json(await withDetail(moved));
+  }));
+
+  // Given effect in the payroll (the payroll itself is updated by the dealing assistant, not by this app)
+  app.post("/api/admin/claim-forms/:id/process", wrap(async (req, res) => {
+    const found = await adminClaim(req, res, true);
+    if (!found) return;
+    const month = clean(req.body?.month);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return res.status(400).json({ message: "Please choose the paybill month." });
+    const actor = adminActor(found.admin);
+    const moved = await move(found.claim.id, ["sent", "accepted"], "processed",
+      [sql`decided_at = NOW()`, sql`decided_by = ${actor.name}`, sql`processed_month = ${month}`]);
+    if (!moved) return res.status(409).json({ message: "This form cannot be marked as processed now." });
+    await logEvent(req, moved.id, "processed", found.claim.status, "processed", actor, `Paybill month ${month}`);
+    res.json(await withDetail(moved));
+  }));
+
+  app.post("/api/admin/claim-forms/:id/reject", wrap(async (req, res) => {
+    const found = await adminClaim(req, res, true);
+    if (!found) return;
+    const reason = clean(req.body?.reason).slice(0, 500);
+    if (reason.length < 5) return res.status(400).json({ message: "Please write the reason for rejection." });
+    const actor = adminActor(found.admin);
+    const moved = await move(found.claim.id, ["sent", "accepted"], "rejected",
+      [sql`decided_at = NOW()`, sql`decided_by = ${actor.name}`, sql`return_reason = ${reason}`, sql`returned_by = ${actor.name}`]);
+    if (!moved) return res.status(409).json({ message: "This form cannot be rejected now." });
+    await logEvent(req, moved.id, "rejected", found.claim.status, "rejected", actor, reason);
+    res.json(await withDetail(moved));
+  }));
+}
