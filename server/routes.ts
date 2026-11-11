@@ -6069,7 +6069,8 @@ export async function registerRoutes(app: Express) {
         try {
           // Temporarily bypass strict SSL checks for AMU internal servers
           process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-          const response = await fetch(externalUrl);
+          // 15 seconds at most: a server that cannot reach the other site must not keep the user waiting
+          const response = await fetch(externalUrl, { signal: AbortSignal.timeout(15_000) });
           process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
 
           if (!response.ok) throw new Error(`HTTP ${response.status} from external resource`);
@@ -6095,7 +6096,11 @@ export async function registerRoutes(app: Express) {
           console.error("Proxy fetch error:", fetchErr);
           // Make sure to reset it just in case it threw before resetting
           process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
-          return res.status(500).send("External resource cannot be proxied or is unavailable.");
+          // This server could not fetch the file (for example the other site is not reachable
+          // from here). The user's own browser usually can: send it straight to the link, so a
+          // download never fails just because of this server's network.
+          if (!res.headersSent) return res.redirect(externalUrl);
+          return;
         }
       } else {
         return res.status(404).json({ message: "No content available for this resource" });
