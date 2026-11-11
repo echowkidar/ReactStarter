@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ExternalLink, Loader2, Printer, Undo2, Upload } from "lucide-react";
 import { ClaimStatusBadge, EVENT_LABELS } from "@/pages/claim-forms";
 import {
-  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, DEPARTMENT_ACTIONABLE, HRA_OPTIONS, claimSummary, formatClaimDate, localToday, monthLabel,
+  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, DEPARTMENT_ACTIONABLE, HRA_OPTIONS, PCA_CATEGORIES, claimSummary, formatClaimDate, localToday, monthLabel,
   type ClaimForm, type ClaimStatus,
 } from "@shared/claimForms";
 
@@ -59,7 +59,7 @@ export default function DepartmentClaimForms() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold">Claim Forms</h1>
-          <p className="text-sm text-slate-600">NPA, HRA and Conveyance Allowance forms filled online by your employees. After the signed form is received, upload it with the dispatch number and date.</p>
+          <p className="text-sm text-slate-600">NPA, HRA, PCA and Conveyance Allowance forms filled online by your employees. After the signed form is received, upload it with the dispatch number and date.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -204,7 +204,15 @@ function ClaimDialog({ departmentId, claimId, onClose, onChanged }: { department
               <dt className="text-slate-500">Name</dt><dd className="font-medium">{claim.snapshot.name}</dd>
               <dt className="text-slate-500">ID No.</dt><dd>{claim.epid}</dd>
               <dt className="text-slate-500">Designation</dt><dd>{claim.snapshot.designation}</dd>
-              {claim.formType === "conveyance" ? (
+              {claim.formType === "pca" ? (
+                <>
+                  <dt className="text-slate-500">Period</dt><dd className="font-medium">{claimSummary(claim)}</dd>
+                  <dt className="text-slate-500">Confirmation / probation</dt><dd>{claim.data.confirmation}</dd>
+                  <dt className="text-slate-500">Date of joining</dt><dd>{formatClaimDate(claim.data.joiningDate)} ({claim.data.joiningSession})</dd>
+                  {claim.data.transferFrom && <><dt className="text-slate-500">Transferred from</dt><dd>{claim.data.transferFrom}, {formatClaimDate(claim.data.transferDate)}</dd></>}
+                  <dt className="text-slate-500">Against the paybill</dt><dd>{PCA_CATEGORIES[claim.data.category as keyof typeof PCA_CATEGORIES] || "—"}</dd>
+                </>
+              ) : claim.formType === "conveyance" ? (
                 <>
                   <dt className="text-slate-500">Period</dt><dd>{claimSummary(claim)}</dd>
                   <dt className="text-slate-500">Vehicle</dt><dd>{claim.data.vehicleType}, {claim.data.vehicleRegNo}</dd>
@@ -251,7 +259,7 @@ function ClaimDialog({ departmentId, claimId, onClose, onChanged }: { department
             {mode === "upload" && (
               <div className="rounded border p-3 space-y-3">
                 <p className="font-medium">Upload the signed form</p>
-                <p className="text-slate-600">The form must be signed by the employee and by the Chairman / Head (with seal), with the dispatch number and date written in the box at the foot of the page.</p>
+                <p className="text-slate-600">The form must be signed by the employee and by the Chairman / Head (with seal), with the dispatch number and date written on it{claim.formType === "pca" ? " (D.No. and Dated at the top), and countersigned by the CMS / CMO" : " (in the box at the foot of the page)"}.</p>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="dno">Dispatch number (D. No.)</Label>

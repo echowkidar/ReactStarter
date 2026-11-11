@@ -25,9 +25,10 @@ import { notify } from "./notify";
 import { buildClaimPdf, claimPrintCode, claimPrintRef } from "./claimPdf";
 import {
   CLAIM_DATA_SCHEMAS, CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS,
-  DEFAULT_CONVEYANCE_RATES, DEPARTMENT_ACTIONABLE, EMPLOYEE_EDITABLE, appointmentKey, claimableQuarters,
-  conveyanceAmounts, formatClaimDate, isClaimFormType, monthLabel, quarterLabel, quarterMonths,
-  type ClaimForm, type ClaimFormType, type ClaimSnapshot, type ClaimStatus, type ConveyanceRate,
+  DEFAULT_CONVEYANCE_RATES, DEPARTMENT_ACTIONABLE, EMPLOYEE_EDITABLE, PCA_STATUSES, appointmentKey, claimableHalfYears,
+  claimableQuarters, conveyanceAmounts, formatClaimDate, halfYearLabel, halfYearRange, isClaimFormType, monthLabel,
+  quarterLabel, quarterMonths,
+  type ClaimForm, type ClaimFormType, type ClaimSnapshot, type ClaimStatus, type ConveyanceRate, type PcaCategory,
 } from "@shared/claimForms";
 
 declare module "express-session" {
@@ -190,6 +191,7 @@ type EmployeeRow = {
   salary_register_no: string | null; salary_asstt: string | null; is_active: string; bank_account: string | null;
   bank_name: string | null; bank_code: string | null; joining_date: string | null; payroll_joining_date: string | null;
   conveyance_flag: string | null; vacation_code: string | null;
+  employment_status: string | null; payroll_confirm_date: string | null;
   department_name: string | null; hod_title: string | null; host_department_id: number | null;
   host_department_name: string | null; host_hod_title: string | null;
 };
@@ -197,6 +199,7 @@ type EmployeeRow = {
 const EMPLOYEE_SELECT = sql`
   SELECT e.id, e.epid, e.name, e.designation, e.department_id, e.pay_level, e.salary_register_no, e.salary_asstt,
          e.is_active, e.bank_account, e.bank_name, e.bank_code, e.conveyance_flag, e.vacation_code,
+         e.employment_status, e.payroll_confirm_date::text AS payroll_confirm_date,
          e.joining_date::text AS joining_date, e.payroll_joining_date::text AS payroll_joining_date,
          d.name AS department_name, d.hod_title,
          h.id AS host_department_id, h.name AS host_department_name, h.hod_title AS host_hod_title
@@ -298,6 +301,56 @@ async function conveyancePaidMonths(epid: string, months: string[]): Promise<str
   return months.filter((m) => rows.some((r) => String(r.f).slice(0, 7) <= m && String(r.t).slice(0, 7) >= m));
 }
 
+// ── Patient Care Allowance: PCA departments, who may claim, payroll of the months before ──
+
+/** Departments (ids) whose employees may claim PCA — chosen by the Salary Section */
+async function pcaDepartmentIds(): Promise<number[]> {
+  const r = await db.execute(sql`SELECT value FROM app_settings WHERE key = 'pca_departments'`);
+  try {
+    const list = JSON.parse(String((r.rows[0] as any)?.value || "[]"));
+    return (Array.isArray(list) ? list : []).map(Number).filter(Number.isFinite);
+  } catch {
+    return [];
+  }
+}
+
+/** Why this employee cannot claim PCA, or null when they can */
+async function pcaBlocked(e: EmployeeRow): Promise<string | null> {
+  if (!PCA_STATUSES.includes(clean(e.employment_status))) {
+    return "The PCA claim form is not applicable for temporary staff. Please contact your Department and the Salary Section.";
+  }
+  if (!(await pcaDepartmentIds()).includes(certifyingDepartment(e).id)) return NOT_ELIGIBLE;
+  return null;
+}
+
+/**
+ * The six months before a half-year in the copied paybill: was PCA drawn, and did
+ * the department change? Decides whether the claim continues one, is new, or is a
+ * transfer case. "unknown" when there is no paybill row for those months at all.
+ */
+async function pcaCategory(epid: string, period: string, saysTransferred: boolean): Promise<{ category: PcaCategory; monthsDrawn: number }> {
+  const [startDay] = halfYearRange(period);
+  const start = new Date(`${startDay}T00:00:00Z`);
+  const from = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 6, 1));
+  const key = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
+  let rows: any[] = [];
+  try {
+    rows = (await db.execute(sql`
+      SELECT yr_no, mth_no, MAX(COALESCE(pat_care, 0)) AS pca, MAX(deptt) AS deptt
+      FROM paybill_history
+      WHERE TRIM(ecode) = ${epid} AND sal_code = 1
+        AND (yr_no * 12 + mth_no - 1) >= ${key(from)} AND (yr_no * 12 + mth_no - 1) < ${key(start)}
+      GROUP BY yr_no, mth_no`)).rows as any[];
+  } catch (error) {
+    console.warn("[ClaimForms] paybill history not read for PCA:", (error as any)?.message || error);
+  }
+  if (!rows.length) return { category: saysTransferred ? "transfer" : "unknown", monthsDrawn: 0 };
+  const monthsDrawn = rows.filter((r) => Number(r.pca) > 0).length;
+  const departments = new Set(rows.map((r) => clean(r.deptt)).filter(Boolean));
+  if (saysTransferred || departments.size > 1) return { category: "transfer", monthsDrawn };
+  return { category: monthsDrawn > 0 ? "continuing" : "new", monthsDrawn };
+}
+
 type Checked = { data?: Record<string, any>; periodKey?: string; periodLabel?: string; error?: string; status?: number };
 
 /**
@@ -338,6 +391,29 @@ async function checkData(formType: ClaimFormType, raw: unknown, e: EmployeeRow):
         amount: worked.amount, da: worked.da, payable: worked.payable, declared: true,
       },
       periodKey: `q:${quarter}`, periodLabel: quarterLabel(quarter),
+    };
+  }
+
+  if (formType === "pca") {
+    const blocked = await pcaBlocked(e);
+    if (blocked) return { error: blocked, status: 403 };
+    const period = String(data.period);
+    if (!claimableHalfYears(todayIst()).includes(period)) return { error: "This period cannot be claimed now." };
+    const [, periodEnd] = halfYearRange(period);
+    const joining = String(data.joiningDate);
+    if (Number.isNaN(Date.parse(joining)) || joining > periodEnd) return { error: "The date of joining cannot be after the period claimed." };
+    if (joined && joining < joined) return { error: "The date of joining here cannot be before your date of joining the University." };
+    const transferFrom = clean(data.transferFrom);
+    const transferDate = clean(data.transferDate);
+    if (!!transferFrom !== !!transferDate) return { error: "For a transfer, enter both the previous department / office and the date." };
+    if (transferDate && transferDate > todayIst()) return { error: "The date of transfer cannot be in the future." };
+    const standing = await pcaCategory(e.epid, period, !!transferFrom);
+    return {
+      data: {
+        period, confirmation: data.confirmation, joiningDate: joining, joiningSession: data.joiningSession,
+        transferFrom, transferDate, category: standing.category, monthsDrawn: standing.monthsDrawn, declared: true,
+      },
+      periodKey: `h:${period}`, periodLabel: halfYearLabel(period),
     };
   }
 
@@ -577,6 +653,29 @@ export function registerClaimFormRoutes(app: Express) {
     });
   }));
 
+  // What the PCA claim form needs to know: may this employee claim, for which periods,
+  // and what is already on record (date of confirmation, last entered date of joining).
+  app.get("/api/public/forms/pca", wrap(async (req, res) => {
+    const e = await claimant(req);
+    if (!e) return res.status(401).json({ message: "Please enter your details again.", code: "CLAIMANT_REQUIRED" });
+    const blocked = await pcaBlocked(e);
+    if (blocked) return res.json({ eligible: false, message: blocked });
+    const mine = (await db.execute(sql`
+      SELECT period_key, ref_no, status, data FROM claim_forms
+      WHERE employee_id = ${e.id} AND form_type = 'pca' ORDER BY id DESC`)).rows as any[];
+    const live = mine.filter((c) => !["rejected", "cancelled"].includes(c.status));
+    const last = mine[0] ? (typeof mine[0].data === "string" ? JSON.parse(mine[0].data) : mine[0].data) : null;
+    res.json({
+      eligible: true,
+      periods: claimableHalfYears(todayIst()).map((p) => ({
+        key: p, label: halfYearLabel(p), claimedRef: live.find((c) => c.period_key === `h:${p}`)?.ref_no || null,
+      })),
+      confirmation: last?.confirmation || (realDate(e.payroll_confirm_date) ? formatClaimDate(e.payroll_confirm_date) : ""),
+      employmentStatus: clean(e.employment_status),
+      last: last ? { joiningDate: last.joiningDate, joiningSession: last.joiningSession } : null,
+    });
+  }));
+
   /** The claimant's own claim (404 for anyone else's) */
   const ownClaim = async (req: Request, res: Response): Promise<{ e: EmployeeRow; claim: ClaimForm } | null> => {
     const e = await claimant(req);
@@ -602,6 +701,8 @@ export function registerClaimFormRoutes(app: Express) {
     const periodKey = checked.periodKey!;
     const already = formType === "conveyance"
       ? `You have already filled the Conveyance Allowance Bill for ${checked.periodLabel}.`
+      : formType === "pca"
+      ? `You have already filled the PCA claim form for ${checked.periodLabel}.`
       : `You have already filled the ${def.shortTitle} form for your present appointment (${e.designation}). A new form is needed only on a fresh appointment.`;
     const existing = (await db.execute(sql`
       SELECT ref_no, status FROM claim_forms
@@ -640,6 +741,9 @@ export function registerClaimFormRoutes(app: Express) {
     // what the claim is for (the quarter) stays as it is: another quarter is another form
     if (claim.formType === "conveyance" && checked.periodKey !== claim.periodKey) {
       return res.status(400).json({ message: "The quarter of a bill cannot be changed. Please fill a new bill for the other quarter." });
+    }
+    if (claim.formType === "pca" && checked.periodKey !== claim.periodKey) {
+      return res.status(400).json({ message: "The period of a claim cannot be changed. Please fill a new form for the other period." });
     }
     if (JSON.stringify(checked.data) === JSON.stringify(claim.data)) return res.json(forEmployee(await withDetail(claim)));
     const r = await db.execute(sql`
@@ -883,6 +987,21 @@ export function registerClaimFormRoutes(app: Express) {
       INSERT INTO app_settings (key, value) VALUES ('conveyance_rates', ${JSON.stringify(rates)})
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
     res.json({ rates });
+  }));
+
+  // Departments whose employees may claim PCA
+  app.get("/api/admin/claim-forms/pca-departments", wrap(async (_req, res) => {
+    const departments = (await db.execute(sql`SELECT id, name FROM departments ORDER BY name`)).rows as any[];
+    res.json({ selected: await pcaDepartmentIds(), departments: departments.map((d) => ({ id: Number(d.id), name: d.name })) });
+  }));
+  app.post("/api/admin/claim-forms/pca-departments", wrap(async (req, res) => {
+    const admin = await sessionAdmin(req);
+    if (!isSuper(admin)) return res.status(403).json({ message: "Only a super admin can change the PCA departments." });
+    const ids = Array.from(new Set((Array.isArray(req.body?.selected) ? req.body.selected : []).map(Number).filter(Number.isFinite)));
+    await db.execute(sql`
+      INSERT INTO app_settings (key, value) VALUES ('pca_departments', ${JSON.stringify(ids)})
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+    res.json({ selected: ids });
   }));
 
   app.get("/api/admin/claim-forms/:id", wrap(async (req, res) => {

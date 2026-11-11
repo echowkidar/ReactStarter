@@ -7,7 +7,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import crypto from "crypto";
 import {
-  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, formatClaimDate, monthLabel, quarterRange,
+  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, formatClaimDate, halfYearLabel, monthLabel, quarterRange,
   type ClaimForm, type ConveyanceMonth,
 } from "@shared/claimForms";
 
@@ -110,7 +110,7 @@ function paragraph(page: PDFPage, value: string, o: ParagraphOptions): number {
 }
 
 /** "Label: value" on a ruled blank; an empty value leaves the blank for handwriting */
-function blank(page: PDFPage, label: string, value: string, x: number, top: number, endX: number, fonts: Fonts, size: number, filler: "-" | "." = "-") {
+function blank(page: PDFPage, label: string, value: string, x: number, top: number, endX: number, fonts: Fonts, size: number, filler: "-" | "." | "_" = "-") {
   text(page, label, x, top, fonts.regular, size);
   let cursor = x + fonts.regular.widthOfTextAtSize(safe(label), size) + size * 0.45;
   if (value) {
@@ -364,6 +364,172 @@ function conveyancePage(page: PDFPage, claim: ClaimForm, f: Fonts) {
   centred(page, "of the Deptt. & Seal)", 455, top + 16, f.italic, size);
 }
 
+type Run = { t: string; font: PDFFont; size: number; underline?: boolean };
+
+/** A paragraph whose words differ in face or size (bold or underlined parts); returns the top after it */
+function richParagraph(page: PDFPage, runs: Run[], x: number, top: number, width: number, lineHeight: number): number {
+  const words: Array<Run & { w: number }> = [];
+  for (const run of runs) {
+    for (const word of safe(run.t).split(/\s+/).filter(Boolean)) {
+      words.push({ ...run, t: word, w: run.font.widthOfTextAtSize(word, run.size) });
+    }
+  }
+  let cursor = x;
+  let y = top;
+  for (const word of words) {
+    const space = word.font.widthOfTextAtSize(" ", word.size);
+    if (cursor > x && cursor + word.w > x + width) {
+      cursor = x;
+      y += lineHeight;
+    }
+    text(page, word.t, cursor, y, word.font, word.size);
+    if (word.underline) {
+      // the underline runs on under the space, so underlined words join up
+      page.drawLine({ start: { x: cursor, y: fromTop(y) - 2 }, end: { x: cursor + word.w + space, y: fromTop(y) - 2 }, thickness: 0.8, color: BLACK });
+    }
+    cursor += word.w + space;
+  }
+  return y + lineHeight;
+}
+
+/** Text in a table cell, made smaller when it would not fit */
+function cell(page: PDFPage, value: string, x: number, top: number, width: number, font: PDFFont, size = 10) {
+  const v = safe(value);
+  let s = size;
+  while (s > 6.5 && font.widthOfTextAtSize(v, s) > width - 8) s -= 0.5;
+  text(page, v, x + 4, top, font, s);
+}
+
+/** H.P.C.A. / P.C.A. claim form — wording and layout of the form approved by the PCA Committee */
+function pcaPage(page: PDFPage, claim: ClaimForm, f: Fonts, sans: Fonts) {
+  const s = claim.snapshot;
+  const d = claim.data;
+  const L = 70, R = 548, SPLIT = 322;
+  const size = 10.5;
+
+  centred(page, "CLAIM FORM", A4.w / 2 - 8, 60, f.bold, 13.5);
+  centred(page, "H.P.C.A. / P.C.A. CLAIM", A4.w / 2 - 8, 76, f.bold, 11);
+  centred(page, "(This form is not applicable for temporary staff)", A4.w / 2 - 8, 91, f.bold, 11);
+  page.drawRectangle({ x: 459, y: fromTop(75), width: 116, height: 32, borderColor: BLACK, borderWidth: 0.9 });
+  centred(page, "Claim form approved by", 517, 56, sans.regular, 8.5);
+  centred(page, "the PCA Committee", 517, 68, sans.regular, 8.5);
+
+  text(page, "D.No.___________", L + 2, 104, f.regular, size);
+  text(page, "Dated:______________", 432, 104, f.regular, size);
+
+  // The table: label on the left, the filled value on the right
+  const rows: Array<{ label: string[]; small?: string; height: number }> = [
+    { label: ["Name of employee"], height: 23 },
+    { label: ["Employee ID Number  |  Salary Register Number"], height: 22 },
+    { label: ["Present Designation    |  Pay Level"], height: 22 },
+    { label: ["Date of Confirmation / Term of Probation"], height: 22 },
+    { label: ["Name of the Department / Office"], height: 22 },
+    { label: ["Date of joining (FN/AN) in JNMCH, AKTCH, ZH", "Dental College (Clinic), University Health Service"], height: 25 },
+    { label: ["Period for which HPCA / PCA is claimed"], small: "(January to June / July to December)", height: 24 },
+    { label: ["If transferred mention name of the previous", "department/office with date"], height: 25 },
+  ];
+  const tableTop = 116;
+  let top = tableTop;
+  const line = (x1: number, y1: number, x2: number, y2: number) =>
+    page.drawLine({ start: { x: x1, y: fromTop(y1) }, end: { x: x2, y: fromTop(y2) }, thickness: 0.8, color: BLACK });
+  line(L, top, R, top);
+  const values: string[][] = [
+    [s.name],
+    [s.epid, s.salaryRegisterNo || ""],
+    [s.designation, s.payLevel || ""],
+    [String(d.confirmation || "")],
+    [s.departmentName],
+    [`${formatClaimDate(d.joiningDate)} (${d.joiningSession || ""})`],
+    [halfYearLabel(String(d.period || ""))],
+    [d.transferFrom ? `${d.transferFrom}, ${formatClaimDate(d.transferDate)}` : ""],
+  ];
+  const splits: Record<number, number> = { 1: 434, 2: 484 }; // rows whose value cell is divided in two
+  rows.forEach((row, i) => {
+    const two = row.label.length > 1 || !!row.small;
+    const base = top + (two ? 10 : row.height / 2 + 3.5);
+    text(page, row.label[0], L + 6, base, i === 1 ? sans.regular : f.regular, i === 1 ? 9.5 : size);
+    if (row.label[1]) text(page, row.label[1], L + 6, base + 11, f.regular, size);
+    if (row.small) text(page, row.small, L + 6, base + 9.5, f.regular, 7.5);
+    const valueTop = top + row.height / 2 + 3.5;
+    const cut = splits[i];
+    if (cut) {
+      line(cut, top, cut, top + row.height);
+      cell(page, values[i][0], SPLIT, valueTop, cut - SPLIT, f.bold);
+      cell(page, values[i][1] || "", cut, valueTop, R - cut, f.bold);
+    } else {
+      cell(page, values[i][0], SPLIT, valueTop, R - SPLIT, f.bold);
+    }
+    top += row.height;
+    line(L, top, R, top);
+  });
+  line(L, tableTop, L, top);
+  line(R, tableTop, R, top);
+  line(SPLIT, tableTop, SPLIT, top);
+
+  // The employee's three statements
+  top += 18;
+  const statements: Run[][] = [
+    [{ t: "I am aware that if, at any stage, the information / documents furnished by me are found to be false, or incorrect, I shall be liable to refund all payments received, alongwith any applicable penalties, to the AMU.", font: f.regular, size }],
+    [{ t: "I am regularly performing duties that involve continuous routine contact with patients affected with communicable diseases / I am handling infected materials, instruments and equipment which can spread infection as my primary duty working in healthcare delivery.", font: f.regular, size }],
+    [{ t: "My exposure to infected materials /patients contact is of", font: sans.regular, size: 9.5 }, { t: "regular and continuous nature, not occasional.", font: sans.bold, size: 9.5 }],
+  ];
+  statements.forEach((runs, i) => {
+    text(page, `${i + 1}.`, L - 4, top, f.regular, size);
+    top = richParagraph(page, runs, L + 8, top, R - L - 8, 12.4);
+  });
+
+  top += 16;
+  text(page, "Dated:__________", L, top, f.regular, size);
+  text(page, "Signature of Employee: -----------------------------", 326, top, f.regular, size);
+
+  // The Chairman / Head's certificate
+  top += 21;
+  blank(page, "This is to certify that Mr./Mrs.", s.name, L, top, 360, f, size, "_");
+  blank(page, "Designation", s.designation, 364, top, 532, f, size, "_");
+  text(page, ",", 534, top, f.regular, size);
+
+  top += 20;
+  const certificate: Run[][] = [
+    [
+      { t: "is an", font: f.regular, size },
+      { t: "allied healthcare professional", font: f.bold, size: 12.5, underline: true },
+      { t: "as per the guidelines mentioned below / Office Memorandum issued by the Ministry of Health and Family Welfare (No.V.28017/23/2018-H-II) and is therefore entitled to claim Hospital Patient Care Allowance / Patient Care Allowance.", font: f.regular, size },
+    ],
+    [{ t: "is working in close proximity of patients directly / indirectly regular and continuous nature, not occasional.", font: f.regular, size }],
+    [{ t: "I undertake to intimate Joint Finance Officer (Salary) if any change occurs in the above employee's duties or status that affects his / her eligibility of HPCA/PCA at later stage and undertake to get indemnify the AMU, if any.", font: f.regular, size }],
+  ];
+  certificate.forEach((runs, i) => {
+    text(page, `${i + 1}.`, L + 18, top, f.regular, size);
+    top = richParagraph(page, runs, L + 36, top, R - L - 36, 15.5);
+  });
+
+  top += 16;
+  centred(page, "Chairman / Head of the Department / Office", 434, top, f.regular, size);
+  centred(page, "(Seal & Signature)", 434, top + 13, f.regular, size);
+  text(page, "Countersigned by", L + 10, top + 10, sans.regular, 9.5);
+
+  top += 38;
+  text(page, "Signature of CMS / CMO", L - 2, top, f.regular, size);
+  text(page, "JNMCH / AKTCH / UHS", L - 2, top + 13, f.regular, size);
+
+  // Guidelines printed at the foot of the form
+  top += 24;
+  centred(page, "Guidelines as per D.No.13/Cr dated 11.1.2023", A4.w / 2, top, sans.bold, 7);
+  top += 13;
+  const guidelines = [
+    "The payment of Patient Care Allowance will be made only to those employees who are either confirmed on their post in the substantive capacity or those who are working on probation through Direct Recruitment.",
+    "HPCA /PCA may be admissible in case the individual proceeds on leave / training for less than one calendar month.",
+    "HPCA / PCA may not be admissible in case of the individual proceeds on leave / training for equivalent and more than one calendar month.",
+    "HPCA / PCA should not be admissible in case of unauthorised leave.",
+    "In case there is any contrary decision declaring them ineligible at a later stage for HPCA / PCA, in that case recovery will be made of the amount of HPCA / PCA paid to such employees.",
+    "This claim form should be submitted twice a year i.e. in January and July, if fresh claim is not submitted after expiry of claim period, PCA will be stopped.",
+  ];
+  guidelines.forEach((g, i) => {
+    text(page, `${i + 1}.`, L + 2, top, sans.regular, 6.6);
+    top = paragraph(page, g, { x: L + 18, top, width: R - L - 18, font: sans.regular, size: 6.6, lineHeight: 8.3 });
+  });
+}
+
 /** The whole print of one claim: the form itself and, for NPA, the undertaking */
 export async function buildClaimPdf(claim: ClaimForm): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
@@ -377,14 +543,21 @@ export async function buildClaimPdf(claim: ClaimForm): Promise<Uint8Array> {
   pdf.setProducer("AMU Salary Section");
 
   const page = pdf.addPage([A4.w, A4.h]);
-  if (claim.formType === "conveyance") {
-    // the office's bill is set in a serif face
-    conveyancePage(page, claim, {
+  if (claim.formType === "conveyance" || claim.formType === "pca") {
+    // these two forms are set in a serif face
+    const serif: Fonts = {
       regular: await pdf.embedFont(StandardFonts.TimesRoman),
       bold: await pdf.embedFont(StandardFonts.TimesRomanBold),
       italic: await pdf.embedFont(StandardFonts.TimesRomanItalic),
-    });
-    await footer(pdf, page, claim, fonts, "Conveyance Allowance Bill");
+    };
+    if (claim.formType === "conveyance") {
+      conveyancePage(page, claim, serif);
+      await footer(pdf, page, claim, fonts, "Conveyance Allowance Bill");
+    } else {
+      pcaPage(page, claim, serif, fonts);
+      // the form has its own D.No. / Dated line at the top, so no dispatch box at the foot
+      await footer(pdf, page, claim, fonts, "HPCA / PCA claim form", false);
+    }
   } else {
     if (claim.formType === "npa") npaPage(page, claim, fonts);
     else hraPage(page, claim, fonts);

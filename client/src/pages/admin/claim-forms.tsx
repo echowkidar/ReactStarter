@@ -18,7 +18,7 @@ import { Check, CheckCheck, ExternalLink, Loader2, Printer, Undo2, X } from "luc
 import { getAdminAccess } from "@/lib/admin-access";
 import { ClaimStatusBadge, EVENT_LABELS } from "@/pages/claim-forms";
 import {
-  CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_LABELS, CONVEYANCE_MONTH_REASONS, HRA_OPTIONS,
+  CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_LABELS, CONVEYANCE_MONTH_REASONS, HRA_OPTIONS, PCA_CATEGORIES,
   claimSummary, conveyanceRateFor, formatClaimDate, localToday, monthLabel,
   type ClaimForm, type ClaimStatus, type ConveyanceRate,
 } from "@shared/claimForms";
@@ -89,8 +89,9 @@ export default function AdminClaimForms() {
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex-1 min-w-[260px]">
             <h1 className="text-2xl font-semibold">Claim Forms</h1>
-            <p className="text-sm text-slate-600">NPA, HRA and Conveyance Allowance forms, signed and uploaded by the departments.</p>
+            <p className="text-sm text-slate-600">NPA, HRA, PCA and Conveyance Allowance forms, signed and uploaded by the departments.</p>
           </div>
+          <PcaDepartments canEdit={access.settings} />
           <ConveyanceRates canEdit={access.settings} />
           {settings && (
             <label className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
@@ -180,6 +181,72 @@ export default function AdminClaimForms() {
   );
 }
 
+
+// ── Departments whose employees may claim PCA (super admin) ──────────────────
+
+function PcaDepartments({ canEdit }: { canEdit: boolean }) {
+  const { toast } = useToast();
+  const key = ["/api/admin/claim-forms/pca-departments"];
+  const { data } = useQuery<{ selected: number[]; departments: Array<{ id: number; name: string }> }>({
+    queryKey: key, queryFn: async () => (await apiRequest("GET", key[0])).json(),
+  });
+  const [open, setOpen] = useState(false);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const count = data?.selected.length ?? 0;
+  const q = search.trim().toLowerCase();
+  const shown = (data?.departments || []).filter((d) => !q || d.name.toLowerCase().includes(q));
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await apiRequest("POST", key[0], { selected: Array.from(chosen) });
+      queryClient.invalidateQueries({ queryKey: key });
+      toast({ title: "PCA departments saved" });
+      setOpen(false);
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <>
+      <button type="button" onClick={() => { setChosen(new Set(data?.selected || [])); setSearch(""); setError(""); setOpen(true); }}
+        className="rounded-lg border bg-white px-3 py-2 text-sm text-left hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+        <span className="block text-xs text-slate-500">PCA departments</span>
+        <span className={`font-medium ${count ? "" : "text-amber-700"}`}>{count ? `${count} department${count > 1 ? "s" : ""}` : "None chosen yet"}</span>
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Departments whose employees may claim PCA</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-slate-600">Only employees of the ticked departments can fill the HPCA / PCA claim form. Others are told to contact their Department and the Salary Section.</p>
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search department" aria-label="Search department" />
+            <div className="max-h-72 overflow-y-auto rounded border divide-y">
+              {shown.map((d) => (
+                <label key={d.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-slate-50">
+                  <input type="checkbox" checked={chosen.has(d.id)} disabled={!canEdit}
+                    onChange={(e) => setChosen((old) => { const next = new Set(old); if (e.target.checked) next.add(d.id); else next.delete(d.id); return next; })} />
+                  <span>{d.name}</span>
+                </label>
+              ))}
+              {shown.length === 0 && <p className="px-3 py-3 text-slate-500">No department matches.</p>}
+            </div>
+            <p className="text-slate-600">{chosen.size} chosen</p>
+            {error && <p role="alert" className="text-red-700">{error}</p>}
+            {canEdit
+              ? <Button size="sm" disabled={busy} onClick={save}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save</Button>
+              : <p className="text-slate-500">Only a super admin can change this list.</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 // ── Rate of the conveyance allowance (super admin) ───────────────────────────
 
@@ -305,7 +372,15 @@ function AdminClaimDialog({ claimId, onClose, onChanged }: { claimId: number; on
                 <dt className="text-slate-500">Department</dt><dd>{claim.snapshot.departmentName}</dd>
                 <dt className="text-slate-500">Register No.</dt><dd>{claim.snapshot.salaryRegisterNo || "—"}</dd>
                 <dt className="text-slate-500">Dealing assistant</dt><dd>{claim.currentDealingAssistant || "Not assigned"}</dd>
-                {claim.formType === "conveyance" ? (
+                {claim.formType === "pca" ? (
+                  <>
+                    <dt className="text-slate-500">Period</dt><dd className="font-medium">{claimSummary(claim)}</dd>
+                    <dt className="text-slate-500">Confirmation / probation</dt><dd>{claim.data.confirmation}</dd>
+                    <dt className="text-slate-500">Date of joining</dt><dd>{formatClaimDate(claim.data.joiningDate)} ({claim.data.joiningSession})</dd>
+                      {claim.data.transferFrom && <><dt className="text-slate-500">Transferred from</dt><dd>{claim.data.transferFrom}, {formatClaimDate(claim.data.transferDate)}</dd></>}
+                    <dt className="text-slate-500">Against the paybill</dt><dd>{PCA_CATEGORIES[claim.data.category as keyof typeof PCA_CATEGORIES] || "—"}</dd>
+                  </>
+                ) : claim.formType === "conveyance" ? (
                   <>
                     <dt className="text-slate-500">Period</dt><dd className="font-medium">{claimSummary(claim)}</dd>
                     <dt className="text-slate-500">Vehicle</dt><dd>{claim.data.vehicleType}, {claim.data.vehicleRegNo}</dd>

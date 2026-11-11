@@ -199,7 +199,20 @@ export default function ClaimFormsPage() {
         />
       )}
 
-      {view.kind === "new" && view.type !== "conveyance" && (
+      {view.kind === "new" && view.type === "pca" && (
+        <PcaEditor
+          employee={employee} onCancel={() => setView({ kind: "home" })} onError={fail}
+          onSave={async (data) => {
+            try {
+              const claim = await api("POST", "/claims", { formType: "pca", data });
+              putClaim(claim);
+              setView({ kind: "claim", id: claim.id });
+            } catch (e) { fail(e); }
+          }}
+        />
+      )}
+
+      {view.kind === "new" && view.type !== "conveyance" && view.type !== "pca" && (
         <ClaimEditor
           info={forms.find((f) => f.type === view.type)!} employee={employee}
           onCancel={() => setView({ kind: "home" })}
@@ -226,7 +239,20 @@ export default function ClaimFormsPage() {
         />
       )}
 
-      {view.kind === "claim" && openClaim && view.edit && openClaim.formType !== "conveyance" && (
+      {view.kind === "claim" && openClaim && view.edit && openClaim.formType === "pca" && (
+        <PcaEditor
+          employee={employee} initial={openClaim.data} fixedPeriod={openClaim.data.period}
+          onCancel={() => setView({ kind: "claim", id: openClaim.id })} onError={fail}
+          onSave={async (data) => {
+            try {
+              putClaim(await api("PUT", `/claims/${openClaim.id}`, { data }));
+              setView({ kind: "claim", id: openClaim.id });
+            } catch (e) { fail(e); }
+          }}
+        />
+      )}
+
+      {view.kind === "claim" && openClaim && view.edit && openClaim.formType !== "conveyance" && openClaim.formType !== "pca" && (
         <ClaimEditor
           info={forms.find((f) => f.type === openClaim.formType)!} employee={employee} initial={openClaim.data}
           onCancel={() => setView({ kind: "claim", id: openClaim.id })}
@@ -305,7 +331,7 @@ function Identify({ onDone }: { onDone: (e: Employee, claims: ClaimForm[]) => vo
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Fill a claim form</CardTitle>
-        <p className="text-sm text-slate-600">NPA, HRA and Conveyance Allowance forms can be filled here. Enter your details to begin.</p>
+        <p className="text-sm text-slate-600">NPA, HRA, PCA and Conveyance Allowance forms can be filled here. Enter your details to begin.</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4 max-w-sm">
@@ -457,6 +483,157 @@ function ClaimEditor({ info, employee, initial, onSave, onCancel }: {
           <Button disabled={!ready || busy} onClick={async () => {
             setBusy(true);
             await onSave(info.type === "hra" ? { wefDate, option, declared: true } : { wefDate, declared: true });
+            setBusy(false);
+          }}>
+            {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save and continue
+          </Button>
+          <Button variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── H.P.C.A. / P.C.A. claim form ─────────────────────────────────────────────
+
+type PcaInfo = {
+  eligible: boolean; message?: string; confirmation?: string; employmentStatus?: string;
+  periods?: Array<{ key: string; label: string; claimedRef: string | null }>;
+  last?: { joiningDate: string; joiningSession: string } | null;
+};
+
+const PCA_STATEMENTS = [
+  "I am aware that if, at any stage, the information / documents furnished by me are found to be false, or incorrect, I shall be liable to refund all payments received, alongwith any applicable penalties, to the AMU.",
+  "I am regularly performing duties that involve continuous routine contact with patients affected with communicable diseases / I am handling infected materials, instruments and equipment which can spread infection as my primary duty working in healthcare delivery.",
+  "My exposure to infected materials /patients contact is of regular and continuous nature, not occasional.",
+];
+
+function PcaEditor({ employee, initial, fixedPeriod, onSave, onCancel, onError }: {
+  employee: Employee; initial?: Record<string, any>; fixedPeriod?: string;
+  onSave: (data: Record<string, any>) => Promise<void>; onCancel: () => void; onError: (e: any) => void;
+}) {
+  const [info, setInfo] = useState<PcaInfo | null>(null);
+  const [period, setPeriod] = useState<string>(fixedPeriod || "");
+  const [confirmation, setConfirmation] = useState<string>(initial?.confirmation || "");
+  const [joiningDate, setJoiningDate] = useState<string>(initial?.joiningDate || "");
+  const [joiningSession, setJoiningSession] = useState<string>(initial?.joiningSession || "");
+  const [transferred, setTransferred] = useState<boolean>(!!initial?.transferFrom);
+  const [transferFrom, setTransferFrom] = useState<string>(initial?.transferFrom || "");
+  const [transferDate, setTransferDate] = useState<string>(initial?.transferDate || "");
+  const [declared, setDeclared] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api("GET", "/pca").then((r: PcaInfo) => {
+      setInfo(r);
+      if (!initial) {
+        setConfirmation(r.confirmation || "");
+        if (r.last) { setJoiningDate(r.last.joiningDate || ""); setJoiningSession(r.last.joiningSession || ""); }
+      }
+    }).catch(onError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!info) return <Card><CardContent className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin inline text-slate-400" /></CardContent></Card>;
+  if (!info.eligible) {
+    return (
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-lg">H.P.C.A. / P.C.A. Claim Form</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{info.message}</p>
+          <Button variant="outline" onClick={onCancel}>Back</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const periods = (info.periods || []).filter((p) => !fixedPeriod || p.key === fixedPeriod);
+  const ready = !!period && confirmation.trim().length >= 3 && !!joiningDate && !!joiningSession && declared
+    && (!transferred || (transferFrom.trim().length > 0 && !!transferDate));
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">H.P.C.A. / P.C.A. Claim Form</CardTitle>
+        <p className="text-sm text-slate-600">This form is not applicable for temporary staff.</p>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm rounded border bg-slate-50 px-3 py-2">
+          <dt className="text-slate-500">Name of employee</dt><dd className="font-medium">{employee.name}</dd>
+          <dt className="text-slate-500">Employee ID Number</dt><dd className="font-medium">{employee.epid}</dd>
+          <dt className="text-slate-500">Present Designation | Pay Level</dt><dd className="font-medium">{employee.designation}{employee.payLevel ? ` | ${employee.payLevel}` : ""}</dd>
+          <dt className="text-slate-500">Name of the Department / Office</dt><dd className="font-medium">{employee.departmentName}</dd>
+        </dl>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Period for which HPCA / PCA is claimed</legend>
+          <div className="space-y-2">
+            {periods.map((p) => {
+              const taken = !!p.claimedRef && !fixedPeriod;
+              return (
+                <label key={p.key} className={`flex items-center gap-2 rounded border px-3 py-2 text-sm ${taken ? "text-slate-400" : "cursor-pointer"} ${period === p.key ? "border-blue-500 bg-blue-50" : "bg-white"}`}>
+                  <input type="radio" name="pca-period" checked={period === p.key} disabled={taken || !!fixedPeriod} onChange={() => setPeriod(p.key)} />
+                  <span className="font-medium">{p.label}</span>
+                  {taken && <span className="text-xs">— already filled ({p.claimedRef})</span>}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="pca-confirm">Date of Confirmation / Term of Probation</Label>
+            <Input id="pca-confirm" value={confirmation} maxLength={60} onChange={(e) => setConfirmation(e.target.value)}
+              placeholder="e.g. 15-03-2019, or On probation up to 30-06-2027" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pca-join">Date of joining in JNMCH, AKTCH, ZH Dental College (Clinic), University Health Service</Label>
+            <Input id="pca-join" type="date" value={joiningDate} max={localToday()} onChange={(e) => setJoiningDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pca-session">Forenoon / Afternoon (FN/AN)</Label>
+            <select id="pca-session" value={joiningSession} onChange={(e) => setJoiningSession(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <option value="">Choose…</option>
+              <option value="FN">Forenoon (FN)</option>
+              <option value="AN">Afternoon (AN)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={transferred} onChange={(e) => { setTransferred(e.target.checked); if (!e.target.checked) { setTransferFrom(""); setTransferDate(""); } }} />
+            <span>I was transferred here from another department / office</span>
+          </label>
+          {transferred && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="pca-from">Name of the previous department / office</Label>
+                <Input id="pca-from" value={transferFrom} maxLength={80} onChange={(e) => setTransferFrom(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pca-tdate">Date of transfer</Label>
+                <Input id="pca-tdate" type="date" value={transferDate} max={localToday()} onChange={(e) => setTransferDate(e.target.value)} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <ol className="text-sm space-y-1 list-decimal pl-6">
+          {PCA_STATEMENTS.map((line) => <li key={line}>{line}</li>)}
+        </ol>
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <Checkbox checked={declared} onCheckedChange={(v) => setDeclared(v === true)} className="mt-0.5"
+            aria-label="I have read the above and it is correct to the best of my knowledge" />
+          <span>I have read the above and it is correct to the best of my knowledge.</span>
+        </label>
+
+        <div className="flex gap-2">
+          <Button disabled={!ready || busy} onClick={async () => {
+            setBusy(true);
+            await onSave({ period, confirmation: confirmation.trim(), joiningDate, joiningSession, transferFrom: transferred ? transferFrom.trim() : "", transferDate: transferred ? transferDate : "", declared: true });
             setBusy(false);
           }}>
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save and continue
@@ -763,7 +940,7 @@ function ClaimView({ claim, info, onBack, onEdit, onChange, onError }: {
                   </Button>
                 </Step>
                 <Step n={3} title="Sign the printed form and hand it to your department">
-                  <p>Your department will get it signed by the Chairman / Head and send it to the Salary Section.</p>
+                  <p>Your department will get it signed by the Chairman / Head{claim.formType === "pca" ? " and countersigned by the CMS / CMO" : ""} and send it to the Salary Section.</p>
                 </Step>
               </>
             )}

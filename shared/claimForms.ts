@@ -10,7 +10,7 @@
 //   returned_employee   returned_department
 import { z } from "zod";
 
-export const CLAIM_FORM_TYPES = ["npa", "hra", "conveyance"] as const;
+export const CLAIM_FORM_TYPES = ["npa", "hra", "pca", "conveyance"] as const;
 export type ClaimFormType = (typeof CLAIM_FORM_TYPES)[number];
 
 export const CLAIM_STATUSES = [
@@ -74,6 +74,13 @@ export const CLAIM_FORM_DEFS: Record<ClaimFormType, ClaimFormDef> = {
     title: "Certificate of H.R.A. Claim",
     shortTitle: "HRA",
     description: "House Rent Allowance. To be filled once for each appointment.",
+    needsUndertaking: false,
+  },
+  pca: {
+    type: "pca", code: "PCA",
+    title: "H.P.C.A. / P.C.A. Claim Form",
+    shortTitle: "PCA",
+    description: "Hospital Patient Care Allowance / Patient Care Allowance. To be filled twice a year, for January to June and for July to December. Not for temporary staff.",
     needsUndertaking: false,
   },
   conveyance: {
@@ -235,15 +242,75 @@ export const conveyanceDataSchema = z.object({
 });
 export type ConveyanceData = z.infer<typeof conveyanceDataSchema>;
 
+// ── Patient Care Allowance (HPCA / PCA) ──────────────────────────────────────
+// Claimed twice a year, for January–June and for July–December ("this claim form
+// should be submitted twice a year i.e. in January and July"). Not for temporary
+// staff; only employees of departments marked as PCA departments by the Salary Section.
+
+/** "2026-1" = January to June 2026, "2026-2" = July to December 2026 */
+export function isHalfYear(key: string): boolean {
+  return /^\d{4}-[12]$/.test(key);
+}
+
+export function halfYearLabel(key: string): string {
+  if (!isHalfYear(key)) return "";
+  const [year, half] = key.split("-");
+  return half === "1" ? `January to June ${year}` : `July to December ${year}`;
+}
+
+/** First and last day: ["2026-07-01", "2026-12-31"] */
+export function halfYearRange(key: string): [string, string] {
+  const [year, half] = key.split("-");
+  return half === "1" ? [`${year}-01-01`, `${year}-06-30`] : [`${year}-07-01`, `${year}-12-31`];
+}
+
+/**
+ * Half-years a PCA claim can be filled for on `today` ("YYYY-MM-DD"), newest first:
+ * the next one (only in June / December, just before it starts), the present one and
+ * the one before it (a late claim).
+ */
+export function claimableHalfYears(today: string): string[] {
+  const [y, m] = today.split("-").map(Number);
+  const present = m <= 6 ? `${y}-1` : `${y}-2`;
+  const before = m <= 6 ? `${y - 1}-2` : `${y}-1`;
+  const next = m <= 6 ? `${y}-2` : `${y + 1}-1`;
+  return [...(m === 6 || m === 12 ? [next] : []), present, before];
+}
+
+/** How the claim stands against the payroll of the six months before it */
+export const PCA_CATEGORIES = {
+  continuing: "Continuing (PCA drawn in the previous six months)",
+  new: "New claim (no PCA in the previous six months)",
+  transfer: "Transfer case (department changed in the previous six months)",
+  unknown: "Not checked (no paybill data for the previous six months)",
+} as const;
+export type PcaCategory = keyof typeof PCA_CATEGORIES;
+
+/** Employment statuses that may claim PCA (confirmed, or on probation) */
+export const PCA_STATUSES = ["Permanent", "Probation"];
+
+export const pcaDataSchema = z.object({
+  period: z.string().refine(isHalfYear, "Please choose the period"),
+  confirmation: z.string().trim().min(3, "Please enter the date of confirmation or the term of probation").max(60),
+  joiningDate: isoDate,
+  joiningSession: z.enum(["FN", "AN"], { errorMap: () => ({ message: "Please choose forenoon or afternoon" }) }),
+  transferFrom: z.string().trim().max(80).optional().default(""),
+  transferDate: z.union([isoDate, z.literal("")]).optional().default(""),
+  declared: z.literal(true, { errorMap: () => ({ message: "Please confirm the declaration" }) }),
+});
+export type PcaData = z.infer<typeof pcaDataSchema>;
+
 export const CLAIM_DATA_SCHEMAS: Record<ClaimFormType, z.ZodTypeAny> = {
   npa: npaDataSchema,
   hra: hraDataSchema,
+  pca: pcaDataSchema,
   conveyance: conveyanceDataSchema,
 };
 
 /** One line that says what a claim is for, for lists: "W.e.f. 01-10-2026" / "June 2026 to August 2026" */
 export function claimSummary(claim: { formType: ClaimFormType; data: Record<string, any> }): string {
   if (claim.formType === "conveyance") return quarterLabel(String(claim.data.quarter || ""));
+  if (claim.formType === "pca") return halfYearLabel(String(claim.data.period || ""));
   return `W.e.f. ${formatClaimDate(claim.data.wefDate)}`;
 }
 

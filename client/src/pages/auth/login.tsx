@@ -123,7 +123,7 @@ function EmployeeClaimFormsLink() {
       </span>
       <span className="flex-1">
         <span className="block text-sm font-semibold text-slate-900">Employees: fill a claim form online</span>
-        <span className="block text-xs text-slate-600">NPA, HRA and Conveyance Allowance. No login needed: Permanent ID and date of joining.</span>
+        <span className="block text-xs text-slate-600">NPA, HRA, PCA and Conveyance Allowance. No login needed: Permanent ID and date of joining.</span>
       </span>
       <ChevronRight className="h-4 w-4 text-slate-400" />
     </button>
