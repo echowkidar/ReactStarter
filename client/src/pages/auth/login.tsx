@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
-import { Loader2, AlertTriangle, DownloadCloud, ChevronDown, PlayCircle } from "lucide-react";
+import { Loader2, AlertTriangle, DownloadCloud, ChevronDown, PlayCircle, FileSignature, ChevronRight } from "lucide-react";
 import { NeuralNetworkStyles, NeuralNetworkOverlay } from "@/components/NeuralNetworkOverlay";
 import { SplashScreen } from "@/components/SplashScreen";
 
@@ -98,6 +98,37 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 });
+
+/** Way in for employees to the online claim forms (shown only while the forms are open) */
+function EmployeeClaimFormsLink() {
+  const [, setLocation] = useLocation();
+  const { data } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/public/forms/config"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/forms/config");
+      if (!res.ok) return { enabled: false };
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  if (!data?.enabled) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => setLocation("/forms")}
+      className="w-full bg-white p-3 rounded-lg shadow-sm border border-blue-200 flex items-center gap-3 text-left hover:bg-blue-50 hover:border-blue-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+    >
+      <span className="h-10 w-10 shrink-0 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
+        <FileSignature className="h-5 w-5" />
+      </span>
+      <span className="flex-1">
+        <span className="block text-sm font-semibold text-slate-900">Employees: fill a claim form online</span>
+        <span className="block text-xs text-slate-600">NPA and HRA forms. No login needed: Permanent ID and date of joining.</span>
+      </span>
+      <ChevronRight className="h-4 w-4 text-slate-400" />
+    </button>
+  );
+}
 
 function PublicDownloadsDropdown() {
   const { data: downloads = [], isLoading } = useQuery<any[]>({
@@ -331,6 +362,8 @@ export default function Login() {
               </Button>
             </CardFooter>
           </Card>
+
+          <EmployeeClaimFormsLink />
 
           {/* Helper Resources row */}
           <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4">
