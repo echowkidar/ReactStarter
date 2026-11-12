@@ -200,7 +200,7 @@ def main() -> int:
     failed = 0
     conn = ora.connect(user=user, password=password, dsn=DSN)
     try:
-        conn.call_timeout = 120_000
+        # (no call_timeout here: it needs a newer Oracle client than the 11.2 one on this PC)
         cur = conn.cursor()
         cur.execute(queries.READ_ONLY_TRANSACTION)
         for title, sql in STEPS:

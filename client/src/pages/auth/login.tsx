@@ -113,20 +113,21 @@ function EmployeeClaimFormsLink() {
   });
   if (!data?.enabled) return null;
   return (
-    <button
-      type="button"
-      onClick={() => setLocation("/forms")}
-      className="w-full bg-white p-3 rounded-lg shadow-sm border border-blue-200 flex items-center gap-3 text-left hover:bg-blue-50 hover:border-blue-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-    >
-      <span className="h-10 w-10 shrink-0 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
+    <div className="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-4 shadow-md">
+      <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">For employees</p>
+      <p className="mt-0.5 text-lg font-bold leading-snug text-slate-900">Fill a claim form online</p>
+      <p className="mt-1 text-sm text-slate-700">NPA, HRA, PCA and Conveyance Allowance. No login or password is needed: only your Permanent ID Number and date of joining.</p>
+      <button
+        type="button"
+        onClick={() => setLocation("/forms")}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-3 text-base font-semibold text-white shadow hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+      >
         <FileSignature className="h-5 w-5" />
-      </span>
-      <span className="flex-1">
-        <span className="block text-sm font-semibold text-slate-900">Employees: fill a claim form online</span>
-        <span className="block text-xs text-slate-600">NPA, HRA, PCA and Conveyance Allowance. No login needed: Permanent ID and date of joining.</span>
-      </span>
-      <ChevronRight className="h-4 w-4 text-slate-400" />
-    </button>
+        Open Employee Claim Forms
+        <ChevronRight className="h-5 w-5" />
+      </button>
+      <p className="mt-2 text-center text-xs text-slate-600">Departments: use the login below.</p>
+    </div>
   );
 }
 
@@ -281,6 +282,8 @@ export default function Login() {
         <NeuralNetworkOverlay />
 
         <div className="w-full max-w-md relative z-10 flex flex-col gap-4">
+          {/* Employees come here to fill claim forms: shown first, before the department login */}
+          <EmployeeClaimFormsLink />
           <Card className="w-full shadow-lg border-primary/10">
             <CardHeader className="text-center pt-5 pb-2">
               <div className="flex justify-center mb-2">
@@ -362,8 +365,6 @@ export default function Login() {
               </Button>
             </CardFooter>
           </Card>
-
-          <EmployeeClaimFormsLink />
 
           {/* Helper Resources row */}
           <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4">

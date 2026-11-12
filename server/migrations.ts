@@ -755,6 +755,33 @@ export async function runMigrations() {
         VALUES ('conveyance_rates', '[{"from":"2000-01","amount":3300,"daPercent":103}]')
         ON CONFLICT (key) DO NOTHING`);
 
+      // Children Education Allowance: schools (kept by the Salary Section). Filled once from
+      // the DSE register when empty; rates are kept in app_settings ('cea_rates').
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS cea_schools (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          place TEXT NOT NULL DEFAULT '',
+          location TEXT NOT NULL DEFAULT 'aligarh',     -- aligarh | outside
+          status TEXT NOT NULL DEFAULT 'unknown',       -- recognised | not_recognised | unknown
+          dse_reference TEXT NOT NULL DEFAULT '',
+          session TEXT NOT NULL DEFAULT '',
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          updated_by TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      const schoolCount = await db.execute(sql`SELECT COUNT(*)::int AS n FROM cea_schools`);
+      if (Number((schoolCount.rows[0] as any).n) === 0) {
+        const { CEA_SCHOOLS_SEED } = await import("./ceaSchoolsSeed");
+        await db.execute(sql`
+          INSERT INTO cea_schools (name, location, status, dse_reference, session, updated_by)
+          SELECT x.name, x.location, x.status, x."dseReference", x.session, 'DSE register'
+          FROM jsonb_to_recordset(${JSON.stringify(CEA_SCHOOLS_SEED)}::jsonb)
+            AS x(name text, location text, status text, "dseReference" text, session text)`);
+      }
+
       // The forms are switched OFF until the super admin turns them on
       await db.execute(sql`
         INSERT INTO app_settings (key, value) VALUES ('claim_forms_enabled', 'false')

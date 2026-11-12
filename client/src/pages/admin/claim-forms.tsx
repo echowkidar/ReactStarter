@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Check, CheckCheck, ExternalLink, Loader2, Printer, Undo2, X } from "lucide-react";
 import { getAdminAccess } from "@/lib/admin-access";
+import { CeaRates, CeaSchools } from "@/components/admin/cea-settings";
 import { ClaimStatusBadge, EVENT_LABELS } from "@/pages/claim-forms";
 import {
   CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_LABELS, CONVEYANCE_MONTH_REASONS, HRA_OPTIONS, PCA_CATEGORIES,
@@ -93,6 +94,8 @@ export default function AdminClaimForms() {
           </div>
           <PcaDepartments canEdit={access.settings} />
           <ConveyanceRates canEdit={access.settings} />
+          <CeaRates canEdit={access.settings} />
+          <CeaSchools canEdit={!access.isViewOnly} />
           {settings && (
             <label className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
               <Switch checked={settings.enabled} disabled={!access.settings} onCheckedChange={setOpen} aria-label="Forms open for employees" />

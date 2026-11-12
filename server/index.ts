@@ -91,6 +91,9 @@ export async function initApp() {
     registerNotificationRoutes(app);
 
     // Online claim forms (NPA, HRA …): employee without login → department → Salary Section
+    // (CEA rates and schools first: their addresses must not be taken for a claim id)
+    const { registerCeaSettingsRoutes } = await import("./ceaSettings");
+    registerCeaSettingsRoutes(app);
     const { registerClaimFormRoutes } = await import("./claimForms");
     registerClaimFormRoutes(app);
 
