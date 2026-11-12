@@ -605,15 +605,15 @@ export default function EmailClient() {
           />
 
           <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
-            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
+            <DialogContent className="sm:max-w-3xl max-h-[min(90vh,calc(100dvh-2rem))] flex flex-col">
               <DialogHeader>
                 <DialogTitle>Preview: {previewAttachment?.filename}</DialogTitle>
               </DialogHeader>
-              <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-slate-100 rounded-md">
+              <div className="min-h-0 flex-1 overflow-auto flex items-center justify-center p-4 bg-slate-100 rounded-md">
                 {previewAttachment?.content?.startsWith('data:image/') ? (
-                  <img src={previewAttachment.content} alt="Attachment" className="max-w-full max-h-[70vh] object-contain shadow-sm" />
+                  <img src={previewAttachment.content} alt="Attachment" className="max-w-full max-h-[min(70vh,calc(100dvh-10rem))] object-contain shadow-sm" />
                 ) : previewAttachment?.content?.startsWith('data:application/pdf') ? (
-                  <iframe src={previewAttachment.content} className="w-full h-[70vh] bg-white shadow-sm" title="PDF Preview" />
+                  <iframe src={previewAttachment.content} className="w-full h-[min(70vh,calc(100dvh-10rem))] bg-white shadow-sm" title="PDF Preview" />
                 ) : (
                   <p className="text-slate-500">Preview not available for this file type.</p>
                 )}
@@ -810,11 +810,11 @@ export default function EmailClient() {
       </div>
 
       <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
-        <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 overflow-hidden sm:max-w-4xl">
+        <DialogContent className="max-w-4xl h-[min(85vh,calc(100dvh-2rem))] flex flex-col p-0 overflow-hidden sm:max-w-4xl [&>[data-dialog-close-row]]:mr-4 [&>[data-dialog-close-row]]:mt-6 [&>[data-dialog-close-row]]:-mb-10">
           <DialogHeader className="p-4 border-b shrink-0 flex flex-row items-center justify-between">
             <DialogTitle className="text-lg truncate pr-8">{previewAttachment?.filename || 'Attachment Preview'}</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-auto bg-slate-50 relative">
+          <div className="min-h-0 flex-1 overflow-auto bg-slate-50 relative">
             {previewAttachment?.filename?.endsWith('.eml') || previewAttachment?.contentType === 'message/rfc822' ? (
               <div className="w-full h-full p-6 bg-white overflow-y-auto">
                 {isParsingEml ? (

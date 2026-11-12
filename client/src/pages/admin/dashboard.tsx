@@ -2468,7 +2468,7 @@ export default function AdminDashboard() {
 
         {/* Locked Accounts & Reset Login Dialog */}
         <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
-          <DialogContent className="max-w-xl max-h-[85vh] flex flex-col">
+          <DialogContent className="max-w-xl max-h-[min(85vh,calc(100dvh-2rem))] flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base">
                 <ShieldAlert className={`h-5 w-5 ${lockedCount > 0 ? "text-red-600" : "text-emerald-600"}`} />
@@ -2541,7 +2541,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* List of Locked Users */}
-            <div className="flex-1 overflow-y-auto max-h-[340px] space-y-2 pr-1">
+            <div className="min-h-0 flex-1 overflow-y-auto max-h-[340px] space-y-2 pr-1">
               {(() => {
                 const filtered = lockedUsersList.filter(u =>
                   (u.name && u.name.toLowerCase().includes(lockedSearchTerm.toLowerCase())) ||

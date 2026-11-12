@@ -1038,8 +1038,8 @@ export default function AdminLPC() {
 
       {/* ═══ PDF VIEWER ═══ */}
       <Dialog open={!!pdfViewRecord} onOpenChange={() => { setPdfViewRecord(null); setVerifyStatus(null); }}>
-        <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="px-4 py-3 border-b flex-shrink-0">
+        <DialogContent className="max-w-4xl h-[min(90vh,calc(100dvh-2rem))] flex flex-col p-0 overflow-hidden [&>[data-dialog-close-row]]:mr-4 [&>[data-dialog-close-row]]:mt-6 [&>[data-dialog-close-row]]:-mb-10">
+          <DialogHeader className="pl-4 pr-10 py-3 border-b flex-shrink-0">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-base flex items-center gap-2">
                 <FileText className="h-5 w-5 text-red-500" />
@@ -1063,7 +1063,7 @@ export default function AdminLPC() {
               </p>
             )}
           </DialogHeader>
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             {pdfViewRecord?.pdfUrl && <iframe src={pdfViewRecord.pdfUrl} className="w-full h-full border-0" title="LPC PDF" />}
           </div>
           <div className="px-4 py-3 border-t flex justify-between items-center bg-slate-50 flex-shrink-0">

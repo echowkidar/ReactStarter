@@ -123,7 +123,7 @@ export function RegisterOrderDialog({ open, onOpenChange, savedOrder, availableR
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-[640px] max-h-[92vh] flex flex-col">
+      <DialogContent className="max-w-[95vw] w-[640px] max-h-[min(92vh,calc(100dvh-2rem))] flex flex-col">
         <DialogHeader>
           <DialogTitle>Arrange Salary Registers</DialogTitle>
           <DialogDescription>
@@ -235,7 +235,7 @@ export function RegisterOrderDialog({ open, onOpenChange, savedOrder, availableR
         )}
 
         {mode === "pick" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 min-h-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
             <div className="flex flex-col min-h-0">
               <div className="text-xs font-medium mb-1">1. Click registers in your paper-register order</div>
               <Input

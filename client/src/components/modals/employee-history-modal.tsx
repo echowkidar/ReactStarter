@@ -82,7 +82,7 @@ export function EmployeeHistoryModal({ isOpen, onClose, employeeId, employeeName
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col">
+            <DialogContent className="max-w-5xl max-h-[min(80vh,calc(100dvh-2rem))] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <History className="h-5 w-5" />
@@ -100,7 +100,7 @@ export function EmployeeHistoryModal({ isOpen, onClose, employeeId, employeeName
                             No history found for this employee.
                         </div>
                     ) : (
-                        <ScrollArea className="h-[60vh]">
+                        <ScrollArea className="h-[min(60vh,calc(100dvh-10rem))]">
                             <Table>
                                 <TableHeader>
                                     <TableRow>

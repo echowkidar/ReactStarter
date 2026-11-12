@@ -608,7 +608,7 @@ export default function Dashboard() {
 
       {/* Deadline Passed Alert Modal */}
       <Dialog open={showDeadlineAlert} onOpenChange={setShowDeadlineAlert}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-0 shadow-lg">
+        <DialogContent className="max-w-md p-0 overflow-hidden border-0 shadow-lg [&>[data-dialog-close-row]]:mr-4 [&>[data-dialog-close-row]]:mt-6 [&>[data-dialog-close-row]>button]:bg-transparent [&>[data-dialog-close-row]>button]:text-white">
           <div className="bg-red-600 p-6 text-center text-white">
             <div className="flex justify-center mb-4">
               <AlertTriangle className="h-12 w-12 text-white" />
