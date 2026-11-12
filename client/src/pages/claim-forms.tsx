@@ -743,7 +743,7 @@ function ConveyanceEditor({ employee, initial, fixedQuarter, onSave, onCancel, o
   const setEntry = (month: string, change: Partial<MonthEntry>) => setEntries((all) => ({ ...all, [month]: { ...entry(month), ...change } }));
   const bill = (quarter: string) => {
     const months = quarterMonths(quarter).map((month) => ({ month, visits: Number(entry(month).visits) || 0, reason: entry(month).reason }));
-    return conveyanceAmounts(months, rates);
+    return conveyanceAmounts(months, rates, vehicleType);
   };
   const bills = chosen.map((q) => ({ quarter: q, ...bill(q) }));
   const total = bills.reduce((sum, b) => sum + b.amount, 0);

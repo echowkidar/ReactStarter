@@ -131,7 +131,9 @@ export type HraData = z.infer<typeof hraDataSchema>;
 // conditions certified on the bill hold for it: more than twenty visits, leave of
 // not more than 15 days, and not a vacation month.
 
-export const CONVEYANCE_VEHICLES = ["Car", "Scooter / Motor Cycle"] as const;
+/** Types of vehicle as in the payroll's conveyance entry */
+export const CONVEYANCE_VEHICLES = ["Four wheeler", "Two wheeler"] as const;
+export type ConveyanceVehicle = (typeof CONVEYANCE_VEHICLES)[number];
 /** A month does not count when the employee marks it with one of these */
 export const CONVEYANCE_MONTH_REASONS = {
   vacation: "On vacation",
@@ -143,10 +145,16 @@ export type ConveyanceMonthReason = keyof typeof CONVEYANCE_MONTH_REASONS;
 /** Rate of the allowance from a month onwards (the latest one that has started applies) */
 export interface ConveyanceRate {
   from: string;        // "YYYY-MM"
-  amount: number;      // rupees per month
+  amount: number;      // rupees per month, four wheeler
+  twoWheeler: number;  // rupees per month, two wheeler
   daPercent: number;   // dearness allowance on it, added by the Salary Section
 }
-export const DEFAULT_CONVEYANCE_RATES: ConveyanceRate[] = [{ from: "2000-01", amount: 3300, daPercent: 103 }];
+export const DEFAULT_CONVEYANCE_RATES: ConveyanceRate[] = [{ from: "2000-01", amount: 3300, twoWheeler: 1080, daPercent: 103 }];
+
+/** The monthly amount of a rate for a vehicle */
+export function conveyanceRateAmount(rate: ConveyanceRate, vehicle: string): number {
+  return vehicle === "Two wheeler" ? Number(rate.twoWheeler ?? 1080) : rate.amount;
+}
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const yearMonth = (y: number, m: number) => `${y}-${String(m).padStart(2, "0")}`; // m = 1..12
@@ -222,11 +230,12 @@ export interface ConveyanceMonth {
 export function conveyanceAmounts(
   months: Array<{ month: string; visits: number; reason: ConveyanceMonthReason | null }>,
   rates: ConveyanceRate[],
+  vehicle: string,
 ) {
   const rows: ConveyanceMonth[] = months.map((x) => {
     const counts = !x.reason && x.visits > 20;
     const rate = conveyanceRateFor(rates, x.month);
-    const amount = counts ? rate.amount : 0;
+    const amount = counts ? conveyanceRateAmount(rate, vehicle) : 0;
     return {
       month: x.month, visits: x.visits,
       reason: counts ? null : x.reason || "visits",

@@ -282,7 +282,11 @@ async function conveyanceRates(): Promise<ConveyanceRate[]> {
     const list = JSON.parse(String((r.rows[0] as any)?.value || "[]"));
     const ok = (Array.isArray(list) ? list : []).filter((x: any) =>
       /^\d{4}-(0[1-9]|1[0-2])$/.test(String(x?.from)) && Number(x?.amount) > 0 && Number(x?.daPercent) >= 0)
-      .map((x: any) => ({ from: String(x.from), amount: Number(x.amount), daPercent: Number(x.daPercent) }));
+      .map((x: any) => ({
+        from: String(x.from), amount: Number(x.amount), daPercent: Number(x.daPercent),
+        // rates saved before two-wheeler rates existed: the payroll's two-wheeler rate
+        twoWheeler: Number(x.twoWheeler) > 0 ? Number(x.twoWheeler) : 1080,
+      }));
     return ok.length ? ok : DEFAULT_CONVEYANCE_RATES;
   } catch {
     return DEFAULT_CONVEYANCE_RATES;
@@ -488,7 +492,7 @@ async function checkData(formType: ClaimFormType, raw: unknown, e: EmployeeRow, 
     }
     const months = quarterMonths(quarter);
     if (data.months.some((m: any, i: number) => m.month !== months[i])) return { error: "The months do not belong to the chosen quarter." };
-    const worked = conveyanceAmounts(data.months, await conveyanceRates());
+    const worked = conveyanceAmounts(data.months, await conveyanceRates(), data.vehicleType);
     if (worked.eligibleMonths === 0) {
       return { error: "No month of this quarter qualifies (more than twenty visits are needed in a month, with no vacation and not more than 15 days of leave)." };
     }
@@ -1166,11 +1170,12 @@ export function registerClaimFormRoutes(app: Express) {
     const list = Array.isArray(req.body?.rates) ? req.body.rates : [];
     const rates: ConveyanceRate[] = [];
     for (const x of list) {
-      const from = clean(x?.from), amount = Number(x?.amount), daPercent = Number(x?.daPercent);
-      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(from) || !(amount > 0 && amount < 1_000_000) || !(daPercent >= 0 && daPercent <= 1000)) {
+      const from = clean(x?.from), amount = Number(x?.amount), twoWheeler = Number(x?.twoWheeler), daPercent = Number(x?.daPercent);
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(from) || !(amount > 0 && amount < 1_000_000) || !(twoWheeler > 0 && twoWheeler < 1_000_000)
+          || !(daPercent >= 0 && daPercent <= 1000)) {
         return res.status(400).json({ message: "Each rate needs a month, an amount and a DA percentage." });
       }
-      rates.push({ from, amount: Math.round(amount), daPercent });
+      rates.push({ from, amount: Math.round(amount), twoWheeler: Math.round(twoWheeler), daPercent });
     }
     if (!rates.length) return res.status(400).json({ message: "At least one rate is needed." });
     if (new Set(rates.map((r) => r.from)).size !== rates.length) return res.status(400).json({ message: "Two rates start in the same month." });

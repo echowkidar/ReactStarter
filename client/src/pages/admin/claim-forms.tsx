@@ -269,14 +269,14 @@ function ConveyanceRates({ canEdit }: { canEdit: boolean }) {
   const key = ["/api/admin/claim-forms/conveyance-rates"];
   const { data } = useQuery<{ rates: ConveyanceRate[] }>({ queryKey: key, queryFn: async () => (await apiRequest("GET", key[0])).json() });
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<Array<{ from: string; amount: string; daPercent: string }>>([]);
+  const [rows, setRows] = useState<Array<{ from: string; amount: string; twoWheeler: string; daPercent: string }>>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const rates = data?.rates || [];
   const current = rates.length ? conveyanceRateFor(rates, localToday().slice(0, 7)) : null;
 
   const start = () => {
-    setRows(rates.map((r) => ({ from: r.from, amount: String(r.amount), daPercent: String(r.daPercent) })));
+    setRows(rates.map((r) => ({ from: r.from, amount: String(r.amount), twoWheeler: String(r.twoWheeler ?? 1080), daPercent: String(r.daPercent) })));
     setError("");
     setOpen(true);
   };
@@ -284,7 +284,7 @@ function ConveyanceRates({ canEdit }: { canEdit: boolean }) {
     setBusy(true);
     setError("");
     try {
-      await apiRequest("POST", key[0], { rates: rows.map((r) => ({ from: r.from, amount: Number(r.amount), daPercent: Number(r.daPercent) })) });
+      await apiRequest("POST", key[0], { rates: rows.map((r) => ({ from: r.from, amount: Number(r.amount), twoWheeler: Number(r.twoWheeler), daPercent: Number(r.daPercent) })) });
       queryClient.invalidateQueries({ queryKey: key });
       toast({ title: "Conveyance allowance rates saved" });
       setOpen(false);
@@ -298,19 +298,20 @@ function ConveyanceRates({ canEdit }: { canEdit: boolean }) {
     <>
       <button type="button" onClick={start} className="rounded-lg border bg-white px-3 py-2 text-sm text-left hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
         <span className="block text-xs text-slate-500">Conveyance allowance rate</span>
-        <span className="font-medium">{current ? `Rs. ${current.amount.toLocaleString("en-IN")} a month + DA ${current.daPercent}%` : "—"}</span>
+        <span className="font-medium">{current ? `Rs. ${current.amount.toLocaleString("en-IN")} / ${(current.twoWheeler ?? 1080).toLocaleString("en-IN")} a month + DA ${current.daPercent}%` : "—"}</span>
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Conveyance allowance rates</DialogTitle></DialogHeader>
           <div className="space-y-3 text-sm">
             <p className="text-slate-600">Each rate applies from its month until the next one starts. Bills already filled keep the amount they were filled with.</p>
-            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-              <Label className="text-xs">From month</Label><Label className="text-xs">Rs. a month</Label><Label className="text-xs">DA %</Label><span />
+            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-end">
+              <Label className="text-xs">From month</Label><Label className="text-xs">Four wheeler, Rs. a month</Label><Label className="text-xs">Two wheeler, Rs. a month</Label><Label className="text-xs">DA %</Label><span />
               {rows.map((r, i) => (
                 <div key={i} className="contents">
                   <Input type="month" value={r.from} disabled={!canEdit} aria-label={`Rate ${i + 1}: from month`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))} />
-                  <Input type="number" min={1} value={r.amount} disabled={!canEdit} aria-label={`Rate ${i + 1}: rupees a month`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
+                  <Input type="number" min={1} value={r.amount} disabled={!canEdit} aria-label={`Rate ${i + 1}: four wheeler, rupees a month`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
+                  <Input type="number" min={1} value={r.twoWheeler} disabled={!canEdit} aria-label={`Rate ${i + 1}: two wheeler, rupees a month`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, twoWheeler: e.target.value } : x)))} />
                   <Input type="number" min={0} step="0.01" value={r.daPercent} disabled={!canEdit} aria-label={`Rate ${i + 1}: DA percent`} onChange={(e) => setRows((all) => all.map((x, j) => (j === i ? { ...x, daPercent: e.target.value } : x)))} />
                   <Button variant="ghost" size="sm" disabled={!canEdit || rows.length === 1} aria-label={`Remove rate ${i + 1}`} onClick={() => setRows((all) => all.filter((_, j) => j !== i))}><X className="h-4 w-4" /></Button>
                 </div>
@@ -318,7 +319,7 @@ function ConveyanceRates({ canEdit }: { canEdit: boolean }) {
             </div>
             {canEdit ? (
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => setRows((all) => [...all, { from: localToday().slice(0, 7), amount: all[all.length - 1]?.amount || "3300", daPercent: all[all.length - 1]?.daPercent || "0" }])}>Add a rate</Button>
+                <Button variant="outline" size="sm" onClick={() => setRows((all) => [...all, { from: localToday().slice(0, 7), amount: all[all.length - 1]?.amount || "3300", twoWheeler: all[all.length - 1]?.twoWheeler || "1080", daPercent: all[all.length - 1]?.daPercent || "0" }])}>Add a rate</Button>
                 <Button size="sm" disabled={busy} onClick={save}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save</Button>
               </div>
             ) : <p className="text-slate-500">Only a super admin can change the rates.</p>}

@@ -752,7 +752,7 @@ export async function runMigrations() {
       // Rate of the conveyance allowance and the DA on it, each from a month onwards
       await db.execute(sql`
         INSERT INTO app_settings (key, value)
-        VALUES ('conveyance_rates', '[{"from":"2000-01","amount":3300,"daPercent":103}]')
+        VALUES ('conveyance_rates', '[{"from":"2000-01","amount":3300,"twoWheeler":1080,"daPercent":103}]')
         ON CONFLICT (key) DO NOTHING`);
 
       // Children Education Allowance: schools (kept by the Salary Section). Filled once from
