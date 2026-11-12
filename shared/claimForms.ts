@@ -10,7 +10,7 @@
 //   returned_employee   returned_department
 import { z } from "zod";
 
-export const CLAIM_FORM_TYPES = ["npa", "hra", "pca", "conveyance"] as const;
+export const CLAIM_FORM_TYPES = ["npa", "hra", "pca", "conveyance", "cea"] as const;
 export type ClaimFormType = (typeof CLAIM_FORM_TYPES)[number];
 
 export const CLAIM_STATUSES = [
@@ -59,6 +59,8 @@ export interface ClaimFormDef {
   description: string;
   /** A signed undertaking must be uploaded by the employee before the form can be submitted */
   needsUndertaking: boolean;
+  /** Each child needs the school's certificate (Annexure B) uploaded before the form can be submitted */
+  needsSchoolCertificate?: boolean;
 }
 
 export const CLAIM_FORM_DEFS: Record<ClaimFormType, ClaimFormDef> = {
@@ -82,6 +84,14 @@ export const CLAIM_FORM_DEFS: Record<ClaimFormType, ClaimFormDef> = {
     shortTitle: "PCA",
     description: "Hospital Patient Care Allowance / Patient Care Allowance. To be filled twice a year, for January to June and for July to December. Not for temporary staff.",
     needsUndertaking: false,
+  },
+  cea: {
+    type: "cea", code: "CEA",
+    title: "Children Education Allowance / Hostel Subsidy",
+    shortTitle: "CEA",
+    description: "Reimbursement of Children Education Allowance / Hostel Subsidy for an academic session, for your two eldest children (three if the second birth gave twins).",
+    needsUndertaking: false,
+    needsSchoolCertificate: true,
   },
   conveyance: {
     type: "conveyance", code: "CA",
@@ -300,17 +310,194 @@ export const pcaDataSchema = z.object({
 });
 export type PcaData = z.infer<typeof pcaDataSchema>;
 
+// ── Children Education Allowance (CEA) / Hostel Subsidy ──────────────────────
+// One claim per employee and academic session (April to March, e.g. "2025-2026"),
+// for the two eldest surviving children (three when the second birth gave twins).
+// Children come from the family details of the payroll (service book): a child who
+// is not there cannot be claimed for. Schools come from the Salary Section's list;
+// only schools that the Directorate of School Education found recognised are
+// accepted. Each child needs the school's certificate (Annexure B) uploaded before
+// the form can be submitted. Amounts are worked out from the CEA rates entered by
+// the Salary Section for the dates of the session.
+
+/** Classes as written in the payroll's CEA records */
+export const CEA_CLASSES = ["Pre-Nur", "Nursery", "L.K.G.", "U.K.G.", "Prep.", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Dip. I", "Dip. II"] as const;
+
+export const SPOUSE_EMPLOYMENT = {
+  none: "Not employed",
+  central: "Central Govt.",
+  psu: "PSU",
+  state: "State Govt.",
+  other: "Other",
+} as const;
+export type SpouseEmployment = keyof typeof SPOUSE_EMPLOYMENT;
+
+/** Why a child is in the same class as in the session before (flagged; marksheet needed) */
+export const CEA_REPEAT_REASONS = {
+  failed: "Failed in the previous session",
+  failed_changed_school: "Failed in the previous session and changed school",
+} as const;
+export type CeaRepeatReason = keyof typeof CEA_REPEAT_REASONS;
+
+/** Approval needed for a claim that is filled late */
+export const CEA_APPROVALS = {
+  none: "",
+  finance_officer: "This claim is two years old: approval of the Finance Officer is required.",
+  vice_chancellor: "This claim is more than two years old: approval of the Vice Chancellor is required.",
+} as const;
+export type CeaApproval = keyof typeof CEA_APPROVALS;
+
+/** "2025-2026" */
+export function isSession(s: string): boolean {
+  const m = /^(\d{4})-(\d{4})$/.exec(s);
+  return !!m && Number(m[2]) === Number(m[1]) + 1;
+}
+
+/** Session in which a day falls (sessions run April to March) */
+export function sessionOf(day: string): string {
+  const [y, m] = day.split("-").map(Number);
+  const start = m >= 4 ? y : y - 1;
+  return `${start}-${start + 1}`;
+}
+
+/** First and last day of a session: ["2025-04-01", "2026-03-31"] */
+export function sessionRange(session: string): [string, string] {
+  const start = Number(session.slice(0, 4));
+  return [`${start}-04-01`, `${start + 1}-03-31`];
+}
+
+/** The twelve months of a session, "YYYY-MM" */
+export function sessionMonths(session: string): string[] {
+  const start = Number(session.slice(0, 4));
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = 4 + i;
+    return m <= 12 ? `${start}-${String(m).padStart(2, "0")}` : `${start + 1}-${String(m - 12).padStart(2, "0")}`;
+  });
+}
+
+/** How old a session is against today: 0 = present, 1 = last, 2 = two years old … */
+export function sessionAge(session: string, today: string): number {
+  return Number(sessionOf(today).slice(0, 4)) - Number(session.slice(0, 4));
+}
+
+/** The present and last sessions need no approval; two years old: Finance Officer; older: Vice Chancellor */
+export function ceaApprovalFor(session: string, today: string): CeaApproval {
+  const age = sessionAge(session, today);
+  if (age <= 1) return "none";
+  return age === 2 ? "finance_officer" : "vice_chancellor";
+}
+
+/** Sessions that can be claimed, newest first (present one and `back` before it) */
+export function ceaClaimableSessions(today: string, back = 5): string[] {
+  const start = Number(sessionOf(today).slice(0, 4));
+  return Array.from({ length: back + 1 }, (_, i) => `${start - i}-${start - i + 1}`);
+}
+
+export interface CeaRate {
+  from: string;   // "YYYY-MM-DD"
+  to: string;     // "" = until further orders
+  cea: number;    // per child per month
+  hostel: number; // per child per month
+  disabled: number; // CEA per month for a child with disability
+}
+
+export function ceaRateOn(rates: CeaRate[], day: string): CeaRate | null {
+  return rates.find((r) => r.from <= day && (!r.to || r.to >= day)) || null;
+}
+
+/** A child of the employee as recorded in the payroll's family details */
+export interface FamilyChild {
+  key: string;        // stable key: date of birth + name, e.g. "2012-05-04|AYESHA"
+  name: string;
+  dob: string;        // "YYYY-MM-DD"
+  relation: "S" | "D";
+}
+
+/**
+ * The children CEA can be claimed for: the two eldest; when the second birth gave
+ * twins (or more), all children of that birth. Children of a birth are those with
+ * the same date of birth.
+ */
+export function ceaEligibleChildren(children: FamilyChild[]): FamilyChild[] {
+  const sorted = [...children].filter((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.dob)).sort((a, b) => a.dob.localeCompare(b.dob));
+  const births: FamilyChild[][] = [];
+  for (const c of sorted) {
+    const last = births[births.length - 1];
+    if (last && last[0].dob === c.dob) last.push(c);
+    else births.push([c]);
+  }
+  if (!births.length) return [];
+  if (births[0].length >= 2) return births[0];        // twins at the first birth
+  return [...births[0], ...(births[1] || [])];         // eldest + the whole second birth
+}
+
+/** What the employee fills for one child */
+export const ceaChildSchema = z.object({
+  childKey: z.string().min(3).max(80),
+  className: z.enum(CEA_CLASSES, { errorMap: () => ({ message: "Please choose the class of each child" }) }),
+  schoolId: z.coerce.number().int().positive({ message: "Please choose the school of each child" }),
+  result: z.enum(["passed", "failed"]).default("passed"),
+  hostel: z.boolean().default(false),
+  hostelDistanceKm: z.coerce.number().min(0).max(5000).optional().default(0),
+  disabled: z.boolean().default(false),
+  disabilityNature: z.string().trim().max(80).optional().default(""),
+  disabilityCertDate: z.union([isoDate, z.literal("")]).optional().default(""),
+  disabilityPercent: z.coerce.number().min(0).max(100).optional().default(0),
+  repeatReason: z.enum(["", "failed", "failed_changed_school"]).optional().default(""),
+});
+export type CeaChildInput = z.infer<typeof ceaChildSchema>;
+
+export const ceaDataSchema = z.object({
+  session: z.string().refine(isSession, "Please choose the academic session"),
+  spouseEmployment: z.enum(["none", "central", "psu", "state", "other"], { errorMap: () => ({ message: "Please say whether your spouse is employed" }) }),
+  spouseName: z.string().trim().max(80).optional().default(""),
+  spouseDetails: z.string().trim().max(200).optional().default(""),   // designation, office, B.U. / PID
+  amountAlreadyReceived: z.coerce.number().min(0).max(10_000_000).optional().default(0),
+  children: z.array(ceaChildSchema).min(1, "Please choose at least one child").max(4),
+  declared: z.literal(true, { errorMap: () => ({ message: "Please confirm the declaration" }) }),
+});
+export type CeaDataInput = z.infer<typeof ceaDataSchema>;
+
+/** One child of a CEA claim as stored (filled data + what the server worked out) */
+export interface CeaChild extends CeaChildInput {
+  name: string;
+  dob: string;
+  relation: "S" | "D";
+  schoolName: string;
+  schoolLocation: string;
+  repeatsClass: boolean;   // same class as in the session before (flag for the dealing assistant)
+  cea: number;             // allowance for the session
+  hostelAmount: number;    // hostel subsidy for the session
+  amount: number;          // cea + hostelAmount
+}
+
+/** Amounts of one child for a session: each month at the rate in force on its first day */
+export function ceaChildAmounts(session: string, rates: CeaRate[], child: { hostel: boolean; disabled: boolean }) {
+  let cea = 0, hostel = 0;
+  const missing: string[] = [];
+  for (const month of sessionMonths(session)) {
+    const rate = ceaRateOn(rates, `${month}-01`);
+    if (!rate) { missing.push(month); continue; }
+    cea += child.disabled && rate.disabled > 0 ? rate.disabled : rate.cea;
+    if (child.hostel) hostel += rate.hostel;
+  }
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return { cea: round(cea), hostel: round(hostel), missing };
+}
+
 export const CLAIM_DATA_SCHEMAS: Record<ClaimFormType, z.ZodTypeAny> = {
   npa: npaDataSchema,
   hra: hraDataSchema,
   pca: pcaDataSchema,
   conveyance: conveyanceDataSchema,
+  cea: ceaDataSchema,
 };
 
 /** One line that says what a claim is for, for lists: "W.e.f. 01-10-2026" / "June 2026 to August 2026" */
 export function claimSummary(claim: { formType: ClaimFormType; data: Record<string, any> }): string {
   if (claim.formType === "conveyance") return quarterLabel(String(claim.data.quarter || ""));
   if (claim.formType === "pca") return halfYearLabel(String(claim.data.period || ""));
+  if (claim.formType === "cea") return `Session ${String(claim.data.session || "")}`;
   return `W.e.f. ${formatClaimDate(claim.data.wefDate)}`;
 }
 

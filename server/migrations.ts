@@ -782,6 +782,44 @@ export async function runMigrations() {
             AS x(name text, location text, status text, "dseReference" text, session text)`);
       }
 
+      // From the payroll (copied by the Oracle sync on every fetch) for the CEA form:
+      // children in the family details (service book), CEA already paid, spouse details.
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS payroll_children (
+          id SERIAL PRIMARY KEY,
+          epid TEXT NOT NULL,
+          name TEXT NOT NULL,
+          dob DATE,
+          relation TEXT NOT NULL,          -- S = son, D = daughter
+          sex TEXT,
+          synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_payroll_children_epid ON payroll_children (epid)`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS cea_paid (
+          id SERIAL PRIMARY KEY,
+          epid TEXT NOT NULL,
+          child_name TEXT,
+          dob DATE,
+          session TEXT,                    -- "2025-2026"
+          class_name TEXT,
+          amount NUMERIC(12,2),
+          financial_year TEXT,
+          synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cea_paid_epid ON cea_paid (epid, dob)`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS payroll_spouse (
+          epid TEXT PRIMARY KEY,
+          name TEXT,
+          designation TEXT,
+          organisation TEXT,
+          synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
       // The forms are switched OFF until the super admin turns them on
       await db.execute(sql`
         INSERT INTO app_settings (key, value) VALUES ('claim_forms_enabled', 'false')

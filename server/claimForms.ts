@@ -23,11 +23,13 @@ import { sessionAdmin, sessionDepartmentId, sessionStaff, regenerateKeeping, sav
 import { rateLimit, safeUploadName } from "./security";
 import { notify } from "./notify";
 import { buildClaimPdf, claimPrintCode, claimPrintRef } from "./claimPdf";
+import { ceaRates } from "./ceaSettings";
 import {
   CLAIM_DATA_SCHEMAS, CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS,
   DEFAULT_CONVEYANCE_RATES, DEPARTMENT_ACTIONABLE, EMPLOYEE_EDITABLE, PCA_STATUSES, appointmentKey, claimableHalfYears,
   claimableQuarters, conveyanceAmounts, formatClaimDate, halfYearLabel, halfYearRange, isClaimFormType, monthLabel,
-  quarterLabel, quarterMonths,
+  quarterLabel, quarterMonths, CEA_APPROVALS, ceaApprovalFor, ceaChildAmounts, ceaClaimableSessions,
+  ceaEligibleChildren, sessionRange, type CeaChild, type FamilyChild,
   type ClaimForm, type ClaimFormType, type ClaimSnapshot, type ClaimStatus, type ConveyanceRate, type PcaCategory,
 } from "@shared/claimForms";
 
@@ -351,6 +353,119 @@ async function pcaCategory(epid: string, period: string, saysTransferred: boolea
   return { category: monthsDrawn > 0 ? "continuing" : "new", monthsDrawn };
 }
 
+// ── Children Education Allowance: children, schools, CEA already paid ─────────
+
+const SCHOOL_NOT_RECOGNISED = "As per the Directorate of School Education (DSE), this school is not recognised. Please contact the school or the DSE.";
+
+/** Sons and daughters of the employee in the payroll's family details */
+async function familyChildren(epid: string): Promise<FamilyChild[]> {
+  const rows = (await db.execute(sql`
+    SELECT name, dob::text AS dob, relation FROM payroll_children
+    WHERE epid = ${epid} AND relation IN ('S', 'D') ORDER BY dob, name`)).rows as any[];
+  return rows.filter((r) => r.dob).map((r) => ({
+    key: `${r.dob}|${clean(r.name).toUpperCase()}`, name: clean(r.name), dob: String(r.dob), relation: r.relation,
+  }));
+}
+
+/** CEA already paid through the payroll (and claims filled here), by child (date of birth) */
+async function ceaHistory(epid: string, employeeId: number, exceptClaimId = 0) {
+  const paid = (await db.execute(sql`
+    SELECT dob::text AS dob, session, class_name FROM cea_paid WHERE epid = ${epid} AND dob IS NOT NULL`)).rows as any[];
+  const filed = (await db.execute(sql`
+    SELECT data, ref_no FROM claim_forms
+    WHERE employee_id = ${employeeId} AND form_type = 'cea' AND id <> ${exceptClaimId}
+      AND status NOT IN ('rejected', 'cancelled')`)).rows as any[];
+  const items: Array<{ dob: string; session: string; className: string; source: string }> = paid.map((p) => ({
+    dob: String(p.dob), session: clean(p.session), className: clean(p.class_name), source: "payroll",
+  }));
+  for (const f of filed) {
+    const d = typeof f.data === "string" ? JSON.parse(f.data) : f.data;
+    for (const c of d?.children || []) items.push({ dob: c.dob, session: d.session, className: c.className, source: f.ref_no });
+  }
+  return items;
+}
+
+/** The session just before "2025-2026" */
+const previousSession = (s: string) => `${Number(s.slice(0, 4)) - 1}-${Number(s.slice(0, 4))}`;
+
+async function checkCea(data: Record<string, any>, e: EmployeeRow, exceptClaimId: number): Promise<Checked> {
+  const session = String(data.session);
+  if (!ceaClaimableSessions(todayIst()).includes(session)) return { error: "This session cannot be claimed here. Please contact the Salary Section." };
+  if (data.spouseEmployment !== "none" && !clean(data.spouseDetails)) {
+    return { error: "Please give the designation and office of your spouse." };
+  }
+  const family = await familyChildren(e.epid);
+  if (!family.length) {
+    return { error: "The names of your children are not in your service book record. Please first get them entered in the Service Book and inform the Salary Section, so that they can be verified.", status: 403 };
+  }
+  const eligible = ceaEligibleChildren(family);
+  const keys = data.children.map((c: any) => c.childKey);
+  if (new Set(keys).size !== keys.length) return { error: "A child is listed twice." };
+
+  const rates = await ceaRates();
+  const history = await ceaHistory(e.epid, Number(e.id), exceptClaimId);
+  const children: CeaChild[] = [];
+  for (const input of data.children) {
+    const child = family.find((c) => c.key === input.childKey);
+    if (!child) return { error: "One of the children is not in your service book record. Please contact the Salary Section." };
+    if (!eligible.some((c) => c.key === child.key)) {
+      return { error: `${child.name} is not one of your two eldest children (or twins of the second birth), so CEA cannot be claimed for this child.` };
+    }
+    const school = (await db.execute(sql`
+      SELECT name, place, location, status, is_active FROM cea_schools WHERE id = ${input.schoolId}`)).rows[0] as any;
+    if (!school || !school.is_active) return { error: `Please choose the school of ${child.name} from the list.` };
+    if (school.status !== "recognised") return { error: `${clean(school.name)}: ${SCHOOL_NOT_RECOGNISED}` };
+    if (input.disabled && (!clean(input.disabilityNature) || !input.disabilityCertDate || !(Number(input.disabilityPercent) > 0))) {
+      return { error: `For ${child.name}, please give the nature of the disability, the date of the certificate and the percentage.` };
+    }
+    if (input.hostel && !(Number(input.hostelDistanceKm) > 0)) {
+      return { error: `For ${child.name}, please give the distance of the hostel from your residence.` };
+    }
+    const already = history.find((h) => h.dob === child.dob && h.session === session);
+    if (already) {
+      return { error: `CEA for ${child.name} for the session ${session} has already been ${already.source === "payroll" ? "paid" : `claimed (${already.source})`}.` };
+    }
+    const before = history.find((h) => h.dob === child.dob && h.session === previousSession(session));
+    const repeatsClass = !!before && !!before.className && before.className === input.className;
+    if (repeatsClass && !input.repeatReason) {
+      return { error: `${child.name} was in class ${input.className} in the session before too. Please choose the reason (failed, or failed and changed school) and upload the marksheet.` };
+    }
+    const worked = ceaChildAmounts(session, rates, { hostel: !!input.hostel, disabled: !!input.disabled });
+    if (worked.missing.length) {
+      return { error: `The CEA rate for the session ${session} has not been entered yet. Please contact the Salary Section.` };
+    }
+    children.push({
+      ...input,
+      repeatReason: repeatsClass ? input.repeatReason : (input.repeatReason || ""),
+      name: child.name, dob: child.dob, relation: child.relation,
+      schoolName: clean(school.place) ? `${clean(school.name)}, ${clean(school.place)}` : clean(school.name),
+      schoolLocation: school.location,
+      repeatsClass, cea: worked.cea, hostelAmount: worked.hostel, amount: worked.cea + worked.hostel,
+    });
+  }
+  const total = children.reduce((s, c) => s + c.amount, 0);
+  const received = Number(data.amountAlreadyReceived) || 0;
+  return {
+    data: {
+      session, spouseEmployment: data.spouseEmployment, spouseName: clean(data.spouseName), spouseDetails: clean(data.spouseDetails),
+      amountAlreadyReceived: received, children, total, payable: Math.max(0, total - received),
+      approval: ceaApprovalFor(session, todayIst()), declared: true,
+    },
+    periodKey: `s:${session}`, periodLabel: `Session ${session}`,
+  };
+}
+
+/** Uploads a CEA claim needs before it can be submitted, and which of them are missing */
+function ceaUploadsMissing(claim: ClaimForm): string[] {
+  const have = new Set((claim.files || []).filter((f) => f.isCurrent && Number(f.revision) === claim.revision).map((f) => f.kind));
+  const missing: string[] = [];
+  (claim.data.children || []).forEach((c: any, i: number) => {
+    if (!have.has(`school_certificate_${i}`)) missing.push(`the certificate of the school (Annexure B) for ${c.name}`);
+    if (c.repeatReason && !have.has(`marksheet_${i}`)) missing.push(`the marksheet of ${c.name}`);
+  });
+  return missing;
+}
+
 type Checked = { data?: Record<string, any>; periodKey?: string; periodLabel?: string; error?: string; status?: number };
 
 /**
@@ -358,10 +473,11 @@ type Checked = { data?: Record<string, any>; periodKey?: string; periodLabel?: s
  * data (amounts are always worked out here, never taken from the browser) and what
  * the claim is for (its period), or an error message.
  */
-async function checkData(formType: ClaimFormType, raw: unknown, e: EmployeeRow): Promise<Checked> {
+async function checkData(formType: ClaimFormType, raw: unknown, e: EmployeeRow, exceptClaimId = 0): Promise<Checked> {
   const parsed = CLAIM_DATA_SCHEMAS[formType].safeParse(raw);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message || "Please fill the form completely" };
   const data = parsed.data as Record<string, any>;
+  if (formType === "cea") return checkCea(data, e, exceptClaimId);
   const joined = [realDate(e.payroll_joining_date), realDate(e.joining_date)].filter(Boolean).sort()[0] as string | undefined;
 
   if (formType === "conveyance") {
@@ -676,6 +792,53 @@ export function registerClaimFormRoutes(app: Express) {
     });
   }));
 
+  // What the CEA form needs: the children (and which can be claimed for), sessions,
+  // schools, whether rates are entered, spouse details on record.
+  app.get("/api/public/forms/cea", wrap(async (req, res) => {
+    const e = await claimant(req);
+    if (!e) return res.status(401).json({ message: "Please enter your details again.", code: "CLAIMANT_REQUIRED" });
+    const family = await familyChildren(e.epid);
+    if (!family.length) {
+      return res.json({
+        eligible: false,
+        message: "The names of your children are not in your service book record. Please first get them entered in the Service Book and inform the Salary Section, so that they can be verified.",
+      });
+    }
+    const eligible = ceaEligibleChildren(family);
+    const today = todayIst();
+    const rates = await ceaRates();
+    const mine = (await db.execute(sql`
+      SELECT period_key, ref_no FROM claim_forms
+      WHERE employee_id = ${e.id} AND form_type = 'cea' AND status NOT IN ('rejected', 'cancelled')`)).rows as any[];
+    const history = await ceaHistory(e.epid, Number(e.id));
+    const schools = (await db.execute(sql`
+      SELECT id, name, place, location, status FROM cea_schools WHERE is_active = true ORDER BY LOWER(name)`)).rows as any[];
+    const spouse = (await db.execute(sql`SELECT name, designation, organisation FROM payroll_spouse WHERE epid = ${e.epid}`)).rows[0] as any;
+    res.json({
+      eligible: true,
+      children: family.map((c) => ({
+        ...c, eligible: eligible.some((x) => x.key === c.key),
+        history: history.filter((h) => h.dob === c.dob).map((h) => ({ session: h.session, className: h.className })),
+      })),
+      sessions: ceaClaimableSessions(today).map((s) => {
+        const [from, to] = sessionRange(s);
+        return {
+          session: s,
+          claimedRef: mine.find((m) => m.period_key === `s:${s}`)?.ref_no || null,
+          approval: CEA_APPROVALS[ceaApprovalFor(s, today)],
+          ratesEntered: ceaChildAmounts(s, rates, { hostel: false, disabled: false }).missing.length === 0,
+          from, to,
+        };
+      }),
+      schools: schools.map((s) => ({
+        id: Number(s.id), name: clean(s.place) ? `${s.name}, ${s.place}` : s.name, location: s.location,
+        recognised: s.status === "recognised",
+      })),
+      notRecognisedMessage: SCHOOL_NOT_RECOGNISED,
+      spouse: spouse ? { name: spouse.name || "", details: [spouse.designation, spouse.organisation].filter(Boolean).join(", ") } : null,
+    });
+  }));
+
   /** The claimant's own claim (404 for anyone else's) */
   const ownClaim = async (req: Request, res: Response): Promise<{ e: EmployeeRow; claim: ClaimForm } | null> => {
     const e = await claimant(req);
@@ -703,6 +866,8 @@ export function registerClaimFormRoutes(app: Express) {
       ? `You have already filled the Conveyance Allowance Bill for ${checked.periodLabel}.`
       : formType === "pca"
       ? `You have already filled the PCA claim form for ${checked.periodLabel}.`
+      : formType === "cea"
+      ? `You have already filled the CEA claim for the session ${String(checked.data?.session || "")}. Add all children to that one form.`
       : `You have already filled the ${def.shortTitle} form for your present appointment (${e.designation}). A new form is needed only on a fresh appointment.`;
     const existing = (await db.execute(sql`
       SELECT ref_no, status FROM claim_forms
@@ -736,11 +901,14 @@ export function registerClaimFormRoutes(app: Express) {
     if (!own) return;
     const { e, claim } = own;
     if (!EMPLOYEE_EDITABLE.includes(claim.status)) return res.status(409).json({ message: "This form can no longer be changed." });
-    const checked = await checkData(claim.formType, req.body?.data, e);
+    const checked = await checkData(claim.formType, req.body?.data, e, claim.id);
     if (checked.error) return res.status(checked.status || 400).json({ message: checked.error });
     // what the claim is for (the quarter) stays as it is: another quarter is another form
     if (claim.formType === "conveyance" && checked.periodKey !== claim.periodKey) {
       return res.status(400).json({ message: "The quarter of a bill cannot be changed. Please fill a new bill for the other quarter." });
+    }
+    if (claim.formType === "cea" && checked.periodKey !== claim.periodKey) {
+      return res.status(400).json({ message: "The session of a claim cannot be changed. Please fill a new form for the other session." });
     }
     if (claim.formType === "pca" && checked.periodKey !== claim.periodKey) {
       return res.status(400).json({ message: "The period of a claim cannot be changed. Please fill a new form for the other period." });
@@ -762,6 +930,26 @@ export function registerClaimFormRoutes(app: Express) {
     sendPdf(res, own.claim, await buildClaimPdf(own.claim));
   }));
 
+  // CEA uploads: the school's certificate (Annexure B) of each child, and the marksheet
+  // of a child who repeats a class. ?kind=school_certificate_0 / marksheet_1 …
+  app.post("/api/public/forms/claims/:id/files", memoryUpload.single("file"), wrap(async (req, res) => {
+    const own = await ownClaim(req, res);
+    if (!own) return;
+    const { e, claim } = own;
+    if (claim.formType !== "cea") return res.status(400).json({ message: "This form has no such upload." });
+    if (!EMPLOYEE_EDITABLE.includes(claim.status)) return res.status(409).json({ message: "This form can no longer be changed." });
+    const kind = clean(req.query.kind);
+    const m = /^(school_certificate|marksheet)_(\d)$/.exec(kind);
+    const child = m ? (claim.data.children || [])[Number(m[2])] : null;
+    if (!m || !child) return res.status(400).json({ message: "Unknown upload." });
+    if (m[1] === "marksheet" && !child.repeatReason) return res.status(400).json({ message: "A marksheet is needed only for a child who repeats a class." });
+    if (!req.file) return res.status(400).json({ message: "Please choose the file (PDF, JPG or PNG, up to 10 MB)." });
+    await saveClaimFile(claim, kind, req.file, employeeActor(e).name);
+    await logEvent(req, claim.id, m[1] === "marksheet" ? "marksheet_uploaded" : "school_certificate_uploaded", claim.status, claim.status,
+      employeeActor(e), child.name);
+    res.json(forEmployee(await withDetail((await getClaim(claim.id))!)));
+  }));
+
   // Signed undertaking (NPA): needed before the form can be submitted
   app.post("/api/public/forms/claims/:id/undertaking", memoryUpload.single("file"), wrap(async (req, res) => {
     const own = await ownClaim(req, res);
@@ -781,6 +969,10 @@ export function registerClaimFormRoutes(app: Express) {
     const { e, claim } = own;
     if (!EMPLOYEE_EDITABLE.includes(claim.status)) return res.status(409).json({ message: "This form has already been submitted." });
     const def = CLAIM_FORM_DEFS[claim.formType];
+    if (def.needsSchoolCertificate) {
+      const missing = ceaUploadsMissing(await withDetail(claim));
+      if (missing.length) return res.status(400).json({ message: `Please upload ${missing.join(" and ")} before submitting.` });
+    }
     if (def.needsUndertaking && !(await withDetail(claim)).hasUndertaking) {
       return res.status(400).json({ message: "Please upload the undertaking signed by you and counter-signed by the Chairman before submitting." });
     }

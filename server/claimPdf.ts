@@ -7,7 +7,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import crypto from "crypto";
 import {
-  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, formatClaimDate, halfYearLabel, monthLabel, quarterRange,
+  CEA_APPROVALS, CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, SPOUSE_EMPLOYMENT, formatClaimDate, halfYearLabel, monthLabel, quarterRange,
   type ClaimForm, type ConveyanceMonth,
 } from "@shared/claimForms";
 
@@ -530,6 +530,413 @@ function pcaPage(page: PDFPage, claim: ClaimForm, f: Fonts, sans: Fonts) {
   });
 }
 
+// ── Children Education Allowance / Hostel Subsidy ──────────────────────────────
+
+type Seg = { t: string; font?: PDFFont; strike?: boolean; underline?: boolean; glue?: boolean } | { blank: number; v?: string };
+
+/** Running text with blanks (filled ones are printed in bold on the line) and struck-out words; returns the top after it */
+function flow(page: PDFPage, segs: Seg[], x: number, top: number, width: number, lh: number, f: Fonts, size: number): number {
+  type Tok = { w: number; draw: (cx: number, y: number) => void; glue: boolean };
+  const toks: Tok[] = [];
+  for (const seg of segs) {
+    if ("blank" in seg) {
+      const v = seg.v ? safe(seg.v) : "";
+      const w = Math.max(seg.blank, v ? f.bold.widthOfTextAtSize(v, size) + 10 : 0);
+      toks.push({
+        w, glue: false,
+        draw: (cx, y) => {
+          page.drawLine({ start: { x: cx, y: fromTop(y) - 1.5 }, end: { x: cx + w, y: fromTop(y) - 1.5 }, thickness: 0.5, color: BLACK });
+          if (v) text(page, v, cx + 4, y - 1, f.bold, size);
+        },
+      });
+      continue;
+    }
+    const font = seg.font || f.regular;
+    for (const word of safe(seg.t).split(/\s+/).filter(Boolean)) {
+      const w = font.widthOfTextAtSize(word, size);
+      toks.push({
+        w, glue: !!seg.glue,
+        draw: (cx, y) => {
+          text(page, word, cx, y, font, size);
+          if (seg.strike) page.drawLine({ start: { x: cx - 1, y: fromTop(y) + size * 0.3 }, end: { x: cx + w + 1, y: fromTop(y) + size * 0.3 }, thickness: 0.8, color: BLACK });
+          if (seg.underline) page.drawLine({ start: { x: cx, y: fromTop(y) - 1.5 }, end: { x: cx + w, y: fromTop(y) - 1.5 }, thickness: 0.6, color: BLACK });
+        },
+      });
+    }
+  }
+  const space = f.regular.widthOfTextAtSize(" ", size);
+  let cx = x;
+  let y = top;
+  let first = true;
+  toks.forEach((tok, i) => {
+    if (!first && cx + tok.w > x + width) { cx = x; y += lh; first = true; }
+    tok.draw(cx, y);
+    cx += tok.w + (tok.glue ? 0 : space);
+    first = false;
+    void i;
+  });
+  return y + lh;
+}
+
+const yesNo = (yes: boolean, _f?: Fonts): Seg[] => [
+  { t: "Yes", strike: !yes, glue: true }, { t: "/", glue: true }, { t: "No", strike: yes },
+];
+
+const ceaYears = (session: string): [string, string] => {
+  const m = /^(\d{4})-(\d{4})$/.exec(session);
+  return m ? [m[1], m[2]] : ["", ""];
+};
+
+const money = (n: number) => Number(n || 0).toLocaleString("en-IN");
+const ordinal = (i: number) => ["1st", "2nd", "3rd", "4th"][i] || `${i + 1}th`;
+
+/** Pages 1 and 2: the proforma itself */
+function ceaProforma(p1: PDFPage, p2: PDFPage, claim: ClaimForm, f: Fonts) {
+  const s = claim.snapshot;
+  const d = claim.data;
+  const children: any[] = Array.isArray(d.children) ? d.children : [];
+  const L = 56, R = 540, W = R - L;
+  const size = 9.5;
+  const line = (page: PDFPage, x1: number, y1: number, x2: number, y2: number) =>
+    page.drawLine({ start: { x: x1, y: fromTop(y1) }, end: { x: x2, y: fromTop(y2) }, thickness: 0.7, color: BLACK });
+  const box = (x: number, top: number, w: number, h: number) =>
+    p1.drawRectangle({ x, y: fromTop(top + h), width: w, height: h, borderColor: BLACK, borderWidth: 0.7 });
+
+  // ── Page 1 ──
+  const t1 = "PROPOSED PROFORMA FOR RE-IMBURSEMENT OF";
+  const t2 = "CHILDREN EDUCATION ALLOWANCE";
+  const t3 = "CLAIM FOR THE ACADEMIC YEAR:";
+  const ul = (txt: string, top: number, extra = "") => {
+    const full = txt + extra;
+    centred(p1, full, A4.w / 2, top, f.bold, 12);
+    const w = f.bold.widthOfTextAtSize(safe(full), 12);
+    line(p1, A4.w / 2 - w / 2, top + 2, A4.w / 2 + w / 2, top + 2);
+  };
+  ul(t1, 50);
+  ul(t2, 65);
+  ul(t3, 80, ` ${d.session || ""}`);
+  let top = 94;
+  if (d.approval && d.approval !== "none") {
+    const msg = (CEA_APPROVALS as Record<string, string>)[String(d.approval)] || "";
+    if (msg) centred(p1, msg, A4.w / 2, top + 4, f.bold, 9.5);
+    top += 14;
+  }
+  top = paragraph(p1, "I hereby apply for the reimbursement of Children Education Allowance / Hostel Subsidy for my child / children and relevant particulars are furnished below:-",
+    { x: L, top: top + 8, width: W, font: f.regular, size: 10, lineHeight: 12.5 });
+
+  // Items 1 to 6
+  const labelW = 200, colonX = L + labelW;
+  const spouseOn = d.spouseEmployment && d.spouseEmployment !== "none";
+  const spouseText = spouseOn
+    ? [(SPOUSE_EMPLOYMENT as Record<string, string>)[d.spouseEmployment], d.spouseName].filter(Boolean).join(" - ")
+    : "No";
+  const rows: Array<{ no: string; label: string; value: string; h: number }> = [
+    { no: "1.", label: "Name of the Employee", value: s.name, h: 17 },
+    { no: "2.", label: "Employee I.D.", value: s.epid, h: 17 },
+    { no: "3.", label: "Designation", value: s.designation, h: 17 },
+    { no: "4.", label: "Department / Office", value: s.departmentName, h: 17 },
+    { no: "5.", label: "If Spouse is employed, state whether in Central Govt., PSU, State Govt. (give details with name of the Spouse)", value: spouseText, h: 38 },
+    { no: "6.", label: "Designation, Office & B.U./PID No. of spouse, if spouse is employed", value: spouseOn ? String(d.spouseDetails || "") : "", h: 26 },
+  ];
+  top += 3;
+  const t1Top = top;
+  rows.forEach((r) => {
+    line(p1, L, top, R, top);
+    text(p1, r.no, L + 3, top + 12, f.regular, size);
+    paragraph(p1, r.label, { x: L + 20, top: top + 12, width: labelW - 24, font: f.regular, size, lineHeight: 11.5 });
+    text(p1, ":", colonX + 3, top + 12, f.regular, size);
+    cell(p1, r.value, colonX + 10, top + 12, R - colonX - 10, f.bold, 10);
+    top += r.h;
+  });
+  line(p1, L, top, R, top);
+  line(p1, L, t1Top, L, top); line(p1, R, t1Top, R, top);
+  line(p1, colonX, t1Top, colonX, top); line(p1, colonX + 10, t1Top, colonX + 10, top);
+
+  // Table 7: the children
+  top += 8;
+  text(p1, "7.", L, top + 8, f.bold, size);
+  text(p1, "Details of the child / children for whom CEA / Hostel Subsidy claimed:-", L + 20, top + 8, f.bold, size);
+  top += 13;
+  const c7 = [L, L + 52, L + 160, L + 224, L + 284, R];
+  const headTop = top;
+  box(L, headTop, W, 28);
+  c7.slice(1, -1).forEach((x) => line(p1, x, headTop, x, headTop + 28));
+  centred(p1, "Sequence", (c7[0] + c7[1]) / 2, headTop + 17, f.bold, size);
+  centred(p1, "Name of the Child", (c7[1] + c7[2]) / 2, headTop + 17, f.bold, size);
+  centred(p1, "DOB", (c7[2] + c7[3]) / 2, headTop + 17, f.bold, size);
+  centred(p1, "Standard/", (c7[3] + c7[4]) / 2, headTop + 12, f.bold, size);
+  centred(p1, "Class", (c7[3] + c7[4]) / 2, headTop + 23, f.bold, size);
+  centred(p1, "Name & Place of the", (c7[4] + c7[5]) / 2, headTop + 12, f.bold, size);
+  centred(p1, "School/Institution", (c7[4] + c7[5]) / 2, headTop + 23, f.bold, size);
+  top += 28;
+
+  // Rows: 1st, 2nd, (twins notice), 3rd, 4th
+  type Slot = { label: string; child?: any } | { twins: true };
+  const slots: Slot[] = [
+    { label: "1st Child", child: children[0] },
+    { label: "2nd Child", child: children[1] },
+    { twins: true },
+    { label: "3rd Child", child: children[2] },
+  ];
+  if (children[3]) slots.push({ label: "4th Child", child: children[3] });
+  const rowH = 22;
+  const schoolLine = (c: any) => (c ? String(c.schoolName || "") : "");
+
+  const table7Top = top;
+  slots.forEach((slot) => {
+    box(L, top, W, rowH);
+    if ("twins" in slot) {
+      centred(p1, "In case 2nd child birth results in Twins/ Multiple births", A4.w / 2 + 4, top + 15, f.bold, size);
+    } else {
+      c7.slice(1, -1).forEach((x) => line(p1, x, top, x, top + rowH));
+      cell(p1, slot.label, c7[0], top + 15, c7[1] - c7[0], f.regular, size);
+      const c = slot.child;
+      if (c) {
+        cell(p1, c.name, c7[1], top + 15, c7[2] - c7[1], f.bold, 9.5);
+        cell(p1, formatClaimDate(c.dob), c7[2], top + 15, c7[3] - c7[2], f.bold, 9.5);
+        cell(p1, c.className, c7[3], top + 15, c7[4] - c7[3], f.bold, 9.5);
+        cell(p1, schoolLine(c), c7[4], top + 15, c7[5] - c7[4], f.bold, 9.5);
+      }
+    }
+    top += rowH;
+  });
+  void table7Top;
+
+  // Table 8: re-imbursement
+  top += 9;
+  text(p1, "8.", L, top + 8, f.bold, size);
+  text(p1, "Re-imbursement of Expenditure:-", L + 20, top + 8, f.regular, size);
+  top += 13;
+  const c8 = [L, L + 52, L + 150, L + 270, L + 340, R];
+  const h8 = top;
+  box(L, h8, W, 28);
+  c8.slice(1, -1).forEach((x) => line(p1, x, h8, x, h8 + 28));
+  centred(p1, "Sequence", (c8[0] + c8[1]) / 2, h8 + 17, f.bold, size);
+  centred(p1, "Period/AY", (c8[1] + c8[2]) / 2, h8 + 17, f.bold, size);
+  centred(p1, "Rate (Rs.)", (c8[2] + c8[3]) / 2, h8 + 17, f.bold, size);
+  centred(p1, "Amount", (c8[3] + c8[4]) / 2, h8 + 12, f.bold, size);
+  centred(p1, "claimed", (c8[3] + c8[4]) / 2, h8 + 23, f.bold, size);
+  centred(p1, "Remarks", (c8[4] + c8[5]) / 2, h8 + 8, f.bold, size);
+  centred(p1, "(Passed/Failed)", (c8[4] + c8[5]) / 2, h8 + 17, f.regular, 8);
+  centred(p1, "Submit the Documentary Proof", (c8[4] + c8[5]) / 2, h8 + 25, f.regular, 7);
+  top += 28;
+  slots.forEach((slot) => {
+    const c = "twins" in slot ? undefined : slot.child;
+    const h = c && c.hostel && c.hostelAmount > 0 ? 32 : rowH;
+    box(L, top, W, h);
+    if ("twins" in slot) {
+      centred(p1, "In case 2nd child birth results in Twins/ Multiple births", A4.w / 2 + 4, top + 15, f.bold, size);
+    } else {
+      c8.slice(1, -1).forEach((x) => line(p1, x, top, x, top + h));
+      cell(p1, slot.label, c8[0], top + 15, c8[1] - c8[0], f.regular, size);
+      if (c) {
+        cell(p1, String(d.session || ""), c8[1], top + 15, c8[2] - c8[1], f.bold, 9.5);
+        cell(p1, `CEA: ${money(c.cea)}`, c8[2], top + (h > rowH ? 13 : 15), c8[3] - c8[2], f.bold, 9.5);
+        if (h > rowH) cell(p1, `Hostel: ${money(c.hostelAmount)}`, c8[2], top + 26, c8[3] - c8[2], f.bold, 9.5);
+        cell(p1, money(c.amount), c8[3], top + 15, c8[4] - c8[3], f.bold, 9.5);
+        cell(p1, c.result === "failed" ? "Failed" : "Passed", c8[4], top + 15, c8[5] - c8[4], f.bold, 9.5);
+      }
+    }
+    top += h;
+  });
+  box(L, top, W, 19);
+  line(p1, c8[3], top, c8[3], top + 19);
+  text(p1, "Total Amount Claimed", L + 4, top + 13, f.bold, 10.5);
+  cell(p1, money(d.total), c8[3], top + 13, c8[5] - c8[3], f.bold, 10.5);
+  top += 19 + 16;
+
+  // Items 9 to 15
+  const hostelKids = children.filter((c) => c.hostel);
+  const disabledKids = children.filter((c) => c.disabled);
+  const anyHostel = hostelKids.length > 0;
+  const named = children.length > 1;
+  const per = (kids: any[], val: (c: any) => string) =>
+    kids.map((c) => (kids.length > 1 || named ? `${String(c.name).split(" ")[0]}: ${val(c)}` : val(c))).join("; ");
+  const hostelTotal = hostelKids.reduce((sum, c) => sum + Number(c.hostelAmount || 0), 0);
+  const IX = L + 22, IW = R - IX, lh = 15;
+  const item = (no: string, segs: Seg[], indent = 0, nolabel = false) => {
+    if (!nolabel) text(p1, no, L + 4, top, f.regular, size);
+    top = flow(p1, segs, IX + indent, top, IW - indent, lh, f, size);
+  };
+  item("9.", [{ t: "Distance of Hostel of child from residence of employee (in case Hostel Subsidy):" }, { blank: 60, v: anyHostel ? per(hostelKids, (c) => `${c.hostelDistanceKm} km`) : "" }]);
+  item("10.", [{ t: "Amount of CEA / Hostel Subsidy already received up to previous quarter:" }, { blank: 60, v: d.amountAlreadyReceived ? `Rs. ${money(d.amountAlreadyReceived)}` : "" }]);
+  item("11.", [{ t: "The Academic year for which CEA / Hostel Subsidy is applied now:" }, { blank: 60, v: String(d.session || "") }]);
+  item("12.", [{ t: "(a) Whether the child for whom the CEA is applied for is a disabled child :" }, ...yesNo(disabledKids.length > 0, f)]);
+  item("", [{ t: "(b) If yes, indicate the nature of disability:" }, { blank: 80, v: disabledKids.length ? per(disabledKids, (c) => c.disabilityNature || "") : "" }], 12, true);
+  item("", [{ t: "(c) Date of disability certificate:" }, { blank: 80, v: disabledKids.length ? per(disabledKids, (c) => (c.disabilityCertDate ? formatClaimDate(c.disabilityCertDate) : "")) : "" }], 12, true);
+  item("", [{ t: "(d) Indicate the percentage of disability:" }, { blank: 80, v: disabledKids.length ? per(disabledKids, (c) => (c.disabilityPercent ? `${c.disabilityPercent}%` : "")) : "" }], 12, true);
+  item("13.", [{ t: "Whether the Bonafide certificate from Head of Institution has been attached :" }, ...yesNo(true, f)]);
+  item("14.", [{ t: "For Hostel Subsidy, the Bonafide certificate mentioning the amount is attached:" }, ...yesNo(anyHostel, f)]);
+  item("15.", [{ t: "If Yes at Item No. 14, Amount claimed for Hostel Subsidy: Rs" }, { blank: 80, v: anyHostel ? money(hostelTotal) : "" }, { t: "." }]);
+
+  // ── Page 2 ──
+  const P = p2;
+  const sz = 10;
+  const lh2 = 14;
+  const X = L, WD = R - L;
+  const central = d.spouseEmployment === "central";
+  centred(P, "- 2 -", A4.w / 2, 52, f.regular, 10);
+  let y = 76;
+  const par = (no: string, segs: Seg[], indent = 22) => {
+    if (no) text(P, no, X + (indent > 22 ? indent - 20 : 0), y, f.regular, sz);
+    y = flow(P, segs, X + indent, y, WD - indent, lh2, f, sz);
+  };
+  par("16.", [{ t: "(a) Certified that I or my wife / husband" }, { t: "is", strike: !central, glue: true }, { t: "/", glue: true }, { t: "is not", strike: central }, { t: "Central Government servant." }]);
+  par("", [
+    { t: "(b) Certified that my wife / husband Sri / Smt" }, { blank: 110, v: spouseOn ? String(d.spouseName || "") : "" }, { t: "is presently working as:" },
+    { blank: 110, v: spouseOn ? String(d.spouseDetails || "") : "" }, { t: "in" }, { blank: 80 },
+    { t: "and that he / she shall not apply / has not applied for the Children Education Allowance for the child/children mentioned above." },
+  ]);
+  par("", [{ t: "(c) Certified that I or my wife / husband has not claimed this re-imbursement from any other source and will not claim the same in future." }]);
+  y += 8;
+  par("17.", [
+    { t: "Certified that my child in respect of whom re-imbursement of Children Education Allowance is applied is studying in the School / Jr. College/ Institution which is recognized and/or affiliated to Board of Education / University" },
+    { blank: 130 }, { t: "vide Registration/Recognition/Aff. No." }, { blank: 110 }, { t: "." },
+  ]);
+  y += 8;
+  par("18.", [{ t: "Certified that I am claiming the CEA in respect of my two eldest surviving children only, the information furnished above are complete and correct and I have not suppressed any relevant information. In the event of any change in the particulars given above which affect my eligibility for reimbursement of Children Education Allowance, I undertake to intimate the same promptly and also to refund excess payments if any made. Further, I am aware that if at any stage the information / documents furnished above is found to be false, I am liable for disciplinary action and recovery of payment." }]);
+
+  y += 14;
+  flow(P, [{ t: "Date:" }, { blank: 100 }], X, y, 200, lh2, f, sz);
+  const sigX = 330;
+  text(P, "Signature of Employee:", sigX, y + 18, f.bold, sz);
+  line(P, sigX, y + 20, sigX + f.bold.widthOfTextAtSize("Signature of Employee:", sz), y + 20);
+  flow(P, [{ t: "Name:" }, { blank: 110, v: s.name }], sigX, y + 34, 200, lh2, f, sz);
+  y += 82;
+  text(P, "Signature with Seal of Head of the Department", sigX - 40, y, f.bold, sz);
+
+  // Office part — left blank, as on the paper
+  y += 34;
+  P.drawLine({ start: { x: X, y: fromTop(y - 12) }, end: { x: R, y: fromTop(y - 12) }, thickness: 0.4, color: GREY });
+  const three = (a: string, b: string, c: string, bold = true) => {
+    text(P, a, X, y, bold ? f.bold : f.regular, 9.5);
+    centred(P, b, A4.w / 2 + 6, y, bold ? f.bold : f.regular, 9.5);
+    text(P, c, R - f.bold.widthOfTextAtSize(c, 9.5), y, bold ? f.bold : f.regular, 9.5);
+    y += 15;
+  };
+  const small = 9.5;
+  text(P, "Forwarded to JFO (Salary)", X, y, f.regular, small);
+  line(P, X, y + 2, X + f.regular.widthOfTextAtSize("Forwarded to JFO (Salary)", small), y + 2);
+  y += 26;
+  three("DA (Salary)", "SO (Salary)", "AFO/DFO/JFO (Salary)");
+  y += 8;
+  const fw = "Forwarded to Service Book & Pension Section with the request to provide a copy of detail of family of employee concerned.";
+  const yy = y;
+  y = paragraph(P, fw, { x: X, top: y, width: WD, font: f.bold, size: small, lineHeight: 12.5 });
+  [yy, yy + 12.5].forEach((t, i) => {
+    const ln = wrap(fw, f.bold, small, WD)[i] || "";
+    line(P, X, t + 2, X + f.bold.widthOfTextAtSize(ln, small), t + 2);
+  });
+  y += 2;
+  flow(P, [{ t: "As desired, a copy of detail of family of Mr./Mrs." }, { blank: 110, v: s.name }, { t: "is enclosed." }], X, y, WD, lh2, f, small);
+  y += 24;
+  three("DA (SB&PS)", "SO (SB&PS)", "AR/JR (SB&PS)");
+  y += 6;
+  text(P, "AFO/DFO/JFO (Salary)", X, y, f.bold, small);
+  y += 14;
+  const box2 = (x: number, top: number) => P.drawRectangle({ x, y: fromTop(top + 1), width: 9, height: 9, borderColor: BLACK, borderWidth: 0.7 });
+  text(P, "Eligible to be forwarded to Director of School Education", X, y, f.regular, small);
+  const ex = X + f.regular.widthOfTextAtSize("Eligible to be forwarded to Director of School Education  ", small);
+  box2(ex, y); text(P, "YES", ex + 12, y, f.bold, small);
+  box2(ex + 50, y); text(P, "NO", ex + 62, y, f.bold, small);
+  y += 14;
+  y = flow(P, [{ t: "If Forwarded, Cumulative No." }, { blank: 30 }, { t: "/100(If School is Local), Cumulative No." }, { blank: 30 }, { t: "/25 (If out of Aligarh) in FY:" }, { blank: 40 }], X, y, WD, 13, f, 8.5);
+  y += 4;
+  const st = "Forwarded to Director of School Education with the request to verify the recognition/Affiliation status of the School concerned and return the same to this office.";
+  const st2 = wrap(st, f.italic, small, WD);
+  st2.forEach((ln, i) => {
+    text(P, ln, X, y + i * 12.5, f.italic, small);
+    line(P, X, y + i * 12.5 + 2, X + f.italic.widthOfTextAtSize(ln, small), y + i * 12.5 + 2);
+  });
+  y += st2.length * 12.5 + 18;
+  three("DA (Salary)", "SO (Salary)", "AFO/DFO/JFO (Salary)");
+  y += 6;
+  flow(P, [{ t: "Report of Director of School Education:" }, { blank: 150 }], X, y, WD, lh2, f, small);
+  y += 30;
+  text(P, "DA / SO (DSE)", X, y, f.bold, small);
+  text(P, "Director (DSE)", X + 230, y, f.bold, small);
+}
+
+/** Annexure 'B' — one page per child; the school fills in everything except the child's particulars */
+function ceaAnnexure(page: PDFPage, claim: ClaimForm, f: Fonts, child: any, pageNo: number) {
+  const d = claim.data;
+  const s = claim.snapshot;
+  const L = 70, R = 525, W = R - L;
+  const sz = 11;
+  const son = child.relation === "S";
+  const [y1, y2] = ceaYears(String(d.session || ""));
+  centred(page, `-:${pageNo}:-`, A4.w / 2, 52, f.regular, 10);
+  const at = "Annexure 'B'";
+  text(page, at, R - f.bold.widthOfTextAtSize(at, 11), 80, f.bold, 11);
+  line2(page, R - f.bold.widthOfTextAtSize(at, 11), 82, R);
+  centred(page, "CEA: CERTIFICATE FROM THE HEAD OF INSTITUTION/SCHOOL", A4.w / 2, 110, f.bold, 12);
+  line2(page, A4.w / 2 - f.bold.widthOfTextAtSize("CEA: CERTIFICATE FROM THE HEAD OF INSTITUTION/SCHOOL", 12) / 2, 112, A4.w / 2 + f.bold.widthOfTextAtSize("CEA: CERTIFICATE FROM THE HEAD OF INSTITUTION/SCHOOL", 12) / 2);
+  let y = paragraph(page, "Authority vide Government of India Ministry of Personal P.G. and Department of Personal & Training New Delhi Order No.A-27102(02)2017 Estt.(AL) 16 August 2017.",
+    { x: L + 20, top: 138, width: W - 20, font: f.regular, size: 10.5, lineHeight: 14, centre: false });
+  centred(page, "Certificate from the Head of Institution/School", A4.w / 2, y + 12, f.bold, 12);
+  centred(page, "(For Re-imbursement CEA)", A4.w / 2, y + 27, f.bold, 12);
+  y += 56;
+  flow(page, [{ t: "Ref No." }, { blank: 110 }], L, y, 200, 18, f, sz);
+  flow(page, [{ t: "Date:" }, { blank: 100 }], R - 140, y, 140, 18, f, sz);
+  y += 34;
+  const lh = 24;
+  y = flow(page, [
+    { t: "It is certified that" },
+    { t: "Master", strike: !son, glue: true }, { t: "/", glue: true }, { t: "Kumari", strike: son },
+    { blank: 150, v: child.name }, { t: "having Admission No." }, { blank: 70 },
+    { t: "D.O.B." }, { blank: 80, v: formatClaimDate(child.dob) },
+    { t: "Son", strike: !son, glue: true }, { t: "/", glue: true }, { t: "Daughter", strike: son }, { t: "of Mr./Mrs." }, { blank: 140, v: s.name },
+    { t: "was studying in Class" }, { blank: 50, v: child.className }, { t: "Sec." }, { blank: 40 }, { t: "Roll No." }, { blank: 50 },
+    { t: "during the Previous Academic year from 20" }, { blank: 28, v: y1.slice(2) }, { t: "to 20" }, { blank: 28, v: y2.slice(2) },
+    { t: "School / Institution, namely" }, { blank: 170, v: child.schoolName }, { t: "vide affiliation Reg. No." }, { blank: 70 },
+    { t: "code" }, { blank: 70 }, { t: "and pattern" }, { blank: 80 }, { t: "Curriculum." },
+  ], L, y, W, lh, f, sz);
+  y += 18;
+  text(page, "Date :", L, y, f.regular, 10);
+  text(page, "Place:", L, y + 24, f.regular, 10);
+  y += 56;
+  text(page, "Signature of Principal", R - 150, y, f.regular, sz);
+  text(page, "(Affix School seal)", R - 140, y + 40, f.bold, sz);
+  text(page, `Contd..P/${pageNo + 1}`, A4.w / 2 - 25, 700, f.regular, 9);
+}
+
+const line2 = (page: PDFPage, x1: number, top: number, x2: number) =>
+  page.drawLine({ start: { x: x1, y: fromTop(top) }, end: { x: x2, y: fromTop(top) }, thickness: 0.7, color: BLACK });
+
+/** Self Declaration of the Govt. servant — one page per child */
+function ceaSelfDeclaration(page: PDFPage, claim: ClaimForm, f: Fonts, child: any, pageNo: number) {
+  const d = claim.data;
+  const s = claim.snapshot;
+  const L = 70, R = 525, W = R - L;
+  const sz = 11.5;
+  const son = child.relation === "S";
+  centred(page, `-:${pageNo}:-`, A4.w / 2, 52, f.regular, 10);
+  const t1 = "CEA: Self Declaration to be submitted by the Govt. Servant";
+  const t2 = "Self Declaration";
+  centred(page, t1, A4.w / 2, 100, f.bold, 12.5);
+  line2(page, A4.w / 2 - f.bold.widthOfTextAtSize(t1, 12.5) / 2, 102, A4.w / 2 + f.bold.widthOfTextAtSize(t1, 12.5) / 2);
+  centred(page, t2, A4.w / 2, 120, f.bold, 12.5);
+  line2(page, A4.w / 2 - f.bold.widthOfTextAtSize(t2, 12.5) / 2, 122, A4.w / 2 + f.bold.widthOfTextAtSize(t2, 12.5) / 2);
+  let y = flow(page, [
+    { t: "I" }, { blank: 170, v: s.name }, { t: "designation" }, { blank: 150, v: s.designation },
+    { t: "I.D.No." }, { blank: 90, v: s.epid }, { t: "Dept/Office" }, { blank: 220, v: s.departmentName },
+    { t: "do hereby certify that my" }, { t: "Son", strike: !son, glue: true }, { t: "/", glue: true }, { t: "Daughter", strike: son },
+    { t: "namely" }, { blank: 150, v: child.name }, { t: "Studied in class" }, { blank: 60, v: child.className },
+    { t: "Section" }, { blank: 50 }, { t: "Roll No." }, { blank: 60 }, { t: "during Previous Academic Year" }, { blank: 80, v: String(d.session || "") },
+    { t: "in" }, { blank: 280, v: child.schoolName }, { t: "School." },
+  ], L, 170, W, 30, f, sz);
+  y += 10;
+  y = paragraph(page, "\"In the event of any change in the particulars given above which affect my eligibility for Children Education Allowance. I undertake to intimate the same promptly and refund excess payment, if any made to me.\"",
+    { x: L + 20, top: y, width: W - 20, font: f.italic, size: 11.5, lineHeight: 18 });
+  y += 24;
+  const X = 330;
+  const lines: Array<[string, string]> = [["Signature :", ""], ["I.D. No :.", s.epid], ["Name :", s.name], ["Designation :", s.designation], ["Department :", s.departmentName]];
+  lines.forEach(([lab, val], i) => {
+    flow(page, [{ t: lab }, { blank: 150, v: val }], X, y + i * 26, 250, 20, f, sz);
+  });
+  flow(page, [{ t: "Dated :" }, { blank: 110 }], L + 20, y + 50, 200, 20, f, sz);
+}
+
 /** The whole print of one claim: the form itself and, for NPA, the undertaking */
 export async function buildClaimPdf(claim: ClaimForm): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
@@ -543,7 +950,29 @@ export async function buildClaimPdf(claim: ClaimForm): Promise<Uint8Array> {
   pdf.setProducer("AMU Salary Section");
 
   const page = pdf.addPage([A4.w, A4.h]);
-  if (claim.formType === "conveyance" || claim.formType === "pca") {
+  if (claim.formType === "cea") {
+    const serif: Fonts = {
+      regular: await pdf.embedFont(StandardFonts.TimesRoman),
+      bold: await pdf.embedFont(StandardFonts.TimesRomanBold),
+      italic: await pdf.embedFont(StandardFonts.TimesRomanItalic),
+    };
+    const kids: any[] = Array.isArray(claim.data.children) ? claim.data.children : [];
+    const total = 2 + 2 * kids.length;
+    const second = pdf.addPage([A4.w, A4.h]);
+    ceaProforma(page, second, claim, serif);
+    await footer(pdf, page, claim, fonts, `CEA claim (page 1 of ${total})`);
+    await footer(pdf, second, claim, fonts, `CEA claim (page 2 of ${total})`, false);
+    let n = 2;
+    for (const [i, child] of kids.entries()) {
+      void i;
+      const annex = pdf.addPage([A4.w, A4.h]);
+      ceaAnnexure(annex, claim, serif, child, 3);
+      await footer(pdf, annex, claim, fonts, `CEA claim (page ${++n} of ${total}) - school certificate`, false);
+      const decl = pdf.addPage([A4.w, A4.h]);
+      ceaSelfDeclaration(decl, claim, serif, child, 4);
+      await footer(pdf, decl, claim, fonts, `CEA claim (page ${++n} of ${total}) - self declaration`, false);
+    }
+  } else if (claim.formType === "conveyance" || claim.formType === "pca") {
     // these two forms are set in a serif face
     const serif: Fonts = {
       regular: await pdf.embedFont(StandardFonts.TimesRoman),

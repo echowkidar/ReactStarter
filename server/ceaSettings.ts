@@ -9,14 +9,8 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { sessionAdmin } from "./auth";
-
-export interface CeaRate {
-  from: string;          // "YYYY-MM-DD"
-  to: string;            // "YYYY-MM-DD", or "" = until further orders
-  cea: number;           // rupees per child per month
-  hostel: number;        // hostel subsidy, rupees per child per month
-  disabled: number;      // CEA for a child with disability, rupees per month
-}
+import { type CeaRate, ceaRateOn } from "@shared/claimForms";
+export { type CeaRate, ceaRateOn };
 
 const isDay = (v: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) && !Number.isNaN(Date.parse(String(v)));
 const clean = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
@@ -30,11 +24,6 @@ export async function ceaRates(): Promise<CeaRate[]> {
   } catch {
     return [];
   }
-}
-
-/** The rate that applies on a day, or null when none has been entered for it */
-export function ceaRateOn(rates: CeaRate[], day: string): CeaRate | null {
-  return rates.find((r) => r.from <= day && (!r.to || r.to >= day)) || null;
 }
 
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response, _next: NextFunction) => {

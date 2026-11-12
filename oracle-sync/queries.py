@@ -143,7 +143,43 @@ FROM amu_pay.t_conv
 WHERE prd_fr >= ADD_MONTHS(TRUNC(SYSDATE), -48)
 """
 
+# Sons and daughters of employees (family details), for the Children Education Allowance form.
+FAMILY_CHILDREN = """
+SELECT ecode,
+       person_name,
+       TO_CHAR(dob, 'YYYY-MM-DD') AS dob,
+       relation_with_emp,
+       sex
+FROM amu_pay.m_family_detail
+WHERE relation_with_emp IN ('S', 'D')
+"""
+
+# Children Education Allowance already paid, from session 2018 on (bind :min_session, e.g. '2018').
+CEA_PAID = """
+SELECT ecode,
+       cname,
+       TO_CHAR(dob, 'YYYY-MM-DD') AS dob,
+       asession,
+       class,
+       cx_amt,
+       financial_year
+FROM amu_pay.t_cecx_sal_hist
+WHERE asession >= :min_session
+"""
+
+# Spouse employment details, one row per employee.
+SPOUSE = """
+SELECT ecode,
+       sname,
+       desig,
+       comp
+FROM amu_pay.m_spouse
+"""
+
 ALL_QUERIES = {
+    "FAMILY_CHILDREN": FAMILY_CHILDREN,
+    "CEA_PAID": CEA_PAID,
+    "SPOUSE": SPOUSE,
     "LATEST_PAYBILL_MONTH": LATEST_PAYBILL_MONTH,
     "EMPLOYEE_SNAPSHOT": EMPLOYEE_SNAPSHOT,
     "DB_PING": DB_PING,

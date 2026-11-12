@@ -116,7 +116,7 @@ function EmployeeClaimFormsLink() {
     <div className="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-4 shadow-md">
       <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">For employees</p>
       <p className="mt-0.5 text-lg font-bold leading-snug text-slate-900">Fill a claim form online</p>
-      <p className="mt-1 text-sm text-slate-700">NPA, HRA, PCA and Conveyance Allowance. No login or password is needed: only your Permanent ID Number and date of joining.</p>
+      <p className="mt-1 text-sm text-slate-700">NPA, HRA, PCA, Conveyance Allowance and Children Education Allowance (CEA). No login or password is needed: only your Permanent ID Number and date of joining.</p>
       <button
         type="button"
         onClick={() => setLocation("/forms")}

@@ -175,7 +175,10 @@ async function claimDetailsSummary() {
              ${isoTime("MAX(payroll_flags_at) AT TIME ZONE current_setting('TimeZone')")} AS refreshed_at
       FROM employees WHERE is_active = 'active'`)).rows[0] as any;
     const paid = (await db.execute(sql`SELECT COUNT(*)::int AS n FROM conveyance_paid`)).rows[0] as any;
+    const kids = (await db.execute(sql`SELECT COUNT(*)::int AS n FROM payroll_children`)).rows[0] as any;
+    const cea = (await db.execute(sql`SELECT COUNT(*)::int AS n FROM cea_paid`)).rows[0] as any;
     return {
+      childrenRows: Number(kids.n), ceaPaidRows: Number(cea.n),
       active: Number(r.active), refreshed: Number(r.refreshed), withJoiningDate: Number(r.joining),
       conveyanceEntitled: Number(r.conveyance), refreshedAt: r.refreshed_at || null, conveyancePaidRows: Number(paid.n),
     };
@@ -263,6 +266,93 @@ export async function refreshConveyancePaid(): Promise<number> {
   return list.length;
 }
 
+const cleanText = (v: unknown) => {
+  const s = v === null || v === undefined ? "" : String(v).trim();
+  return s || null;
+};
+const cleanDay = (v: unknown) => {
+  const s = v === null || v === undefined ? "" : String(v).trim().slice(0, 10);
+  const year = Number(s.slice(0, 4));
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && year >= 1950 && year <= 2100 ? s : null;
+};
+
+/** Copy of the sons and daughters in the family details (table payroll_children). Replaced as a whole. */
+export async function refreshFamilyChildren(): Promise<number> {
+  const reply = await callService("/family-children", 120_000);
+  const list = (Array.isArray(reply?.rows) ? reply.rows : [])
+    .map((r: any) => ({
+      epid: String(r.ecode || "").trim(),
+      name: cleanText(r.person_name),
+      dob: cleanDay(r.dob),
+      relation: cleanText(r.relation_with_emp),
+      sex: cleanText(r.sex),
+    }))
+    .filter((r: any) => r.epid && r.name && r.relation);
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM payroll_children`);
+    for (let i = 0; i < list.length; i += 2000) {
+      await tx.execute(sql`
+        INSERT INTO payroll_children (epid, name, dob, relation, sex)
+        SELECT x.epid, x.name, x.dob::date, x.relation, x.sex
+        FROM jsonb_to_recordset(${JSON.stringify(list.slice(i, i + 2000))}::jsonb)
+          AS x(epid text, name text, dob text, relation text, sex text)`);
+    }
+  });
+  return list.length;
+}
+
+/** Copy of the Children Education Allowance already paid (table cea_paid). Replaced as a whole. */
+export async function refreshCeaPaid(): Promise<number> {
+  const reply = await callService("/cea-paid", 120_000);
+  const list = (Array.isArray(reply?.rows) ? reply.rows : [])
+    .map((r: any) => ({
+      epid: String(r.ecode || "").trim(),
+      child: cleanText(r.cname),
+      dob: cleanDay(r.dob),
+      session: cleanText(r.asession),
+      cls: cleanText(r.class),
+      amount: r.cx_amt === null || r.cx_amt === undefined || r.cx_amt === "" || !Number.isFinite(Number(r.cx_amt)) ? null : Number(r.cx_amt),
+      fy: cleanText(r.financial_year),
+    }))
+    .filter((r: any) => r.epid);
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM cea_paid`);
+    for (let i = 0; i < list.length; i += 2000) {
+      await tx.execute(sql`
+        INSERT INTO cea_paid (epid, child_name, dob, session, class_name, amount, financial_year)
+        SELECT x.epid, x.child, x.dob::date, x.session, x.cls, x.amount, x.fy
+        FROM jsonb_to_recordset(${JSON.stringify(list.slice(i, i + 2000))}::jsonb)
+          AS x(epid text, child text, dob text, session text, cls text, amount numeric, fy text)`);
+    }
+  });
+  return list.length;
+}
+
+/** Copy of the spouse employment details (table payroll_spouse), first row per employee. Replaced as a whole. */
+export async function refreshSpouse(): Promise<number> {
+  const reply = await callService("/spouse", 120_000);
+  const list = (Array.isArray(reply?.rows) ? reply.rows : [])
+    .map((r: any) => ({
+      epid: String(r.ecode || "").trim(),
+      name: cleanText(r.sname),
+      desig: cleanText(r.desig),
+      org: cleanText(r.comp),
+    }))
+    .filter((r: any) => r.epid);
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM payroll_spouse`);
+    for (let i = 0; i < list.length; i += 2000) {
+      await tx.execute(sql`
+        INSERT INTO payroll_spouse (epid, name, designation, organisation)
+        SELECT x.epid, x.name, x.desig, x.org
+        FROM jsonb_to_recordset(${JSON.stringify(list.slice(i, i + 2000))}::jsonb)
+          AS x(epid text, name text, desig text, org text)
+        ON CONFLICT (epid) DO NOTHING`);
+    }
+  });
+  return list.length;
+}
+
 export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) {
   const guard = [verifyAdminSession, requireSettingsUnlock];
 
@@ -309,7 +399,26 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
         // an older sync container has no such endpoint: the existing copy is kept
         console.warn("[OracleSync] paid conveyance periods not refreshed:", paidError?.message || paidError);
       }
-      res.json({ ok: true, id: Number((ins.rows[0] as any).id), oracleRows: rows.length, kept: kept.length, payrollFlags, conveyancePaid });
+      // Children, CEA payments and spouse details for the Children Education Allowance form
+      let familyChildren: number | null = null;
+      let ceaPaid: number | null = null;
+      let spouse: number | null = null;
+      try {
+        familyChildren = await refreshFamilyChildren();
+      } catch (e2: any) {
+        console.warn("[OracleSync] family details of children not refreshed:", e2?.message || e2);
+      }
+      try {
+        ceaPaid = await refreshCeaPaid();
+      } catch (e3: any) {
+        console.warn("[OracleSync] CEA payments not refreshed:", e3?.message || e3);
+      }
+      try {
+        spouse = await refreshSpouse();
+      } catch (e4: any) {
+        console.warn("[OracleSync] spouse details not refreshed:", e4?.message || e4);
+      }
+      res.json({ ok: true, id: Number((ins.rows[0] as any).id), oracleRows: rows.length, kept: kept.length, payrollFlags, conveyancePaid, familyChildren, ceaPaid, spouse });
     } catch (e: any) {
       console.error("[OracleSync] fetch failed:", e);
       res.status(e instanceof ServiceError ? 503 : 500).json({ message: e.message || "Fetch failed" });

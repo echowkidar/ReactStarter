@@ -64,7 +64,7 @@ type StatusResponse = {
   /** Payroll details kept for the online claim forms (refreshed on every fetch, not reviewed) */
   claimDetails?: {
     active: number; refreshed: number; withJoiningDate: number; conveyanceEntitled: number;
-    refreshedAt: string | null; conveyancePaidRows: number;
+    refreshedAt: string | null; conveyancePaidRows: number; childrenRows: number; ceaPaidRows: number;
   } | null;
 };
 type Run = {
@@ -367,7 +367,8 @@ function OracleSync() {
       const forForms = r.payrollFlags > 0
         ? ` Claim-form details refreshed for ${Number(r.payrollFlags).toLocaleString()} employees.`
         : " Claim-form details were NOT received: the sync container is an older version.";
-      toast({ title: "Oracle data fetched", description: `${r.kept.toLocaleString()} of ${r.oracleRows.toLocaleString()} payroll rows kept.${forForms} You can stop the container now.` });
+      const forChildren = typeof r.familyChildren === "number" ? " Family details of children and CEA payments refreshed." : "";
+      toast({ title: "Oracle data fetched", description: `${r.kept.toLocaleString()} of ${r.oracleRows.toLocaleString()} payroll rows kept.${forForms}${forChildren} You can stop the container now.` });
       setFieldChoice({}); setNewChoice({});
       await refreshAll();
     } catch (e: any) {
@@ -560,7 +561,8 @@ function OracleSync() {
                 <p className="text-muted-foreground">
                   For the online claim forms: date of joining held for <b>{status.data.claimDetails.withJoiningDate.toLocaleString()}</b> of {status.data.claimDetails.active.toLocaleString()} active employees,
                   {" "}<b>{status.data.claimDetails.conveyanceEntitled.toLocaleString()}</b> entitled to conveyance allowance,
-                  {" "}{status.data.claimDetails.conveyancePaidRows.toLocaleString()} paid conveyance periods
+                  {" "}{status.data.claimDetails.conveyancePaidRows.toLocaleString()} paid conveyance periods,
+                  {" "}{(status.data.claimDetails.childrenRows ?? 0).toLocaleString()} children in the family details, {(status.data.claimDetails.ceaPaidRows ?? 0).toLocaleString()} CEA payments
                   {status.data.claimDetails.refreshedAt ? <> (refreshed {fmtWhen(status.data.claimDetails.refreshedAt)})</> : null}.
                   {" "}These refresh on every fetch and are kept apart: the joining date entered by a department is not changed, so it is not in the list of fields below.
                 </p>

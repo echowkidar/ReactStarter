@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CheckCircle2, FileText, Loader2, LogOut, Printer, Search, Upload } from "lucide-react";
 import {
+  CEA_APPROVALS, CEA_CLASSES, CEA_REPEAT_REASONS, SPOUSE_EMPLOYMENT, type CeaApproval, type SpouseEmployment,
   CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS, CONVEYANCE_VEHICLES, DEFAULT_CONVEYANCE_RATES, EMPLOYEE_EDITABLE, HRA_OPTIONS,
   claimSummary, conveyanceAmounts, localToday, monthLabel, quarterMonths,
   type ClaimForm, type ClaimFormType, type ClaimStatus, type ConveyanceMonthReason, type ConveyanceRate,
@@ -212,7 +213,20 @@ export default function ClaimFormsPage() {
         />
       )}
 
-      {view.kind === "new" && view.type !== "conveyance" && view.type !== "pca" && (
+      {view.kind === "new" && view.type === "cea" && (
+        <CeaEditor
+          employee={employee} onCancel={() => setView({ kind: "home" })} onError={fail}
+          onSave={async (data) => {
+            try {
+              const claim = await api("POST", "/claims", { formType: "cea", data });
+              putClaim(claim);
+              setView({ kind: "claim", id: claim.id });
+            } catch (e) { fail(e); }
+          }}
+        />
+      )}
+
+      {view.kind === "new" && view.type !== "conveyance" && view.type !== "pca" && view.type !== "cea" && (
         <ClaimEditor
           info={forms.find((f) => f.type === view.type)!} employee={employee}
           onCancel={() => setView({ kind: "home" })}
@@ -252,7 +266,20 @@ export default function ClaimFormsPage() {
         />
       )}
 
-      {view.kind === "claim" && openClaim && view.edit && openClaim.formType !== "conveyance" && openClaim.formType !== "pca" && (
+      {view.kind === "claim" && openClaim && view.edit && openClaim.formType === "cea" && (
+        <CeaEditor
+          employee={employee} initial={openClaim.data} fixedSession={openClaim.data.session}
+          onCancel={() => setView({ kind: "claim", id: openClaim.id })} onError={fail}
+          onSave={async (data) => {
+            try {
+              putClaim(await api("PUT", `/claims/${openClaim.id}`, { data }));
+              setView({ kind: "claim", id: openClaim.id });
+            } catch (e) { fail(e); }
+          }}
+        />
+      )}
+
+      {view.kind === "claim" && openClaim && view.edit && openClaim.formType !== "conveyance" && openClaim.formType !== "pca" && openClaim.formType !== "cea" && (
         <ClaimEditor
           info={forms.find((f) => f.type === openClaim.formType)!} employee={employee} initial={openClaim.data}
           onCancel={() => setView({ kind: "claim", id: openClaim.id })}
@@ -331,7 +358,7 @@ function Identify({ onDone }: { onDone: (e: Employee, claims: ClaimForm[]) => vo
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Fill a claim form</CardTitle>
-        <p className="text-sm text-slate-600">NPA, HRA, PCA and Conveyance Allowance forms can be filled here. Enter your details to begin.</p>
+        <p className="text-sm text-slate-600">NPA, HRA, PCA, Conveyance Allowance and Children Education Allowance (CEA) forms can be filled here. Enter your details to begin.</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4 max-w-sm">
@@ -838,6 +865,316 @@ function ConveyanceEditor({ employee, initial, fixedQuarter, onSave, onCancel, o
   );
 }
 
+// ── Children Education Allowance (CEA) / Hostel Subsidy ──────────────────────
+
+type CeaInfo = {
+  eligible: boolean; message?: string;
+  children?: Array<{ key: string; name: string; dob: string; relation: "S" | "D"; eligible: boolean; history: Array<{ session: string; className: string }> }>;
+  sessions?: Array<{ session: string; claimedRef: string | null; approval: string; ratesEntered: boolean }>;
+  schools?: Array<{ id: number; name: string; location: string; recognised: boolean }>;
+  notRecognisedMessage?: string;
+  spouse?: { name: string; details: string } | null;
+};
+type CeaEntry = {
+  className: string; schoolId: number | null; result: "passed" | "failed"; hostel: boolean; hostelDistanceKm: string;
+  disabled: boolean; disabilityNature: string; disabilityCertDate: string; disabilityPercent: string; repeatReason: string;
+};
+const EMPTY_CEA_ENTRY: CeaEntry = {
+  className: "", schoolId: null, result: "passed", hostel: false, hostelDistanceKm: "",
+  disabled: false, disabilityNature: "", disabilityCertDate: "", disabilityPercent: "", repeatReason: "",
+};
+
+const CEA_STATEMENTS = [
+  "I or my wife / husband has not claimed this re-imbursement from any other source and will not claim the same in future.",
+  "My child is studying in a School / Jr. College / Institution which is recognized and/or affiliated to Board of Education / University.",
+  "I am claiming the CEA in respect of my two eldest surviving children only. The information furnished above is complete and correct; if it is found false or incorrect, I am liable for disciplinary action and recovery of payment.",
+];
+
+const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
+
+function CeaEditor({ employee, initial, fixedSession, onSave, onCancel, onError }: {
+  employee: Employee; initial?: Record<string, any>; fixedSession?: string;
+  onSave: (data: Record<string, any>) => Promise<void>; onCancel: () => void; onError: (e: any) => void;
+}) {
+  const [info, setInfo] = useState<CeaInfo | null>(null);
+  const [session, setSession] = useState<string>(fixedSession || "");
+  const [entries, setEntries] = useState<Record<string, CeaEntry>>(() => {
+    const start: Record<string, CeaEntry> = {};
+    for (const c of (initial?.children || []) as any[]) {
+      start[c.childKey] = {
+        className: c.className || "", schoolId: c.schoolId ?? null, result: c.result === "failed" ? "failed" : "passed",
+        hostel: !!c.hostel, hostelDistanceKm: c.hostel ? String(c.hostelDistanceKm ?? "") : "",
+        disabled: !!c.disabled, disabilityNature: c.disabilityNature || "", disabilityCertDate: c.disabilityCertDate || "",
+        disabilityPercent: c.disabled ? String(c.disabilityPercent ?? "") : "", repeatReason: c.repeatReason || "",
+      };
+    }
+    return start;
+  });
+  const [chosen, setChosen] = useState<string[]>(() => ((initial?.children || []) as any[]).map((c) => c.childKey));
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [spouseEmployment, setSpouseEmployment] = useState<string>(initial?.spouseEmployment || "");
+  const [spouseName, setSpouseName] = useState<string>(initial?.spouseName || "");
+  const [spouseDetails, setSpouseDetails] = useState<string>(initial?.spouseDetails || "");
+  const [received, setReceived] = useState<string>(String(initial?.amountAlreadyReceived ?? 0));
+  const [declared, setDeclared] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api("GET", "/cea").then((r: CeaInfo) => {
+      setInfo(r);
+      if (!initial && r.spouse) { setSpouseName(r.spouse.name || ""); setSpouseDetails(r.spouse.details || ""); }
+    }).catch(onError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!info) return <Card><CardContent className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin inline text-slate-400" /></CardContent></Card>;
+  if (!info.eligible) {
+    return (
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-lg">Children Education Allowance (CEA) / Hostel Subsidy</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{info.message}</p>
+          <Button variant="outline" onClick={onCancel}>Back</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const schools = info.schools || [];
+  const sessions = (info.sessions || []).filter((s) => !fixedSession || s.session === fixedSession);
+  const chosenSession = sessions.find((s) => s.session === session);
+  const prevSession = session ? `${Number(session.slice(0, 4)) - 1}-${Number(session.slice(0, 4))}` : "";
+  const entry = (key: string): CeaEntry => entries[key] || EMPTY_CEA_ENTRY;
+  const setEntry = (key: string, change: Partial<CeaEntry>) => setEntries((all) => ({ ...all, [key]: { ...entry(key), ...change } }));
+  const schoolOf = (key: string) => schools.find((s) => s.id === entry(key).schoolId);
+  const repeats = (key: string) => {
+    const child = info.children?.find((c) => c.key === key);
+    return !!child && !!entry(key).className && child.history.some((h) => h.session === prevSession && h.className === entry(key).className);
+  };
+  const notRecognised = chosen.some((k) => schoolOf(k) && !schoolOf(k)!.recognised);
+  const childReady = (key: string) => {
+    const e = entry(key);
+    return !!e.className && !!e.schoolId && !!schoolOf(key)?.recognised
+      && (!e.hostel || Number(e.hostelDistanceKm) > 0)
+      && (!e.disabled || (e.disabilityNature.trim() && e.disabilityCertDate && Number(e.disabilityPercent) > 0))
+      && (!repeats(key) || !!e.repeatReason);
+  };
+  const ready = !!chosenSession && chosenSession.ratesEntered && !!spouseEmployment
+    && (spouseEmployment === "none" || (spouseName.trim().length > 0 && spouseDetails.trim().length > 0))
+    && chosen.length > 0 && chosen.every(childReady) && !notRecognised && declared;
+
+  const save = async () => {
+    setBusy(true);
+    await onSave({
+      session, spouseEmployment,
+      spouseName: spouseEmployment === "none" ? "" : spouseName.trim(),
+      spouseDetails: spouseEmployment === "none" ? "" : spouseDetails.trim(),
+      amountAlreadyReceived: Number(received) || 0,
+      children: (info.children || []).filter((c) => chosen.includes(c.key)).map((c) => {
+        const e = entry(c.key);
+        return {
+          childKey: c.key, className: e.className, schoolId: e.schoolId, result: e.result,
+          hostel: e.hostel, hostelDistanceKm: e.hostel ? Number(e.hostelDistanceKm) : 0,
+          disabled: e.disabled, disabilityNature: e.disabled ? e.disabilityNature.trim() : "",
+          disabilityCertDate: e.disabled ? e.disabilityCertDate : "", disabilityPercent: e.disabled ? Number(e.disabilityPercent) : 0,
+          repeatReason: repeats(c.key) ? e.repeatReason : "",
+        };
+      }),
+      declared: true,
+    });
+    setBusy(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-lg">Children Education Allowance (CEA) / Hostel Subsidy</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm rounded border bg-slate-50 px-3 py-2">
+          <dt className="text-slate-500">Name of employee</dt><dd className="font-medium">{employee.name}</dd>
+          <dt className="text-slate-500">Employee ID Number</dt><dd className="font-medium">{employee.epid}</dd>
+          <dt className="text-slate-500">Designation</dt><dd className="font-medium">{employee.designation}</dd>
+          <dt className="text-slate-500">Department / Office</dt><dd className="font-medium">{employee.departmentName}</dd>
+        </dl>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Academic session</legend>
+          <div className="space-y-2">
+            {sessions.map((s) => {
+              const taken = !!s.claimedRef && !fixedSession;
+              const noRate = !s.ratesEntered;
+              const off = taken || noRate;
+              return (
+                <label key={s.session} className={`flex items-center gap-2 rounded border px-3 py-2 text-sm ${off ? "text-slate-400" : "cursor-pointer"} ${session === s.session ? "border-blue-500 bg-blue-50" : "bg-white"}`}>
+                  <input type="radio" name="cea-session" checked={session === s.session} disabled={off || !!fixedSession} onChange={() => setSession(s.session)} />
+                  <span className="font-medium">{s.session}</span>
+                  {taken && <span className="text-xs">— already filled ({s.claimedRef})</span>}
+                  {!taken && noRate && <span className="text-xs">— rate not entered yet; contact the Salary Section</span>}
+                </label>
+              );
+            })}
+          </div>
+          {chosenSession?.approval && (
+            <p role="note" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{chosenSession.approval}</p>
+          )}
+        </fieldset>
+
+        <fieldset className="space-y-3">
+          <legend className="text-sm font-medium">Children</legend>
+          <p className="text-xs text-slate-500">Tick the children you are claiming for. CEA can be claimed for the two eldest surviving children only.</p>
+          {(info.children || []).map((c) => {
+            const on = chosen.includes(c.key);
+            const e = entry(c.key);
+            const school = schoolOf(c.key);
+            const filter = (filters[c.key] || "").trim().toLowerCase();
+            const shown = schools.filter((s) => s.id === e.schoolId || !filter || s.name.toLowerCase().includes(filter)).slice(0, 150);
+            return (
+              <div key={c.key} className={`rounded border ${on ? "border-blue-500 bg-blue-50/40" : "bg-white"} ${c.eligible ? "" : "opacity-60 bg-slate-50"}`}>
+                <label className={`flex flex-wrap items-center gap-2 px-3 py-2 text-sm ${c.eligible ? "cursor-pointer" : "text-slate-500"}`}>
+                  <input type="checkbox" checked={on} disabled={!c.eligible} aria-label={`Claim for ${c.name}`}
+                    onChange={(ev) => setChosen((list) => ev.target.checked ? [...list, c.key] : list.filter((x) => x !== c.key))} />
+                  <span className="font-medium">{c.name}</span>
+                  <span className="text-xs text-slate-500">{c.relation === "S" ? "Son" : "Daughter"} · born {c.dob.split("-").reverse().join("-")}</span>
+                  {!c.eligible && <span className="text-xs">— not one of the two eldest children</span>}
+                </label>
+                {on && (
+                  <div className="px-3 pb-3 space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`cea-class-${c.key}`}>Class</Label>
+                        <select id={`cea-class-${c.key}`} value={e.className} onChange={(ev) => setEntry(c.key, { className: ev.target.value })} className={selectClass}>
+                          <option value="">Choose…</option>
+                          {CEA_CLASSES.map((x) => <option key={x} value={x}>{x}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`cea-result-${c.key}`}>Result of the session</Label>
+                        <select id={`cea-result-${c.key}`} value={e.result} onChange={(ev) => setEntry(c.key, { result: ev.target.value as "passed" | "failed" })} className={selectClass}>
+                          <option value="passed">Passed</option>
+                          <option value="failed">Failed</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor={`cea-school-${c.key}`}>School</Label>
+                        <Input aria-label={`Search the school of ${c.name}`} placeholder="Type part of the school's name to search" value={filters[c.key] || ""}
+                          onChange={(ev) => setFilters((f) => ({ ...f, [c.key]: ev.target.value }))} />
+                        <select id={`cea-school-${c.key}`} value={e.schoolId ?? ""} onChange={(ev) => setEntry(c.key, { schoolId: ev.target.value ? Number(ev.target.value) : null })} className={selectClass}>
+                          <option value="">Choose…</option>
+                          {shown.map((s) => <option key={s.id} value={s.id}>{s.name}{s.location === "outside" ? " (outside Aligarh)" : ""}</option>)}
+                        </select>
+                        {filter && shown.filter((s) => s.id !== e.schoolId).length === 0 && (
+                          <p className="text-xs text-slate-600">If the school is not in the list, please contact the Salary Section.</p>
+                        )}
+                        {school && !school.recognised && (
+                          <p role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                            {info.notRecognisedMessage || "As per the Directorate of School Education (DSE), this school is not recognised. Please contact the school or the DSE."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" checked={e.hostel} onChange={(ev) => setEntry(c.key, { hostel: ev.target.checked, hostelDistanceKm: ev.target.checked ? e.hostelDistanceKm : "" })} />
+                        <span>Studying in a hostel</span>
+                      </label>
+                      {e.hostel && (
+                        <div className="space-y-1.5 max-w-xs">
+                          <Label htmlFor={`cea-km-${c.key}`}>Distance of the hostel from your residence (km)</Label>
+                          <Input id={`cea-km-${c.key}`} type="number" inputMode="decimal" min={0} value={e.hostelDistanceKm} onChange={(ev) => setEntry(c.key, { hostelDistanceKm: ev.target.value })} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" checked={e.disabled} onChange={(ev) => setEntry(c.key, { disabled: ev.target.checked })} />
+                        <span>Child with disability</span>
+                      </label>
+                      {e.disabled && (
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`cea-dnature-${c.key}`}>Nature of disability</Label>
+                            <Input id={`cea-dnature-${c.key}`} maxLength={80} value={e.disabilityNature} onChange={(ev) => setEntry(c.key, { disabilityNature: ev.target.value })} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`cea-ddate-${c.key}`}>Date of the certificate</Label>
+                            <Input id={`cea-ddate-${c.key}`} type="date" max={localToday()} value={e.disabilityCertDate} onChange={(ev) => setEntry(c.key, { disabilityCertDate: ev.target.value })} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`cea-dpct-${c.key}`}>Percentage of disability</Label>
+                            <Input id={`cea-dpct-${c.key}`} type="number" inputMode="decimal" min={0} max={100} value={e.disabilityPercent} onChange={(ev) => setEntry(c.key, { disabilityPercent: ev.target.value })} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {repeats(c.key) && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`cea-repeat-${c.key}`}>Reason for the same class</Label>
+                        <select id={`cea-repeat-${c.key}`} value={e.repeatReason} onChange={(ev) => setEntry(c.key, { repeatReason: ev.target.value })} className={selectClass}>
+                          <option value="">Choose…</option>
+                          {Object.entries(CEA_REPEAT_REASONS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                        </select>
+                        <p className="text-xs text-amber-800">{c.name} was in class {e.className} in the session before too. The marksheet must be uploaded after you save the form.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </fieldset>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2 max-w-xs">
+            <Label htmlFor="cea-spouse-emp">Is your spouse employed?</Label>
+            <select id="cea-spouse-emp" value={spouseEmployment} onChange={(e) => setSpouseEmployment(e.target.value)} className={selectClass}>
+              <option value="">Choose…</option>
+              {(Object.keys(SPOUSE_EMPLOYMENT) as SpouseEmployment[]).map((k) => <option key={k} value={k}>{SPOUSE_EMPLOYMENT[k]}</option>)}
+            </select>
+          </div>
+          {spouseEmployment && spouseEmployment !== "none" && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="cea-spouse-name">Name of spouse</Label>
+                <Input id="cea-spouse-name" maxLength={80} value={spouseName} onChange={(e) => setSpouseName(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cea-spouse-details">Designation, office and B.U./PID No.</Label>
+                <Input id="cea-spouse-details" maxLength={200} value={spouseDetails} onChange={(e) => setSpouseDetails(e.target.value)} />
+              </div>
+            </>
+          )}
+          <div className="space-y-1.5 sm:col-span-2 max-w-xs">
+            <Label htmlFor="cea-received">Amount of CEA / Hostel Subsidy already received for this session (if any)</Label>
+            <Input id="cea-received" type="number" inputMode="decimal" min={0} value={received} onChange={(e) => setReceived(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Declaration</p>
+          <ol className="text-sm space-y-1 list-decimal pl-6">
+            {CEA_STATEMENTS.map((line) => <li key={line}>{line}</li>)}
+          </ol>
+        </div>
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <Checkbox checked={declared} onCheckedChange={(v) => setDeclared(v === true)} className="mt-0.5"
+            aria-label="I make the above declaration" />
+          <span>I make the above declaration.</span>
+        </label>
+        {notRecognised && <p className="text-sm text-red-700">The form cannot be saved while a chosen school is not recognised.</p>}
+
+        <div className="flex gap-2">
+          <Button disabled={!ready || busy} onClick={save}>
+            {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save and continue
+          </Button>
+          <Button variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── One form: print, sign, upload, submit, status ────────────────────────────
 
 function Step({ n, done, title, children }: { n: number; done?: boolean; title: string; children?: React.ReactNode }) {
@@ -860,6 +1197,16 @@ function ClaimView({ claim, info, onBack, onEdit, onChange, onError }: {
 }) {
   const [busy, setBusy] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const ceaFileRef = useRef<HTMLInputElement>(null);
+  const ceaKind = useRef("");
+  // CEA: the uploads each child needs, and which of them are there for this revision of the form
+  const ceaChildren: any[] = claim.formType === "cea" ? (claim.data.children || []) : [];
+  const ceaItems = ceaChildren.flatMap((c, i) => [
+    { kind: `school_certificate_${i}`, label: `School certificate (Annexure B) – ${c.name}` },
+    ...(c.repeatReason ? [{ kind: `marksheet_${i}`, label: `Marksheet – ${c.name}` }] : []),
+  ]);
+  const ceaHave = new Set((claim.files || []).filter((f) => f.isCurrent && f.revision === claim.revision).map((f) => f.kind));
+  const ceaMissing = ceaItems.filter((x) => !ceaHave.has(x.kind));
   const editable = EMPLOYEE_EDITABLE.includes(claim.status);
   const pdfUrl = `/api/public/forms/claims/${claim.id}/pdf`;
   const run = async (name: string, fn: () => Promise<ClaimForm>) => {
@@ -880,6 +1227,15 @@ function ClaimView({ claim, info, onBack, onEdit, onChange, onError }: {
           Reference <span className="font-mono font-medium">{claim.refNo}</span> · {claimSummary(claim)}
           {claim.formType === "conveyance" && <> · Amount of Claim Rs. {Number(claim.data.amount || 0).toLocaleString("en-IN")}</>}
         </p>
+        {claim.formType === "cea" && (
+          <p className="text-sm text-slate-700">
+            Total Amount Claimed Rs. {Number(claim.data.total || 0).toLocaleString("en-IN")}
+            {Number(claim.data.amountAlreadyReceived) > 0 && <> · Already received Rs. {Number(claim.data.amountAlreadyReceived).toLocaleString("en-IN")} · Payable Rs. {Number(claim.data.payable || 0).toLocaleString("en-IN")}</>}
+          </p>
+        )}
+        {claim.formType === "cea" && claim.data.approval && claim.data.approval !== "none" && (
+          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{CEA_APPROVALS[claim.data.approval as CeaApproval]}</p>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {claim.status === "returned_employee" && (
@@ -895,15 +1251,61 @@ function ClaimView({ claim, info, onBack, onEdit, onChange, onError }: {
 
         {editable ? (
           <ol>
-            <Step n={1} title={info.needsUndertaking ? "Print the certificate and the undertaking" : "Print the form"}>
-              <p>{info.needsUndertaking ? "Both pages are in one file. Print on A4 paper." : "Print on A4 paper."}</p>
+            <Step n={1} title={claim.formType === "cea" ? "Print the form, the school certificates and the self declarations" : info.needsUndertaking ? "Print the certificate and the undertaking" : "Print the form"}>
+              <p>{claim.formType === "cea"
+                ? "The file has the form and, for every child, the school certificate (Annexure B) and the self declaration. Print on A4 paper."
+                : info.needsUndertaking ? "Both pages are in one file. Print on A4 paper." : "Print on A4 paper."}</p>
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="outline" size="sm"><a href={pdfUrl} target="_blank" rel="noopener"><Printer className="h-4 w-4 mr-1" /> Open to print</a></Button>
                 <Button variant="ghost" size="sm" onClick={onEdit}>Change the form</Button>
               </div>
               <p className="text-xs">If you change the form after printing, print it again: the old print will not be accepted.</p>
             </Step>
-            {info.needsUndertaking ? (
+            {claim.formType === "cea" ? (
+              <>
+                <Step n={2} title="Get the school certificate filled, signed and sealed; sign the self declaration">
+                  <p>Annexure B must be filled, signed and sealed by the school of each child. Sign the self declaration of each child yourself.</p>
+                </Step>
+                <Step n={3} done={ceaMissing.length === 0} title="Upload the school certificate of each child">
+                  <p>Scan or photograph each certificate (PDF, JPG or PNG, up to 10 MB). {ceaItems.some((x) => x.kind.startsWith("marksheet")) && "Where a child is in the same class as before, the marksheet is needed too."}</p>
+                  <input ref={ceaFileRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      const kind = ceaKind.current;
+                      e.target.value = "";
+                      if (!file || !kind) return;
+                      const body = new FormData();
+                      body.append("file", file);
+                      run(kind, () => api("POST", `/claims/${claim.id}/files?kind=${kind}`, body));
+                    }} />
+                  <ul className="space-y-2">
+                    {ceaItems.map((x) => {
+                      const have = ceaHave.has(x.kind);
+                      return (
+                        <li key={x.kind} className="flex flex-wrap items-center gap-2">
+                          <span className="min-w-[200px]">{x.label}</span>
+                          <Button variant="outline" size="sm" disabled={!!busy} aria-label={`${have ? "Upload again" : "Choose file"}: ${x.label}`}
+                            onClick={() => { ceaKind.current = x.kind; ceaFileRef.current?.click(); }}>
+                            {busy === x.kind ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                            {have ? "Upload again" : "Choose file"}
+                          </Button>
+                          {have && <span className="text-green-700 flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Uploaded</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Step>
+                <Step n={4} title="Submit the form">
+                  <Button disabled={!!busy || ceaMissing.length > 0} onClick={() => run("submit", () => api("POST", `/claims/${claim.id}/submit`))}>
+                    {busy === "submit" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Submit the form
+                  </Button>
+                  {ceaMissing.length > 0 && <p className="text-xs">The form can be submitted after all the uploads above are done.</p>}
+                </Step>
+                <Step n={5} title="Hand the signed form to your department">
+                  <p>Give the printed and signed form, with the school certificates, to your department. They will get it signed by the Chairman / Head and send it to the Salary Section.</p>
+                </Step>
+              </>
+            ) : info.needsUndertaking ? (
               <>
                 <Step n={2} title="Sign both pages and get them signed by the Chairman">
                   <p>Sign the certificate and the undertaking. The Chairman signs the certificate and counter-signs the undertaking.</p>
@@ -983,6 +1385,8 @@ export const EVENT_LABELS: Record<string, string> = {
   created: "Form filled",
   edited: "Form changed",
   undertaking_uploaded: "Signed undertaking uploaded",
+  school_certificate_uploaded: "School certificate uploaded",
+  marksheet_uploaded: "Marksheet uploaded",
   submitted: "Submitted to department",
   cancelled: "Cancelled",
   signed_form_uploaded: "Signed form uploaded by department",

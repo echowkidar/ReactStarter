@@ -18,9 +18,20 @@ import { useToast } from "@/hooks/use-toast";
 import { ExternalLink, Loader2, Printer, Undo2, Upload } from "lucide-react";
 import { ClaimStatusBadge, EVENT_LABELS } from "@/pages/claim-forms";
 import {
-  CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, DEPARTMENT_ACTIONABLE, HRA_OPTIONS, PCA_CATEGORIES, claimSummary, formatClaimDate, localToday, monthLabel,
-  type ClaimForm, type ClaimStatus,
+  CEA_REPEAT_REASONS, CLAIM_FORM_DEFS, CONVEYANCE_MONTH_REASONS, DEPARTMENT_ACTIONABLE, HRA_OPTIONS, PCA_CATEGORIES, SPOUSE_EMPLOYMENT, claimSummary, formatClaimDate, localToday, monthLabel,
+  type CeaChild, type ClaimForm, type ClaimStatus,
 } from "@shared/claimForms";
+
+/** What an uploaded file is, in words (CEA: the school certificate / marksheet of a child) */
+function fileLabel(claim: ClaimForm, kind: string): string {
+  if (kind === "undertaking") return "Signed undertaking";
+  const m = /^(school_certificate|marksheet)_(\d+)$/.exec(kind);
+  if (m) {
+    const name = (claim.data.children || [])[Number(m[2])]?.name;
+    return `${m[1] === "marksheet" ? "Marksheet" : "School certificate"}${name ? ` – ${name}` : ""}`;
+  }
+  return "Signed form";
+}
 
 const TABS: Array<{ key: string; label: string; statuses: ClaimStatus[] }> = [
   { key: "waiting", label: "Waiting for signed form", statuses: ["submitted", "returned_department"] },
@@ -59,7 +70,7 @@ export default function DepartmentClaimForms() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold">Claim Forms</h1>
-          <p className="text-sm text-slate-600">NPA, HRA, PCA and Conveyance Allowance forms filled online by your employees. After the signed form is received, upload it with the dispatch number and date.</p>
+          <p className="text-sm text-slate-600">NPA, HRA, PCA, Conveyance Allowance and CEA forms filled online by your employees. After the signed form is received, upload it with the dispatch number and date.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -204,7 +215,34 @@ function ClaimDialog({ departmentId, claimId, onClose, onChanged }: { department
               <dt className="text-slate-500">Name</dt><dd className="font-medium">{claim.snapshot.name}</dd>
               <dt className="text-slate-500">ID No.</dt><dd>{claim.epid}</dd>
               <dt className="text-slate-500">Designation</dt><dd>{claim.snapshot.designation}</dd>
-              {claim.formType === "pca" ? (
+              {claim.formType === "cea" ? (
+                <>
+                  <dt className="text-slate-500">Session</dt><dd className="font-medium">{claim.data.session}</dd>
+                  <dt className="text-slate-500">Spouse</dt>
+                  <dd>{SPOUSE_EMPLOYMENT[claim.data.spouseEmployment as keyof typeof SPOUSE_EMPLOYMENT] || "—"}{claim.data.spouseName ? `, ${claim.data.spouseName}` : ""}{claim.data.spouseDetails ? ` (${claim.data.spouseDetails})` : ""}</dd>
+                  {((claim.data.children || []) as CeaChild[]).map((c, i) => (
+                    <div key={i} className="col-span-2 rounded border bg-white px-3 py-2 space-y-0.5">
+                      <p className="font-medium">{c.name} <span className="font-normal text-slate-500">· born {formatClaimDate(c.dob)}</span></p>
+                      <p>Class {c.className} · {c.schoolName}{c.schoolLocation === "outside" ? " (outside Aligarh)" : ""} · {c.result === "failed" ? "Failed" : "Passed"}</p>
+                      {c.hostel && <p>Hostel: {c.hostelDistanceKm} km from residence</p>}
+                      {c.disabled && <p>Disability: {c.disabilityNature}, {c.disabilityPercent}% (certificate dated {formatClaimDate(c.disabilityCertDate)})</p>}
+                      {c.repeatsClass && (
+                        <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-900">
+                          Same class as the session before — {CEA_REPEAT_REASONS[c.repeatReason as keyof typeof CEA_REPEAT_REASONS] || "no reason given"}; marksheet uploaded
+                        </p>
+                      )}
+                      <p className="font-medium">Amount: Rs. {Number(c.amount || 0).toLocaleString("en-IN")}</p>
+                    </div>
+                  ))}
+                  <dt className="text-slate-500">Total Amount Claimed</dt><dd className="font-medium">Rs. {Number(claim.data.total || 0).toLocaleString("en-IN")}</dd>
+                  {Number(claim.data.amountAlreadyReceived) > 0 && (
+                    <>
+                      <dt className="text-slate-500">Already received</dt><dd>Rs. {Number(claim.data.amountAlreadyReceived).toLocaleString("en-IN")}</dd>
+                      <dt className="text-slate-500">Payable</dt><dd className="font-medium">Rs. {Number(claim.data.payable || 0).toLocaleString("en-IN")}</dd>
+                    </>
+                  )}
+                </>
+              ) : claim.formType === "pca" ? (
                 <>
                   <dt className="text-slate-500">Period</dt><dd className="font-medium">{claimSummary(claim)}</dd>
                   <dt className="text-slate-500">Confirmation / probation</dt><dd>{claim.data.confirmation}</dd>
@@ -245,7 +283,7 @@ function ClaimDialog({ departmentId, claimId, onClose, onChanged }: { department
               </Button>
               {currentFiles.map((f) => (
                 <Button key={f.id} asChild variant="outline" size="sm">
-                  <a href={f.fileUrl} target="_blank" rel="noopener"><ExternalLink className="h-4 w-4 mr-1" /> {f.kind === "undertaking" ? "Signed undertaking" : "Signed form"}</a>
+                  <a href={f.fileUrl} target="_blank" rel="noopener"><ExternalLink className="h-4 w-4 mr-1" /> {fileLabel(claim, f.kind)}</a>
                 </Button>
               ))}
               {actionable && mode === "view" && (
