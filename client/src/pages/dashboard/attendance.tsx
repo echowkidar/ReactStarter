@@ -2563,7 +2563,7 @@ export default function Attendance() {
               )}
               </div>
 
-              <DialogContent className="max-w-[95vw] w-[1400px] max-h-[85vh] overflow-hidden flex flex-col">
+              <DialogContent className="max-w-[95vw] w-[1400px] max-h-[min(85vh,calc(100dvh-2rem))] overflow-hidden flex flex-col">
                 <DialogHeader className="flex-shrink-0">
                   <DialogTitle className="text-xl font-semibold">
                     {editingReportId
@@ -2574,7 +2574,7 @@ export default function Attendance() {
                     {activeReportType === 'reporting' ? " (Reporting Employees)" : ""}
                   </DialogTitle>
                 </DialogHeader>
-                <div className="overflow-auto flex-grow pr-1">
+                <div className="min-h-0 overflow-auto flex-1 pr-1">
                   {/* Main vs Supplementary choice (only while creating a new report) */}
                   {!editingReportId && (
                     mainExistsForActiveType ? (
@@ -3011,7 +3011,7 @@ export default function Attendance() {
 
       {/* Deadline Passed Alert Modal */}
       <Dialog open={showDeadlineAlert} onOpenChange={setShowDeadlineAlert}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-0 shadow-lg">
+        <DialogContent className="max-w-md p-0 overflow-hidden border-0 shadow-lg [&>[data-dialog-close-row]]:mr-4 [&>[data-dialog-close-row]]:mt-6 [&>[data-dialog-close-row]>button]:bg-transparent [&>[data-dialog-close-row]>button]:text-white">
           <div className="bg-red-600 p-6 text-center text-white">
             <div className="flex justify-center mb-4">
               <AlertTriangle className="h-12 w-12 text-white" />
@@ -3057,7 +3057,7 @@ export default function Attendance() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
             <div
-              className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 text-center"
+              className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto"
               style={{ animation: 'fadeInScale 0.25s ease' }}
             >
               {/* Title */}
@@ -3160,7 +3160,7 @@ export default function Attendance() {
             style={{ backgroundColor: 'rgba(0,0,0,0.82)' }}
           >
             <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[calc(100dvh-2rem)] overflow-y-auto"
               style={{ animation: 'cancelSlideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
             >
               <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center gap-3">

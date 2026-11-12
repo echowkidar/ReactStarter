@@ -601,7 +601,7 @@ function EmployeeDialog({ ecode, onClose, desigName, deptName, salType }: {
   );
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-6xl max-h-[min(85vh,calc(100dvh-2rem))] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><History className="h-5 w-5" /> {ecode}{name ? ` · ${name}` : ""}</DialogTitle>
           <DialogDescription>
@@ -609,7 +609,7 @@ function EmployeeDialog({ ecode, onClose, desigName, deptName, salType }: {
             Yellow = different from the previous regular salary.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-auto">
+        <div className="min-h-0 flex-1 overflow-auto">
           {q.isLoading ? <div className="p-6 text-center"><Loader2 className="h-5 w-5 animate-spin inline" /></div> : (
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-white text-left text-muted-foreground">

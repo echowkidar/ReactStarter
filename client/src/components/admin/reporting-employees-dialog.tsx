@@ -70,7 +70,7 @@ export function ReportingEmployeesDialog({ open, onOpenChange }: { open: boolean
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-[1200px] max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[95vw] w-[1200px] max-h-[min(85vh,calc(100dvh-2rem))] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Reporting Employees</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -92,7 +92,7 @@ export function ReportingEmployeesDialog({ open, onOpenChange }: { open: boolean
           </div>
         </div>
 
-        <div className="overflow-auto flex-grow rounded-md border">
+        <div className="min-h-0 overflow-auto flex-1 rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>

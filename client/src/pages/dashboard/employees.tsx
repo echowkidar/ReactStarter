@@ -453,7 +453,7 @@ export default function Employees() {
                   Add Employee
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+              <DialogContent className="max-w-4xl max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle className="text-xl font-semibold">Add New Employee</DialogTitle>
                 </DialogHeader>
