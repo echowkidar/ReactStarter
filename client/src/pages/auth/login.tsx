@@ -113,21 +113,22 @@ function EmployeeClaimFormsLink() {
   });
   if (!data?.enabled) return null;
   return (
-    <div className="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-4 shadow-md">
-      <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">For employees</p>
-      <p className="mt-0.5 text-lg font-bold leading-snug text-slate-900">Fill a claim form online</p>
-      <p className="mt-1 text-sm text-slate-700">NPA, HRA, PCA, Conveyance Allowance and Children Education Allowance (CEA). No login or password is needed: only your Permanent ID Number and date of joining.</p>
-      <button
-        type="button"
-        onClick={() => setLocation("/forms")}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-3 text-base font-semibold text-white shadow hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
-      >
+    <button
+      type="button"
+      onClick={() => setLocation("/forms")}
+      title="NPA, HRA, PCA, Conveyance Allowance and CEA. No login needed: only your Permanent ID Number and date of joining."
+      className="group flex w-full items-center gap-3 rounded-xl border-2 border-emerald-600 bg-emerald-50 px-3 py-2.5 text-left shadow-md hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-white">
         <FileSignature className="h-5 w-5" />
-        Open Employee Claim Forms
-        <ChevronRight className="h-5 w-5" />
-      </button>
-      <p className="mt-2 text-center text-xs text-slate-600">Departments: use the login below.</p>
-    </div>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-bold uppercase tracking-wider text-emerald-800">For employees · no login needed</span>
+        <span className="block text-base font-bold leading-snug text-slate-900">Fill a claim form online</span>
+        <span className="block truncate text-xs text-slate-600">NPA, HRA, PCA, Conveyance, CEA</span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-emerald-700 transition-transform group-hover:translate-x-0.5" />
+    </button>
   );
 }
 
@@ -281,10 +282,14 @@ export default function Login() {
         <N8nChatScript />
         <NeuralNetworkOverlay />
 
-        <div className="w-full max-w-md relative z-10 flex flex-col gap-4">
+        {/* Phone: one column (claim forms, login, downloads). Wide screen: login on the left,
+            claim forms + downloads on the right, so everything is in view at 100% zoom. */}
+        <div className="w-full max-w-md lg:max-w-4xl relative z-10 grid gap-4 lg:grid-cols-2 lg:gap-x-8">
           {/* Employees come here to fill claim forms: shown first, before the department login */}
-          <EmployeeClaimFormsLink />
-          <Card className="w-full shadow-lg border-primary/10">
+          <div className="lg:col-start-2 lg:row-start-1 lg:self-end">
+            <EmployeeClaimFormsLink />
+          </div>
+          <Card className="w-full shadow-lg border-primary/10 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:self-center">
             <CardHeader className="text-center pt-5 pb-2">
               <div className="flex justify-center mb-2">
                 <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-16 w-auto drop-shadow-sm" />
@@ -367,7 +372,7 @@ export default function Login() {
           </Card>
 
           {/* Helper Resources row */}
-          <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4">
+          <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4 lg:col-start-2 lg:row-start-2 lg:self-start">
             <div
               className="w-[160px] h-[90px] shrink-0 rounded overflow-hidden relative cursor-pointer group shadow-sm bg-slate-900"
               onClick={() => window.open('https://www.youtube.com/watch?v=s3uPEzevL5w', '_blank')}

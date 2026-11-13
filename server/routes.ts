@@ -6060,18 +6060,25 @@ export async function registerRoutes(app: Express) {
         // Option 1: It's a local file.
         return res.redirect(download.fileUrl);
       } else if (download.externalLink) {
-        // Option 2: It's an external link. Proxy the content securely and bypass SSL certificate issues.
+        // Option 2: It's an external link.
         let externalUrl = download.externalLink;
         if (!externalUrl.startsWith('http://') && !externalUrl.startsWith('https://')) {
           externalUrl = 'https://' + externalUrl;
         }
 
+        // An https link opens straight in the user's browser. Fetching it through this server
+        // was slow (the server reaches the AMU file server only after ~11 s, or not at all),
+        // while the user's browser gets the same file in well under a second.
+        if (externalUrl.startsWith('https://')) {
+          res.setHeader('Cache-Control', 'public, max-age=300');
+          return res.redirect(externalUrl);
+        }
+
+        // A plain http link cannot be opened from this https site (the browser blocks it),
+        // so it is passed through this server.
         try {
-          // Temporarily bypass strict SSL checks for AMU internal servers
-          process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
           // 15 seconds at most: a server that cannot reach the other site must not keep the user waiting
           const response = await fetch(externalUrl, { signal: AbortSignal.timeout(15_000) });
-          process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
 
           if (!response.ok) throw new Error(`HTTP ${response.status} from external resource`);
 
@@ -6094,8 +6101,6 @@ export async function registerRoutes(app: Express) {
           }
         } catch (fetchErr) {
           console.error("Proxy fetch error:", fetchErr);
-          // Make sure to reset it just in case it threw before resetting
-          process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
           // This server could not fetch the file (for example the other site is not reachable
           // from here). The user's own browser usually can: send it straight to the link, so a
           // download never fails just because of this server's network.
