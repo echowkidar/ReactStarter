@@ -64,6 +64,9 @@ function Shell({ children }: { children: React.ReactNode }) {
             <h1 className="text-base font-semibold leading-tight">Salary Section — Online Claim Forms</h1>
             <p className="text-xs text-slate-500">Aligarh Muslim University</p>
           </div>
+          <a href="/" className="ml-auto flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900">
+            <ArrowLeft className="h-4 w-4" /><span className="hidden sm:inline">Back to</span> Home
+          </a>
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-4">{children}</main>
