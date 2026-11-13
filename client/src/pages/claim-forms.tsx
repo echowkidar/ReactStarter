@@ -1,6 +1,7 @@
 // Online claim forms — the employee's page (no login).
 // The employee proves who they are with the Permanent ID and date of joining,
 // fills a form, prints it, signs it and hands it to the department.
+import { retryImage } from "@/lib/retry-image";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +60,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <img src="/logo_favicon/favicon-32x32.png" alt="" className="h-8 w-8" />
+          <img src="/logo_favicon/favicon-32x32.png" onError={retryImage} alt="" className="h-8 w-8" />
           <div>
             <h1 className="text-base font-semibold leading-tight">Salary Section — Online Claim Forms</h1>
             <p className="text-xs text-slate-500">Aligarh Muslim University</p>

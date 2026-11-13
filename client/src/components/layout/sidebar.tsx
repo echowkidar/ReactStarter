@@ -1,3 +1,4 @@
+import { retryImage } from "@/lib/retry-image";
 import { Link, useLocation } from "wouter";
 import { logout, getCurrentDepartment, checkDepartmentName, getCurrentStaff, isDeptSupervisor, STAFF_ROLE_LABELS } from "@/lib/auth";
 import { FolderOpen, UserCog, FileSignature } from "lucide-react";
@@ -254,7 +255,7 @@ export default function Sidebar({ className }: SidebarProps) {
       <NeuralNetworkOverlay />
       <div className="px-3 py-1">
         <div className="mb-2 px-4 flex items-center gap-2">
-          <img src="/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto" />
+          <img src="/logo_favicon/favicon-32x32.png" onError={retryImage} alt="AMU Logo" className="h-8 w-auto" />
           <h2 className="text-base font-semibold leading-tight flex-1">
             {department?.name}
           </h2>

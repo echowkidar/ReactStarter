@@ -1,3 +1,4 @@
+import { retryImage } from "@/lib/retry-image";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -292,7 +293,7 @@ export default function Login() {
           <Card className="w-full shadow-lg border-primary/10 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:self-center">
             <CardHeader className="text-center pt-5 pb-2">
               <div className="flex justify-center mb-2">
-                <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-16 w-auto drop-shadow-sm" />
+                <img src="/logo_favicon/android-chrome-192x192.png" onError={retryImage} alt="AMU Logo" className="h-16 w-auto drop-shadow-sm" />
               </div>
               <h1 className="text-2xl font-bold tracking-tight">Department Login</h1>
               <p className="text-sm text-muted-foreground mt-0">

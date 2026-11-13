@@ -1,3 +1,4 @@
+import { retryImage } from "@/lib/retry-image";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -129,7 +130,7 @@ export default function AdminLogin() {
       <Card className="w-full max-w-md mx-4">
         <CardHeader>
           <div className="flex justify-center mb-4">
-            <img src="/logo_favicon/android-chrome-192x192.png" alt="AMU Logo" className="h-20 w-auto" />
+            <img src="/logo_favicon/android-chrome-192x192.png" onError={retryImage} alt="AMU Logo" className="h-20 w-auto" />
           </div>
           <CardTitle className="text-2xl text-center">Admin Login</CardTitle>
         </CardHeader>

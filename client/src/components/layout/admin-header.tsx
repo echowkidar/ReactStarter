@@ -1,3 +1,4 @@
+import { retryImage } from "@/lib/retry-image";
 import { serverLogout } from "@/lib/auth";
 // Admin top bar — shared by every admin page
 // ─────────────────────────────────────────────────────────────────────────────
@@ -162,7 +163,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
       <header className="flex items-center justify-between gap-3 border-b bg-white/95 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         {/* Who is logged in */}
         <Link href="/admin/dashboard" className="flex min-w-0 items-center gap-3" title="Go to Dashboard">
-          <img src="/logo_favicon/favicon-32x32.png" alt="AMU Logo" className="h-8 w-auto shrink-0" />
+          <img src="/logo_favicon/favicon-32x32.png" onError={retryImage} alt="AMU Logo" className="h-8 w-auto shrink-0" />
           <div className={cn("hidden shrink-0 rounded-full p-2 sm:block lg:hidden min-[1700px]:block", display.bg)}>
             <AdminIcon className={cn("h-5 w-5", display.color)} />
           </div>

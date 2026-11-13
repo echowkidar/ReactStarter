@@ -48,7 +48,29 @@ import { useToast } from "@/hooks/use-toast";
 import salaryAssistants from "@/lib/salary-assistants.json";
 import { RegisterOrderDialog } from "@/components/admin/register-order-dialog";
 import { sortByCustomOrder, stepRegister, mergeOrder } from "@/lib/register-order";
-import { ChevronsLeft, ChevronsRight, ListOrdered } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, ListOrdered, X } from "lucide-react";
+
+/**
+ * useState that is remembered for this browser tab (sessionStorage), so the search,
+ * filters, sort and page survive a refresh and a visit to another admin page.
+ */
+function useTabState<T>(name: string, initial: T | (() => T)) {
+  // Per admin login, so another admin signing in on this tab starts clean
+  let who = "";
+  try { who = JSON.parse(localStorage.getItem("admin") || "{}").email || ""; } catch { /* none */ }
+  const key = `adminAttendanceReports.${who}.${name}`;
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const saved = sessionStorage.getItem(key);
+      if (saved !== null) return JSON.parse(saved) as T;
+    } catch { /* storage blocked or bad value: use the default */ }
+    return typeof initial === "function" ? (initial as () => T)() : initial;
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* not remembered */ }
+  }, [key, value]);
+  return [value, setValue] as const;
+}
 
 type AttendanceEntry = {
   id: number;
@@ -312,8 +334,9 @@ export default function AttendanceReports() {
     }
   };
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
+  // Search, filters, sort and page are kept for this browser tab (see useTabState)
+  const [searchTerm, setSearchTerm] = useTabState<string>("search", "");
+  const [departmentFilter, setDepartmentFilter] = useTabState<string[]>("department", []);
   // Fetch available months from backend
   const { data: dbMonths = [] } = useQuery<{ month: number; year: number }[]>({
     queryKey: ["/api/admin/attendance/months"],
@@ -328,7 +351,7 @@ export default function AttendanceReports() {
   }, [dbMonths]);
 
   // Initialize with current month
-  const [monthFilter, setMonthFilter] = useState<string[]>(() => {
+  const [monthFilter, setMonthFilter] = useTabState<string[]>("month", () => {
     const now = new Date();
     // Default to current month even if not in database yet (it will just show empty)
     // Or we could default to the latest available month from dbMonths if we waited for it
@@ -336,7 +359,7 @@ export default function AttendanceReports() {
     const current = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     return [current];
   });
-  const [salaryRegisterFilter, setSalaryRegisterFilter] = useState<string[]>([]);
+  const [salaryRegisterFilter, setSalaryRegisterFilter] = useTabState<string[]>("register", []);
 
   // Dealing assistant's own salary-register order (saved per admin login)
   const { data: registerOrderPref } = useQuery<{ value: string[] | null }>({
@@ -361,12 +384,12 @@ export default function AttendanceReports() {
     },
     onError: (e: any) => toast({ variant: "destructive", title: "Could not save order", description: e?.message || "" }),
   });
-  const [salaryAssistantFilter, setSalaryAssistantFilter] = useState<string[]>([]);
-  const [designationFilter, setDesignationFilter] = useState<string[]>([]);
-  const [analysisFilter, setAnalysisFilter] = useState<string[]>([]);
-  const [verifiedFilter, setVerifiedFilter] = useState<"all" | "verified" | "unverified">("all");
-  const [exportFilter, setExportFilter] = useState<"all" | "exported" | "not_exported">("all");
-  const [skipExported, setSkipExported] = useState(true); // default: checked — skip already-exported rows on export
+  const [salaryAssistantFilter, setSalaryAssistantFilter] = useTabState<string[]>("assistant", []);
+  const [designationFilter, setDesignationFilter] = useTabState<string[]>("designation", []);
+  const [analysisFilter, setAnalysisFilter] = useTabState<string[]>("analysis", []);
+  const [verifiedFilter, setVerifiedFilter] = useTabState<"all" | "verified" | "unverified">("verified", "all");
+  const [exportFilter, setExportFilter] = useTabState<"all" | "exported" | "not_exported">("exported", "all");
+  const [skipExported, setSkipExported] = useTabState<boolean>("skipExported", true); // default: checked — skip already-exported rows on export
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
 
   // Permission checks for Export button and date editing
@@ -378,7 +401,7 @@ export default function AttendanceReports() {
   const isNasirAdmin = adminEmail === "nasir@amu.ac.in";
 
   // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useTabState<number>("page", 1);
   const pageSize = 50;
 
   // Toggle verification mutation with optimistic update
@@ -723,7 +746,7 @@ export default function AttendanceReports() {
   });
 
   // Sorting state for Employee ID
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useTabState<{ key: string; direction: 'asc' | 'desc' } | null>("sort", null);
 
   const handleSort = (key: string) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -1371,6 +1394,10 @@ export default function AttendanceReports() {
 
   // Calculate total pages
   const totalPages = Math.ceil(processedEntries.length / pageSize);
+  // A remembered page can be past the end once the list is shorter: go to its last page
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   const handleLogout = () => {
     // Clear admin data from localStorage
@@ -2017,8 +2044,19 @@ export default function AttendanceReports() {
                     setSearchTerm(e.target.value);
                     setCurrentPage(1); // Reset to first page on search
                   }}
-                  className="pl-8"
+                  className="pl-8 pr-8"
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    title="Clear search"
+                    aria-label="Clear search"
+                    onClick={() => { setSearchTerm(""); setCurrentPage(1); }}
+                    className="absolute right-2 top-2 rounded p-0.5 text-muted-foreground hover:bg-slate-100 hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               <div className="w-full md:w-64">
                 <MultiSelect
