@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, CalendarPlus, FileSignature, Scissors, Clock, LocateFixed, UserMinus } from "lucide-react";
+import { Loader2, AlertTriangle, CalendarPlus, FileSignature, Scissors, Clock, LocateFixed, UserMinus, BadgeCheck } from "lucide-react";
 
 // Reasons a department can give when the term cannot be updated right now.
 // The chosen reason is written into the Remarks of the employee's attendance row.
@@ -84,7 +84,12 @@ export function TermCheckDialog({ open, onOpenChange, issues, departmentId, onEm
   );
 }
 
-type Mode = null | "extend" | "fresh" | "bypass";
+type Mode = null | "extend" | "fresh" | "status" | "bypass";
+
+// Statuses a Temporary / Probation employee can be moved to from this popup.
+// Only Temporary and Probation are term-checked, so any other status clears the issue.
+const STATUS_OPTIONS = ["Permanent", "Probation", "Temporary", "Court Case", "Compensation", "Till Further Order"];
+const statusLabel = (s: string) => (s === "Permanent" ? "Permanent (Confirmed)" : s);
 
 function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypass, onUntick, onLocate }: {
   issue: TermIssue;
@@ -107,6 +112,8 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
   const [memoFile, setMemoFile] = useState<File | null>(null);
   const [joiningDate, setJoiningDate] = useState("");
   const [joiningFile, setJoiningFile] = useState<File | null>(null);
+  // Status change
+  const [newStatus, setNewStatus] = useState("Permanent");
   // Bypass
   const [reason, setReason] = useState<string>("");
   const [otherReason, setOtherReason] = useState("");
@@ -114,13 +121,18 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
   const save = async () => {
     setError("");
     if (!departmentId) { setError("Department not found."); return; }
-    if (!termExpiry) { setError("Please enter the new Term Expiry date."); return; }
+    const isStatus = mode === "status";
+    const stillTermed = newStatus === "Temporary" || newStatus === "Probation";
+    if (isStatus && newStatus === emp.employmentStatus) { setError("Please choose a different status."); return; }
+    if ((!isStatus || stillTermed) && !termExpiry) { setError("Please enter the new Term Expiry date."); return; }
     if (mode === "fresh" && (!memoNo.trim() || !joiningDate)) {
       setError("Office Memo No. and Joining Date are required for a fresh appointment."); return;
     }
     setSaving(true);
     try {
-      const updates: Record<string, any> = { termExpiry };
+      const updates: Record<string, any> = isStatus
+        ? { employmentStatus: newStatus, ...(stillTermed ? { termExpiry } : {}) }
+        : { termExpiry };
       if (mode === "extend" && extensionFile) updates.termExtensionUrl = await uploadFile(extensionFile);
       if (mode === "fresh") {
         updates.officeMemoNo = memoNo.trim();
@@ -200,6 +212,7 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
       <div className="flex flex-wrap gap-2 mt-3">
         <ModeButton m="extend" icon={CalendarPlus} label="Extend Term" />
         <ModeButton m="fresh" icon={FileSignature} label="Fresh Appointment" />
+        <ModeButton m="status" icon={BadgeCheck} label="Change Status / Confirm" />
         {issue.kind === "short" && issue.canTrim && (
           <Button type="button" size="sm" variant="outline" className="h-8 text-xs"
             title={`Set the To Date to ${issue.expiryDisplay}`} onClick={() => onTrim(emp.id)}>
@@ -233,6 +246,29 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
             <Input type="date" className="h-9" value={termExpiry} onChange={(e) => setTermExpiry(e.target.value)} />
           </div>
           {mode === "extend" && fileInput("Term extension letter", setExtensionFile)}
+          <div className="sm:col-span-2 flex justify-end">
+            <Button type="button" size="sm" onClick={save} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Save to employee record
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {mode === "status" && (
+        <div className="mt-3 rounded-md border bg-white p-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">New Employment Status <span className="text-muted-foreground">(now {emp.employmentStatus})</span></Label>
+            <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+              value={newStatus} onChange={(e) => { setError(""); setNewStatus(e.target.value); }}>
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+            </select>
+          </div>
+          {(newStatus === "Temporary" || newStatus === "Probation") && (
+            <div>
+              <Label className="text-xs">New Term Expiry Date</Label>
+              <Input type="date" className="h-9" value={termExpiry} onChange={(e) => setTermExpiry(e.target.value)} />
+            </div>
+          )}
           <div className="sm:col-span-2 flex justify-end">
             <Button type="button" size="sm" onClick={save} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Save to employee record

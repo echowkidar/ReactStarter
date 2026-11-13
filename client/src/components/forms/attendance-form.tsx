@@ -321,8 +321,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
   const [includedEmployees, setIncludedEmployees] = useState<Set<number>>(new Set());
   const [reportedEmployeeIds, setReportedEmployeeIds] = useState<Set<number>>(new Set());
-  // Employees ticked since the last render — a Term Check popup opens for them if needed
-  const justTickedRef = React.useRef<Set<number>>(new Set());
   // Live updates (Admin changes while this popup is open)
   const [liveTick, setLiveTick] = useState(0);
   const [liveRemovedNames, setLiveRemovedNames] = useState<string[]>([]);
@@ -624,7 +622,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
           return prev;
         }
         next.add(employeeId);
-        justTickedRef.current.add(employeeId);
         // Initialize entry when adding employee
         const currentEntries = form.getValues("entries") || [];
         const isGuest = isGuestTeacher(employeeId);
@@ -938,7 +935,6 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     } else {
       // Select all eligible employees
       const newIncluded = new Set([...includedEmployees, ...eligibleEmployees.map((emp: any) => emp.id)]);
-      eligibleEmployees.forEach((emp: any) => { if (!includedEmployees.has(emp.id)) justTickedRef.current.add(emp.id); });
       setIncludedEmployees(newIncluded);
 
       // Initialize entries for newly added eligible employees
@@ -1022,13 +1018,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   const pendingTermIssues = Array.from(termStateById.values()).filter((t) => !t.bypassed);
   const pendingTermKey = pendingTermIssues.map((t) => t.employee.id).join(",");
 
-  // Open the popup when a just-ticked employee has a term problem
-  useEffect(() => {
-    const ticked = justTickedRef.current;
-    if (ticked.size === 0) return;
-    justTickedRef.current = new Set();
-    if (pendingTermIssues.some((t) => ticked.has(t.employee.id))) setTermDialogOpen(true);
-  }, [includedEmployees, pendingTermKey]);
+  // The popup opens only on "Create Report" (see the form submit below) or the
+  // "Resolve" button — not while employees are being ticked.
 
   // Everything resolved → close the popup
   useEffect(() => {
@@ -1096,7 +1087,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
 
   const refreshEmployees = async () => {
     await queryClient.invalidateQueries({ queryKey: [`/api/departments/${departmentId}/employees`] });
-    toast({ title: "Employee updated", description: "Term saved to the employee record." });
+    toast({ title: "Employee updated", description: "Saved to the employee record." });
   };
 
   if (loadingEmployees) {
