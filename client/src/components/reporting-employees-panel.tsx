@@ -59,7 +59,7 @@ export function ReportingEmployeesPanel({ departmentId }: { departmentId: number
   });
 
   const [editing, setEditing] = useState<ReportingRecord | null>(null);
-  const [editForm, setEditForm] = useState({ fromDate: "", orderNo: "", orderDate: "", remarks: "" });
+  const [editForm, setEditForm] = useState({ fromDate: "", toDate: "", orderNo: "", orderDate: "", remarks: "" });
   const [closing, setClosing] = useState<ReportingRecord | null>(null);
   const [closeForm, setCloseForm] = useState({ toDate: "", closeReason: "" });
   const [historyFor, setHistoryFor] = useState<ReportingRecord | null>(null);
@@ -159,6 +159,9 @@ export function ReportingEmployeesPanel({ departmentId }: { departmentId: number
                     <Button size="icon" variant="outline" title="History" onClick={() => setHistoryFor(r)}><History className="h-4 w-4" /></Button>
                     {r.status !== "active" && (
                       <>
+                        <Button size="icon" variant="outline" title="Edit" onClick={() => { setEditing(r); setEditForm({ fromDate: r.fromDate, toDate: r.toDate || "", orderNo: r.orderNo || "", orderDate: r.orderDate || "", remarks: r.remarks || "" }); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <Button size="sm" variant="outline" className="text-amber-700 border-amber-200" title="Undo relieve (if relieved by mistake)"
                           disabled={reopenMutation.isPending}
                           onClick={() => { if (window.confirm(`Reopen reporting of ${r.employee.name}? The relieved date ${fmt(r.toDate)} will be removed and the employee will be reporting again.`)) reopenMutation.mutate(r); }}>
@@ -172,7 +175,7 @@ export function ReportingEmployeesPanel({ departmentId }: { departmentId: number
                     )}
                     {r.status === "active" && (
                       <>
-                        <Button size="icon" variant="outline" title="Edit" onClick={() => { setEditing(r); setEditForm({ fromDate: r.fromDate, orderNo: r.orderNo || "", orderDate: r.orderDate || "", remarks: r.remarks || "" }); }}>
+                        <Button size="icon" variant="outline" title="Edit" onClick={() => { setEditing(r); setEditForm({ fromDate: r.fromDate, toDate: "", orderNo: r.orderNo || "", orderDate: r.orderDate || "", remarks: r.remarks || "" }); }}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button size="sm" variant="outline" className="text-amber-700 border-amber-200" onClick={() => { setClosing(r); setCloseForm({ toDate: "", closeReason: "" }); }}>
@@ -201,6 +204,12 @@ export function ReportingEmployeesPanel({ departmentId }: { departmentId: number
               <label className="text-sm font-medium">Reporting Date</label>
               <Input type="date" value={editForm.fromDate} onChange={(e) => setEditForm(f => ({ ...f, fromDate: e.target.value }))} />
             </div>
+            {editing?.toDate && (
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Relieved Date</label>
+                <Input type="date" value={editForm.toDate} onChange={(e) => setEditForm(f => ({ ...f, toDate: e.target.value }))} />
+              </div>
+            )}
             <div className="space-y-1">
               <label className="text-sm font-medium">Order / Letter No. *</label>
               <Input value={editForm.orderNo} onChange={(e) => setEditForm(f => ({ ...f, orderNo: e.target.value }))} />

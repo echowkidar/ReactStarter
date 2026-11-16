@@ -52,11 +52,13 @@ export default function GlobalSearch() {
     });
     const canMarkReporting = !!attendanceStatus?.allowReportingEmployees;
     const [reportingEmployee, setReportingEmployee] = useState<GlobalEmployee | null>(null);
-    const [reportingForm, setReportingForm] = useState({ fromDate: "", orderNo: "", orderDate: "", remarks: "" });
+    const [reportingForm, setReportingForm] = useState({ fromDate: "", toDate: "", orderNo: "", orderDate: "", remarks: "" });
 
     const reportingMutation = useMutation({
-        mutationFn: async (data: { employeeId: number; fromDate: string; orderNo: string; orderDate: string; remarks: string }) => {
-            const res = await apiRequest('POST', `/api/departments/${department?.id}/reporting-employees`, data);
+        mutationFn: async (data: { employeeId: number; fromDate: string; toDate?: string; orderNo: string; orderDate: string; remarks: string }) => {
+            const payload: any = { ...data };
+            if (!payload.toDate) delete payload.toDate;
+            const res = await apiRequest('POST', `/api/departments/${department?.id}/reporting-employees`, payload);
             return res.json();
         },
         onSuccess: () => {
@@ -71,7 +73,7 @@ export default function GlobalSearch() {
 
     const openReportingModal = (employee: GlobalEmployee) => {
         setReportingEmployee(employee);
-        setReportingForm({ fromDate: "", orderNo: "", orderDate: "", remarks: "" });
+        setReportingForm({ fromDate: "", toDate: "", orderNo: "", orderDate: "", remarks: "" });
     };
 
     // Search Function
@@ -263,6 +265,15 @@ export default function GlobalSearch() {
                                     <Input type="date" value={reportingForm.fromDate}
                                         max={new Date().toISOString().slice(0, 10)}
                                         onChange={(e) => setReportingForm(f => ({ ...f, fromDate: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium">Relieved Date (Optional)</label>
+                                    <Input type="date" value={reportingForm.toDate}
+                                        min={reportingForm.fromDate}
+                                        max={new Date().toISOString().slice(0, 10)}
+                                        placeholder="Optional if already relieved"
+                                        onChange={(e) => setReportingForm(f => ({ ...f, toDate: e.target.value }))} />
+                                    <p className="text-[11px] text-muted-foreground">Required if employee has already joined elsewhere (e.g. past period)</p>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-sm font-medium">Order / Letter No. *</label>

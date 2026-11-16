@@ -462,12 +462,17 @@ export function registerReportingEmployeeRoutes(
   app.post("/api/departments/:departmentId/reporting-employees", async (req, res) => {
     try {
       const host = await getHost(req, res); if (!host) return;
-      const { employeeId, fromDate, orderNo, orderDate, remarks } = req.body || {};
+      const { employeeId, fromDate, toDate, orderNo, orderDate, remarks, closeReason } = req.body || {};
       const empId = Number(employeeId);
       const from = isoToDay(fromDate);
+      const to = toDate ? isoToDay(toDate) : null;
       if (!empId) return res.status(400).json({ message: "Employee is required" });
       if (from == null) return res.status(400).json({ message: "Valid reporting date is required" });
       if (from > todayDay()) return res.status(400).json({ message: "Reporting date cannot be in the future" });
+      if (to != null) {
+        if (to < from) return res.status(400).json({ message: "Relieved date cannot be before reporting date" });
+        if (to > todayDay()) return res.status(400).json({ message: "Relieved date cannot be in the future" });
+      }
       if (!orderNo || !String(orderNo).trim()) return res.status(400).json({ message: "Order / Letter No. is required" });
       if (orderDate && isoToDay(orderDate) == null) return res.status(400).json({ message: "Invalid order date" });
 
@@ -477,39 +482,67 @@ export function registerReportingEmployeeRoutes(
       if (employee.departmentId === host.id) return res.status(400).json({ message: "This employee is already on your staff" });
 
       const existing = await getAttachmentsForEmployees([empId]);
-      const active = existing.find((a) => a.status === "active");
-      if (active) {
-        const n = await getDeptName(active.hostDepartmentId);
-        return res.status(400).json({ message: `Employee is already reporting at "${n}" since ${dayToDDMMYY(windowStart(active))}` });
+      if (to == null) {
+        const active = existing.find((a) => a.status === "active");
+        if (active) {
+          const n = await getDeptName(active.hostDepartmentId);
+          return res.status(400).json({ message: `Employee is already reporting at "${n}" since ${dayToDDMMYY(windowStart(active))}` });
+        }
       }
-      const clash = existing.find((a) => from <= windowEnd(a));
+      const clash = existing.find((a) => (to != null ? windowStart(a) <= to : true) && windowEnd(a) >= from);
       if (clash) {
         const clashHost = await getDeptName(clash.hostDepartmentId);
         return res.status(400).json({
-          message: `This employee already has a relieved reporting record at "${clashHost}" for ${dayToDDMMYY(windowStart(clash))} to ${clash.toDate ? dayToDDMMYY(windowEnd(clash)) : "till date"}, which overlaps the new reporting date. Choose a date after ${clash.toDate ? dayToDDMMYY(windowEnd(clash)) : "it"}, or — if that record is wrong — open Employees → Reporting Employees → Relieved and use "Reopen" or "Delete" there.`,
+          message: `This employee already has a reporting record at "${clashHost}" for ${dayToDDMMYY(windowStart(clash))} to ${clash.toDate ? dayToDDMMYY(windowEnd(clash)) : "till date"}, which overlaps the requested reporting period. Choose a non-overlapping date, or — if that record is wrong — open Employees → Reporting Employees → Relieved and use "Reopen" or "Delete" there.`,
         });
       }
 
-      // Rule 4: other departments must not already have attendance on/after the reporting date
+      // Rule 4: other departments must not already have attendance overlapping the reporting window
       const periods = await getEmployeePeriods(empId);
-      const conflict = periods.find((p) => p.departmentId !== host.id && p.to >= from);
-      if (conflict) {
-        return res.status(409).json({
-          message: `"${conflict.departmentName}" has already included this employee for ${conflict.fromStr} to ${conflict.toStr} (report status: ${conflict.status}). Reporting date must be after ${conflict.toStr}, or that department must first correct its report.`,
-        });
+      if (to != null) {
+        const conflict = periods.find((p) => p.departmentId !== host.id && p.from <= to && p.to >= from);
+        if (conflict) {
+          return res.status(409).json({
+            message: `"${conflict.departmentName}" has already included this employee for ${conflict.fromStr} to ${conflict.toStr} (report status: ${conflict.status}), which overlaps with the reporting period (${dayToDDMMYY(from)} to ${dayToDDMMYY(to)}).`,
+          });
+        }
+      } else {
+        const directConflict = periods.find((p) => p.departmentId !== host.id && p.from <= from && p.to >= from);
+        if (directConflict) {
+          return res.status(409).json({
+            message: `"${directConflict.departmentName}" has already included this employee for ${directConflict.fromStr} to ${directConflict.toStr} (report status: ${directConflict.status}). Reporting date must be after ${directConflict.toStr}, or that department must first correct its report.`,
+          });
+        }
+        const futureConflict = periods.filter((p) => p.departmentId !== host.id && p.from > from).sort((a, b) => a.from - b.from)[0];
+        if (futureConflict) {
+          return res.status(409).json({
+            message: `"${futureConflict.departmentName}" has already included this employee for ${futureConflict.fromStr} to ${futureConflict.toStr} (report status: ${futureConflict.status}). If this employee reported here before that, please specify a Relieved Date on or before ${dayToDDMMYY(futureConflict.from - 1)}, or choose a reporting date after ${futureConflict.toStr}.`,
+          });
+        }
       }
 
+      const isClosed = to != null;
       const created = await db.execute(sql`
         INSERT INTO reporting_employees
-          (employee_id, host_department_id, parent_department_id, from_date, order_no, order_date, remarks, status, created_by)
-        VALUES (${empId}, ${host.id}, ${employee.departmentId}, ${dayToIso(from)}::date, ${String(orderNo).trim()},
-                ${orderDate ? dayToIso(isoToDay(orderDate) as number) : null}::date, ${remarks || null}, 'active', ${host.email})
+          (employee_id, host_department_id, parent_department_id, from_date, to_date, order_no, order_date, remarks, status, close_reason, created_by, closed_by, closed_at)
+        VALUES (${empId}, ${host.id}, ${employee.departmentId}, ${dayToIso(from)}::date,
+                ${to != null ? dayToIso(to) : null}::date,
+                ${String(orderNo).trim()},
+                ${orderDate ? dayToIso(isoToDay(orderDate) as number) : null}::date,
+                ${remarks || null},
+                ${isClosed ? 'closed' : 'active'},
+                ${isClosed ? (closeReason || 'joined_other_dept') : null},
+                ${host.email},
+                ${isClosed ? host.email : null},
+                ${isClosed ? sql`NOW()` : null})
         RETURNING id`);
       const newId = Number((created.rows[0] as any).id);
 
       await storage.logEmployeeChange(
-        empId, "reporting_attach", "reporting",
-        `Marked as reporting employee at ${host.name} w.e.f. ${dayToDDMMYY(from)} (Order: ${String(orderNo).trim()})`,
+        empId, isClosed ? "reporting_attach_closed" : "reporting_attach", "reporting",
+        isClosed
+          ? `Added as past reporting employee at ${host.name} from ${dayToDDMMYY(from)} to ${dayToDDMMYY(to)} (Order: ${String(orderNo).trim()})`
+          : `Marked as reporting employee at ${host.name} w.e.f. ${dayToDDMMYY(from)} (Order: ${String(orderNo).trim()})`,
         host.email, "department", host.id
       );
 
@@ -530,24 +563,52 @@ export function registerReportingEmployeeRoutes(
       const host = await getHost(req, res); if (!host) return;
       const att = await getAttachment(Number(req.params.rid));
       if (!att || att.hostDepartmentId !== host.id) return res.status(404).json({ message: "Reporting record not found" });
-      const { fromDate, orderNo, orderDate, remarks } = req.body || {};
+      const { fromDate, toDate, orderNo, orderDate, remarks } = req.body || {};
 
       let newFrom = windowStart(att);
+      let newTo = att.toDate ? (isoToDay(att.toDate) as number) : null;
+
+      if (toDate !== undefined) {
+        if (toDate === null || toDate === "") {
+          if (att.status === "closed") {
+            return res.status(400).json({ message: "Use Reopen to make a relieved employee active again." });
+          }
+          newTo = null;
+        } else {
+          const t = isoToDay(toDate);
+          if (t == null) return res.status(400).json({ message: "Invalid relieved date" });
+          if (t < newFrom) return res.status(400).json({ message: "Relieved date cannot be before reporting date" });
+          if (t > todayDay()) return res.status(400).json({ message: "Relieved date cannot be in the future" });
+          const periods = await getEmployeePeriods(att.employeeId);
+          const lastHost = periods.filter((p) => p.departmentId === host.id && p.reportType === "reporting")
+            .reduce((m, p) => Math.max(m, p.to), -Infinity);
+          if (Number.isFinite(lastHost) && t < lastHost) {
+            return res.status(400).json({ message: `Attendance up to ${dayToDDMMYY(lastHost)} is already prepared/sent for this employee. Relieved date cannot be before that.` });
+          }
+          const conflict = periods.find((p) => p.departmentId !== host.id && p.from <= t && p.to >= newFrom);
+          if (conflict) {
+            return res.status(409).json({ message: `"${conflict.departmentName}" has already included this employee for ${conflict.fromStr} to ${conflict.toStr}.` });
+          }
+          newTo = t;
+        }
+      }
+
       if (fromDate !== undefined && fromDate !== att.fromDate) {
         const f = isoToDay(fromDate);
         if (f == null) return res.status(400).json({ message: "Invalid reporting date" });
         if (f > todayDay()) return res.status(400).json({ message: "Reporting date cannot be in the future" });
-        if (att.toDate && f > windowEnd(att)) return res.status(400).json({ message: "Reporting date cannot be after relieved date" });
+        if (newTo != null && f > newTo) return res.status(400).json({ message: "Reporting date cannot be after relieved date" });
         const periods = await getEmployeePeriods(att.employeeId);
         if (periods.some((p) => p.departmentId === host.id && p.reportType === "reporting")) {
           return res.status(400).json({ message: "Reporting date cannot be changed after attendance has been prepared for this employee" });
         }
-        const conflict = periods.find((p) => p.departmentId !== host.id && p.to >= f && p.from <= windowEnd(att));
+        const effectiveEnd = newTo != null ? newTo : windowEnd(att);
+        const conflict = periods.find((p) => p.departmentId !== host.id && p.to >= f && p.from <= effectiveEnd);
         if (conflict) {
           return res.status(409).json({ message: `"${conflict.departmentName}" has already included this employee for ${conflict.fromStr} to ${conflict.toStr}.` });
         }
         const others = (await getAttachmentsForEmployees([att.employeeId])).filter((a) => a.id !== att.id);
-        if (others.some((a) => f <= windowEnd(a) && windowEnd(att) >= windowStart(a))) {
+        if (others.some((a) => f <= windowEnd(a) && effectiveEnd >= windowStart(a))) {
           return res.status(400).json({ message: "Reporting date overlaps another reporting period of this employee" });
         }
         newFrom = f;
@@ -558,14 +619,15 @@ export function registerReportingEmployeeRoutes(
       await db.execute(sql`
         UPDATE reporting_employees SET
           from_date = ${dayToIso(newFrom)}::date,
+          to_date = ${newTo != null ? dayToIso(newTo) : null}::date,
           order_no = ${orderNo !== undefined ? String(orderNo).trim() : att.orderNo},
           order_date = ${orderDate !== undefined ? (orderDate ? dayToIso(isoToDay(orderDate) as number) : null) : att.orderDate}::date,
           remarks = ${remarks !== undefined ? remarks || null : att.remarks}
         WHERE id = ${att.id}`);
 
-      if (newFrom !== windowStart(att)) {
-        await storage.logEmployeeChange(att.employeeId, "reporting_update", "reporting.fromDate",
-          `Reporting date changed ${dayToDDMMYY(windowStart(att))} → ${dayToDDMMYY(newFrom)}`, host.email, "department", host.id);
+      if (newFrom !== windowStart(att) || (newTo != null ? dayToIso(newTo) : null) !== att.toDate) {
+        await storage.logEmployeeChange(att.employeeId, "reporting_update", "reporting",
+          `Reporting window changed: ${dayToDDMMYY(newFrom)} to ${newTo != null ? dayToDDMMYY(newTo) : "open"}`, host.email, "department", host.id);
       }
       const updated = await getAttachment(att.id);
       res.json(updated ? (await enrich([updated]))[0] : null);
