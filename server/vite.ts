@@ -79,7 +79,15 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, {
+    // Service worker and manifest must always be re-checked, so app updates reach users
+    setHeaders: (res, filePath) => {
+      const name = path.basename(filePath);
+      if (name === "sw.js" || name === "manifest.webmanifest" || name === "index.html") {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    },
+  }));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {

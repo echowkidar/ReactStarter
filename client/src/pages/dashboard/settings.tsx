@@ -22,6 +22,7 @@ import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { InstallAppCard } from "@/components/pwa";
 
 const profileSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
@@ -166,6 +167,8 @@ export default function SettingsPage() {
               </AlertDescription>
             </Alert>
             
+            <InstallAppCard />
+
             <Tabs defaultValue="profile" className="w-full">
               <TabsList>
                 <TabsTrigger value="profile">Profile</TabsTrigger>
