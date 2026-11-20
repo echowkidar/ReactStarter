@@ -4,6 +4,7 @@ import type { Express, Request } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import type { DbStorage } from "./dbStorage";
+import { sessionAdmin } from "./auth";
 
 // Only these keys may be stored, each with a validator
 const ALLOWED_KEYS: Record<string, (v: unknown) => boolean> = {
@@ -11,20 +12,14 @@ const ALLOWED_KEYS: Record<string, (v: unknown) => boolean> = {
     Array.isArray(v) && v.length <= 5000 && v.every((x) => typeof x === "string" && x.length > 0 && x.length <= 100),
 };
 
-/** Same token check as verifyAdminSession; view-only (VEW) admins may also save their OWN preferences */
-async function getAdmin(req: Request, storage: DbStorage) {
-  let token: any = req.headers["x-session-token"];
-  if (!token && req.query.token) token = req.query.token;
-  if (!token || typeof token !== "string") return null;
+/**
+ * The logged-in admin from the login session (same as verifyAdminSession);
+ * view-only (VEW) admins may also save their OWN preferences.
+ * (The old email:password token is no longer issued, so it is not read here.)
+ */
+async function getAdmin(req: Request, _storage: DbStorage) {
   try {
-    const decoded = Buffer.from(token, "base64").toString("utf-8");
-    const parts = decoded.split(":");
-    if (parts.length < 2) return null;
-    const email = parts[0];
-    const password = parts.slice(1).join(":");
-    const admin = await storage.getAdminByEmail(email);
-    if (!admin || admin.password !== password) return null;
-    return admin;
+    return await sessionAdmin(req);
   } catch {
     return null;
   }

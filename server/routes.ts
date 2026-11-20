@@ -1508,11 +1508,14 @@ export async function registerRoutes(app: Express) {
       let user = (req as any).user;
       const session = (req as any).session;
 
-      // Try to identify admin from x-session-token header (sent by client)
-      const sessionToken = req.headers['x-session-token'];
-
-      if (typeof sessionToken === 'string') {
+      // The admin of the login session (the email:password token below is no longer issued)
+      if (!user) {
+        const sAdmin = await sessionAdmin(req).catch(() => null);
+        if (sAdmin) user = { email: sAdmin.email, role: sAdmin.role, name: sAdmin.name };
       }
+
+      // Older clients: x-session-token as base64 email:password
+      const sessionToken = req.headers['x-session-token'];
 
       if (!user && typeof sessionToken === 'string' && sessionToken) {
         try {
