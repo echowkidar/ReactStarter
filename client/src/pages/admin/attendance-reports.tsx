@@ -1,5 +1,5 @@
 import { serverLogout } from "@/lib/auth";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
 import { getReportPrefix } from "@shared/reportKind";
 import { useLocation } from "wouter";
 
@@ -70,6 +70,25 @@ function useTabState<T>(name: string, initial: T | (() => T)) {
     try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* not remembered */ }
   }, [key, value]);
   return [value, setValue] as const;
+}
+
+/** Cache key prefix of the Detailed View's per-month report lists ([...DETAIL_KEY, "April 2026"]). */
+const DETAIL_KEY = ["/api/admin/attendance", "detailed"] as const;
+
+/** Change matching entries in every cached month of the Detailed View (no refetch). */
+function patchDetailEntries(change: (entry: any) => any) {
+  queryClient.setQueriesData({ queryKey: DETAIL_KEY }, (old: any) =>
+    Array.isArray(old)
+      ? old.map((report: any) => ({ ...report, entries: report.entries?.map(change) }))
+      : old
+  );
+}
+
+/** "April 2026" → 202604, for calendar ordering of month labels. */
+function monthLabelValue(label: string) {
+  const [name, year] = label.split(" ");
+  const m = new Date(`${name} 1, 2000`).getMonth() + 1;
+  return (Number(year) || 0) * 100 + (m || 0);
 }
 
 type AttendanceEntry = {
@@ -161,15 +180,9 @@ function NotingCell({
       await apiRequest('PATCH', `/api/attendance/entries/${entryId}/noting`, { noting: trimmed || null });
       lastSavedRef.current = trimmed;
       // Silently update cache without full refetch
-      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
-        if (!old) return old;
-        return old.map((report: any) => ({
-          ...report,
-          entries: report.entries?.map((entry: any) =>
-            entry.id === entryId ? { ...entry, admin_noting: trimmed || null } : entry
-          ),
-        }));
-      });
+      patchDetailEntries((entry: any) =>
+        entry.id === entryId ? { ...entry, admin_noting: trimmed || null } : entry
+      );
     } catch (error) {
       toast({
         variant: "destructive",
@@ -196,17 +209,11 @@ function NotingCell({
       lastSavedPermRef.current = trimmed;
       setPermRemarks(trimmed);
       // Update employee remarks in cache
-      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
-        if (!old) return old;
-        return old.map((report: any) => ({
-          ...report,
-          entries: report.entries?.map((entry: any) =>
-            entry.employee?.id === employeeDbId
-              ? { ...entry, employee: { ...entry.employee, remarks: trimmed || null } }
-              : entry
-          ),
-        }));
-      });
+      patchDetailEntries((entry: any) =>
+        entry.employee?.id === employeeDbId
+          ? { ...entry, employee: { ...entry.employee, remarks: trimmed || null } }
+          : entry
+      );
       toast({
         title: "Saved",
         description: "Permanent remark updated",
@@ -411,26 +418,18 @@ export default function AttendanceReports() {
     },
     onMutate: async (entryId: number) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["/api/admin/attendance", monthFilter] });
-      // Snapshot the previous value
-      const previousData = queryClient.getQueryData(["/api/admin/attendance", monthFilter]);
+      await queryClient.cancelQueries({ queryKey: DETAIL_KEY });
+      // Snapshot the previous value of every cached month
+      const previousData = queryClient.getQueriesData<AttendanceReport[]>({ queryKey: DETAIL_KEY });
       // Optimistically update the cache
-      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
-        if (!old) return old;
-        return old.map((report: any) => ({
-          ...report,
-          entries: report.entries?.map((entry: any) =>
-            entry.id === entryId ? { ...entry, verified: !entry.verified } : entry
-          ),
-        }));
-      });
+      patchDetailEntries((entry: any) =>
+        entry.id === entryId ? { ...entry, verified: !entry.verified } : entry
+      );
       return { previousData };
     },
     onError: (_err, _entryId, context) => {
       // Rollback on error
-      if (context?.previousData) {
-        queryClient.setQueryData(["/api/admin/attendance", monthFilter], context.previousData);
-      }
+      context?.previousData?.forEach(([key, data]) => queryClient.setQueryData<AttendanceReport[]>(key, data));
     },
     onSettled: () => {
       // Always refetch after error or success to ensure data consistency
@@ -445,23 +444,15 @@ export default function AttendanceReports() {
     },
     onMutate: async ({ entryIds, verified }) => {
       const idSet = new Set(entryIds);
-      await queryClient.cancelQueries({ queryKey: ["/api/admin/attendance", monthFilter] });
-      const previousData = queryClient.getQueryData(["/api/admin/attendance", monthFilter]);
-      queryClient.setQueryData(["/api/admin/attendance", monthFilter], (old: any) => {
-        if (!old) return old;
-        return old.map((report: any) => ({
-          ...report,
-          entries: report.entries?.map((entry: any) =>
-            idSet.has(entry.id) ? { ...entry, verified } : entry
-          ),
-        }));
-      });
+      await queryClient.cancelQueries({ queryKey: DETAIL_KEY });
+      const previousData = queryClient.getQueriesData<AttendanceReport[]>({ queryKey: DETAIL_KEY });
+      patchDetailEntries((entry: any) =>
+        idSet.has(entry.id) ? { ...entry, verified } : entry
+      );
       return { previousData };
     },
     onError: (_err, _variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(["/api/admin/attendance", monthFilter], context.previousData);
-      }
+      context?.previousData?.forEach(([key, data]) => queryClient.setQueryData<AttendanceReport[]>(key, data));
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/attendance"] });
@@ -693,24 +684,28 @@ export default function AttendanceReports() {
   // ---- End Replace Signed Report ----
 
   // Fetch attendance reports - filtered by month/year if selected
-  const { data: reports = [], isLoading } = useQuery<AttendanceReport[]>({
-    queryKey: ["/api/admin/attendance", monthFilter],
-    queryFn: async ({ queryKey }) => {
-      const [, filters] = queryKey;
-      let url = "/api/admin/attendance";
-
-      if (Array.isArray(filters) && filters.length > 0) {
-        url += `?months=${encodeURIComponent((filters as string[]).join(','))}`;
-      }
-
-      const res = await apiRequest("GET", url);
-      return res.json();
-    },
-    select: (data) => data.filter(report =>
-      report.status === "sent" ||
-      report.status === "cancel_requested"
-    ),
+  // One request per selected month (each cached on its own), so picking many months
+  // never builds one huge response, and a month that fails does not blank the others.
+  const monthQueries = useQueries({
+    queries: monthFilter.map(m => ({
+      queryKey: [...DETAIL_KEY, m],
+      queryFn: async () => {
+        const res = await apiRequest("GET", `/api/admin/attendance?slim=1&months=${encodeURIComponent(m)}`);
+        return (await res.json()) as AttendanceReport[];
+      },
+    })),
   });
+  const reports = useMemo<AttendanceReport[]>(
+    () => monthQueries.flatMap(q => (q.data || []).filter(report =>
+      report.status === "sent" || report.status === "cancel_requested")),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [monthFilter.join("|") + "#" + monthQueries.map(q => q.dataUpdatedAt).join(",")]
+  );
+  // Full-page loader only on the first load; adding a month keeps the table on screen
+  const isLoading = monthQueries.length > 0 && monthQueries.every(q => q.isLoading);
+  const loadingMonths = monthFilter.filter((_, i) => monthQueries[i]?.isLoading);
+  const failedMonths = monthFilter.filter((_, i) => monthQueries[i]?.isError);
+  const retryFailedMonths = () => monthQueries.forEach(q => { if (q.isError) q.refetch(); });
 
   const { data: missingEmployees = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/all-missing-employees", apiMonth, filterYear],
@@ -860,7 +855,9 @@ export default function AttendanceReports() {
   const availableMonths = useMemo(() => {
     const reportMonths = allEntries.map(entry => entry.month);
     // Return unique set of available strings
-    return Array.from(new Set([...availableMonthStrings, ...monthFilter, ...reportMonths])).sort();
+    // Newest month first (calendar order, not alphabetical)
+    return Array.from(new Set([...availableMonthStrings, ...monthFilter, ...reportMonths]))
+      .sort((a, b) => monthLabelValue(b) - monthLabelValue(a));
   }, [availableMonthStrings, monthFilter, allEntries]);
 
   // Get unique departments for the filter (only from sent reports)
@@ -2272,6 +2269,19 @@ export default function AttendanceReports() {
                 </label>
               </div>
             </div>
+
+            {/* Months still loading / months that could not be loaded */}
+            {loadingMonths.length > 0 && !isLoading && (
+              <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                Loading {loadingMonths.join(", ")}…
+              </div>
+            )}
+            {failedMonths.length > 0 && (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                <span>Could not load {failedMonths.join(", ")}. The list below is missing these months.</span>
+                <Button size="sm" variant="outline" onClick={retryFailedMonths}>Retry</Button>
+              </div>
+            )}
 
             {/* Top pagination */}
             {!isLoading && processedEntries.length > 0 && (

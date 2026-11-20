@@ -3709,6 +3709,14 @@ export async function registerRoutes(app: Express) {
         console.error('[Reporting] reporting info skipped:', e);
       }
 
+      // ?slim=1 (Detailed View): only the employee fields that page shows. The full
+      // employee row on every entry made multi-month responses too big to load.
+      const slim = req.query.slim === "1";
+      const slimEmployee = (e: any) => e && ({
+        id: e.id, epid: e.epid, employeeId: e.employeeId, name: e.name, designation: e.designation,
+        salary_asstt: e.salary_asstt, salaryRegisterNo: e.salaryRegisterNo, remarks: e.remarks,
+      });
+
       // Assemble response using maps (no extra DB queries)
       const reportsWithDetails = filteredReports.map(report => {
         const department = departmentMap.get(report.departmentId);
@@ -3718,7 +3726,9 @@ export async function registerRoutes(app: Express) {
           const entries = entriesByReport.get(report.id) || [];
           entriesWithDetails = entries.map(entry => ({
             ...entry,
-            employee: withEntrySnapshot(entry, employeeMap.get(entry.employeeId)),
+            employee: slim
+              ? slimEmployee(withEntrySnapshot(entry, employeeMap.get(entry.employeeId)))
+              : withEntrySnapshot(entry, employeeMap.get(entry.employeeId)),
             ...((entry as any).reportingEmployeeId && reportingInfoById.has((entry as any).reportingEmployeeId)
               ? { reportingInfo: reportingInfoById.get((entry as any).reportingEmployeeId) } : {}),
           }));
