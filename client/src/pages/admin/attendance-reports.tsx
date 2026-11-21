@@ -1358,11 +1358,29 @@ export default function AttendanceReports() {
       return a.employeeName.localeCompare(b.employeeName);
     });
 
+    // Employees with more than one period in the same month: count their rows and give
+    // each such employee one of two tints (alternating), so neighbouring groups differ
+    const periodKey = (e: typeof sorted[number]) =>
+      e.employeeId && !String(e.period).startsWith("MISSING") ? `${e.employeeId}|${e.monthNum}|${e.yearNum}` : "";
+    const periodCount = new Map<string, number>();
+    for (const e of sorted) {
+      const k = periodKey(e);
+      if (k) periodCount.set(k, (periodCount.get(k) || 0) + 1);
+    }
+    const periodBand = new Map<string, number>();
+    for (const e of sorted) {
+      const k = periodKey(e);
+      if (k && (periodCount.get(k) || 0) > 1 && !periodBand.has(k)) periodBand.set(k, periodBand.size % 2);
+    }
+
     // Mark entries to indicate if department name should be shown
     let currentDeptId: number | null = null;
     let currentMonth: string | null = null;
 
     return sorted.map((entry, index) => {
+      const pk = periodKey(entry);
+      const periodsThisMonth = pk ? periodCount.get(pk) || 1 : 1;
+      const periodBandNo = pk ? periodBand.get(pk) : undefined;
       const isFirstDeptEntry = entry.departmentId !== currentDeptId;
 
       // Reset current month when department changes
@@ -1378,7 +1396,9 @@ export default function AttendanceReports() {
       return {
         ...entry,
         showDepartment: isFirstDeptEntry,
-        showMonth: isFirstMonthEntry
+        showMonth: isFirstMonthEntry,
+        periodsThisMonth,
+        periodBandNo,
       };
     });
   }, [filteredEntries, sortConfig]);
@@ -2460,7 +2480,18 @@ export default function AttendanceReports() {
                         </TableRow>
                       ) : (
                         paginatedEntries.map((entry, index) => (
-                          <TableRow key={index} className={entry.exportedToOracleAt ? 'bg-green-50' : ''}>
+                          <TableRow
+                            key={index}
+                            className={[
+                              // Exported rows stay green; multi-period rows get a tint, and always a coloured left edge
+                              entry.exportedToOracleAt ? 'bg-green-50'
+                                : entry.periodBandNo === 0 ? 'bg-amber-50 hover:bg-amber-100/70'
+                                : entry.periodBandNo === 1 ? 'bg-sky-50 hover:bg-sky-100/70' : '',
+                              entry.periodBandNo === 0 ? '[&>td:first-child]:shadow-[inset_4px_0_0_0_#fbbf24]'
+                                : entry.periodBandNo === 1 ? '[&>td:first-child]:shadow-[inset_4px_0_0_0_#38bdf8]' : '',
+                            ].join(' ')}
+                            title={entry.periodsThisMonth > 1 ? `${entry.employeeName}: ${entry.periodsThisMonth} periods in ${entry.month}` : undefined}
+                          >
                             {isMultiMonth && (
                               <TableCell className="font-medium text-xs text-blue-900 bg-blue-50/40">
                                 {entry.month}
