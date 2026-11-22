@@ -1,5 +1,6 @@
 import { retryImage } from "@/lib/retry-image";
 import { serverLogout } from "@/lib/auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 // Admin top bar — shared by every admin page
 // ─────────────────────────────────────────────────────────────────────────────
 // Left: who is logged in. Right: the admin menu (same on every page, the open
@@ -213,6 +214,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
             );
           })}
           <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden />
+          <ThemeToggle />
           <button
             type="button"
             onClick={() => logoutAdmin(setLocation)}
@@ -271,6 +273,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
                   </Link>
                 );
               })}
+              <ThemeToggle showLabel className="mt-2 h-auto justify-start gap-3 px-3 py-2.5" />
               <button
                 type="button"
                 onClick={() => logoutAdmin(setLocation)}

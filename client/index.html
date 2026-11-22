@@ -11,6 +11,10 @@
     <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="AMU Attendance" />
+    <script>
+      // Apply the saved light/dark theme before the page paints (no white flash)
+      try { if (localStorage.getItem("app-theme") === "dark") document.documentElement.classList.add("app-dark"); } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

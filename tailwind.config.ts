@@ -1,7 +1,8 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  darkMode: ["class"],
+  // Dark mode follows the "app-dark" class on <html>, on screen only - printouts stay light.
+  darkMode: ["variant", "@media screen { &:is(.app-dark *) }"],
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
