@@ -509,11 +509,13 @@ export default function AttendanceReports() {
 
   // Fetch export status for current month (for button color)
   const { data: exportStatus } = useQuery<{ latestExportDate: string | null; exportedCount: number }>({
-    queryKey: ["/api/admin/attendance/export-status", apiMonth, filterYear],
+    queryKey: ["/api/admin/attendance/export-status", apiMonth, filterYear, section],
     queryFn: async () => {
-      let url = "/api/admin/attendance/export-status";
+      // Export state of this section's own attendance only (Salary = non-wage reports)
+      const kind = section === "salary" ? "kind=regular" : `kind=fund&codes=${sectionCodes(section).join(",")}`;
+      let url = `/api/admin/attendance/export-status?${kind}`;
       if (apiMonth && filterYear) {
-        url += `?month=${apiMonth}&year=${filterYear}`;
+        url += `&month=${apiMonth}&year=${filterYear}`;
       }
       const res = await apiRequest("GET", url);
       return res.json();

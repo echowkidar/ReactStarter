@@ -504,9 +504,9 @@ export default function AdminDashboard() {
 
   // Fetch export status for current month to show popup if data is exported
   const { data: exportStatus } = useQuery<{ latestExportDate: string | null; exportedCount: number }>({
-    queryKey: ["/api/admin/attendance/export-status", apiMonth, filterYear],
+    queryKey: ["/api/admin/attendance/export-status", apiMonth, filterYear, statsKind],
     queryFn: async () => {
-      const url = `/api/admin/attendance/export-status?month=${apiMonth}&year=${filterYear}`;
+      const url = `/api/admin/attendance/export-status?month=${apiMonth}&year=${filterYear}&${statsKind}`;
       const response = await apiRequest("GET", url);
       return response.json();
     },

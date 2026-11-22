@@ -3375,6 +3375,15 @@ export async function registerRoutes(app: Express) {
       const { db } = await import("./db");
       const { sql } = await import("drizzle-orm");
 
+      // Optional section filter (same as department-employee-stats):
+      // kind=regular → Salary Section reports; kind=fund (+codes) → a section's wage / fund staff.
+      // Without `kind` the result is exactly as before.
+      const kind = req.query.kind === 'fund' ? 'fund' : req.query.kind === 'regular' ? 'regular' : null;
+      const codes = String(req.query.codes || '').split(',').map(c => c.trim().toUpperCase()).filter(c => /^[A-Z]{3}$/.test(c));
+      const kindFilter = kind === 'fund'
+        ? sql`AND COALESCE(ar.report_type, 'regular') = 'fund' ${codes.length ? sql`AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${sql.join(codes.map(c => sql`${c}`), sql`, `)})` : sql``}`
+        : kind === 'regular' ? sql`AND COALESCE(ar.report_type, 'regular') <> 'fund'` : sql``;
+
       let result;
       if (!isNaN(month) && !isNaN(year)) {
         result = await db.execute(sql`
@@ -3382,8 +3391,10 @@ export async function registerRoutes(app: Express) {
                  COUNT(CASE WHEN ae.exported_to_oracle_at IS NOT NULL THEN 1 END)::int as exported_count
           FROM attendance_entries ae
           JOIN attendance_reports ar ON ae.report_id = ar.id
+          LEFT JOIN employees e ON e.id = ae.employee_id
           WHERE ar.month = ${month} AND ar.year = ${year}
             AND ar.status IN ('sent', 'cancel_requested')
+            ${kindFilter}
         `);
       } else {
         result = await db.execute(sql`
@@ -3391,7 +3402,9 @@ export async function registerRoutes(app: Express) {
                  COUNT(CASE WHEN ae.exported_to_oracle_at IS NOT NULL THEN 1 END)::int as exported_count
           FROM attendance_entries ae
           JOIN attendance_reports ar ON ae.report_id = ar.id
+          LEFT JOIN employees e ON e.id = ae.employee_id
           WHERE ar.status IN ('sent', 'cancel_requested')
+            ${kindFilter}
         `);
       }
 
