@@ -344,7 +344,7 @@ export default function AdminNotices() {
                 {/* View Notice Dialog */}
                 <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>
                     <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-                        <DialogHeader className="pb-4 border-b">
+                        <DialogHeader className="pb-4 pr-6 border-b">
                             <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
                                 <Megaphone className="h-7 w-7 text-blue-600" />
                                 {selectedNotice?.subject}

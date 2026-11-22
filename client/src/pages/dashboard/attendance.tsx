@@ -3074,7 +3074,7 @@ export default function Attendance() {
           <div className="p-6 space-y-4">
             <div className="text-center space-y-2">
               <h3 className="font-bold text-lg text-gray-900">Aligarh Muslim University</h3>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Salary Section â€“ Attendance Alert</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Salary Section – Attendance Alert</p>
 
               <p className="mx-auto text-gray-700">
                 Attendance submission deadline for <span className="font-bold">{currentMonthName} {currentYear}</span> was <span className="font-bold text-red-600">15 {currentMonthName}</span>. The deadline has now passed.

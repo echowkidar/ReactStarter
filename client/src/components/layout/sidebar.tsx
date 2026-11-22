@@ -254,7 +254,7 @@ export default function Sidebar({ className }: SidebarProps) {
       <N8nChatScript />
       <NeuralNetworkOverlay />
       <div className="px-3 py-1">
-        <div className="mb-2 px-4 flex items-center gap-2">
+        <div className={cn("mb-2 px-4 flex items-center gap-2", isMobile && "pr-10")}>
           <img src="/logo_favicon/favicon-32x32.png" onError={retryImage} alt="AMU Logo" className="h-8 w-auto" />
           <h2 className="text-base font-semibold leading-tight flex-1">
             {department?.name}
@@ -378,7 +378,7 @@ export default function Sidebar({ className }: SidebarProps) {
       {/* Notice Detail Dialog */}
       <Dialog open={!!selectedNotice} onOpenChange={() => setSelectedNotice(null)}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader className="pb-4 border-b">
+          <DialogHeader className="pb-4 pr-6 border-b">
             <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
               <Megaphone className="h-7 w-7 text-blue-600" />
               {selectedNotice?.subject}

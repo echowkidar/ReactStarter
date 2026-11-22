@@ -358,7 +358,8 @@ export default function Tickets() {
                     {selectedTicket && (
                         <>
                             <DialogHeader>
-                                <div className="flex justify-between items-start">
+                                {/* pr-8: room for the dialog's close (X) button */}
+                                <div className="flex flex-wrap justify-between items-start gap-2 pr-8">
                                     <DialogTitle>{selectedTicket.subject}</DialogTitle>
                                     <div className="flex gap-2">
                                         {getPriorityBadge(selectedTicket.priority)}

@@ -226,7 +226,8 @@ export default function AdminTickets() {
                     {selectedTicket && (
                         <>
                             <DialogHeader>
-                                <div className="flex justify-between items-start">
+                                {/* pr-8: room for the dialog's close (X) button */}
+                                <div className="flex flex-wrap justify-between items-start gap-2 pr-8">
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-sm text-muted-foreground">#{selectedTicket.id}</span>
@@ -252,7 +253,12 @@ export default function AdminTickets() {
                                         <Button
                                             variant="destructive"
                                             size="icon"
-                                            onClick={() => deleteTicket.mutate(selectedTicket.id)}
+                                            title="Delete ticket"
+                                            onClick={() => {
+                                                if (window.confirm(`Delete ticket #${selectedTicket.id}? This cannot be undone.`)) {
+                                                    deleteTicket.mutate(selectedTicket.id);
+                                                }
+                                            }}
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
