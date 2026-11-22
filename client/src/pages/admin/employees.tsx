@@ -1,5 +1,6 @@
 import { serverLogout } from "@/lib/auth";
-import { useAdminSection } from "@/lib/admin-access";
+import { useAdminSection, isSectionLogin, getAdminAccess } from "@/lib/admin-access";
+import { FundEmployeeImportDialog } from "@/components/admin/fund-employee-import-dialog";
 import { sectionCodes, codesForUserCode } from "@shared/sections";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -174,6 +175,8 @@ export default function AdminEmployees() {
   };
 
   const section = useAdminSection();
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const canImportFund = section !== "salary" && (isSectionLogin() || (() => { const a = getAdminAccess(); return a.isSuperAdmin && !a.isViewOnly && !a.isQasim; })());
   const { data: allEmployees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
     queryKey: ['/api/admin/employees'],
     queryFn: async () => {
@@ -1140,6 +1143,15 @@ export default function AdminEmployees() {
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <CardTitle>Employee Management</CardTitle>
             <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+              {canImportFund && (
+                <>
+                  <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import Employees
+                  </Button>
+                  <FundEmployeeImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} section={section} />
+                </>
+              )}
               {(() => {
                 const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
                 if (adminData.userCode === 'VEW' || adminData.email === 'qasim@amu.ac.in') return null;

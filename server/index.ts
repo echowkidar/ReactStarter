@@ -100,6 +100,8 @@ export async function initApp() {
     // Wages / Fund Staff attendance report (letter-EPID staff → Accounts / Bill / Students sections)
     const { registerFundReportRoutes } = await import("./fundReports");
     registerFundReportRoutes(app);
+    const { registerFundEmployeeImportRoutes } = await import("./fundEmployeeImport");
+    registerFundEmployeeImportRoutes(app);
 
     // Setup Cron Jobs
     setupCronJobs();
