@@ -3826,11 +3826,26 @@ export async function registerRoutes(app: Express) {
 
       const allDepartments = await storage.getAllDepartments();
 
+      // Optional section filter (admin dashboard section view):
+      //  kind=regular → numeric-EPID staff and non-fund reports (Salary Section)
+      //  kind=fund    → letter-EPID staff and Wages / Fund Staff reports, optionally only
+      //                 the dealing assistant codes in `codes` (e.g. ACC,OTH)
+      // Without `kind` the counts are exactly as before (all employees, all reports).
+      const kind = req.query.kind === 'fund' ? 'fund' : req.query.kind === 'regular' ? 'regular' : null;
+      const codes = String(req.query.codes || '').split(',').map(c => c.trim().toUpperCase()).filter(c => /^[A-Z]{3}$/.test(c));
+      const empFilter = kind === 'fund'
+        ? sql`AND e.epid ~ '^[A-Za-z]' ${codes.length ? sql`AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${sql.join(codes.map(c => sql`${c}`), sql`, `)})` : sql``}`
+        : kind === 'regular' ? sql`AND e.epid !~ '^[A-Za-z]'` : sql``;
+      const reportFilter = kind === 'fund'
+        ? sql`AND COALESCE(ar.report_type, 'regular') = 'fund'`
+        : kind === 'regular' ? sql`AND COALESCE(ar.report_type, 'regular') <> 'fund'` : sql``;
+
       // Count active vs disabled employees per department
       const employeeResult = await db.execute(sql`
-        SELECT department_id, is_active, COUNT(*)::int as count
-        FROM employees
-        GROUP BY department_id, is_active
+        SELECT e.department_id, e.is_active, COUNT(*)::int as count
+        FROM employees e
+        WHERE true ${empFilter}
+        GROUP BY e.department_id, e.is_active
       `);
 
       // Find employees with attendance in submitted/sent reports for this month
@@ -3838,8 +3853,10 @@ export async function registerRoutes(app: Express) {
         SELECT DISTINCT ae.employee_id, ar.department_id
         FROM attendance_entries ae
         JOIN attendance_reports ar ON ae.report_id = ar.id
+        LEFT JOIN employees e ON e.id = ae.employee_id
         WHERE ar.month = ${month} AND ar.year = ${year}
           AND ar.status IN ('submitted', 'sent')
+          ${reportFilter} ${empFilter}
       `);
 
       // Build lookup maps

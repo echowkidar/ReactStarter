@@ -24,7 +24,7 @@ import {
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
 import { getAdminAccess, useAdminSection, isSectionLogin } from "@/lib/admin-access";
-import { reportInSection, isFundReport, isSectionLoginCode, FUND_REPORT_LABEL, sectionLabel } from "@shared/sections";
+import { reportInSection, isFundReport, isSectionLoginCode, FUND_REPORT_LABEL, sectionLabel, sectionCodes } from "@shared/sections";
 import { Switch } from "@/components/ui/switch";
 import { getReportPrefix } from "@shared/reportKind";
 import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send, Lock, Unlock, ShieldAlert, ShieldCheck } from "lucide-react";
@@ -491,10 +491,12 @@ export default function AdminDashboard() {
     missing: number;
     disabled: number;
   }
+  // Counts follow the section view: Salary = numeric-EPID staff, a fund section = its letter-EPID staff
+  const statsKind = section === "salary" ? "kind=regular" : `kind=fund&codes=${sectionCodes(section).join(",")}`;
   const { data: deptStats = [] } = useQuery<DeptEmployeeStats[]>({
-    queryKey: ["/api/admin/department-employee-stats", apiMonth, filterYear],
+    queryKey: ["/api/admin/department-employee-stats", apiMonth, filterYear, statsKind],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/admin/department-employee-stats?month=${apiMonth}&year=${filterYear}`);
+      const response = await apiRequest("GET", `/api/admin/department-employee-stats?month=${apiMonth}&year=${filterYear}&${statsKind}`);
       return response.json();
     },
     refetchInterval: 120000,
@@ -518,9 +520,9 @@ export default function AdminDashboard() {
 
   // Fetch previous month's department employee stats for comparison
   const { data: prevDeptStats = [] } = useQuery<DeptEmployeeStats[]>({
-    queryKey: ["/api/admin/department-employee-stats", prevApiMonth, prevFilterYear],
+    queryKey: ["/api/admin/department-employee-stats", prevApiMonth, prevFilterYear, statsKind],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/admin/department-employee-stats?month=${prevApiMonth}&year=${prevFilterYear}`);
+      const response = await apiRequest("GET", `/api/admin/department-employee-stats?month=${prevApiMonth}&year=${prevFilterYear}&${statsKind}`);
       return response.json();
     },
     refetchInterval: 120000,
