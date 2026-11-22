@@ -51,7 +51,7 @@ export function setupCronJobs() {
                             eq(attendanceReports.month, targetMonth),
                             eq(attendanceReports.year, targetYear)
                         )
-                    }).then(rs => rs.filter(r => r.reportKind !== 'supplementary')); // only Main reports count
+                    }).then(rs => rs.filter(r => r.reportKind !== 'supplementary' && r.reportType !== 'fund')); // only Main reports count (Wages / Fund Staff reports are separate)
 
                     const hasSentReport = reports.some(r => r.status === 'sent');
                     const activeReports = reports.filter(r => r.status !== 'cancelled');
@@ -81,7 +81,7 @@ export function setupCronJobs() {
                             eq(attendanceReports.month, targetMonth),
                             eq(attendanceReports.year, targetYear)
                         )
-                    }).then(rs => rs.filter(r => r.reportKind !== 'supplementary')); // only Main reports count
+                    }).then(rs => rs.filter(r => r.reportKind !== 'supplementary' && r.reportType !== 'fund')); // only Main reports count (Wages / Fund Staff reports are separate)
 
                     // If department ALREADY has ANY report in 'sent' status for this month, NEVER send deadline warning
                     const hasSentReport = reports.some(r => r.status === 'sent');

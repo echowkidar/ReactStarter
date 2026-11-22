@@ -20,7 +20,10 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { getAdminAccess } from "@/lib/admin-access";
+import { getAdminAccess, useAdminSection, setAdminSectionView, isSectionLogin } from "@/lib/admin-access";
+import { SECTIONS, sectionLabel } from "@shared/sections";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 
 interface AdminHeaderProps {
   className?: string;
@@ -78,6 +81,9 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
   const adminInfo = readAdmin();
   const access = getAdminAccess();
   const { email, isViewOnly, isQasim } = access;
+  const section = useAdminSection();
+  const sectionLogin = isSectionLogin();
+  const canPickSection = access.isSuperAdmin && !access.isSalaryAdmin;
 
   useEffect(() => { setMenuOpen(false); }, [location]);
 
@@ -191,6 +197,25 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
             <LayoutDashboard className="h-4 w-4 shrink-0" />
             <span>Dashboard</span>
           </Link>
+          {canPickSection && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" title="Switch section" className="ml-1 inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-md border px-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  {sectionLabel(section)} <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {SECTIONS.map((s) => (
+                  <DropdownMenuItem key={s.key} onSelect={() => setAdminSectionView(s.key)} className={cn(s.key === section && "font-semibold")}>
+                    {s.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {sectionLogin && (
+            <span className="ml-1 inline-flex h-9 items-center whitespace-nowrap rounded-md border bg-slate-50 px-2 text-sm font-medium text-slate-700">{sectionLabel(section)}</span>
+          )}
           <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden />
           {otherItems.map((item) => {
             const active = isActive(item);
@@ -253,6 +278,19 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
                 <LayoutDashboard className="h-4 w-4" />
                 <span className="flex-1">Dashboard</span>
               </Link>
+              {canPickSection && (
+                <div className="mb-1 px-1">
+                  <div className="px-2 pb-1 text-xs font-medium text-slate-500">Section</div>
+                  <select
+                    value={section}
+                    onChange={(e) => setAdminSectionView(e.target.value as any)}
+                    className="h-10 w-full rounded-md border bg-white px-2 text-sm"
+                  >
+                    {SECTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                </div>
+              )}
+              {sectionLogin && <div className="mb-1 px-3 py-1 text-sm font-medium text-slate-600">{sectionLabel(section)}</div>}
               {otherItems.map((item) => {
                 const active = isActive(item);
                 const Icon = item.icon;

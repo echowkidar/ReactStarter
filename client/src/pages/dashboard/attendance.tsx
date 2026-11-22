@@ -33,6 +33,7 @@ import { Plus, Eye, Upload, Trash2, Loader2, FileCheck, AlertTriangle, Camera, S
 import { DocumentScannerDialog } from "@/components/document-scanner-dialog";
 import { Input } from "@/components/ui/input";
 import React from "react";
+import { FUND_REPORT_LABEL } from "@shared/sections";
 import { findMainReport, getReportPrefix, type ReportKind } from "@shared/reportKind";
 
 // Types
@@ -1760,7 +1761,7 @@ export default function Attendance() {
     if (!isCreatingReport) setKindContext(null);
   }, [isCreatingReport]);
   // 'regular' = own staff report, 'reporting' = Reporting Employees report (Admin Non Teaching)
-  const [activeReportType, setActiveReportType] = useState<'regular' | 'reporting'>('regular');
+  const [activeReportType, setActiveReportType] = useState<'regular' | 'reporting' | 'fund'>('regular');
   // Main vs Supplementary — chosen in the Create dialog
   const [reportKind, setReportKind] = useState<ReportKind>('main');
   const [selectedReport, setSelectedReport] = useState<number | null>(null);
@@ -1786,7 +1787,7 @@ export default function Attendance() {
 
 
   // Check attendance status for deadline alert (MOVED FROM BELOW)
-  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean; allowReportingEmployees?: boolean }>({
+  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean; allowReportingEmployees?: boolean; hasFundStaff?: boolean; fundReportOpen?: boolean; allowFundSupplementary?: boolean }>({
     queryKey: [`/api/departments/${department?.id}/attendance-status`],
     enabled: !!department?.id,
   });
@@ -1837,7 +1838,7 @@ export default function Attendance() {
     mutationFn: async (data: any) => {
       // Last check just before saving: every selected employee must still belong to
       // this department (Admin may have transferred/disabled someone meanwhile).
-      if (activeReportType === 'regular' && department?.id) {
+      if ((activeReportType === 'regular' || activeReportType === 'fund') && department?.id) {
         const empKey = [`/api/departments/${department.id}/employees`];
         const freshRes = await fetch(`/api/departments/${department.id}/employees`, { cache: "no-store" });
         if (freshRes.ok) {
@@ -2339,7 +2340,7 @@ export default function Attendance() {
         }))
       };
 
-      setActiveReportType((report as any).reportType === 'reporting' ? 'reporting' : 'regular');
+      setActiveReportType((report as any).reportType === 'reporting' ? 'reporting' : (report as any).reportType === 'fund' ? 'fund' : 'regular');
       setEditingReportId(report.id);
       setEditingReportData(formData);
       setIsCreatingReport(true);
@@ -2375,18 +2376,23 @@ export default function Attendance() {
   const existingReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'regular');
   // Reporting Employees report (separate report type; only for enabled departments)
   const existingReportingReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'reporting');
+  // Wages / Fund Staff report (letter-EPID employees; separate report type)
+  const existingFundReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'fund');
   // An open draft (Main or Supplementary) must be finalised/deleted before another report is created
-  const existingDraftReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType !== 'reporting');
+  const existingDraftReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType !== 'reporting' && (r as any).reportType !== 'fund');
+  const existingDraftFundReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType === 'fund');
   const existingDraftReportingReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType === 'reporting');
   // Main report exists for the report type currently being created → only Supplementary possible
   const mainExistsForActiveType = kindContext
     ? kindContext.mainExists
-    : !!(activeReportType === 'reporting' ? existingReportingReport : existingReport);
+    : !!(activeReportType === 'reporting' ? existingReportingReport : activeReportType === 'fund' ? existingFundReport : existingReport);
   // Supplementary is offered only while Admin has enabled "Supp. Report" for this department.
   // Otherwise the report is always a Main report (as it was before).
   const supplementaryAllowed = kindContext
     ? kindContext.suppAllowed
-    : attendanceStatus?.allowSupplementaryReport === true;
+    : (activeReportType === 'fund'
+      ? attendanceStatus?.allowFundSupplementary === true
+      : attendanceStatus?.allowSupplementaryReport === true);
   const effectiveReportKind: ReportKind = mainExistsForActiveType
     ? 'supplementary'
     : (supplementaryAllowed ? reportKind : 'main');
@@ -2410,6 +2416,13 @@ export default function Attendance() {
       : attendanceStatus?.permitted === false
         ? false
         : (!isPastDeadline && (!existingReportingReport || attendanceStatus?.allowSupplementaryReport))
+  );
+
+  // Wages / Fund Staff report: own window opened by Super Admin, not tied to the 15th-day deadline
+  const canCreateFundReport = !!attendanceStatus?.hasFundStaff && !existingDraftFundReport && (
+    existingFundReport
+      ? attendanceStatus?.allowFundSupplementary === true
+      : attendanceStatus?.fundReportOpen === true
   );
 
   // "Request to Cancel" button ab sirf Super Admin ke attendance toggle se control hoga
@@ -2561,6 +2574,38 @@ export default function Attendance() {
                   Create Reporting Employees Report
                 </Button>
               )}
+              {attendanceStatus?.hasFundStaff && (
+                <div className="flex flex-col items-start">
+                  <Button
+                    variant="outline"
+                    className="border-emerald-300 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950"
+                    disabled={!canCreateFundReport}
+                    title={canCreateFundReport
+                      ? `Create attendance report for ${FUND_REPORT_LABEL}`
+                      : existingDraftFundReport
+                        ? "A draft Wages / Fund Staff report already exists. Please finalise or delete it first."
+                        : existingFundReport
+                          ? `Wages / Fund Staff report for this month already exists (${existingFundReport.status})`
+                          : "Opens when the Super Admin opens Wages / Fund Staff attendance"}
+                    onClick={() => {
+                      setActiveReportType('fund');
+                      setReportKind(existingFundReport ? 'supplementary' : 'main');
+                      setKindContext({ mainExists: !!existingFundReport, suppAllowed: attendanceStatus?.allowFundSupplementary === true });
+                      setEditingReportId(null);
+                      setEditingReportData(null);
+                      setIsCreatingReport(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Wages / Fund Staff Report
+                  </Button>
+                  {!canCreateFundReport && !existingFundReport && !existingDraftFundReport && attendanceStatus?.fundReportOpen !== true && (
+                    <span className="text-[11px] text-muted-foreground mt-1">
+                      Opens when the Super Admin opens Wages / Fund Staff attendance
+                    </span>
+                  )}
+                </div>
+              )}
               </div>
 
               <DialogContent className="max-w-[95vw] w-[1400px] max-h-[min(85vh,calc(100dvh-2rem))] overflow-hidden flex flex-col">
@@ -2571,7 +2616,7 @@ export default function Attendance() {
                       : (supplementaryAllowed || mainExistsForActiveType
                         ? `Create ${effectiveReportKind === 'supplementary' ? 'Supplementary' : 'Main'} Attendance Report`
                         : "Create Attendance Report")}
-                    {activeReportType === 'reporting' ? " (Reporting Employees)" : ""}
+                    {activeReportType === 'reporting' ? " (Reporting Employees)" : activeReportType === 'fund' ? ` (${FUND_REPORT_LABEL})` : ""}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="min-h-0 overflow-auto flex-1 pr-1">
@@ -2667,6 +2712,13 @@ export default function Attendance() {
                           </div>
                         ) : null;
                       })()}
+                      {(report as any).reportType === 'fund' && (
+                        <div className="mt-1">
+                          <span className="inline-block rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-800">
+                            {FUND_REPORT_LABEL}
+                          </span>
+                        </div>
+                      )}
                       {(report as any).reportType === 'reporting' && (
                         <div className="mt-1">
                           <span className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">

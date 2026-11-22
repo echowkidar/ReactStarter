@@ -1,3 +1,4 @@
+import { isTermedStatus, isLetterEpid } from "@shared/employeeKind";
 import React, { useState, useEffect } from "react";
 import { LIVE_CHANGE_EVENT } from "@/hooks/useDepartmentLiveUpdates";
 import { useForm, useWatch } from "react-hook-form";
@@ -33,7 +34,6 @@ const AUTO_REMARK_TEXT = "No break in the previous month as well";
 // must have the term updated, or a reason written in Remarks, e.g.
 // "Term upto 31-10-26 - Extension order awaited". That remark is what marks the
 // employee as dealt with, so deleting it brings the warning back.
-const TERM_CHECK_STATUSES = ["TEMPORARY", "PROBATION"];
 // A reason must follow the dash — "Term upto 15-11-26 - " alone does not count
 const TERM_REMARK_TEST = /Term (upto \d{2}-\d{2}-\d{2}|not entered) - *[^;\s]/;
 const TERM_REMARK_STRIP = /(;\s*)?Term (upto \d{2}-\d{2}-\d{2}|not entered) - [^;]*/g;
@@ -189,7 +189,7 @@ interface AttendanceFormProps {
   isSupplementary?: boolean;
   departmentId?: number;
   // 'reporting' = Reporting Employees report (Admin Non Teaching). Default 'regular'.
-  reportType?: 'regular' | 'reporting';
+  reportType?: 'regular' | 'reporting' | 'fund';
   // Term Check popup (department side). Admin editing a report passes false.
   termCheck?: boolean;
 }
@@ -197,7 +197,7 @@ interface AttendanceFormProps {
 // Add the formatTermExpiry function
 const formatTermExpiry = (dateStr: string | null | undefined, employmentStatus?: string): string => {
   if (!dateStr) return "-";
-  if (employmentStatus && employmentStatus !== "Temporary" && employmentStatus !== "Probation") return "-";
+  if (employmentStatus && !isTermedStatus(employmentStatus)) return "-";
 
   try {
     const date = new Date(dateStr);
@@ -214,6 +214,7 @@ const formatTermExpiry = (dateStr: string | null | undefined, employmentStatus?:
 
 export default function AttendanceForm({ onSubmit, isLoading, reportId, initialData, isSupplementary, departmentId: propDepartmentId, reportType = 'regular', termCheck = true }: AttendanceFormProps) {
   const isReportingMode = reportType === 'reporting';
+  const isFundMode = reportType === 'fund';
   const currentDept = getCurrentDepartment();
   const departmentId = propDepartmentId || currentDept?.id;
   const { toast } = useToast();
@@ -385,7 +386,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       }
 
       try {
-        const res = await fetch(`/api/departments/${departmentId}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}${isReportingMode ? '&reportType=reporting' : ''}`);
+        const res = await fetch(`/api/departments/${departmentId}/attendance/reported-employees?month=${watchMonth}&year=${watchYear}${isReportingMode ? '&reportType=reporting' : isFundMode ? '&reportType=fund' : ''}`);
         if (res.ok) {
           const ids = await res.json();
 
@@ -397,7 +398,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     };
 
     fetchReportedEmployees();
-  }, [isSupplementary, departmentId, watchMonth, watchYear, isReportingMode, liveTick]);
+  }, [isSupplementary, departmentId, watchMonth, watchYear, isReportingMode, isFundMode, liveTick]);
 
   const { data: rawEmployees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: [isReportingMode
@@ -446,6 +447,8 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       // Filter only active employees and sort by Pay Level (descending) then EPID (ascending)
       return [...list]
         .filter((employee: any) => employee.isActive === "active")
+        // Wages / Fund Staff report: letter-EPID employees only; regular report: never letter-EPID
+        .filter((employee: any) => isReportingMode ? true : isFundMode ? isLetterEpid(employee.epid) : !isLetterEpid(employee.epid))
         .sort((a, b) => {
           // First sort by pay level (higher levels first)
           const payLevelA = getPayLevelOrder(a.payLevel || "L-0");
@@ -984,7 +987,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
   type TermState = Omit<TermIssue, "serial"> & { bypassed: boolean; bypassReason: string; expiry: Date | null };
   const getTermState = (emp: any, periods: Array<{ fromDate: string; toDate: string; remarks?: string }>): TermState | null => {
     if (!termCheckOn || !emp) return null;
-    if (!TERM_CHECK_STATUSES.includes(String(emp.employmentStatus || "").toUpperCase())) return null;
+    if (!isTermedStatus(emp.employmentStatus)) return null;
     const valid = (periods || []).filter((p) =>
       !isNaN(parseDateFromDisplay(p.fromDate).getTime()) && !isNaN(parseDateFromDisplay(p.toDate).getTime()));
     if (valid.length === 0) return null;

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { showsTermExpiry } from "@shared/employeeKind";
 import { ReportingEmployeesPanel } from "@/components/reporting-employees-panel";
 
 const EmployeeDetails = ({ employee, fieldSettings }: { employee: Employee; fieldSettings?: Record<string, string> }) => {
@@ -44,7 +45,7 @@ const EmployeeDetails = ({ employee, fieldSettings }: { employee: Employee; fiel
           <label className="text-sm font-medium text-muted-foreground">Employment Status</label>
           <p>{employee.employmentStatus}</p>
         </div>
-        {(employee.employmentStatus === "Probation" || employee.employmentStatus === "Temporary") && employee.termExpiry && (
+        {showsTermExpiry(employee.epid, employee.employmentStatus) && employee.termExpiry && (
           <div>
             <label className="text-sm font-medium text-muted-foreground">Term Expiry</label>
             <p>{format(new Date(employee.termExpiry), "dd MMM yyyy")}</p>
@@ -187,7 +188,7 @@ const EmployeeDetails = ({ employee, fieldSettings }: { employee: Employee; fiel
           </div>
 
           {/* Term Extension Office Memo - Only for Probation or Temporary employees */}
-          {(employee.employmentStatus === "Probation" || employee.employmentStatus === "Temporary") && (
+          {showsTermExpiry(employee.epid, employee.employmentStatus) && (
             <div>
               <label className="text-sm font-medium text-muted-foreground">Term Extension Office Memo</label>
               {employee.termExtensionUrl ? (
@@ -566,8 +567,7 @@ export default function Employees() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {(employee.employmentStatus === "Probation" ||
-                        employee.employmentStatus === "Temporary") &&
+                      {showsTermExpiry(employee.epid, employee.employmentStatus) &&
                         employee.termExpiry ? (
                         format(new Date(employee.termExpiry), "dd MMM yyyy")
                       ) : (

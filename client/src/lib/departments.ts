@@ -1,14 +1,9 @@
 import { apiRequest } from "./queryClient";
 import { DepartmentName } from "../../../shared/schema";
+import { ALL_STATUSES } from "../../../shared/employeeKind";
 
-export const employmentStatuses = [
-  "Permanent",
-  "Probation",
-  "Temporary",
-  "Court Case",
-  "Compensation",
-  "Till Further Order"
-] as const;
+// All statuses (regular + wage/fund staff); forms narrow the list with statusesForEpid()
+export const employmentStatuses = ALL_STATUSES;
 
 // Define the type for the response from /api/departments
 export type DepartmentRegistrationInfo = DepartmentName;

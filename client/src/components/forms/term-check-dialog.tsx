@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isTermedStatus, isLetterEpid, statusesForEpid } from "@shared/employeeKind";
 import { Loader2, AlertTriangle, CalendarPlus, FileSignature, Scissors, Clock, LocateFixed, UserMinus, BadgeCheck } from "lucide-react";
 
 // Reasons a department can give when the term cannot be updated right now.
@@ -88,7 +89,6 @@ type Mode = null | "extend" | "fresh" | "status" | "bypass";
 
 // Statuses a Temporary / Probation employee can be moved to from this popup.
 // Only Temporary and Probation are term-checked, so any other status clears the issue.
-const STATUS_OPTIONS = ["Permanent", "Probation", "Temporary", "Court Case", "Compensation", "Till Further Order"];
 const statusLabel = (s: string) => (s === "Permanent" ? "Permanent (Confirmed)" : s);
 
 function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypass, onUntick, onLocate }: {
@@ -113,7 +113,7 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
   const [joiningDate, setJoiningDate] = useState("");
   const [joiningFile, setJoiningFile] = useState<File | null>(null);
   // Status change
-  const [newStatus, setNewStatus] = useState("Permanent");
+  const [newStatus, setNewStatus] = useState(() => (isLetterEpid(emp.epid) ? (statusesForEpid(emp.epid).find((s) => s !== emp.employmentStatus) ?? statusesForEpid(emp.epid)[0]) : "Permanent"));
   // Bypass
   const [reason, setReason] = useState<string>("");
   const [otherReason, setOtherReason] = useState("");
@@ -122,7 +122,7 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
     setError("");
     if (!departmentId) { setError("Department not found."); return; }
     const isStatus = mode === "status";
-    const stillTermed = newStatus === "Temporary" || newStatus === "Probation";
+    const stillTermed = isTermedStatus(newStatus) || isLetterEpid(emp.epid);
     if (isStatus && newStatus === emp.employmentStatus) { setError("Please choose a different status."); return; }
     if ((!isStatus || stillTermed) && !termExpiry) { setError("Please enter the new Term Expiry date."); return; }
     if (mode === "fresh" && (!memoNo.trim() || !joiningDate)) {
@@ -260,10 +260,10 @@ function TermIssueCard({ issue, departmentId, onEmployeeUpdated, onTrim, onBypas
             <Label className="text-xs">New Employment Status <span className="text-muted-foreground">(now {emp.employmentStatus})</span></Label>
             <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
               value={newStatus} onChange={(e) => { setError(""); setNewStatus(e.target.value); }}>
-              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+              {statusesForEpid(emp.epid).map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </select>
           </div>
-          {(newStatus === "Temporary" || newStatus === "Probation") && (
+          {(isTermedStatus(newStatus) || isLetterEpid(emp.epid)) && (
             <div>
               <Label className="text-xs">New Term Expiry Date</Label>
               <Input type="date" className="h-9" value={termExpiry} onChange={(e) => setTermExpiry(e.target.value)} />

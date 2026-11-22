@@ -96,6 +96,7 @@ export default function AdminLogin() {
       // Store admin information in localStorage
       localStorage.setItem("adminType", responseData.adminType || "super");
       localStorage.setItem("adminSessionToken", responseData.sessionToken);
+      try { localStorage.setItem("adminSectionView", "salary"); } catch { /* ignore */ }
 
       localStorage.setItem("admin", JSON.stringify({
         email: data.email,

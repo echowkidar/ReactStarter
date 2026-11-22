@@ -1,6 +1,9 @@
 import { serverLogout } from "@/lib/auth";
 import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
 import { getReportPrefix } from "@shared/reportKind";
+import { useAdminSection } from "@/lib/admin-access";
+import { reportInSection, sectionCodes, codesForUserCode, SECTIONS } from "@shared/sections";
+import { isLetterEpid } from "@shared/employeeKind";
 import { useLocation } from "wouter";
 
 import {
@@ -398,6 +401,7 @@ export default function AttendanceReports() {
   const [exportFilter, setExportFilter] = useTabState<"all" | "exported" | "not_exported">("exported", "all");
   const [skipExported, setSkipExported] = useTabState<boolean>("skipExported", true); // default: checked — skip already-exported rows on export
   const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+  const section = useAdminSection();
 
   // Permission checks for Export button and date editing
   const adminData = useMemo(() => JSON.parse(localStorage.getItem("admin") || "{}"), []);
@@ -468,13 +472,27 @@ export default function AttendanceReports() {
     if (adminType === "salary") {
       if (userCode && userCode !== "ALL" && userCode !== "VEW") {
         setIsSalaryAdmin(true);
-        setSalaryAssistantFilter([userCode]);
+        // Section logins (ACC/BIL/STU) are locked to all codes of their section (ACC also covers OTH)
+        setSalaryAssistantFilter(codesForUserCode(userCode));
       } else {
         // If userCode is ALL or VEW, treat as super admin for filtering purposes (don't restrict)
         setIsSalaryAdmin(false);
       }
     }
   }, []);
+
+  // Super Admin in a section view: preset the salary-assistant filter to that section's codes (unlocked)
+  useEffect(() => {
+    const adminType = localStorage.getItem("adminType");
+    if (adminType === "salary") return;
+    const fundCodes = SECTIONS.flatMap(sec => sectionCodes(sec.key));
+    if (section !== "salary") {
+      setSalaryAssistantFilter(sectionCodes(section));
+    } else if (salaryAssistantFilter.length > 0 && salaryAssistantFilter.every(c => fundCodes.includes(c))) {
+      setSalaryAssistantFilter([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
 
   // Parse current month/year from monthFilter for export-status API
   const { apiMonth, filterYear } = useMemo(() => {
@@ -697,9 +715,10 @@ export default function AttendanceReports() {
   });
   const reports = useMemo<AttendanceReport[]>(
     () => monthQueries.flatMap(q => (q.data || []).filter(report =>
-      report.status === "sent" || report.status === "cancel_requested")),
+      (report.status === "sent" || report.status === "cancel_requested") &&
+      reportInSection((report as any).reportType, section))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [monthFilter.join("|") + "#" + monthQueries.map(q => q.dataUpdatedAt).join(",")]
+    [monthFilter.join("|") + "#" + monthQueries.map(q => q.dataUpdatedAt).join(",") + "#" + section]
   );
   // Full-page loader only on the first load; adding a month keeps the table on screen
   const isLoading = monthQueries.length > 0 && monthQueries.every(q => q.isLoading);
@@ -707,7 +726,7 @@ export default function AttendanceReports() {
   const failedMonths = monthFilter.filter((_, i) => monthQueries[i]?.isError);
   const retryFailedMonths = () => monthQueries.forEach(q => { if (q.isError) q.refetch(); });
 
-  const { data: missingEmployees = [] } = useQuery<any[]>({
+  const { data: allMissingEmployees = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/all-missing-employees", apiMonth, filterYear],
     queryFn: async () => {
       if (!apiMonth || !filterYear) return [];
@@ -716,6 +735,13 @@ export default function AttendanceReports() {
     },
     enabled: !!apiMonth && !!filterYear
   });
+
+  // Missing employees of the section being viewed: salary = numeric EPID; fund sections = letter EPID of that section's codes
+  const missingEmployees = useMemo(() => {
+    if (section === "salary") return allMissingEmployees.filter(e => !isLetterEpid(e.epid));
+    const codes = sectionCodes(section);
+    return allMissingEmployees.filter(e => isLetterEpid(e.epid) && codes.includes(String(e.salary_asstt || "").toUpperCase()));
+  }, [allMissingEmployees, section]);
 
   // Accept cancellation mutation
   const acceptCancellation = useMutation({
@@ -808,6 +834,7 @@ export default function AttendanceReports() {
                 String(entry.employee.salary_asstt) :
                 "";
 
+            if (section !== "salary" && !sectionCodes(section).includes(salaryAssttValue.trim().toUpperCase())) return;
             try {
               const periods = JSON.parse(entry.periods);
               periods.forEach((period: any) => {

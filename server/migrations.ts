@@ -415,6 +415,11 @@ export async function runMigrations() {
     await db.execute(sql`
       ALTER TABLE attendance_entries ADD COLUMN IF NOT EXISTS reporting_employee_id INTEGER;
     `);
+    // One-time permit for a supplementary Wages / Fund Staff report (report_type 'fund').
+    // NULL / false = not allowed; cleared once used.
+    await db.execute(sql`
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS allow_fund_supplementary BOOLEAN;
+    `);
 
     // ─── Designation as it was at the time of the attendance entry ───────────
     // ADDITIVE: three new nullable columns (Drizzle selects them, so not swallowed).

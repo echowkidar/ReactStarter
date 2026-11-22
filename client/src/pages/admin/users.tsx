@@ -770,6 +770,7 @@ export default function AdminUsers() {
                             }}
                           />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">Section logins: ACC = Accounts (also Others), BIL = Bill, STU = Students</p>
                         <FormMessage />
                       </FormItem>
                     )}

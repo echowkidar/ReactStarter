@@ -1,3 +1,6 @@
+import { isTermedStatus, isLetterEpid } from "@shared/employeeKind";
+import { useAdminSection } from "@/lib/admin-access";
+import { sectionCodes, codesForUserCode, SECTIONS } from "@shared/sections";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -64,6 +67,7 @@ export default function MissingEmployees() {
     const pageSize = 50;
 
     const [isSalaryAdmin, setIsSalaryAdmin] = useState(false);
+    const section = useAdminSection();
 
     useEffect(() => {
         // Check if user is salary admin
@@ -74,18 +78,37 @@ export default function MissingEmployees() {
         if (adminType === "salary") {
             if (userCode && userCode !== "ALL" && userCode !== "VEW") {
                 setIsSalaryAdmin(true);
-                setSalaryAssistantFilter([userCode]);
+                // Section logins (ACC/BIL/STU) are locked to all codes of their section (ACC also covers OTH)
+                setSalaryAssistantFilter(codesForUserCode(userCode));
             }
         }
     }, []);
 
-    const { data: employees = [], isLoading } = useQuery<MissingEmployee[]>({
+    // Super Admin in a section view: preset the salary-assistant filter to that section's codes (unlocked)
+    useEffect(() => {
+        if (localStorage.getItem("adminType") === "salary") return;
+        const fundCodes = SECTIONS.flatMap(sec => sectionCodes(sec.key));
+        if (section !== "salary") {
+            setSalaryAssistantFilter(sectionCodes(section));
+        } else {
+            setSalaryAssistantFilter(prev => (prev.length > 0 && prev.every(c => fundCodes.includes(c)) ? [] : prev));
+        }
+    }, [section]);
+
+    const { data: allEmployees = [], isLoading } = useQuery<MissingEmployee[]>({
         queryKey: ["/api/admin/all-missing-employees", currentMonth, currentYear],
         queryFn: async () => {
             const response = await apiRequest("GET", `/api/admin/all-missing-employees?month=${currentMonth}&year=${currentYear}`);
             return response.json();
         },
     });
+
+    // Salary view: numeric-EPID employees only. Section view: letter-EPID employees of that section's codes.
+    const employees = useMemo(() => {
+        if (section === "salary") return allEmployees.filter(e => !isLetterEpid(e.epid));
+        const codes = sectionCodes(section);
+        return allEmployees.filter(e => isLetterEpid(e.epid) && codes.includes(String(e.salary_asstt || "").toUpperCase()));
+    }, [allEmployees, section]);
 
     // Extract unique departments and salary assistants for filters
     const departments = useMemo(() => {
@@ -302,7 +325,7 @@ export default function MissingEmployees() {
                                                         {emp.employment_status || '—'}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-sm">{(emp.employment_status === 'Temporary' || emp.employment_status === 'Probation') ? (emp.term_expiry || '—') : '—'}</TableCell>
+                                                <TableCell className="text-sm">{isTermedStatus(emp.employment_status) ? (emp.term_expiry || '—') : '—'}</TableCell>
                                                 <TableCell className="text-sm">{emp.salary_asstt || '—'}</TableCell>
                                                 <TableCell className="text-sm">{emp.salary_register_no || '—'}</TableCell>
                                             </TableRow>

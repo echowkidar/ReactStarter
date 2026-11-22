@@ -1,3 +1,5 @@
+import { isLetterEpid } from "../shared/employeeKind";
+
 // Oracle payroll master  ↔  app employees: what differs and what to do about it.
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure functions only (no database access) so the same rules are used to show
@@ -190,7 +192,9 @@ export const FIELDS: FieldDef[] = [
   { field: "termExpiry", column: "term_expiry", label: "Term Expiry", date: true,
     oracle: (o) => clean(o.term_app) || null, app: (a) => a.term_expiry },
   { field: "employmentStatus", column: "employment_status", label: "Employment Status",
-    oracle: (o) => EMP_STATUS[clean(o.emp_status)]?.app ?? null, app: (a) => a.employment_status },
+    // Letter EPIDs (R0001…) use fund statuses that the payroll status does not carry → never suggested
+    oracle: (o) => (isLetterEpid(clean(o.ecode)) ? null : EMP_STATUS[clean(o.emp_status)]?.app ?? null),
+    app: (a) => a.employment_status },
   { field: "payLevel", column: "pay_level", label: "Pay Level",
     oracle: (o) => mapPayLevel(o.pay_grade), app: (a) => a.pay_level },
   { field: "panNumber", column: "pan_number", label: "PAN", sensitive: true,
@@ -413,7 +417,7 @@ export function computeDiff(
       }),
       status: null,
       suggestedDepartmentId: dept?.id ?? null,
-      suggestedEmploymentStatus: EMP_STATUS[clean(o.emp_status)]?.app ?? null,
+      suggestedEmploymentStatus: isLetterEpid(ecode) ? null : EMP_STATUS[clean(o.emp_status)]?.app ?? null,
     });
   }
 

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
 import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
-import { employmentStatuses } from "@/lib/departments";
+import { ALL_STATUSES, statusesForEpid, isValidEpid, isLetterEpid, EPID_FORMAT_MESSAGE, showsTermExpiry, requiresTermExpiry, dealingAssistantAllowed, dealingAssistantOptionsFor } from "@shared/employeeKind";
 import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Loader2, AlertCircle } from "lucide-react";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
@@ -34,7 +34,7 @@ const employeeSchema = z.object({
   employeeCategory: z.enum(["", "Teaching", "Non-Teaching"]).optional(),
   designation: z.string().min(1, "Designation is required"),
 
-  employmentStatus: z.enum(employmentStatuses),
+  employmentStatus: z.string().refine((v) => v === "" || (ALL_STATUSES as readonly string[]).includes(v), "Invalid status"),
   payLevel: z.enum(PAY_LEVELS),
   termExpiry: z.string().optional(),
   officeMemoNo: z.string().min(1, "Office Memo No. is required"),
@@ -49,6 +49,21 @@ const employeeSchema = z.object({
   officeMemoDoc: z.string().optional(),
   joiningReportDoc: z.string().optional(),
   termExtensionDoc: z.string().optional(),
+}).superRefine((d, ctx) => {
+  if (!isValidEpid(d.epid)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["epid"], message: EPID_FORMAT_MESSAGE });
+  }
+  if (!d.employmentStatus) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["employmentStatus"], message: "Employment Status is required" });
+  } else if (!statusesForEpid(d.epid).includes(d.employmentStatus)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["employmentStatus"], message: "Select a status that matches this EPID" });
+  }
+  if (requiresTermExpiry(d.epid) && !String(d.termExpiry ?? "").trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["termExpiry"], message: "Term Expiry date is required" });
+  }
+  if (!dealingAssistantAllowed(d.epid, d.salary_asstt)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["salary_asstt"], message: "This Salary Assistant is not allowed for this EPID" });
+  }
 });
 
 interface EmployeeFormProps {
@@ -159,6 +174,20 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
 
   // Duplicate EPID Check
   const watchedEpid = form.watch("epid");
+  const watchedStatus = form.watch("employmentStatus");
+  const statusOptions = statusesForEpid(watchedEpid);
+  const assistantOptions: ComboboxOption[] = dealingAssistantOptionsFor(watchedEpid, salaryAssistantOptions);
+
+  // When the EPID kind changes, drop a status / dealing assistant that no longer fits
+  useEffect(() => {
+    const st = form.getValues("employmentStatus");
+    if (!statusesForEpid(watchedEpid).includes(st)) {
+      form.setValue("employmentStatus", isLetterEpid(watchedEpid) ? "" : "Permanent");
+    }
+    if (!dealingAssistantAllowed(watchedEpid, form.getValues("salary_asstt"))) {
+      form.setValue("salary_asstt", "");
+    }
+  }, [watchedEpid]);
 
   useEffect(() => {
     const checkEpid = async () => {
@@ -204,8 +233,11 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                         className="bg-white dark:bg-slate-800"
                         maxLength={5}
                         onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, '').slice(0, 5);
-                          field.onChange(value);
+                          // 5 digits, or 1 letter followed by 4 digits
+                          let v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                          if (/^[A-Z]/.test(v)) v = v[0] + v.slice(1).replace(/\D/g, '');
+                          else v = v.replace(/\D/g, '');
+                          field.onChange(v.slice(0, 5));
                         }}
                       />
                     </FormControl>
@@ -278,15 +310,15 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                     <Select
                       disabled={isLoading}
                       onValueChange={field.onChange}
-                      value={field.value}
+                      value={field.value || undefined}
                     >
                       <FormControl>
                         <SelectTrigger className="bg-white dark:bg-slate-800">
-                          <SelectValue />
+                          <SelectValue placeholder="Select status..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {employmentStatuses.map((status) => (
+                        {statusOptions.map((status) => (
                           <SelectItem key={status} value={status}>
                             {status}
                           </SelectItem>
@@ -325,13 +357,13 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-              {(form.watch("employmentStatus") === "Probation" || form.watch("employmentStatus") === "Temporary") && (
+              {showsTermExpiry(watchedEpid, watchedStatus) && (
                 <FormField
                   control={form.control}
                   name="termExpiry"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Term Expiry Date</FormLabel>
+                      <FormLabel>Term Expiry Date{requiresTermExpiry(watchedEpid) && <span className="text-red-500"> *</span>}</FormLabel>
                       <FormControl>
                         <Input {...field} type="date" disabled={isLoading} className="bg-white dark:bg-slate-800" />
                       </FormControl>
@@ -537,7 +569,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                     <FormLabel>Salary Assistant <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={salaryAssistantOptions}
+                        options={assistantOptions}
                         value={field.value || ""}
                         onValueChange={field.onChange}
                         placeholder="Select salary assistant..."
@@ -655,8 +687,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                   </FormItem>
                 )}
               />
-              {(form.watch("employmentStatus") === "Probation" ||
-                form.watch("employmentStatus") === "Temporary") && (
+              {showsTermExpiry(watchedEpid, watchedStatus) && (
                   <FormField
                     control={form.control}
                     name="termExtensionDoc"

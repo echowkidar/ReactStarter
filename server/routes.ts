@@ -46,6 +46,9 @@ import { findStaffForLogin, registerStaffRoutes } from "./dakStaff";
 import { buildHistoryView } from "./employeeHistoryView";
 import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
 import { normaliseReportKind, findMainReport } from "../shared/reportKind";
+import { employeeKindError, isLetterEpid } from "../shared/employeeKind";
+import { codesForUserCode } from "../shared/sections";
+import { isFundReportOpen, fundStaffCount, fundSupplementaryAllowed as fundSupplementaryAllowedFor, useUpFundSupplementary } from "./fundReports";
 
 // Helper: Check if employee's current-month attendance BLOCKS transfer.
 // Logic:
@@ -1382,6 +1385,7 @@ export async function registerRoutes(app: Express) {
       if (process.env.NODE_ENV !== 'production') {
       }
 
+      if (typeof employeeData.epid === "string") employeeData.epid = employeeData.epid.trim().toUpperCase();
       if (employeeData.epid) {
         const existingEmployee = await storage.getEmployeeByEpid(employeeData.epid);
         if (existingEmployee) {
@@ -1394,6 +1398,8 @@ export async function registerRoutes(app: Express) {
       }
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
+      const kindError = employeeKindError(parsedData, () => true);
+      if (kindError) return res.status(400).json({ message: kindError, details: kindError });
 
       const employee = await storage.createEmployee(parsedData);
       res.status(201).json(employee);
@@ -1486,6 +1492,7 @@ export async function registerRoutes(app: Express) {
           }
         }
       }
+      if (typeof updates.epid === "string") updates.epid = updates.epid.trim().toUpperCase();
       if (updates.epid && updates.epid !== currentEmployee.epid) {
         const existingEmployee = await storage.getEmployeeByEpid(updates.epid);
         if (existingEmployee && existingEmployee.id !== employeeId) {
@@ -1500,6 +1507,18 @@ export async function registerRoutes(app: Express) {
       // Hidden fields reach the form blank — never let that blank overwrite the stored value
       const safeUpdates = stripHiddenUpdates(updates, await getFieldVisibility());
       if (Object.keys(safeUpdates).length === 0) return res.json(currentEmployee); // nothing left to change
+
+      // EPID kind rules (letter EPID → fund statuses, ACC/BIL/STU/OTH, term expiry required).
+      // Only fields that actually change are judged, so old records stay editable otherwise.
+      if (typeof safeUpdates.epid === "string") safeUpdates.epid = safeUpdates.epid.trim().toUpperCase();
+      {
+        const cur: any = currentEmployee;
+        const norm = (v: any) => String(v ?? "").trim().toUpperCase();
+        const merged = { ...cur, ...safeUpdates };
+        const kindError = employeeKindError(merged, (f) =>
+          f in safeUpdates && norm((safeUpdates as any)[f]) !== norm(cur[f]));
+        if (kindError) return res.status(400).json({ message: kindError, details: kindError });
+      }
       const employee = await storage.updateEmployee(employeeId, safeUpdates);
 
       // Log changes
@@ -2600,6 +2619,7 @@ export async function registerRoutes(app: Express) {
       // Optional: only consider reports of one type (used by the Reporting Employees form).
       // When absent, behaviour is exactly as before.
       const reportTypeFilter = req.query.reportType === 'reporting' ? 'reporting'
+        : req.query.reportType === 'fund' ? 'fund'
         : (req.query.reportType === 'regular' ? 'regular' : null);
 
       if (isNaN(departmentId) || isNaN(month) || isNaN(year)) {
@@ -2760,8 +2780,10 @@ export async function registerRoutes(app: Express) {
   app.post("/api/departments/:departmentId/attendance", async (req, res) => {
     try {
       const departmentId = Number(req.params.departmentId);
-      // 'reporting' = Reporting Employees report (Admin Non Teaching); anything else = regular
-      const reportType = (req.body as any)?.reportType === 'reporting' ? 'reporting' : 'regular';
+      // 'reporting' = Reporting Employees report (Admin Non Teaching);
+      // 'fund' = Wages / Fund Staff report (letter-EPID staff); anything else = regular
+      const askedType = (req.body as any)?.reportType;
+      const reportType = askedType === 'reporting' ? 'reporting' : askedType === 'fund' ? 'fund' : 'regular';
       // 'main' | 'supplementary' — chosen by the department in the Create dialog
       const reportKind = normaliseReportKind((req.body as any)?.reportKind);
       const reportData = insertAttendanceReportSchema.parse({
@@ -2787,6 +2809,19 @@ export async function registerRoutes(app: Express) {
         return res.status(403).json({ message: "Reporting employees report is not enabled for this department" });
       }
 
+      // Wages / Fund Staff report: only departments with letter-EPID staff; Main only while the
+      // Super Admin keeps it open; Supplementary only with the section's one-time permit.
+      let fundSupplementaryAllowed = false;
+      if (reportType === 'fund') {
+        if ((await fundStaffCount(departmentId)) === 0) {
+          return res.status(403).json({ message: "This department has no Wages / Fund Staff employees." });
+        }
+        fundSupplementaryAllowed = await fundSupplementaryAllowedFor(departmentId);
+        if (reportKind === 'main' && !(await isFundReportOpen())) {
+          return res.status(403).json({ message: "The Wages / Fund Staff attendance report is closed at present." });
+        }
+      }
+
       // An unfinished draft must be finalised or deleted first (avoids the same
       // employee being entered in two open reports at once)
       if (existingDraftReport) {
@@ -2807,7 +2842,12 @@ export async function registerRoutes(app: Express) {
       // report has been created successfully (see below), so a failed creation
       // does not cost the department its permission.
       // Without that permission only the Main report can be created, as before.
-      if (reportKind === 'supplementary' && !department?.allowSupplementaryReport) {
+      if (reportType === 'fund' && reportKind === 'supplementary' && !fundSupplementaryAllowed) {
+        return res.status(400).json({
+          message: "A Supplementary Wages / Fund Staff report needs permission from the Accounts / Bill / Students section."
+        });
+      }
+      if (reportType !== 'fund' && reportKind === 'supplementary' && !department?.allowSupplementaryReport) {
         return res.status(400).json({
           message: existingMainReport
             ? "The Main Attendance Report for this month already exists. Please ask Admin for Supplementary report permission (or request cancellation/recall of the Main report)."
@@ -2819,7 +2859,13 @@ export async function registerRoutes(app: Express) {
 
       // Report created → now use up the one-time Supplementary permission
       // (admin dashboard switch turns OFF by itself)
-      if (reportKind === 'supplementary') {
+      if (reportKind === 'supplementary' && reportType === 'fund') {
+        try {
+          await useUpFundSupplementary(departmentId);
+        } catch (permErr) {
+          console.error(`[FundReport] Report ${report.id} created but failed to reset fund supplementary permission for dept ${departmentId}:`, permErr);
+        }
+      } else if (reportKind === 'supplementary') {
         try {
           const { db } = await import("./db");
           const { sql } = await import("drizzle-orm");
@@ -3007,6 +3053,19 @@ export async function registerRoutes(app: Express) {
       // Reporting employees guard (no effect for employees without reporting records)
       let reportingEmployeeId: number | null = null;
       if (report) {
+        // Letter-EPID (wage / fund) staff go only in the Wages / Fund Staff report, and only they do
+        const empForKind = await storage.getEmployee(Number(employeeId));
+        if (empForKind) {
+          const fundReport = (report as any).reportType === 'fund';
+          const letter = isLetterEpid(empForKind.epid);
+          if (fundReport && !letter) {
+            return res.status(400).json({ message: `${empForKind.name} (${empForKind.epid}) is not Wages / Fund Staff and cannot be added to this report.` });
+          }
+          if (!fundReport && letter) {
+            return res.status(400).json({ message: `${empForKind.name} (${empForKind.epid}) is Wages / Fund Staff — add the attendance in the Wages / Fund Staff report.` });
+          }
+        }
+
         const guard = await checkReportingGuard({
           employeeId: Number(employeeId),
           reportDepartmentId: report.departmentId,
@@ -3023,7 +3082,7 @@ export async function registerRoutes(app: Express) {
         // while the popup was open). Only sent by the "create report" flow, so edits
         // of older reports and admin edits are not affected.
         if ((req.body as any)?.strictDepartmentCheck === true
-            && ((report as any).reportType || 'regular') === 'regular'
+            && ['regular', 'fund'].includes((report as any).reportType || 'regular')
             && !reportingEmployeeId) {
           const emp = await storage.getEmployee(Number(employeeId));
           const isActive = String(emp?.isActive || 'active').toLowerCase() === 'active';
@@ -3286,7 +3345,8 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Only rows of sent reports can be marked as exported." });
       }
       const limited = !isSuper && !isNasir; // salary admin
-      if (limited && row.salary_asstt !== salaryCode) {
+      // Section logins act on all their section's codes (Accounts: ACC + OTH)
+      if (limited && !codesForUserCode(salaryCode).includes(row.salary_asstt)) {
         return res.status(403).json({ message: "You can change the export status only of your own employees." });
       }
       if (!exported && !isSuper && row.exported_to_oracle_at && !row.exported_today) {
@@ -4513,6 +4573,7 @@ export async function registerRoutes(app: Express) {
         termExtensionUrl: files?.termExtensionDoc ? `/uploads/${files.termExtensionDoc[0].filename}` : req.body.termExtensionUrl || null,
       };
 
+      if (typeof employeeData.epid === "string") employeeData.epid = employeeData.epid.trim().toUpperCase();
       if (employeeData.epid) {
         const existingEmployee = await storage.getEmployeeByEpid(employeeData.epid);
         if (existingEmployee) {
@@ -4525,6 +4586,8 @@ export async function registerRoutes(app: Express) {
       }
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
+      const kindError = employeeKindError(parsedData, () => true);
+      if (kindError) return res.status(400).json({ message: kindError, details: kindError });
 
       try {
         const employee = await storage.createEmployee(parsedData);
@@ -4925,6 +4988,10 @@ export async function registerRoutes(app: Express) {
         permitted: department.attendancePermitted,
         allowSupplementaryReport: department.allowSupplementaryReport,
         allowReportingEmployees: !!(department as any).allowReportingEmployees,
+        // Wages / Fund Staff report (letter-EPID staff)
+        hasFundStaff: (await fundStaffCount(deptId)) > 0,
+        fundReportOpen: await isFundReportOpen(),
+        allowFundSupplementary: await fundSupplementaryAllowedFor(deptId),
         deadlineDay,
         daysRemaining: isPastDeadline ? 0 : daysRemaining,
         isPastDeadline

@@ -1,4 +1,6 @@
+import { isTermedStatus } from "@shared/employeeKind";
 import { useQuery } from "@tanstack/react-query";
+import { FUND_REPORT_LABEL } from "@shared/sections";
 import { getReportPrefix } from "@shared/reportKind";
 import { groupEntriesByEmployee } from "@shared/entryPeriods";
 import { useRoute, useLocation } from "wouter";
@@ -96,7 +98,8 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
 
   // Reporting Employees report (Admin Non Teaching) — separate report type
   const isReportingReport = (report as any)?.reportType === 'reporting';
-  const reportTypeSuffix = isReportingReport ? ' (Reporting Employees)' : '';
+  const isFundReportType = (report as any)?.reportType === 'fund';
+  const reportTypeSuffix = isReportingReport ? ' (Reporting Employees)' : isFundReportType ? ` (${FUND_REPORT_LABEL})` : '';
 
   if (isLoadingReport) {
     return <LoadingSkeleton />;
@@ -145,7 +148,7 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
 
   const formatTermExpiry = (dateStr: string | null | undefined, employmentStatus?: string): string => {
     if (!dateStr) return "-";
-    if (employmentStatus && employmentStatus !== "Temporary" && employmentStatus !== "Probation") return "-";
+    if (employmentStatus && !isTermedStatus(employmentStatus)) return "-";
 
     try {
       const date = new Date(dateStr);

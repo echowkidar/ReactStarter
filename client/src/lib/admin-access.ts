@@ -71,3 +71,59 @@ export function canOpenAdminPage(path: string, access: AdminAccess = getAdminAcc
   const rule = PAGE_RULES.find((r) => path === r.prefix || path.startsWith(r.prefix + "/"));
   return rule ? rule.allowed(access) : true;
 }
+
+// ─── Section view (Salary / Accounts / Bill / Students) ─────────────────────
+// A section login (ACC, BIL, STU) is fixed to its own section. A real Super Admin
+// picks the section to look at from the header (kept in localStorage, default salary).
+// Everyone else always works in the Salary Section.
+import { useEffect, useState } from "react";
+import { sectionOfAdmin, isSectionLoginCode, SECTIONS, type SectionKey } from "@shared/sections";
+
+const SECTION_EVENT = "admin-section-change";
+
+function readAdminForSection(): { adminType: string; userCode: string; role: string } {
+  let admin: any = {};
+  let adminType = "";
+  try { admin = JSON.parse(localStorage.getItem("admin") || "{}"); } catch { admin = {}; }
+  try { adminType = localStorage.getItem("adminType") || ""; } catch { adminType = ""; }
+  return { adminType, userCode: String(admin.userCode || ""), role: String(admin.role || "") };
+}
+
+export function isSectionLogin(): boolean {
+  const { adminType, userCode, role } = readAdminForSection();
+  const isSalary = adminType ? adminType === "salary" : role === "salary";
+  return isSalary && isSectionLoginCode(userCode);
+}
+
+export function getAdminSection(): SectionKey {
+  const { adminType, userCode, role } = readAdminForSection();
+  const isSalary = adminType ? adminType === "salary" : role === "salary";
+  if (isSalary) return sectionOfAdmin(userCode);
+  const isSuper = adminType ? adminType === "super" : (role === "superadmin" || role === "super");
+  if (!isSuper || userCode.toUpperCase() === "ALL") return "salary";
+  try {
+    const v = localStorage.getItem("adminSectionView");
+    if (SECTIONS.some((s) => s.key === v)) return v as SectionKey;
+  } catch { /* ignore */ }
+  return "salary";
+}
+
+export function setAdminSectionView(key: SectionKey) {
+  try { localStorage.setItem("adminSectionView", key); } catch { /* ignore */ }
+  window.dispatchEvent(new Event(SECTION_EVENT));
+}
+
+export function useAdminSection(): SectionKey {
+  const [section, setSection] = useState<SectionKey>(() => getAdminSection());
+  useEffect(() => {
+    const update = () => setSection(getAdminSection());
+    window.addEventListener(SECTION_EVENT, update);
+    window.addEventListener("storage", update);
+    update();
+    return () => {
+      window.removeEventListener(SECTION_EVENT, update);
+      window.removeEventListener("storage", update);
+    };
+  }, []);
+  return section;
+}

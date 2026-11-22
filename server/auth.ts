@@ -221,7 +221,7 @@ const DEPT_ALLOWED_ADMIN = [
 
 /** Admin actions that live outside /api/admin/ — never for departments */
 const ADMIN_ONLY_OUTSIDE_ADMIN = [
-  { method: "PATCH", re: /^\/api\/departments\/\d+\/(?:attendance-permit|supplementary-permit|reporting-permit)$/ },
+  { method: "PATCH", re: /^\/api\/departments\/\d+\/(?:attendance-permit|supplementary-permit|reporting-permit|fund-supplementary-permit)$/ },
   { method: "POST", re: /^\/api\/notices$/ },
   { method: "DELETE", re: /^\/api\/notices\/\d+$/ },
   { method: "PATCH", re: /^\/api\/tickets\/\d+$/ },

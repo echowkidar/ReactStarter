@@ -1,4 +1,6 @@
 import { serverLogout } from "@/lib/auth";
+import { useAdminSection } from "@/lib/admin-access";
+import { sectionCodes, codesForUserCode } from "@shared/sections";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -14,7 +16,7 @@ import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, Chevro
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
-import { employmentStatuses } from "@/lib/departments";
+import { statusesForEpid, isLetterEpid, isValidEpid, EPID_FORMAT_MESSAGE, showsTermExpiry, dealingAssistantAllowed, dealingAssistantOptionsFor } from "@shared/employeeKind";
 import AdminHeader from "@/components/layout/admin-header";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
@@ -94,6 +96,10 @@ export default function AdminEmployees() {
 
   // DUPLICATE EPID CHECK
   const [watchedEpid, setWatchedEpid] = useState("");
+  // EPID that decides the employee kind (locked EPID when editing, typed EPID when adding)
+  const kindEpid = selectedEmployee?.epid || watchedEpid;
+  const statusOptions = statusesForEpid(kindEpid);
+  const assistantOptions = dealingAssistantOptionsFor(kindEpid, salaryAssistantOptions);
   const [duplicateEmployee, setDuplicateEmployee] = useState<{ name: string; departmentName: string } | null>(null);
 
   useEffect(() => {
@@ -167,13 +173,20 @@ export default function AdminEmployees() {
     return employee.departmentId?.toString() || "";
   };
 
-  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
+  const section = useAdminSection();
+  const { data: allEmployees = [], isLoading: isEmployeesLoading } = useQuery<Employee[]>({
     queryKey: ['/api/admin/employees'],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/admin/employees");
       return response.json();
     }
   });
+  // Salary view: numeric-EPID employees. Section view: letter-EPID employees of that section's dealing assistant codes.
+  const employees = useMemo(() => {
+    if (section === "salary") return allEmployees.filter(e => !isLetterEpid(e.epid));
+    const codes = sectionCodes(section);
+    return allEmployees.filter(e => isLetterEpid(e.epid) && codes.includes(String(e.salary_asstt || "").toUpperCase()));
+  }, [allEmployees, section]);
 
   const { data: departments = [], isLoading: isDepartmentsLoading } = useQuery<Department[]>({
     queryKey: ['/api/departments'],
@@ -414,7 +427,7 @@ export default function AdminEmployees() {
       setSelectedDesignation(selectedEmployee.designation || "");
       setPayLevel(selectedEmployee.payLevel || "L-0");
       setSelectedSalaryRegisterNo(selectedEmployee.salaryRegisterNo || "");
-      setSelectedSalaryAsstt(selectedEmployee.salary_asstt || "");
+      setSelectedSalaryAsstt(dealingAssistantAllowed(selectedEmployee.epid, selectedEmployee.salary_asstt) ? (selectedEmployee.salary_asstt || "") : "");
     } else if (!selectedEmployee) {
       setSelectedDepartmentId("");
       setSelectedDesignation("");
@@ -711,6 +724,19 @@ export default function AdminEmployees() {
         title: "Error",
         description: "Please select a department"
       });
+      return;
+    }
+
+    if (!isValidEpid(kindEpid)) {
+      toast({ variant: "destructive", title: "Error", description: EPID_FORMAT_MESSAGE });
+      return;
+    }
+    if (!employmentStatus || !statusesForEpid(kindEpid).includes(employmentStatus)) {
+      toast({ variant: "destructive", title: "Error", description: "Please select a valid Employment Status for this EPID" });
+      return;
+    }
+    if (isLetterEpid(kindEpid) && !String(data.termExpiry ?? "").trim()) {
+      toast({ variant: "destructive", title: "Error", description: "Term Expiry date is required" });
       return;
     }
 
@@ -1160,10 +1186,19 @@ export default function AdminEmployees() {
                                   required
                                   maxLength={5}
                                   disabled={!!selectedEmployee?.epid}
+                                  placeholder="5 digits or 1 letter + 4 digits"
                                   onChange={(e) => {
-                                    // Only allow numeric input
-                                    const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+                                    // 5 digits, or 1 letter followed by 4 digits
+                                    let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                    value = (/^[A-Z]/.test(value) ? value[0] + value.slice(1).replace(/\D/g, '') : value.replace(/\D/g, '')).slice(0, 5);
                                     e.target.value = value;
+                                    // Kind changed: drop a status / dealing assistant that no longer fits
+                                    if (!selectedEmployee?.epid) {
+                                      if (!statusesForEpid(value).includes(employmentStatus)) {
+                                        setEmploymentStatus(isLetterEpid(value) ? "" : "Permanent");
+                                      }
+                                      if (!dealingAssistantAllowed(value, selectedSalaryAsstt)) setSelectedSalaryAsstt("");
+                                    }
                                     setWatchedEpid(value);
                                   }}
                                 />
@@ -1233,7 +1268,7 @@ export default function AdminEmployees() {
                                     <SelectValue placeholder="Select status" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {employmentStatuses.map((status) => (
+                                    {statusOptions.map((status) => (
                                       <SelectItem key={status} value={status}>
                                         {status}
                                       </SelectItem>
@@ -1275,9 +1310,9 @@ export default function AdminEmployees() {
                                   Employee is Active
                                 </Label>
                               </div>
-                              {(employmentStatus === "Probation" || employmentStatus === "Temporary") && (
+                              {showsTermExpiry(kindEpid, employmentStatus) && (
                                 <div>
-                                  <Label htmlFor="termExpiry">Term Expiry Date</Label>
+                                  <Label htmlFor="termExpiry">Term Expiry Date{isLetterEpid(kindEpid) && <span className="text-red-500"> *</span>}</Label>
                                   <Input
                                     id="termExpiry"
                                     name="termExpiry"
@@ -1427,7 +1462,7 @@ export default function AdminEmployees() {
                               <div>
                                 <Label htmlFor="salary_asstt">Salary Assistant <span className="text-red-500">*</span></Label>
                                 <SearchableSelect
-                                  options={salaryAssistantOptions}
+                                  options={assistantOptions}
                                   value={selectedSalaryAsstt}
                                   onValueChange={setSelectedSalaryAsstt}
                                   placeholder="Select salary assistant..."
@@ -1487,7 +1522,7 @@ export default function AdminEmployees() {
                               {showAadhar && renderUploadPreview('aadharCard', 'Adhar Number')}
                               {renderUploadPreview('officeMemo', 'Office Memo')}
                               {renderUploadPreview('joiningReport', 'Joining Report')}
-                              {(employmentStatus === "Probation" || employmentStatus === "Temporary") &&
+                              {showsTermExpiry(kindEpid, employmentStatus) &&
                                 renderUploadPreview('termExtension', 'Term Extension Office Memo')
                               }
                             </div>
@@ -1777,7 +1812,7 @@ export default function AdminEmployees() {
                               const canEdit =
                                 adminType === "super" ||
                                 (adminType === "salary" && userCode === "ALL") ||
-                                (adminType === "salary" && userCode === employee.salary_asstt);
+                                (adminType === "salary" && codesForUserCode(userCode).includes(employee.salary_asstt || ""));
 
                               if (!canEdit) return true;
 
@@ -1827,7 +1862,7 @@ export default function AdminEmployees() {
                               const canEdit =
                                 adminType === "super" ||
                                 (adminType === "salary" && userCode === "ALL") ||
-                                (adminType === "salary" && userCode === employee.salary_asstt);
+                                (adminType === "salary" && codesForUserCode(userCode).includes(employee.salary_asstt || ""));
 
                               if (!canEdit) {
                                 e.preventDefault();
@@ -1861,8 +1896,7 @@ export default function AdminEmployees() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {(employee.employmentStatus === "Probation" ||
-                          employee.employmentStatus === "Temporary") &&
+                        {showsTermExpiry(employee.epid, employee.employmentStatus) &&
                           employee.termExpiry ? (
                           (() => {
                             try {
@@ -1927,7 +1961,7 @@ export default function AdminEmployees() {
                           const canEdit =
                             adminType === "super" ||
                             (adminType === "salary" && userCode === "ALL") ||
-                            (adminType === "salary" && userCode === employee.salary_asstt);
+                            (adminType === "salary" && codesForUserCode(userCode).includes(employee.salary_asstt || ""));
 
                           if (!canEdit) return null;
 
@@ -1937,7 +1971,8 @@ export default function AdminEmployees() {
                               size="icon"
                               onClick={() => {
                                 setSelectedEmployee(employee);
-                                setEmploymentStatus(employee.employmentStatus);
+                                // a stored status that does not fit the EPID kind is shown as unselected
+                                setEmploymentStatus(statusesForEpid(employee.epid).includes(employee.employmentStatus) ? employee.employmentStatus : "");
 
                                 // The department ID will be set by the useEffect when departments are available
                                 setIsDialogOpen(true);

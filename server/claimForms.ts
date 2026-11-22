@@ -24,6 +24,7 @@ import { rateLimit, safeUploadName } from "./security";
 import { notify } from "./notify";
 import { buildClaimPdf, claimPrintCode, claimPrintRef } from "./claimPdf";
 import { ceaRates } from "./ceaSettings";
+import { codesForUserCode } from "../shared/sections";
 import {
   CLAIM_DATA_SCHEMAS, CLAIM_FORM_DEFS, CLAIM_FORM_TYPES, CLAIM_STATUS_HELP, CLAIM_STATUS_LABELS,
   DEFAULT_CONVEYANCE_RATES, DEPARTMENT_ACTIONABLE, EMPLOYEE_EDITABLE, PCA_STATUSES, appointmentKey, claimableHalfYears,
@@ -1115,7 +1116,8 @@ export function registerClaimFormRoutes(app: Express) {
   const mayDecide = (admin: any, dealingAssistant: string | null): boolean => {
     if (isSuper(admin)) return true;
     const code = clean(admin?.userCode).toUpperCase();
-    return !!code && code !== "ALL" && code !== "VEW" && code === clean(dealingAssistant).toUpperCase();
+    // Section logins (ACC/BIL/STU) act on all their section's codes (Accounts: ACC + OTH)
+    return !!code && code !== "ALL" && code !== "VEW" && codesForUserCode(code).includes(clean(dealingAssistant).toUpperCase());
   };
 
   const adminClaim = async (req: Request, res: Response, write: boolean): Promise<{ claim: ClaimForm; admin: any; dealingAssistant: string | null } | null> => {

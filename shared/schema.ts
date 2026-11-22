@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, date, timestamp, boolean, jsonb, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { isValidEpid, EPID_FORMAT_MESSAGE, canonicalStatus } from "./employeeKind";
 
 export const departments = pgTable("departments", {
   id: serial("id").primaryKey(),
@@ -12,6 +13,8 @@ export const departments = pgTable("departments", {
   attendancePermitted: boolean("attendance_permitted").notNull().default(true),
   allowSupplementaryReport: boolean("allow_supplementary_report").notNull().default(false),
   allowReportingEmployees: boolean("allow_reporting_employees").notNull().default(false),
+  // One-time permit for a supplementary Wages / Fund Staff report (NULL = not allowed)
+  allowFundSupplementary: boolean("allow_fund_supplementary"),
   lastLogin: timestamp("last_login"),
 });
 
@@ -132,7 +135,9 @@ export const insertDepartmentSchema = createInsertSchema(departments).omit({ id:
 export const insertEmployeeSchema = createInsertSchema(employees)
   .omit({ id: true })
   .extend({
-    epid: z.string().length(5, "EPID must be exactly 5 digits").regex(/^\d+$/, "EPID must only contain numbers"),
+    // 5 digits (regular staff) or 1 letter + 4 digits (wage / fund staff, e.g. R0001)
+    epid: z.string().transform(v => v.trim().toUpperCase())
+      .refine(isValidEpid, EPID_FORMAT_MESSAGE),
     joiningDate: z.union([
       z.string(),
       z.date().transform(date => date.toISOString().split('T')[0])
@@ -146,16 +151,9 @@ export const insertEmployeeSchema = createInsertSchema(employees)
       if (val instanceof Date) return val.toISOString().split('T')[0];
       return val;
     }),
+    // Which statuses fit which EPID kind is checked by employeeKindError (shared/employeeKind.ts)
     employmentStatus: z.string().transform(val => {
-      const allowed = [
-        "Permanent",
-        "Probation",
-        "Temporary",
-        "Court Case",
-        "Compensation",
-        "Till Further Order"
-      ];
-      const match = allowed.find(s => s.toLowerCase() === val.trim().toLowerCase());
+      const match = canonicalStatus(val);
       if (!match) {
         throw new Error("Invalid employment status");
       }

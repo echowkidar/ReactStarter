@@ -20,6 +20,7 @@ import {
   computeDiff, newEmployeeValues, normaliseConfig, FIELD_BY_NAME, FIELDS, PAY_RELEASE_FLAGS,
   type AppEmployee, type OracleRow, type SyncConfig,
 } from "./oracleSyncDiff";
+import { statusesForEpid } from "../shared/employeeKind";
 
 const CONFIG_KEY = "oracle_sync_config";
 
@@ -51,7 +52,7 @@ export const isoTime = (column: string) =>
 const SERVICE_URL = () => (process.env.ORACLE_SYNC_URL || "http://oracle-sync:8000").replace(/\/+$/, "");
 const KEEP_SNAPSHOTS = 3;
 const MAX_ITEMS = 12000;
-const APP_STATUSES = ["Permanent", "Probation", "Temporary", "Court Case", "Compensation", "Till Further Order"];
+// Allowed statuses depend on the EPID kind (numeric vs letter EPID) — see shared/employeeKind.ts
 
 // Columns an Oracle sync may change (and an undo may put back) — nothing else
 const STATUS_COLUMNS = ["is_active", "disable_reason", "disable_wef_date"];
@@ -533,7 +534,7 @@ export function registerOracleSyncRoutes(app: Express, verifyAdminSession: any) 
             const departmentId = Number(it.create.departmentId);
             const status = String(it.create.employmentStatus || d.suggestedEmploymentStatus || "");
             if (!deptIds.has(departmentId)) { summary.skipped.push(`${epid}: choose a department`); continue; }
-            if (!APP_STATUSES.includes(status)) { summary.skipped.push(`${epid}: choose an employment status`); continue; }
+            if (!statusesForEpid(epid).includes(status)) { summary.skipped.push(`${epid}: choose an employment status`); continue; }
             const exists = await tx.execute(sql`SELECT 1 FROM employees WHERE epid = ${epid} LIMIT 1`);
             if (exists.rows.length) { summary.skipped.push(`${epid}: already exists`); continue; }
             const v = newEmployeeValues(o, departmentId, status, today);

@@ -1,3 +1,4 @@
+import { isTermedStatus } from "@shared/employeeKind";
 import { serverLogout } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -22,7 +23,9 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { getAdminAccess } from "@/lib/admin-access";
+import { getAdminAccess, useAdminSection, isSectionLogin } from "@/lib/admin-access";
+import { reportInSection, isFundReport, isSectionLoginCode, FUND_REPORT_LABEL, sectionLabel } from "@shared/sections";
+import { Switch } from "@/components/ui/switch";
 import { getReportPrefix } from "@shared/reportKind";
 import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send, Lock, Unlock, ShieldAlert, ShieldCheck } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
@@ -183,7 +186,9 @@ export default function AdminDashboard() {
   // API expects 1-based month
   const apiMonth = filterMonth + 1;
 
-  const { data: reports = [], isLoading } = useQuery<ReportWithDepartment[]>({
+  const section = useAdminSection();
+  const sectionLogin = isSectionLogin();
+  const { data: allReports = [], isLoading } = useQuery<ReportWithDepartment[]>({
     queryKey: ["/api/admin/attendance", monthFilter],
     queryFn: async () => {
       let url = "/api/admin/attendance";
@@ -196,6 +201,63 @@ export default function AdminDashboard() {
     },
     refetchInterval: 120000,
   });
+
+  // Only the reports that belong to the section being viewed (salary view = regular + reporting)
+  const reports = useMemo(
+    () => (allReports as ReportWithDepartment[]).filter((r) => reportInSection((r as any).reportType, section)),
+    [allReports, section],
+  );
+
+  // Wages / Fund Staff attendance: open flag + departments with letter-EPID staff
+  interface FundStatus {
+    open: boolean;
+    departments: { id: number; name: string; fundStaffCount: number; allowFundSupplementary: boolean }[];
+  }
+  const { data: fundStatus } = useQuery<FundStatus>({
+    queryKey: ["/api/admin/fund-report-status"],
+    queryFn: async () => (await apiRequest("GET", "/api/admin/fund-report-status")).json(),
+    refetchInterval: 120000,
+  });
+  const fundSuppMap = useMemo(() => {
+    const m = new Map<number, boolean>();
+    (fundStatus?.departments || []).forEach((d) => m.set(d.id, !!d.allowFundSupplementary));
+    return m;
+  }, [fundStatus]);
+  const fundOpenMutation = useMutation({
+    mutationFn: async (open: boolean) => {
+      await apiRequest("PATCH", "/api/admin/fund-report-open", { open });
+    },
+    onSuccess: (_, open) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fund-report-status"] });
+      toast({ title: open ? "Wages / Fund Staff attendance opened" : "Wages / Fund Staff attendance closed" });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update" });
+    },
+  });
+  const fundSuppMutation = useMutation({
+    mutationFn: async ({ deptId, allowed }: { deptId: number; allowed: boolean }) => {
+      await apiRequest("PATCH", `/api/departments/${deptId}/fund-supplementary-permit`, { allowed });
+    },
+    onSuccess: (_, { allowed }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fund-report-status"] });
+      toast({ title: allowed ? "Supplementary allowed" : "Supplementary not allowed" });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update" });
+    },
+  });
+
+  // Who may act on a report: fund reports -> Super Admin or a section login; others -> as before
+  const canActOnReport = (report: any): boolean => {
+    const a = JSON.parse(localStorage.getItem("admin") || "{}");
+    if (a.userCode === 'VEW') return false;
+    const isSuper = a.role === 'superadmin';
+    const isSectionAdmin = a.role === 'salary' && isSectionLoginCode(a.userCode);
+    if (isFundReport(report.reportType)) return isSuper || isSectionAdmin;
+    if (isSectionAdmin) return false;
+    return isSuper || (a.role === 'salary' && (a.userCode === 'ALL' || report.department?.dealingAssistantCode === a.userCode));
+  };
 
   // Reports labelled "Supplementary" (same rule as Detailed View / report pages)
   const supplementaryReportIds = useMemo(() => {
@@ -933,7 +995,12 @@ export default function AdminDashboard() {
 
       // Find departments that have employees (>0) AND NO report for this month
       // AND are permitted (optional, but requested: 'departments with >0 employees')
-      const missingDepts = departments.filter(dept => {
+      const candidateDepts = section === "salary"
+        ? departments
+        : (fundStatus?.open
+          ? (fundStatus.departments || []).map(d => ({ id: d.id, name: d.name, employeeCount: d.fundStaffCount }))
+          : []);
+      const missingDepts = candidateDepts.filter(dept => {
         if (!dept.employeeCount || dept.employeeCount === 0) return false;
 
         // Check if report exists
@@ -965,6 +1032,7 @@ export default function AdminDashboard() {
           despatchNo: "-",
           despatchDate: null,
           status: "not_received",
+          reportType: section === "salary" ? "regular" : "fund",
           // Add other required fields with dummy values
           createdAt: new Date(),
           fileUrl: null
@@ -1014,7 +1082,7 @@ export default function AdminDashboard() {
     });
 
     return filtered;
-  }, [reports, searchTerm, statusFilter, monthFilter, departmentFilter, sortConfig, departments]);
+  }, [reports, searchTerm, statusFilter, monthFilter, departmentFilter, sortConfig, departments, section, fundStatus]);
 
   const handleLogout = () => {
     // Send logout signal to remove from active users
@@ -1117,7 +1185,7 @@ export default function AdminDashboard() {
             <h1 className="text-2xl font-bold">Attendance Reports</h1>
             <Badge variant="outline" className="text-lg">
               <FileCheck className="h-4 w-4 mr-2" />
-              Salary Section
+              {sectionLabel(section)}
             </Badge>
           </div>
           <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
@@ -1645,9 +1713,10 @@ export default function AdminDashboard() {
                 {(() => {
                   const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
                   const isSuperOrAll = adminData.role === 'superadmin' || (adminData.role === 'salary' && adminData.userCode === 'ALL');
-                  const isDealingAssistant = adminData.role === 'salary' && adminData.userCode !== 'ALL' && adminData.userCode !== 'VEW';
+                  const isDealingAssistant = adminData.role === 'salary' && adminData.userCode !== 'ALL' && adminData.userCode !== 'VEW' && !isSectionLoginCode(adminData.userCode);
+                  const isSectionAdmin = adminData.role === 'salary' && isSectionLoginCode(adminData.userCode);
 
-                  if (!isSuperOrAll && !isDealingAssistant) return (
+                  if (!isSuperOrAll && !isDealingAssistant && !isSectionAdmin) return (
                     <>
                       <p className="text-lg font-bold text-gray-400 leading-none">-</p>
                       <p className="text-[7px] uppercase text-gray-400 font-medium">Pending</p>
@@ -1656,7 +1725,7 @@ export default function AdminDashboard() {
 
                   // Calculate pending requests meant for this user
                   let pendingCount = 0;
-                  if (isSuperOrAll) {
+                  if (isSuperOrAll || isSectionAdmin) {
                     pendingCount = stats.requests.cancellation + stats.requests.recall;
                   } else if (isDealingAssistant) {
                     // Count only requests from departments assigned to this dealing assistant
@@ -1769,6 +1838,32 @@ export default function AdminDashboard() {
         )}
 
 
+
+        {(isSuperAdmin || sectionLogin) && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold">{FUND_REPORT_LABEL} attendance</p>
+              <p className="text-xs text-muted-foreground">
+                {fundStatus?.open
+                  ? "Open: departments can submit attendance of their wages / fund staff."
+                  : "Closed: departments cannot submit attendance of their wages / fund staff."}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-medium ${fundStatus?.open ? "text-green-600" : "text-red-600"}`}>
+                {fundStatus ? (fundStatus.open ? "Open" : "Closed") : "..."}
+              </span>
+              {isSuperAdmin && adminInfo.userCode !== 'VEW' && (
+                <Switch
+                  checked={!!fundStatus?.open}
+                  disabled={!fundStatus || fundOpenMutation.isPending}
+                  onCheckedChange={(open) => fundOpenMutation.mutate(open)}
+                  aria-label="Open or close Wages / Fund Staff attendance"
+                />
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 mb-4">
 
@@ -1915,6 +2010,22 @@ export default function AdminDashboard() {
                         return (
                           <div className="flex flex-col gap-0.5">
                             <span className="font-medium">{deptName}</span>
+                            {isFundReport((report as any).reportType) && (
+                              <span className="w-fit rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] text-amber-800">
+                                {FUND_REPORT_LABEL}
+                              </span>
+                            )}
+                            {isFundReport((report as any).reportType) && (isSuperAdmin || sectionLogin) && adminInfo.userCode !== 'VEW' && (
+                              <label className="flex w-fit items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <Switch
+                                  checked={fundSuppMap.get(report.departmentId) ?? false}
+                                  disabled={fundSuppMutation.isPending}
+                                  onCheckedChange={(allowed) => fundSuppMutation.mutate({ deptId: report.departmentId, allowed })}
+                                  className="h-4 w-7"
+                                />
+                                Allow supplementary
+                              </label>
+                            )}
                             {supplementaryReportIds.has(report.id) && (
                               <span className="w-fit rounded border border-purple-200 bg-purple-50 px-1 py-0.5 text-[10px] text-purple-800">
                                 Supplementary Report
@@ -2045,9 +2156,7 @@ export default function AdminDashboard() {
                             size="sm"
                             onClick={() => {
                               const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-                              const isSuperOrAll = adminData.role === 'superadmin' || (adminData.role === 'salary' && adminData.userCode === 'ALL');
                               const isVEW = adminData.userCode === 'VEW';
-                              const isAssignedToMe = adminData.role === 'salary' && (report.department as any)?.dealingAssistantCode === adminData.userCode;
 
                               if (isVEW) {
                                 toast({
@@ -2058,7 +2167,7 @@ export default function AdminDashboard() {
                                 return;
                               }
 
-                              if (isSuperOrAll || isAssignedToMe) {
+                              if (canActOnReport(report)) {
                                 setLocation(`/admin/reports/${report.id}`);
                               } else {
                                 toast({
@@ -2076,18 +2185,8 @@ export default function AdminDashboard() {
                         )}
                         {/* Accept Cancellation button for cancel_requested status */}
                         {(() => {
-                          const adminData = JSON.parse(localStorage.getItem("admin") || "{}");
-
-                          // Check if department is assigned to this specific dealing assistant
-                          const isAssignedToMe = adminData.role === 'salary' &&
-                            (report.department as any)?.dealingAssistantCode === adminData.userCode;
-
-                          // 'ALL' user code is equivalent to super_admin for these tasks
-                          const canManageRequests = adminData.role === 'superadmin' ||
-                            (adminData.role === 'salary' && adminData.userCode === 'ALL') ||
-                            isAssignedToMe;
-
-                          if (!canManageRequests) return null;
+                          // Fund reports: Super Admin / section logins. Others: Super Admin, 'ALL' (acts as super) or the assigned dealing assistant.
+                          if (!canActOnReport(report)) return null;
 
                           return (
                             <>
@@ -2371,7 +2470,7 @@ export default function AdminDashboard() {
                                 {emp.employment_status || '—'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-sm">{(emp.employment_status === 'Temporary' || emp.employment_status === 'Probation') ? (emp.term_expiry || '—') : '—'}</TableCell>
+                            <TableCell className="text-sm">{isTermedStatus(emp.employment_status) ? (emp.term_expiry || '—') : '—'}</TableCell>
                             <TableCell className="text-sm">{emp.salary_asstt || '—'}</TableCell>
                             <TableCell className="text-sm">{emp.salary_register_no || '—'}</TableCell>
                             {(employeePopup?.category === 'reported' || employeePopup?.category === 'report_entries') && (

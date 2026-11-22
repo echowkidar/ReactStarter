@@ -8,6 +8,7 @@ import {
     departmentNames,
     insertEmployeeSchema
 } from "@shared/schema";
+import { employeeKindError } from "@shared/employeeKind";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -116,6 +117,8 @@ export function registerExternalRoutes(app: any) {
         try {
             // Validate with schema (loosely, allowing some missing fields to be filled with defaults)
             const employeeData = insertEmployeeSchema.parse(req.body);
+            const kindError = employeeKindError(employeeData, () => true);
+            if (kindError) return res.status(400).json({ error: "Validation Error", details: kindError });
 
             // Need to resolve department_id from name or code if provided?
             // Assuming they send 'departmentId' valid integer as per schema.

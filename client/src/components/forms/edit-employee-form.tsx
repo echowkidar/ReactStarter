@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { employmentStatuses } from "@/lib/departments";
+import { ALL_STATUSES, statusesForEpid, isLetterEpid, showsTermExpiry, requiresTermExpiry, dealingAssistantAllowed, dealingAssistantOptionsFor } from "@shared/employeeKind";
 import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Employee, InsertEmployee, insertEmployeeSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -82,7 +82,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
   const [selectedDesignation, setSelectedDesignation] = useState(employee.designation || "");
-  const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState(employee.salary_asstt || "");
+  const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState(
+    window.location.pathname.includes('/admin') && !dealingAssistantAllowed(employee.epid, employee.salary_asstt) ? "" : (employee.salary_asstt || "")
+  );
   const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState(employee.salaryRegisterNo || "");
 
   // Fetch all salary registers dynamically
@@ -411,6 +413,16 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
     officeMemoUrl: z.string().optional(),
     joiningReportUrl: z.string().optional(),
     termExtensionUrl: z.string().optional(),
+    employmentStatus: z.string().refine((v) => v === "" || (ALL_STATUSES as readonly string[]).includes(v), "Invalid status"),
+  }).superRefine((d: any, ctx) => {
+    if (!d.employmentStatus) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["employmentStatus"], message: "Employment Status is required" });
+    } else if (!statusesForEpid(d.epid).includes(d.employmentStatus)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["employmentStatus"], message: "Select a status that matches this EPID" });
+    }
+    if (requiresTermExpiry(d.epid) && !String(d.termExpiry ?? "").trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["termExpiry"], message: "Term Expiry date is required" });
+    }
   });
 
   const form = useForm<InsertEmployee & {
@@ -432,7 +444,8 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
       epid: employee.epid,
       name: employee.name,
       designation: employee.designation,
-      employmentStatus: employee.employmentStatus,
+      // a stored status that does not fit the EPID kind is shown as unselected so the user must choose
+      employmentStatus: statusesForEpid(employee.epid).includes(employee.employmentStatus) ? employee.employmentStatus : "",
       payLevel: employee.payLevel || "L-0",
       termExpiry: employee.termExpiry || "",
       panNumber: employee.panNumber || "",
@@ -557,7 +570,9 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
 
   // Watch employment status to conditionally show term expiry field
   const employmentStatus = watch("employmentStatus");
-  const showTermExpiry = employmentStatus === "Probation" || employmentStatus === "Temporary";
+  const showTermExpiry = showsTermExpiry(employee.epid, employmentStatus);
+  const statusOptions = statusesForEpid(employee.epid);
+  const assistantOptions = dealingAssistantOptionsFor(employee.epid, salaryAssistantOptions);
 
   // DUPLICATE EPID CHECK (Moved here)
   const [duplicateEmployee, setDuplicateEmployee] = useState<{ name: string; departmentName: string } | null>(null);
@@ -949,12 +964,13 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                     id="epid"
                     {...register("epid")}
                     maxLength={5}
-                    placeholder="5-digit numeric ID"
+                    placeholder="5 digits or 1 letter + 4 digits"
                     disabled={!!employee.epid} // Lock if editing existing employee with EPID
                     className={`w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${!!employee.epid ? 'bg-slate-100 text-slate-900 font-medium cursor-not-allowed' : ''}`}
                     onChange={(e) => {
-                      // Only allow numeric input
-                      const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+                      // 5 digits, or 1 letter followed by 4 digits
+                      let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                      value = (/^[A-Z]/.test(value) ? value[0] + value.slice(1).replace(/\D/g, '') : value.replace(/\D/g, '')).slice(0, 5);
                       e.target.value = value;
                       // Manually trigger react-hook-form change
                       register("epid").onChange({ target: { value, name: "epid" } } as any);
@@ -1019,7 +1035,8 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                     {...register("employmentStatus")}
                     className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   >
-                    {employmentStatuses.map((status) => (
+                    {!watch("employmentStatus") && <option value="" disabled>Select status...</option>}
+                    {statusOptions.map((status) => (
                       <option key={status} value={status}>
                         {status}
                       </option>
@@ -1137,7 +1154,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Salary Assistant <span className="text-red-500">*</span></label>
                   <SearchableSelect
-                    options={salaryAssistantOptions}
+                    options={assistantOptions}
                     value={selectedSalaryAsstt}
                     onValueChange={(value) => {
                       setSelectedSalaryAsstt(value);
@@ -1210,10 +1227,10 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
               <h3 className="text-md font-medium mb-4 text-slate-700 border-b pb-2">Documents</h3>
 
               {/* Term Expiry Date and Term Extension Letter - Only for non-Permanent employees */}
-              {watch("employmentStatus") !== "Permanent" && (
+              {(isLetterEpid(employee.epid) || watch("employmentStatus") !== "Permanent") && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 pb-6 border-b">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Term Expiry Date</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Term Expiry Date{requiresTermExpiry(employee.epid) && <span className="text-red-500"> *</span>}</label>
                     <input
                       type="date"
                       {...register("termExpiry")}
@@ -1222,7 +1239,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                     {errors.termExpiry && <p className="text-red-500 text-xs mt-1">{errors.termExpiry.message}</p>}
                   </div>
 
-                  {(watch("employmentStatus") === "Probation" || watch("employmentStatus") === "Temporary") && (
+                  {showsTermExpiry(employee.epid, watch("employmentStatus")) && (
                     <div className="border-l pl-4">
                       <FileUpload
                         label="Term Extension Letter"

@@ -28,6 +28,7 @@ import {
   SlidersHorizontal, FileSpreadsheet, ChevronDown, ChevronUp, X,
 } from "lucide-react";
 import salaryAssistants from "@/lib/salary-assistants.json";
+import { statusesForEpid } from "@shared/employeeKind";
 
 // ── Types (same shape as server/oracleSyncDiff.ts) ──────────────────────────
 type FieldChange = {
@@ -100,7 +101,6 @@ const TABS: Array<{ key: Tab; label: string; hint: string; tone: string }> = [
   { key: "new", label: "New employees", hint: "Salary made in Oracle, not in the app", tone: "text-violet-700" },
   { key: "missing", label: "Not in Oracle", hint: "Active here, ECODE not in Oracle", tone: "text-slate-700" },
 ];
-const APP_STATUSES = ["Permanent", "Probation", "Temporary", "Court Case", "Compensation", "Till Further Order"];
 const PAGE_SIZES = [50, 100, 200, 500];
 const NO_HIDDEN: Hidden = {};
 const STATUS_LABELS: Record<string, string> = {
@@ -781,7 +781,7 @@ function OracleSync() {
                                 value={newOf(i).status ?? ""}
                                 onChange={(e) => setNewChoice((m) => ({ ...m, [i.epid]: { ...m[i.epid], status: e.target.value || undefined } }))}>
                                 <option value="">Status…</option>
-                                {APP_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                                {statusesForEpid(i.epid).map((s) => <option key={s} value={s}>{s}</option>)}
                               </select>
                             </div>
                           </div>
