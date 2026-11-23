@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { isSectionLoginCode, sectionLabel, sectionOfAdmin } from "@shared/sections";
 
 
 import {
@@ -72,9 +73,16 @@ const userFormSchema = z.object({
   password: z.string().min(6, { message: "Password must be at least 6 characters" }).optional()
     .or(z.literal('')) // Allow empty string for editing
     .transform(val => val === '' ? undefined : val), // Convert empty string to undefined
-  role: z.enum(["superadmin", "salary", "department"]),
+  // "section" is only a form choice: it is saved as a Salary login with code ACC / BIL / STU
+  role: z.enum(["superadmin", "salary", "section", "department"]),
   userCode: z.string().optional().nullable(),
   departmentId: z.number({ coerce: true }).optional().nullable(),
+}).refine((data) => {
+  if (data.role === "section") return ["ACC", "BIL", "STU"].includes(String(data.userCode || ""));
+  return true;
+}, {
+  message: "Please choose the section",
+  path: ["userCode"],
 }).refine((data) => {
   if (data.role === "salary") {
     // Check if userCode is present and matches 3 uppercase letters
@@ -264,7 +272,9 @@ export default function AdminUsers() {
         name: user.name,
         email: user.email,
         password: "", // Don't fill password for editing
-        role: user.role,
+        // A Salary login with code ACC / BIL / STU is shown as a Section login
+        role: user.role === "salary" && isSectionLoginCode(user.userCode) ? "section" : user.role,
+        userCode: user.userCode ?? "",
         departmentId: targetDepartmentId, // Set the ID found from the departments list
       });
     } else {
@@ -322,7 +332,8 @@ export default function AdminUsers() {
       response = await fetch(apiUrl, {
         method: method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        // A Section login is stored as role "salary" with its section code
+        body: JSON.stringify({ ...data, role: data.role === "section" ? "salary" : data.role }),
       });
 
       let responseData;
@@ -469,11 +480,14 @@ export default function AdminUsers() {
     (user.departmentName && user.departmentName.toLowerCase().includes(searchTerm.toLowerCase()))
   ) || [];
 
-  const getRoleBadge = (role: string) => {
+  const getRoleBadge = (role: string, userCode?: string | null) => {
     switch (role) {
       case "superadmin":
         return <Badge className="bg-rose-100 text-rose-700">Super Admin</Badge>;
       case "salary":
+        if (isSectionLoginCode(userCode)) {
+          return <Badge className="bg-teal-100 text-teal-700">{sectionLabel(sectionOfAdmin(userCode))}</Badge>;
+        }
         return <Badge className="bg-emerald-100 text-emerald-700">Salary Admin</Badge>;
       case "department":
         return <Badge className="bg-blue-100 text-blue-700">Department Admin</Badge>;
@@ -569,7 +583,7 @@ export default function AdminUsers() {
                           <TableRow key={user.id}>
                             <TableCell>{user.name}</TableCell>
                             <TableCell>{user.email}</TableCell>
-                            <TableCell>{getRoleBadge(user.role)}</TableCell>
+                            <TableCell>{getRoleBadge(user.role, user.userCode)}</TableCell>
                             <TableCell>
                               <div>
                                 <div>{user.departmentName || "-"}</div>
@@ -742,6 +756,7 @@ export default function AdminUsers() {
                         <SelectContent>
                           <SelectItem value="department">Department</SelectItem>
                           <SelectItem value="salary">Salary</SelectItem>
+                          <SelectItem value="section">Section (Accounts / Bill / Students)</SelectItem>
                           <SelectItem value="superadmin">Super Admin</SelectItem>
                         </SelectContent>
                       </Select>
@@ -749,6 +764,32 @@ export default function AdminUsers() {
                     </FormItem>
                   )}
                 />
+
+                {form.watch("role") === "section" && (
+                  <FormField
+                    control={form.control}
+                    name="userCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Section</FormLabel>
+                        <Select onValueChange={field.onChange} value={["ACC", "BIL", "STU"].includes(field.value || "") ? field.value! : undefined}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select section" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="ACC">Accounts Section (also Others)</SelectItem>
+                            <SelectItem value="BIL">Bill Section</SelectItem>
+                            <SelectItem value="STU">Students Section</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Sees only its Wages / Fund Staff employees and reports.</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {form.watch("role") === "salary" && (
                   <FormField
@@ -770,7 +811,7 @@ export default function AdminUsers() {
                             }}
                           />
                         </FormControl>
-                        <p className="text-xs text-muted-foreground">Section logins: ACC = Accounts (also Others), BIL = Bill, STU = Students</p>
+                        <p className="text-xs text-muted-foreground">For an Accounts, Bill or Students login choose the role "Section" instead.</p>
                         <FormMessage />
                       </FormItem>
                     )}
