@@ -2248,9 +2248,11 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      // Check if email already exists in departments
+      // Check if email already exists in departments. An admin login (Salary / Section /
+      // Super Admin) may use a department's email: the two logins are separate (own login
+      // page, own table, own password). A second department login with it stays blocked.
       const existingDeptByEmail = await storage.getDepartmentByEmail(email);
-      if (existingDeptByEmail) {
+      if (existingDeptByEmail && role === "department") {
         return res.status(400).json({ message: "Email already in use by a department" });
       }
 
