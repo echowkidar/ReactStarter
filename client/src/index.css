@@ -176,6 +176,10 @@
     border-color: #2c3850 !important;
     color: #e8edf4;
   }
+  /* Tooltip value lines carry an inline (often dark) colour — keep them readable */
+  html.app-dark .recharts-default-tooltip .recharts-tooltip-item,
+  html.app-dark .recharts-default-tooltip .recharts-tooltip-item * { color: #e8edf4 !important; }
+  html.app-dark .recharts-default-tooltip .recharts-tooltip-label { color: #e8edf4; }
 
   /* Plain form controls without classes */
   html.app-dark input:not([class]),
@@ -186,4 +190,10 @@
   }
 
   html.app-dark ::placeholder { color: #64748b; }
+
+  /* Inline-coloured dark red text (countdown) — lighten so it reads on the dark card */
+  html.app-dark .dk-red-text { color: #f87171 !important; }
+
+  /* Light-text mapping must not hit text that sits on a bright, unmapped background */
+  html.app-dark [class~="bg-amber-500"][class~="text-black"] { color: #000; }
 }

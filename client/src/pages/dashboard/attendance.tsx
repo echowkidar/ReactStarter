@@ -3284,7 +3284,7 @@ export default function Attendance() {
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span
-                      className="font-black leading-none tabular-nums"
+                      className="font-black leading-none tabular-nums dk-red-text"
                       style={{
                         fontSize: 44,
                         color: isUrgent ? '#b91c1c' : '#dc2626',
@@ -3298,7 +3298,7 @@ export default function Attendance() {
                   </div>
                 </div>
 
-                <p className="text-center text-xs mb-5" style={{ color: isUrgent ? '#b91c1c' : '#6b7280' }}>
+                <p className={`text-center text-xs mb-5 ${isUrgent ? "dk-red-text" : ""}`} style={{ color: isUrgent ? '#b91c1c' : '#6b7280' }}>
                   : '⏳ Countdown running... click Abort to stop.'
                 </p>
 

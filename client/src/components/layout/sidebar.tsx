@@ -334,7 +334,7 @@ export default function Sidebar({ className }: SidebarProps) {
               </div>
               <div className="flex flex-col items-start">
                 <span className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">AMU AI</span>
-                <span className="text-[11px] font-medium" style={{ color: '#b45309' }}>✦ Active · Ask me anything</span>
+                <span className="text-[11px] font-medium text-amber-700">✦ Active · Ask me anything</span>
               </div>
             </button>
           </div>
