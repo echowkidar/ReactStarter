@@ -47,6 +47,7 @@ import { buildHistoryView } from "./employeeHistoryView";
 import { getFieldVisibility, maskEmployee, stripHiddenUpdates, ALL_HIDDEN } from "./fieldVisibility";
 import { normaliseReportKind, findMainReport } from "../shared/reportKind";
 import { employeeKindError, isLetterEpid } from "../shared/employeeKind";
+import { normalizePayrollFields } from "../shared/wagePayroll";
 import { codesForUserCode } from "../shared/sections";
 import { isFundReportOpen, fundStaffCount, fundSupplementaryAllowed as fundSupplementaryAllowedFor, useUpFundSupplementary } from "./fundReports";
 
@@ -1398,7 +1399,8 @@ export async function registerRoutes(app: Express) {
       }
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
-      const kindError = employeeKindError(parsedData, () => true);
+      const kindError = employeeKindError(parsedData, () => true)
+        ?? normalizePayrollFields(parsedData as any, isLetterEpid(parsedData.epid));
       if (kindError) return res.status(400).json({ message: kindError, details: kindError });
 
       const employee = await storage.createEmployee(parsedData);
@@ -1513,6 +1515,8 @@ export async function registerRoutes(app: Express) {
       if (typeof safeUpdates.epid === "string") safeUpdates.epid = safeUpdates.epid.trim().toUpperCase();
       {
         const cur: any = currentEmployee;
+        const payErr = normalizePayrollFields(safeUpdates, isLetterEpid(safeUpdates.epid ?? cur.epid));
+        if (payErr) return res.status(400).json({ message: payErr, details: payErr });
         const norm = (v: any) => String(v ?? "").trim().toUpperCase();
         const merged = { ...cur, ...safeUpdates };
         const kindError = employeeKindError(merged, (f) =>
@@ -1633,6 +1637,19 @@ export async function registerRoutes(app: Express) {
       // Hidden fields reach the form blank — never let that blank overwrite the stored value
       updates = stripHiddenUpdates(updates, await getFieldVisibility());
       if (Object.keys(updates).length === 0) return res.json(employee); // nothing left to change
+
+      // EPID kind rules + payroll fields (same checks as the admin update route)
+      {
+        const cur: any = employee;
+        const epidAfter = typeof updates.epid === "string" ? updates.epid.trim().toUpperCase() : cur.epid;
+        if (typeof updates.epid === "string") updates.epid = epidAfter;
+        const payErr = normalizePayrollFields(updates, isLetterEpid(epidAfter));
+        if (payErr) return res.status(400).json({ message: payErr, details: payErr });
+        const norm = (v: any) => String(v ?? "").trim().toUpperCase();
+        const kindError = employeeKindError({ ...cur, ...updates }, (f) =>
+          f in updates && norm((updates as any)[f]) !== norm(cur[f]));
+        if (kindError) return res.status(400).json({ message: kindError, details: kindError });
+      }
 
       // Handle disable with reason and WEF date
       if (updates.isActive === 'disabled' && employee.isActive !== 'disabled') {
@@ -4618,7 +4635,8 @@ export async function registerRoutes(app: Express) {
       }
 
       const parsedData = insertEmployeeSchema.parse(employeeData);
-      const kindError = employeeKindError(parsedData, () => true);
+      const kindError = employeeKindError(parsedData, () => true)
+        ?? normalizePayrollFields(parsedData as any, isLetterEpid(parsedData.epid));
       if (kindError) return res.status(400).json({ message: kindError, details: kindError });
 
       try {

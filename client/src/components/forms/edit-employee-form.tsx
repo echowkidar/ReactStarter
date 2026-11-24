@@ -18,6 +18,8 @@ import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-sel
 import { DisableReasonModal, DisableReason, DISABLE_REASONS } from "@/components/ui/disable-reason-modal";
 import { TransferModal } from "@/components/ui/transfer-modal";
 import { getCurrentDepartment } from "@/lib/auth";
+import { WagePayrollFields, PayrollValue, payrollFromEmployee, validatePayroll, payrollPayload } from "@/components/forms/employee-form";
+import { categoryFromDesignation } from "@shared/wagePayroll";
 
 // Import master data for designations and salary assistants
 import designationsData from "@/lib/designations.json";
@@ -86,6 +88,13 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
     window.location.pathname.includes('/admin') && !dealingAssistantAllowed(employee.epid, employee.salary_asstt) ? "" : (employee.salary_asstt || "")
   );
   const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState(employee.salaryRegisterNo || "");
+  // Wages payroll (letter EPIDs only)
+  const [payroll, setPayroll] = useState<PayrollValue>(() => {
+    const p = payrollFromEmployee(employee);
+    if (!p.wageCategory) p.wageCategory = categoryFromDesignation(employee.designation) ?? "";
+    return p;
+  });
+  const [payrollErrors, setPayrollErrors] = useState<Partial<Record<keyof PayrollValue, string>>>({});
 
   // Fetch all salary registers dynamically
   const { data: registers } = useQuery<{id: number; value: string; label: string; departmentId: number | null}[]>({
@@ -621,6 +630,15 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
       });
       return;
     }
+    const letter = isLetterEpid(employee.epid);
+    if (letter) {
+      const pe = validatePayroll(payroll);
+      setPayrollErrors(pe);
+      if (Object.keys(pe).length > 0) {
+        toast({ variant: "destructive", title: "Error", description: Object.values(pe)[0] as string });
+        return;
+      }
+    }
     try {
       setIsSubmitting(true);
 
@@ -774,6 +792,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
           // Sent only when shown; hidden ones keep their stored (e.g. Oracle) value
           ...(showBank && { bankName: data.bankName || null, ifsc: (data.ifsc || "").toUpperCase() || null }),
           ...(showCategory && { employeeCategory: data.employeeCategory || null }),
+          ...(letter && payrollPayload(payroll)),
           officeMemoNo: data.officeMemoNo || "",
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
@@ -838,6 +857,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
           // Sent only when shown; hidden ones keep their stored (e.g. Oracle) value
           ...(showBank && { bankName: data.bankName || null, ifsc: (data.ifsc || "").toUpperCase() || null }),
           ...(showCategory && { employeeCategory: data.employeeCategory || null }),
+          ...(letter && payrollPayload(payroll)),
           officeMemoNo: data.officeMemoNo || "",
           joiningDate: data.joiningDate || "",
           joiningShift: data.joiningShift || "FN",
@@ -1221,6 +1241,17 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
               </div>
             </div>
 
+
+            {/* Wages payroll (letter EPIDs only) */}
+            {isLetterEpid(employee.epid) && (
+              <WagePayrollFields
+                value={payroll}
+                onChange={(patch) => setPayroll((p) => ({ ...p, ...patch }))}
+                errors={payrollErrors}
+                disabled={isSubmitting}
+                designation={watch("designation")}
+              />
+            )}
 
             {/* Document upload fields */}
             <div className="bg-slate-50 p-4 rounded-lg">

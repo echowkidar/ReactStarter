@@ -503,6 +503,37 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
     return designation === 'GUEST TEACHER' || designation === 'GUEST FACULTY';
   };
 
+  // ── Wages / Fund report: days-first entry ─────────────────────────────────
+  // Typing the days sets the period to the whole month (the period's own month, which is
+  // the default month unless the user moved it) and keeps the typed days. Changing a date
+  // recalculates the days as calendar days, like any normal row.
+  const fullMonthOfPeriod = (fromDateStr: string) => {
+    let base = parseDateFromDisplay(fromDateStr);
+    if (isNaN(base.getTime())) base = defaultStartDate;
+    const first = new Date(base.getFullYear(), base.getMonth(), 1);
+    const last = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+    return { first, last, daysInMonth: last.getDate() };
+  };
+
+  const setFundDays = (employeeId: number, periodIndex: number, raw: string) => {
+    const entries = form.getValues("entries");
+    const entryIndex = entries.findIndex(entry => entry.employeeId === employeeId);
+    if (entryIndex === -1) return;
+    const cur = entries[entryIndex].periods[periodIndex];
+    const { first, last, daysInMonth } = fullMonthOfPeriod(cur.fromDate);
+    const typed = parseInt(raw, 10);
+    const days = Math.min(Math.max(isNaN(typed) ? 0 : typed, 0), daysInMonth);
+    const newEntries = [...entries];
+    newEntries[entryIndex] = { ...newEntries[entryIndex], periods: [...newEntries[entryIndex].periods] };
+    newEntries[entryIndex].periods[periodIndex] = {
+      ...cur,
+      fromDate: formatDateForDisplay(first),
+      toDate: formatDateForDisplay(last),
+      days,
+    };
+    form.setValue("entries", newEntries, { shouldDirty: true });
+  };
+
   // ── Reporting employees ────────────────────────────────────────────────────
   // Parent department: an employee reporting at another department (e.g. Admin
   // Non Teaching) is locked from the reporting date onwards. Employees without
@@ -859,7 +890,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
             periods: entry.periods.map(period => ({
               fromDate: period.fromDate,
               toDate: period.toDate,
-              days: isGuest ? (period.days || 0) : calculateDays(period.fromDate, period.toDate),
+              days: (isGuest || isFundMode) ? (period.days || 0) : calculateDays(period.fromDate, period.toDate),
               remarks: period.remarks || ''
             }))
           };
@@ -1174,6 +1205,28 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
         if (guestErrors.length > 0) {
           alert('Guest Teacher/Faculty total periods cannot be 0:\n\n' + guestErrors.join('\n'));
           return;
+        }
+
+        // Wages / Fund report: days must be 1 .. calendar days of the period
+        if (isFundMode) {
+          const fundErrors: string[] = [];
+          for (const entry of data.entries) {
+            if (!includedEmployees.has(entry.employeeId)) continue;
+            const emp = employees.find((e: any) => e.id === entry.employeeId);
+            const empName = emp?.name || `Employee #${entry.employeeId}`;
+            entry.periods.forEach((p, i) => {
+              const cal = calculateDays(p.fromDate, p.toDate);
+              if (!p.days || p.days <= 0) {
+                fundErrors.push(`${empName}: Period ${i + 1} has 0 days. Enter the days worked or untick the employee.`);
+              } else if (p.days > cal) {
+                fundErrors.push(`${empName}: Period ${i + 1} has ${p.days} days but ${p.fromDate} to ${p.toDate} is only ${cal} days.`);
+              }
+            });
+          }
+          if (fundErrors.length > 0) {
+            alert('Please correct the days before submitting:\n\n' + fundErrors.join('\n'));
+            return;
+          }
         }
 
         handleFormSubmit(data);
@@ -1598,6 +1651,22 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
                                       disabled={isLoading || !includedEmployees.has(employee.id)}
                                     />
                                   </div>
+                                ) : isFundMode ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={fullMonthOfPeriod(period.fromDate).daysInMonth}
+                                    className={`w-full p-1 text-sm border rounded-md text-center ${
+                                      isInvalid
+                                        ? "bg-red-100 text-red-700 border-red-500 font-bold"
+                                        : "border-orange-300 bg-orange-50 dark:bg-orange-900/30"
+                                    }`}
+                                    value={isInvalid ? 0 : (period.days || '')}
+                                    placeholder="0"
+                                    title="Type the days worked: the period is set to the whole month. Changing a date recalculates the days."
+                                    onChange={(e) => setFundDays(employee.id, periodIndex, e.target.value)}
+                                    disabled={isLoading || !includedEmployees.has(employee.id)}
+                                  />
                                 ) : (
                                   <div className={`p-1 border rounded-md text-center text-sm ${
                                     isInvalid

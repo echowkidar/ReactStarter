@@ -33,6 +33,7 @@ const FIELD_CHANGE_ACTIONS = new Set(["update", "oracle_sync", "oracle_sync_undo
 
 const FIELD_LABELS: Record<string, string> = {
     epid: "EPID", name: "Name", designation: "Designation", employmentStatus: "Employment Status",
+    wageCategory: "Wage Category", epfApplicable: "EPF", uanNo: "UAN", esiApplicable: "ESI", esiNo: "ESI No.", esiCovered: "ESI covered", masApplicable: "MAS",
     payLevel: "Pay Level", termExpiry: "Term Expiry", joiningDate: "Joining Date", joiningShift: "Joining Shift",
     salaryRegisterNo: "Register No", officeMemoNo: "Office Memo No", salary_asstt: "Dealing Assistant",
     panNumber: "PAN", bankAccount: "Bank Account", aadharCard: "Aadhar", bankName: "Bank Name", ifsc: "IFSC",

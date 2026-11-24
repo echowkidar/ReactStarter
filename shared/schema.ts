@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, date, timestamp, boolean, jsonb, numeri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { isValidEpid, EPID_FORMAT_MESSAGE, canonicalStatus } from "./employeeKind";
+import { toFlag } from "./wagePayroll";
 
 export const departments = pgTable("departments", {
   id: serial("id").primaryKey(),
@@ -73,6 +74,14 @@ export const employees = pgTable("employees", {
   oracleEmpStatus: text("oracle_emp_status"),    // EMP_STATUS code: C,T,P,D,Q,X,Y,O
   salGroup: text("sal_group"),                   // SALGROUP code: RG, FX, DC, ...
   oracleSyncedAt: timestamp("oracle_synced_at"), // last time the sync updated this employee
+  // Wages payroll (letter-EPID wage / fund staff only; see shared/wagePayroll.ts)
+  wageCategory: text("wage_category"),             // clerical_skilled | semi_skilled | unskilled
+  epfApplicable: boolean("epf_applicable"),
+  uanNo: text("uan_no"),
+  esiApplicable: boolean("esi_applicable"),
+  esiNo: text("esi_no"),
+  esiCovered: boolean("esi_covered"),
+  masApplicable: boolean("mas_applicable"),
 });
 
 export const departmentNames = pgTable("department_names", {
@@ -176,6 +185,14 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     officeMemoUrl: z.string().nullable(),
     joiningReportUrl: z.string().nullable(),
     termExtensionUrl: z.string().nullable().optional(),
+    // Wages payroll fields (FormData sends strings; checked again by normalizePayrollFields)
+    wageCategory: z.string().nullable().optional().transform(v => (v ? v : null)),
+    epfApplicable: z.any().optional().transform(toFlag),
+    uanNo: z.string().nullable().optional().transform(v => (v ? v : null)),
+    esiApplicable: z.any().optional().transform(toFlag),
+    esiNo: z.string().nullable().optional().transform(v => (v ? v : null)),
+    esiCovered: z.any().optional().transform(toFlag),
+    masApplicable: z.any().optional().transform(toFlag),
   });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
   id: true,

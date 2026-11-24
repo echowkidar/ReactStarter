@@ -24,6 +24,7 @@ export type AdminAccess = {
   contacts: boolean;
   tickets: boolean;
   notices: boolean;
+  payroll: boolean;
 };
 
 export function getAdminAccess(): AdminAccess {
@@ -53,6 +54,8 @@ export function getAdminAccess(): AdminAccess {
     contacts: isSalaryAdmin || isSuperAdmin,
     tickets: !isViewOnly && !isQasim,
     notices: !isViewOnly,
+    // Wages payroll: section logins (ACC / BIL / STU) and the full Super Admin
+    payroll: (isSalaryAdmin && ["ACC", "BIL", "STU"].includes(String(admin.userCode || "").toUpperCase())) || fullSuper,
   };
 }
 
@@ -65,6 +68,7 @@ const PAGE_RULES: Array<{ prefix: string; allowed: (a: AdminAccess) => boolean }
   { prefix: "/admin/department-contacts", allowed: (a) => a.contacts },
   { prefix: "/admin/tickets", allowed: (a) => a.tickets },
   { prefix: "/admin/notices", allowed: (a) => a.notices },
+  { prefix: "/admin/payroll", allowed: (a) => a.payroll },
 ];
 
 export function canOpenAdminPage(path: string, access: AdminAccess = getAdminAccess()): boolean {

@@ -27,6 +27,8 @@ import { compressImageToWebP } from "@/lib/image-utils";
 
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
+import { WagePayrollFields, PayrollValue, EMPTY_PAYROLL, payrollFromEmployee, validatePayroll, payrollPayload } from "@/components/forms/employee-form";
+import { categoryFromDesignation } from "@shared/wagePayroll";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Import master data for designations
@@ -88,6 +90,9 @@ export default function AdminEmployees() {
 
   const [selectedSalaryRegisterNo, setSelectedSalaryRegisterNo] = useState<string>("");
   const [selectedSalaryAsstt, setSelectedSalaryAsstt] = useState<string>("");
+  // Wages payroll (letter EPIDs only)
+  const [payroll, setPayroll] = useState<PayrollValue>(EMPTY_PAYROLL);
+  const [payrollErrors, setPayrollErrors] = useState<Partial<Record<keyof PayrollValue, string>>>({});
   const [uploads, setUploads] = useState<UploadState>({});
   const [, setLocation] = useLocation();
   const [isAdmin, setIsAdmin] = useState(() => {
@@ -431,7 +436,13 @@ export default function AdminEmployees() {
       setPayLevel(selectedEmployee.payLevel || "L-0");
       setSelectedSalaryRegisterNo(selectedEmployee.salaryRegisterNo || "");
       setSelectedSalaryAsstt(dealingAssistantAllowed(selectedEmployee.epid, selectedEmployee.salary_asstt) ? (selectedEmployee.salary_asstt || "") : "");
+      const pv = payrollFromEmployee(selectedEmployee);
+      if (!pv.wageCategory) pv.wageCategory = categoryFromDesignation(selectedEmployee.designation) ?? "";
+      setPayroll(pv);
+      setPayrollErrors({});
     } else if (!selectedEmployee) {
+      setPayroll(EMPTY_PAYROLL);
+      setPayrollErrors({});
       setSelectedDepartmentId("");
       setSelectedDesignation("");
       setPayLevel("L-0");
@@ -750,6 +761,17 @@ export default function AdminEmployees() {
         description: "Please select a salary assistant"
       });
       return;
+    }
+
+    // Wages payroll fields: letter EPIDs only
+    if (isLetterEpid(kindEpid)) {
+      const pe = validatePayroll(payroll);
+      setPayrollErrors(pe);
+      if (Object.keys(pe).length > 0) {
+        toast({ variant: "destructive", title: "Error", description: Object.values(pe)[0] as string });
+        return;
+      }
+      Object.assign(data, payrollPayload(payroll));
     }
 
     // Create a new FormData for the API request
@@ -1337,6 +1359,15 @@ export default function AdminEmployees() {
                               )}
                             </div>
                           </div>
+
+                          {isLetterEpid(kindEpid) && (
+                            <WagePayrollFields
+                              value={payroll}
+                              onChange={(patch) => setPayroll((p) => ({ ...p, ...patch }))}
+                              errors={payrollErrors}
+                              designation={selectedDesignation}
+                            />
+                          )}
 
                           {(showPan || showBank || showAadhar || showCategory) && (
                             <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">

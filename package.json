@@ -11,7 +11,7 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "postinstall": "node -e \"const fs = require('fs'); const p = 'node_modules/pdf-img-convert/package.json'; if (fs.existsSync(p)) { const d = JSON.parse(fs.readFileSync(p)); d.type = 'module'; fs.writeFileSync(p, JSON.stringify(d, null, 2)); }\"",
-    "test": "tsx --test client/src/hooks/useInstallPrompt.test.ts"
+    "test": "tsx --test client/src/hooks/useInstallPrompt.test.ts shared/wagePayroll.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",

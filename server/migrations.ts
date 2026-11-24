@@ -833,6 +833,113 @@ export async function runMigrations() {
       console.error("[Migrations] claim form tables failed (online claim forms affected):", claimErr);
     }
 
+    // ─── Wages payroll for wage / fund staff (letter EPIDs) ─────────────────
+    // Additive only: nullable employee columns and new tables (see shared/wagePayroll.ts).
+    try {
+      await db.execute(sql`
+        ALTER TABLE employees
+          ADD COLUMN IF NOT EXISTS wage_category TEXT,          -- clerical_skilled | semi_skilled | unskilled
+          ADD COLUMN IF NOT EXISTS epf_applicable BOOLEAN,
+          ADD COLUMN IF NOT EXISTS uan_no TEXT,
+          ADD COLUMN IF NOT EXISTS esi_applicable BOOLEAN,
+          ADD COLUMN IF NOT EXISTS esi_no TEXT,
+          ADD COLUMN IF NOT EXISTS esi_covered BOOLEAN,          -- covered in the current ESI contribution period
+          ADD COLUMN IF NOT EXISTS mas_applicable BOOLEAN;
+      `);
+      // Payment head + payment code of a department's fund, per section
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS fund_payment_heads (
+          id SERIAL PRIMARY KEY,
+          department_id INTEGER NOT NULL,
+          section TEXT NOT NULL,                 -- accounts | bill | students
+          head_name TEXT NOT NULL,               -- "Revolving Fund of D/o Pathology"
+          payment_code TEXT NOT NULL,            -- "4DE09665"
+          updated_by TEXT,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fund_payment_heads ON fund_payment_heads (department_id, section)`);
+      // One muster roll per department + section + wage month (main); status draft → finalised → passed
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS wage_rolls (
+          id SERIAL PRIMARY KEY,
+          department_id INTEGER NOT NULL,
+          section TEXT NOT NULL,
+          month INTEGER NOT NULL,
+          year INTEGER NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'main',     -- main | supplementary
+          status TEXT NOT NULL DEFAULT 'draft',  -- draft | finalised | passed
+          head_name TEXT,
+          payment_code TEXT,
+          rates JSONB NOT NULL,                  -- wage rates + EPF/ESI set used (snapshot)
+          totals JSONB,
+          page_no TEXT,
+          passed_on DATE,
+          created_by TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          finalised_by TEXT,
+          finalised_at TIMESTAMPTZ,
+          passed_by TEXT,
+          passed_at TIMESTAMPTZ
+        );
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_wage_rolls_main ON wage_rolls (department_id, section, year, month) WHERE kind = 'main'`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS wage_roll_lines (
+          id SERIAL PRIMARY KEY,
+          roll_id INTEGER NOT NULL REFERENCES wage_rolls(id) ON DELETE CASCADE,
+          employee_id INTEGER NOT NULL,
+          sno INTEGER NOT NULL,
+          epid TEXT NOT NULL,
+          name TEXT NOT NULL,
+          designation TEXT,
+          category TEXT,
+          basic NUMERIC(10,2) NOT NULL DEFAULT 0,
+          vda NUMERIC(10,2) NOT NULL DEFAULT 0,
+          days INTEGER NOT NULL DEFAULT 0,
+          attendance_days INTEGER,               -- days in the received attendance
+          adjust_reason TEXT,                    -- required when days differ from attendance
+          epf_on BOOLEAN NOT NULL DEFAULT false,
+          esi_on BOOLEAN NOT NULL DEFAULT false,
+          esi_covered BOOLEAN NOT NULL DEFAULT false,
+          mas_on BOOLEAN NOT NULL DEFAULT false,
+          gross INTEGER NOT NULL DEFAULT 0,
+          epf_base INTEGER NOT NULL DEFAULT 0,
+          epf INTEGER NOT NULL DEFAULT 0,
+          esi_base INTEGER NOT NULL DEFAULT 0,
+          esi INTEGER NOT NULL DEFAULT 0,
+          mas INTEGER NOT NULL DEFAULT 0,
+          net INTEGER NOT NULL DEFAULT 0,
+          er_eps INTEGER NOT NULL DEFAULT 0,
+          er_epf INTEGER NOT NULL DEFAULT 0,
+          er_edli INTEGER NOT NULL DEFAULT 0,
+          er_admin INTEGER NOT NULL DEFAULT 0,
+          er_epf_total INTEGER NOT NULL DEFAULT 0,
+          er_esi INTEGER NOT NULL DEFAULT 0,
+          uan_no TEXT,
+          esi_no TEXT,
+          bank_account TEXT,
+          bank_name TEXT,
+          ifsc TEXT
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_wage_roll_lines_roll ON wage_roll_lines (roll_id)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_wage_roll_lines_emp ON wage_roll_lines (employee_id)`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS wage_roll_log (
+          id SERIAL PRIMARY KEY,
+          roll_id INTEGER NOT NULL,
+          action TEXT NOT NULL,                  -- created | line | finalised | reopened | passed | rebuilt
+          detail TEXT,
+          by_user TEXT NOT NULL,
+          at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_wage_roll_log_roll ON wage_roll_log (roll_id)`);
+    } catch (payErr) {
+      console.error("[Migrations] wages payroll tables failed (payroll affected):", payErr);
+    }
+
     console.log("Database migrations completed successfully");
 
   } catch (error) {

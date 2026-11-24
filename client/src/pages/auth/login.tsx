@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
-import { Loader2, AlertTriangle, DownloadCloud, ChevronDown, PlayCircle, FileSignature, ChevronRight } from "lucide-react";
+import { Loader2, AlertTriangle, DownloadCloud, ChevronDown, PlayCircle, FileSignature, ChevronRight, ReceiptText } from "lucide-react";
 import { NeuralNetworkStyles, NeuralNetworkOverlay } from "@/components/NeuralNetworkOverlay";
 import { SplashScreen } from "@/components/SplashScreen";
 
@@ -99,6 +99,29 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 });
+
+/** Way in for wage / fund staff to their wage slips (always shown, no login) */
+function WageSlipLink() {
+  const [, setLocation] = useLocation();
+  return (
+    <button
+      type="button"
+      onClick={() => setLocation("/wage-slip")}
+      title="View and print your wage slip. No login needed: only your Employee ID and date of joining or bank account number."
+      className="group flex w-full items-center gap-3 rounded-xl border-2 border-blue-600 bg-blue-50 px-3 py-2.5 text-left shadow-md hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-700 text-white">
+        <ReceiptText className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-bold uppercase tracking-wider text-blue-800">For wage / fund staff · no login needed</span>
+        <span className="block text-base font-bold leading-snug text-slate-900">Wage Slip (Wage / Fund Staff)</span>
+        <span className="block truncate text-xs text-slate-600">View, print or download your slip</span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-blue-700 transition-transform group-hover:translate-x-0.5" />
+    </button>
+  );
+}
 
 /** Way in for employees to the online claim forms (shown only while the forms are open) */
 function EmployeeClaimFormsLink() {
@@ -287,8 +310,9 @@ export default function Login() {
             claim forms + downloads on the right, so everything is in view at 100% zoom. */}
         <div className="w-full max-w-md lg:max-w-4xl relative z-10 grid gap-4 lg:grid-cols-2 lg:gap-x-8">
           {/* Employees come here to fill claim forms: shown first, before the department login */}
-          <div className="lg:col-start-2 lg:row-start-1 lg:self-end">
+          <div className="lg:col-start-2 lg:row-start-1 lg:self-end space-y-3">
             <EmployeeClaimFormsLink />
+            <WageSlipLink />
           </div>
           <Card className="w-full shadow-lg border-primary/10 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:self-center">
             <CardHeader className="text-center pt-5 pb-2">

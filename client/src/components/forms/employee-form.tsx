@@ -13,6 +13,9 @@ import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Loader2, AlertCircle } from "lucide-react";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
 import { useState, useEffect } from "react";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { WAGE_CATEGORIES, WAGE_CATEGORY_LABELS, categoryFromDesignation } from "@shared/wagePayroll";
 
 // Import master data for designations
 import designationsData from "@/lib/designations.json";
@@ -22,6 +25,135 @@ import { getCurrentDepartment } from "@/lib/auth";
 // Prepare options for searchable selects
 const designationOptions: ComboboxOption[] = designationsData.map((d: string) => ({ value: d, label: d }));
 const salaryAssistantOptions: ComboboxOption[] = salaryAssistantsData as ComboboxOption[];
+
+// ── Wages payroll fields (letter EPIDs only) — shared with the Edit and Admin forms ──
+export type PayrollValue = {
+  wageCategory: string;
+  epfApplicable: boolean;
+  uanNo: string;
+  esiApplicable: boolean;
+  esiNo: string;
+  esiCovered: boolean;
+  masApplicable: boolean;
+};
+
+export const EMPTY_PAYROLL: PayrollValue = {
+  wageCategory: "", epfApplicable: false, uanNo: "", esiApplicable: false, esiNo: "", esiCovered: false, masApplicable: false,
+};
+
+/** Read the payroll values from a stored employee row (camelCase or snake_case) */
+export function payrollFromEmployee(emp: any): PayrollValue {
+  const pick = (a: string, b: string) => emp?.[a] ?? emp?.[b];
+  const flag = (v: any) => v === true || v === "true" || v === 1 || v === "1";
+  return {
+    wageCategory: String(pick("wageCategory", "wage_category") ?? ""),
+    epfApplicable: flag(pick("epfApplicable", "epf_applicable")),
+    uanNo: String(pick("uanNo", "uan_no") ?? ""),
+    esiApplicable: flag(pick("esiApplicable", "esi_applicable")),
+    esiNo: String(pick("esiNo", "esi_no") ?? ""),
+    esiCovered: flag(pick("esiCovered", "esi_covered")),
+    masApplicable: flag(pick("masApplicable", "mas_applicable")),
+  };
+}
+
+/** Client-side check; returns field -> message (empty object when fine) */
+export function validatePayroll(v: PayrollValue): Partial<Record<keyof PayrollValue, string>> {
+  const e: Partial<Record<keyof PayrollValue, string>> = {};
+  if (!v.wageCategory) e.wageCategory = "Wage Category is required";
+  if (v.epfApplicable && v.uanNo.trim() && !/^\d{12}$/.test(v.uanNo.trim())) e.uanNo = "UAN must be 12 digits";
+  if (v.esiApplicable && v.esiNo.trim() && !/^\d{10}$/.test(v.esiNo.trim())) e.esiNo = "ESI number must be 10 digits";
+  return e;
+}
+
+/** The values to send with the form */
+export function payrollPayload(v: PayrollValue) {
+  return {
+    wageCategory: v.wageCategory,
+    epfApplicable: v.epfApplicable,
+    uanNo: v.epfApplicable ? v.uanNo.trim() : "",
+    esiApplicable: v.esiApplicable,
+    esiNo: v.esiApplicable ? v.esiNo.trim() : "",
+    esiCovered: v.esiApplicable ? v.esiCovered : false,
+    masApplicable: v.masApplicable,
+  };
+}
+
+export function WagePayrollFields({ value, onChange, errors = {}, disabled, designation }: {
+  value: PayrollValue;
+  onChange: (patch: Partial<PayrollValue>) => void;
+  errors?: Partial<Record<keyof PayrollValue, string>>;
+  disabled?: boolean;
+  designation?: string;
+}) {
+  // Suggest the category from the designation while none has been picked
+  useEffect(() => {
+    if (!value.wageCategory) {
+      const c = categoryFromDesignation(designation);
+      if (c) onChange({ wageCategory: c });
+    }
+  }, [designation, value.wageCategory]);
+
+  const digits = (s: string, n: number) => s.replace(/\D/g, "").slice(0, n);
+  const inputCls = "bg-white dark:bg-slate-800";
+  const errCls = "text-red-500 dark:text-red-400 text-xs mt-1";
+  return (
+    <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg" data-testid="wage-payroll-block">
+      <h3 className="text-md font-medium mb-4 text-slate-700 dark:text-slate-200 border-b dark:border-slate-700 pb-2">Wages payroll</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Wage Category <span className="text-red-500">*</span></label>
+          <Select disabled={disabled} value={value.wageCategory || undefined} onValueChange={(v) => onChange({ wageCategory: v })}>
+            <SelectTrigger className={inputCls}><SelectValue placeholder="Select category..." /></SelectTrigger>
+            <SelectContent>
+              {WAGE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{WAGE_CATEGORY_LABELS[c]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {errors.wageCategory && <p className={errCls}>{errors.wageCategory}</p>}
+        </div>
+        <div className="flex items-center gap-3 sm:pt-6">
+          <Switch id="payroll-mas" checked={value.masApplicable} disabled={disabled} onCheckedChange={(v) => onChange({ masApplicable: v })} />
+          <label htmlFor="payroll-mas" className="text-sm text-slate-700 dark:text-slate-200">MAS member — ₹125 per month</label>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Switch id="payroll-epf" checked={value.epfApplicable} disabled={disabled} onCheckedChange={(v) => onChange({ epfApplicable: v })} />
+            <label htmlFor="payroll-epf" className="text-sm font-medium text-slate-700 dark:text-slate-200">EPF applies</label>
+          </div>
+          {value.epfApplicable && (
+            <div>
+              <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">UAN (12 digits)</label>
+              <Input value={value.uanNo} inputMode="numeric" maxLength={12} disabled={disabled} className={inputCls}
+                onChange={(e) => onChange({ uanNo: digits(e.target.value, 12) })} />
+              <p className="text-xs text-muted-foreground mt-1">Needed for the EPF return.</p>
+              {errors.uanNo && <p className={errCls}>{errors.uanNo}</p>}
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Switch id="payroll-esi" checked={value.esiApplicable} disabled={disabled} onCheckedChange={(v) => onChange({ esiApplicable: v })} />
+            <label htmlFor="payroll-esi" className="text-sm font-medium text-slate-700 dark:text-slate-200">ESI applies</label>
+          </div>
+          {value.esiApplicable && (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">ESI number (10 digits)</label>
+                <Input value={value.esiNo} inputMode="numeric" maxLength={10} disabled={disabled} className={inputCls}
+                  onChange={(e) => onChange({ esiNo: digits(e.target.value, 10) })} />
+                {errors.esiNo && <p className={errCls}>{errors.esiNo}</p>}
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="payroll-esi-covered" checked={value.esiCovered} disabled={disabled}
+                  onCheckedChange={(v) => onChange({ esiCovered: v === true })} />
+                <label htmlFor="payroll-esi-covered" className="text-sm text-slate-700 dark:text-slate-200">Already covered in current ESI period</label>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const employeeSchema = z.object({
   epid: z.string().min(1, "EPID is required"),
@@ -42,6 +174,14 @@ const employeeSchema = z.object({
   joiningShift: z.enum(["FN", "AN"]),
   salaryRegisterNo: z.string().min(1, "Salary Register No. is required"),
   salary_asstt: z.string().min(1, "Salary Assistant is required"),
+  // Wages payroll (letter EPIDs only)
+  wageCategory: z.string().optional(),
+  epfApplicable: z.boolean().optional(),
+  uanNo: z.string().optional(),
+  esiApplicable: z.boolean().optional(),
+  esiNo: z.string().optional(),
+  esiCovered: z.boolean().optional(),
+  masApplicable: z.boolean().optional(),
   // Document fields
   panCardDoc: z.string().optional(),
   bankAccountDoc: z.string().optional(),
@@ -63,6 +203,10 @@ const employeeSchema = z.object({
   }
   if (!dealingAssistantAllowed(d.epid, d.salary_asstt)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["salary_asstt"], message: "This Salary Assistant is not allowed for this EPID" });
+  }
+  if (isLetterEpid(d.epid)) {
+    const pe = validatePayroll({ ...EMPTY_PAYROLL, ...(d as any), uanNo: d.uanNo ?? "", esiNo: d.esiNo ?? "", wageCategory: d.wageCategory ?? "" });
+    for (const [k, m] of Object.entries(pe)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: m as string });
   }
 });
 
@@ -115,6 +259,13 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       joiningShift: "FN",
       salaryRegisterNo: "",
       salary_asstt: "",
+      wageCategory: "",
+      epfApplicable: false,
+      uanNo: "",
+      esiApplicable: false,
+      esiNo: "",
+      esiCovered: false,
+      masApplicable: false,
       panCardDoc: "",
       bankAccountDoc: "",
       aadharCardDoc: "",
@@ -127,7 +278,13 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
   // Handle the form submission, catching specific errors
   const handleFormSubmit = async (data: z.infer<typeof employeeSchema>) => {
     try {
-      await onSubmit(data);
+      const out: any = { ...data };
+      if (isLetterEpid(data.epid)) {
+        Object.assign(out, payrollPayload({ ...EMPTY_PAYROLL, ...(data as any), wageCategory: data.wageCategory ?? "", uanNo: data.uanNo ?? "", esiNo: data.esiNo ?? "" }));
+      } else {
+        for (const k of Object.keys(EMPTY_PAYROLL)) delete out[k]; // payroll is for letter EPIDs only
+      }
+      await onSubmit(out);
     } catch (error) {
       if (error instanceof Error && error.message.includes("EPID already exists")) {
         form.setError("epid", {
@@ -374,6 +531,31 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
               )}
             </div>
           </div>
+
+          {/* Wages payroll (letter EPIDs only) */}
+          {isLetterEpid(watchedEpid) && (
+            <WagePayrollFields
+              value={{
+                wageCategory: form.watch("wageCategory") ?? "",
+                epfApplicable: !!form.watch("epfApplicable"),
+                uanNo: form.watch("uanNo") ?? "",
+                esiApplicable: !!form.watch("esiApplicable"),
+                esiNo: form.watch("esiNo") ?? "",
+                esiCovered: !!form.watch("esiCovered"),
+                masApplicable: !!form.watch("masApplicable"),
+              }}
+              onChange={(patch) => {
+                for (const [k, v] of Object.entries(patch)) form.setValue(k as any, v as any, { shouldValidate: form.formState.isSubmitted });
+              }}
+              errors={{
+                wageCategory: form.formState.errors.wageCategory?.message,
+                uanNo: form.formState.errors.uanNo?.message,
+                esiNo: form.formState.errors.esiNo?.message,
+              }}
+              disabled={isLoading}
+              designation={form.watch("designation")}
+            />
+          )}
 
           {/* Identification Details Section */}
           {(showPan || showBank || showAadhar || showCategory) && (

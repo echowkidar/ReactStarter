@@ -48,8 +48,10 @@ import LpcVerify from "@/pages/lpc-verify";
 import EmailManagement from "@/pages/email-management";
 import EmailClient from "@/pages/email-client";
 import ClaimFormsPage from "@/pages/claim-forms";
+import WageSlipPage from "@/pages/wage-slip";
 import DepartmentClaimForms from "@/pages/dashboard/claim-forms";
 import AdminClaimForms from "@/pages/admin/claim-forms";
+import AdminPayroll from "@/pages/admin/payroll";
 
 function AppRouter() {
   return (
@@ -96,8 +98,10 @@ function AppRouter() {
       <ProtectedAdminRoute path="/admin/mailbox" component={EmailClient} />
       {/* Online claim forms: the employee's page needs no login */}
       <Route path="/forms" component={ClaimFormsPage} />
+      <Route path="/wage-slip" component={WageSlipPage} />
       <ProtectedRoute path="/dashboard/forms" component={DepartmentClaimForms} />
       <ProtectedAdminRoute path="/admin/claim-forms" component={AdminClaimForms} />
+      <ProtectedAdminRoute path="/admin/payroll" component={AdminPayroll} />
       <Route path="/lpc/verify/:id" component={LpcVerify} />
       <Route path="/dak/verify/:token" component={DakVerify} />
       <Route component={NotFound} />
