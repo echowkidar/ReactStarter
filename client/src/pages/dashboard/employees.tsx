@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getCurrentDepartment } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { showsTermExpiry } from "@shared/employeeKind";
+import { showsTermExpiry, isLetterEpid } from "@shared/employeeKind";
 import { ReportingEmployeesPanel } from "@/components/reporting-employees-panel";
 
 const EmployeeDetails = ({ employee, fieldSettings }: { employee: Employee; fieldSettings?: Record<string, string> }) => {
@@ -244,7 +244,12 @@ export default function Employees() {
   });
 
   // Sort employees by Pay Level (desc) -> Sort Order (asc) -> EPID (asc)
+  // Wage / fund staff (EPID starting with a letter) come last, in their own section of the list
   const sortedEmployees = [...(employees || [])].sort((a, b) => {
+    const groupA = isLetterEpid(a.epid) ? 1 : 0;
+    const groupB = isLetterEpid(b.epid) ? 1 : 0;
+    if (groupA !== groupB) return groupA - groupB;
+
     // Pay Level
     const payA = getPayLevelOrder(a.payLevel || "L-0");
     const payB = getPayLevelOrder(b.payLevel || "L-0");
@@ -293,6 +298,10 @@ export default function Employees() {
     }
   });
 
+  // Up/down moves stay within the same pay level and the same section of the list
+  const sameMoveGroup = (a: Employee, b: Employee) =>
+    a.payLevel === b.payLevel && isLetterEpid(a.epid) === isLetterEpid(b.epid);
+
   const handleMove = (index: number, direction: 'up' | 'down') => {
     // Determine boundaries based on filtered list (assuming filtered list is what user sees)
     // Note: Reordering works best when showing all employees of a department (no text filter)
@@ -308,8 +317,8 @@ export default function Employees() {
 
     const targetEmp = filteredEmployees[targetIndex];
 
-    // Verify same Pay Level
-    if (currentEmp.payLevel !== targetEmp.payLevel) return;
+    // Verify same Pay Level (and same section of the list)
+    if (!sameMoveGroup(currentEmp, targetEmp)) return;
 
     let newCurrentOrder = targetEmp.sortOrder;
     let newTargetOrder = currentEmp.sortOrder;
@@ -529,8 +538,20 @@ export default function Employees() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEmployees.map((employee) => (
-                  <TableRow key={employee.id}>
+                {filteredEmployees.map((employee, idx) => (
+                  <Fragment key={employee.id}>
+                  {/* Heading before the first wage / fund staff row */}
+                  {isLetterEpid(employee.epid) && (idx === 0 || !isLetterEpid(filteredEmployees[idx - 1].epid)) && (
+                    <TableRow className="bg-emerald-50 hover:bg-emerald-50">
+                      <TableCell colSpan={8} className="py-2 text-sm font-semibold text-emerald-800">
+                        Wages / Fund Staff
+                        <span className="ml-2 font-normal text-emerald-700">
+                          ({filteredEmployees.filter((e) => isLetterEpid(e.epid)).length}) — Employee ID starting with a letter; attendance goes in the Wages / Fund Staff report
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  <TableRow>
                     <TableCell>{employee.epid}</TableCell>
                     <TableCell>
                       {employee.name}
@@ -586,7 +607,7 @@ export default function Employees() {
                             disabled={
                               !!searchQuery.trim() ||
                               filteredEmployees.indexOf(employee) === 0 ||
-                              (filteredEmployees.indexOf(employee) > 0 && filteredEmployees[filteredEmployees.indexOf(employee) - 1].payLevel !== employee.payLevel)
+                              (filteredEmployees.indexOf(employee) > 0 && !sameMoveGroup(filteredEmployees[filteredEmployees.indexOf(employee) - 1], employee))
                             }
                             title="Move Up"
                           >
@@ -600,7 +621,7 @@ export default function Employees() {
                             disabled={
                               !!searchQuery.trim() ||
                               filteredEmployees.indexOf(employee) === filteredEmployees.length - 1 ||
-                              (filteredEmployees.indexOf(employee) < filteredEmployees.length - 1 && filteredEmployees[filteredEmployees.indexOf(employee) + 1].payLevel !== employee.payLevel)
+                              (filteredEmployees.indexOf(employee) < filteredEmployees.length - 1 && !sameMoveGroup(filteredEmployees[filteredEmployees.indexOf(employee) + 1], employee))
                             }
                             title="Move Down"
                           >
@@ -652,6 +673,7 @@ export default function Employees() {
                       </div>
                     </TableCell>
                   </TableRow>
+                  </Fragment>
                 ))}
                 {filteredEmployees.length === 0 && (
                   <TableRow>
