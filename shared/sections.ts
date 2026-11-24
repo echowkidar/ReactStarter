@@ -1,7 +1,7 @@
 /**
  * Sections that make salaries / wages, and which attendance they handle.
  *  - salary:   regular staff (numeric EPID) — reports of type 'regular' and 'reporting'.
- *  - accounts / bill / students: wage / fund staff (letter EPID) — reports of type 'fund',
+ *  - accounts / bill / students: staff paid from Revolving Funds or Other Similar Funds (letter EPID) — reports of type 'fund',
  *    split by the employee's dealing assistant code (accounts also handles OTH).
  * A section login is an admin with role "salary" and user code ACC, BIL or STU.
  */
@@ -16,7 +16,7 @@ export const SECTIONS: { key: SectionKey; label: string }[] = [
 ];
 
 export const FUND_REPORT_TYPE = "fund";
-export const FUND_REPORT_LABEL = "Wages / Fund Staff";
+export const FUND_REPORT_LABEL = "Revolving Funds or Other Similar Funds";
 
 const CODES: Record<Exclude<SectionKey, "salary">, string[]> = {
   accounts: ["ACC", "OTH"],

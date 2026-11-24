@@ -1860,6 +1860,11 @@ export async function registerRoutes(app: Express) {
         new Blob([bufferToSend], { type: req.file.mimetype }),
         filenameToSend
       );
+      // Which report is being uploaded (sent by the attendance page). A Revolving Funds
+      // report is printed as the Finance Officer's "Muster Roll for Daily Wagers"; the hint
+      // tells the OCR service (ignored if it does not use it).
+      const isMusterRoll = String(req.body?.reportType || "") === "fund";
+      form.append("document_type", isMusterRoll ? "muster_roll" : "attendance_report");
 
       const upstream = await fetch(ocrApiUrl, {
         method: "POST",
@@ -1901,13 +1906,15 @@ export async function registerRoutes(app: Express) {
         );
         const hasValidTxId = data.transaction_id_extracted || data.transaction_id || data.content_checks?.transaction_id;
 
-        if (isWrongDocTypeError && !hasImageQualityError) {
-          console.log('[OCR-Validate] Supplementary Attendance Report detected (wrong-doc-type override). Accepting document.');
+        // A Muster Roll (Revolving Funds report) is a different-looking document: any
+        // non-quality rejection is overridden, as long as the image itself is readable.
+        if ((isWrongDocTypeError || isMusterRoll) && !hasImageQualityError) {
+          console.log(`[OCR-Validate] ${isMusterRoll ? 'Muster Roll' : 'Supplementary Attendance Report'} detected (wrong-doc-type override). Accepting document.`);
           data.document_acceptable = true;
           data.quality_acceptable = true;
           // Clear the rejection message so it shows as accepted
-          data.message = 'Document accepted (Supplementary Attendance Report)';
-          data.message_hindi = 'दस्तावेज़ स्वीकृत (अनुपूरक उपस्थिति रिपोर्ट)';
+          data.message = isMusterRoll ? 'Document accepted (Muster Roll for Daily Wagers)' : 'Document accepted (Supplementary Attendance Report)';
+          data.message_hindi = isMusterRoll ? 'दस्तावेज़ स्वीकृत (मस्टर रोल)' : 'दस्तावेज़ स्वीकृत (अनुपूरक उपस्थिति रिपोर्ट)';
         }
       }
       // ────────────────────────────────────────────────────────────────────────────────────────
@@ -2833,11 +2840,11 @@ export async function registerRoutes(app: Express) {
       let fundSupplementaryAllowed = false;
       if (reportType === 'fund') {
         if ((await fundStaffCount(departmentId)) === 0) {
-          return res.status(403).json({ message: "This department has no Wages / Fund Staff employees." });
+          return res.status(403).json({ message: "This department has no Revolving Funds or Other Similar Funds staff." });
         }
         fundSupplementaryAllowed = await fundSupplementaryAllowedFor(departmentId);
         if (reportKind === 'main' && !(await isFundReportOpen())) {
-          return res.status(403).json({ message: "The Wages / Fund Staff attendance report is closed at present." });
+          return res.status(403).json({ message: "The Revolving Funds or Other Similar Funds attendance report is closed at present." });
         }
       }
 
@@ -2863,7 +2870,7 @@ export async function registerRoutes(app: Express) {
       // Without that permission only the Main report can be created, as before.
       if (reportType === 'fund' && reportKind === 'supplementary' && !fundSupplementaryAllowed) {
         return res.status(400).json({
-          message: "A Supplementary Wages / Fund Staff report needs permission from the Accounts / Bill / Students section."
+          message: "A Supplementary Revolving Funds or Other Similar Funds report needs permission from the Accounts / Bill / Students section."
         });
       }
       if (reportType !== 'fund' && reportKind === 'supplementary' && !department?.allowSupplementaryReport) {
@@ -3078,10 +3085,10 @@ export async function registerRoutes(app: Express) {
           const fundReport = (report as any).reportType === 'fund';
           const letter = isLetterEpid(empForKind.epid);
           if (fundReport && !letter) {
-            return res.status(400).json({ message: `${empForKind.name} (${empForKind.epid}) is not Wages / Fund Staff and cannot be added to this report.` });
+            return res.status(400).json({ message: `${empForKind.name} (${empForKind.epid}) is not Revolving Funds or Other Similar Funds staff and cannot be added to this report.` });
           }
           if (!fundReport && letter) {
-            return res.status(400).json({ message: `${empForKind.name} (${empForKind.epid}) is Wages / Fund Staff — add the attendance in the Wages / Fund Staff report.` });
+            return res.status(400).json({ message: `${empForKind.name} (${empForKind.epid}) is Revolving Funds or Other Similar Funds staff — add the attendance in the Revolving Funds or Other Similar Funds report.` });
           }
         }
 

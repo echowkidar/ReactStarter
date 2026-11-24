@@ -16,6 +16,7 @@ import { Download, Printer, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useState, useEffect, useMemo } from "react";
 import { getPayLevelOrder } from "@/lib/pay-levels";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ExtendedAttendanceEntry extends AttendanceEntry {
   employee?: Employee;
@@ -100,6 +101,15 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
   const isReportingReport = (report as any)?.reportType === 'reporting';
   const isFundReportType = (report as any)?.reportType === 'fund';
   const reportTypeSuffix = isReportingReport ? ' (Reporting Employees)' : isFundReportType ? ` (${FUND_REPORT_LABEL})` : '';
+
+  // Revolving Funds report: shown as the prescribed "Muster Roll for Daily Wagers"
+  const { data: muster, isLoading: isLoadingMuster, error: musterError } = useQuery<MusterData>({
+    queryKey: [`/api/attendance/${reportId}/muster`],
+    enabled: !!reportId && isFundReportType,
+    queryFn: async () => (await apiRequest("GET", `/api/attendance/${reportId}/muster`)).json(),
+  });
+  const musterTitle = "Muster Roll for Daily Wagers";
+  const pageOrientation = isFundReportType ? "A4 landscape" : "portrait";
 
   if (isLoadingReport) {
     return <LoadingSkeleton />;
@@ -229,11 +239,11 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
         printWindow.document.write(`
           <html>
             <head>
-              <title>${reportPrefix}Attendance Report${reportTypeSuffix}</title>
+              <title>${isFundReportType ? musterTitle : `${reportPrefix}Attendance Report${reportTypeSuffix}`}</title>
               <style>${styles}</style>
               <style media="all">
                 @page { 
-                  size: portrait;
+                  size: ${pageOrientation};
                   margin: 5mm 5mm 15mm 5mm;
                 }
                 body {
@@ -392,6 +402,7 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
                   page-break-inside: avoid !important;
                   margin-top: 30px !important;
                 }
+                ${MUSTER_PRINT_CSS}
               </style>
             </head>
             <body>
@@ -480,6 +491,59 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
   const handleDownload = () => {
     const wb = XLSX.utils.book_new();
 
+    if (isFundReportType) {
+      if (!muster) {
+        alert('The Muster Roll is still loading. Please try again in a moment.');
+        return;
+      }
+      const used = new Set<string>();
+      muster.blocks.forEach((b, bi) => {
+        const rows: any[][] = [
+          [musterTitle],
+          [`Name of the Department: ${muster.departmentName || report.department?.name || ''}`, '', '', '', `Wage Month: ${musterMonthLabel(muster)}`],
+          [`Payment Head: ${b.headName || '________'}`, '', '', '', `Payment Code: ${b.paymentCode || '________'}`],
+          [b.sectionLabel || ''],
+          ['Transaction ID:', report.transactionId || '-', 'Status:', report.status, 'Despatch No:', report.despatchNo || '-', 'Despatch Date:', report.despatchDate ? formatDispatchDate(report.despatchDate) : '-'],
+          [''],
+          ['S. No.', 'Emp ID', 'Name of the Employee', 'Designation', 'Basic Rate per Day (Rs.)', 'VDA per day (Rs.)', 'Total Days Worked', 'Gross Wages (Rs.)', 'Employee Deduction', '', '', 'Net Payable Amount (Rs.)'],
+          ['', '', '', '', '', '', '', '', 'EPF deduction (if applicable) Rs.', 'ESI deduction (if applicable) Rs.', 'MAS deduction (if applicable) Rs.', ''],
+        ];
+        const headerRow = rows.length - 2;
+        b.lines.forEach(l => rows.push([
+          l.sno, l.epid, l.name, l.designation || '',
+          l.missingCategory ? '' : musterRate(l.basic), l.missingCategory ? '' : musterRate(l.vda),
+          l.days, Math.round(l.gross || 0), Math.round(l.epf || 0), Math.round(l.esi || 0), Math.round(l.mas || 0), Math.round(l.net || 0),
+        ]));
+        rows.push(['', '', 'Total', '', '', '', b.totals.days, Math.round(b.totals.gross || 0), Math.round(b.totals.epf || 0), Math.round(b.totals.esi || 0), Math.round(b.totals.mas || 0), Math.round(b.totals.net || 0)]);
+        rows.push(['']);
+        rows.push(['Passed for payment: ______________', '', '', '', 'Entered at Page No. ______']);
+        rows.push(['']);
+        rows.push(['Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered.']);
+        rows.push(['Certified that the above attendance report is correct.']);
+        rows.push(['']);
+        rows.push([report.department?.hodName || '']);
+        rows.push([report.department?.hodTitle || '']);
+        rows.push([report.department?.name || '']);
+        rows.push(['Signature of HOD / Stamp']);
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!merges'] = [
+          { s: { r: headerRow, c: 8 }, e: { r: headerRow, c: 10 } },
+          ...[0, 1, 2, 3, 4, 5, 6, 7, 11].map(c => ({ s: { r: headerRow, c }, e: { r: headerRow + 1, c } })),
+        ];
+        ws['!cols'] = [{ wch: 6 }, { wch: 9 }, { wch: 26 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 15 }];
+        const name = (b.sectionLabel || `Block ${bi + 1}`).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 28).trim() || `Block ${bi + 1}`;
+        let n = name, k = 2;
+        while (used.has(n.toLowerCase())) n = `${name.slice(0, 26)} ${k++}`;
+        used.add(n.toLowerCase());
+        XLSX.utils.book_append_sheet(wb, ws, n);
+      });
+      if (muster.blocks.length === 0) {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[musterTitle], ['No employees in this report.']]), 'Muster Roll');
+      }
+      XLSX.writeFile(wb, `muster_roll_${report.department?.name}_${report.year}_${report.month}.xlsx`);
+      return;
+    }
+
     const headerData = [
       [`${reportPrefix}Attendance Report${reportTypeSuffix}`],
       [''],
@@ -550,7 +614,7 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
     <div className="container mx-auto py-6 space-y-6">
       <style type="text/css" media="print">{`
         @page { 
-          size: portrait;
+          size: ${pageOrientation};
           margin: 5mm 5mm 15mm 5mm;
         }
         @media print {
@@ -710,11 +774,12 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
           .print-content th:nth-child(7), .print-content td:nth-child(7) { width: 17% !important; } /* Period */
           .print-content th:nth-child(8), .print-content td:nth-child(8) { width: 5% !important; } /* Days */
           .print-content th:nth-child(9), .print-content td:nth-child(9) { width: 18% !important; white-space: normal !important; } /* Remarks */
+          ${MUSTER_PRINT_CSS}
         }
       `}</style>
 
       <div className="flex justify-between items-center no-print">
-        <h1 className="text-2xl font-bold">{reportPrefix}Attendance Report{reportTypeSuffix} Details</h1>
+        <h1 className="text-2xl font-bold">{isFundReportType ? musterTitle : `${reportPrefix}Attendance Report${reportTypeSuffix}`} Details</h1>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {extraActions}
           {report.fileUrl && (
@@ -744,7 +809,9 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
         <Card>
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 print:flex-row print:items-center print:justify-between">
             <CardTitle>
-              {report.status === 'draft' ? `Draft ${reportPrefix}Attendance Report${reportTypeSuffix}` : `${reportPrefix}Attendance Report${reportTypeSuffix}`}
+              {isFundReportType
+                ? (report.status === 'draft' ? `Draft ${musterTitle}` : musterTitle)
+                : (report.status === 'draft' ? `Draft ${reportPrefix}Attendance Report${reportTypeSuffix}` : `${reportPrefix}Attendance Report${reportTypeSuffix}`)}
               {isReportingReport && (
                 <div className="text-xs font-normal mt-1">Employees reporting to {report.department?.name}, awaiting posting</div>
               )}
@@ -813,6 +880,15 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
           </CardContent>
         </Card>
 
+        {isFundReportType ? (
+          <MusterRoll
+            report={report}
+            muster={muster}
+            isLoading={isLoadingMuster}
+            error={musterError as Error | null}
+            feedbackRemark={feedbackRemark}
+          />
+        ) : (
         <div className="mt-4 overflow-x-auto">
           <Table className="w-full border-collapse">
             <TableHeader>
@@ -982,6 +1058,7 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
             })()}
           </Table>
         </div>
+        )}
       </div>
 
       <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
@@ -1040,5 +1117,162 @@ function LoadingSkeleton() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+
+// ── Muster Roll for Daily Wagers (Revolving Funds or Other Similar Funds reports) ──
+interface MusterLine {
+  sno: number; epid: string; name: string; designation?: string; category?: string;
+  basic: number; vda: number; days: number; gross: number; epf: number; esi: number; mas: number; net: number;
+  missingCategory?: boolean;
+}
+interface MusterBlock {
+  section: string; sectionLabel: string; headName: string; paymentCode: string;
+  lines: MusterLine[];
+  totals: { employees: number; days: number; gross: number; epf: number; esi: number; mas: number; net: number };
+}
+interface MusterData {
+  reportId: string | number; departmentId: string | number; departmentName: string;
+  month: number; year: number; blocks: MusterBlock[];
+}
+
+const musterMonthLabel = (m: { month: number; year: number }) =>
+  new Date(m.year, m.month - 1).toLocaleDateString("en-US", { year: "numeric", month: "long" });
+const musterRate = (n: number | null | undefined) => Number(n || 0).toFixed(2);
+const musterAmt = (n: number | null | undefined) => Math.round(Number(n || 0)).toLocaleString("en-IN");
+
+const MUSTER_PRINT_CSS = `
+  .muster-block + .muster-block { page-break-before: always; break-before: page; }
+  .print-content table.muster-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+  .print-content table.muster-table th, .print-content table.muster-table td {
+    padding: 3px 3px !important; border: 1px solid #000; font-size: 8pt;
+    white-space: normal !important; overflow: visible; text-overflow: clip;
+  }
+  .print-content table.muster-table th { text-align: center; background-color: #f3f4f6 !important; }
+  .print-content table.muster-table td.mnum { text-align: right; }
+  .print-content table.muster-table .mc-sno { width: 4% !important; }
+  .print-content table.muster-table .mc-id { width: 7% !important; }
+  .print-content table.muster-table .mc-name { width: 17% !important; }
+  .print-content table.muster-table .mc-des { width: 14% !important; }
+  .print-content table.muster-table .mc-rate { width: 8% !important; }
+  .print-content table.muster-table .mc-days { width: 7% !important; }
+  .print-content table.muster-table .mc-amt { width: 9% !important; }
+  .print-content table.muster-table .mc-ded { width: 8% !important; }
+  .print-content table.muster-table .mc-net { width: 9% !important; }
+`;
+
+function MusterRoll({ report, muster, isLoading, error, feedbackRemark }: {
+  report: ExtendedAttendanceReport;
+  muster?: MusterData;
+  isLoading: boolean;
+  error: Error | null;
+  feedbackRemark: string | null;
+}) {
+  if (isLoading) return <div className="mt-4"><Skeleton className="h-40 w-full" /></div>;
+  if (error || !muster) {
+    return <p className="mt-4 text-center text-sm text-red-600">Unable to load the Muster Roll{error?.message ? `: ${error.message}` : "."}</p>;
+  }
+  if (muster.blocks.length === 0) {
+    return <p className="mt-4 text-center text-sm text-muted-foreground">No employees in this report.</p>;
+  }
+  const th = "border border-black px-1 py-1 text-center align-middle font-bold bg-gray-100 dark:bg-gray-800";
+  const td = "border border-black px-1 py-0.5 align-top";
+  return (
+    <>
+      {muster.blocks.map((b, bi) => (
+        <div key={`${b.section}-${bi}`} className="muster-block mt-4">
+          <div className="space-y-1 mb-2">
+            <p className="font-bold text-sm text-center">Muster Roll for Daily Wagers</p>
+            <p className="text-sm font-semibold">
+              Name of the Department: {muster.departmentName || report.department?.name} &nbsp;|&nbsp; Wage Month: {musterMonthLabel(muster)}
+            </p>
+            <p className="text-sm font-semibold">
+              Payment Head: {b.headName || "________"} &nbsp;|&nbsp; Payment Code: {b.paymentCode || "________"}
+            </p>
+            {b.sectionLabel && <p className="text-[10px]">{b.sectionLabel}</p>}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="muster-table w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th rowSpan={2} className={`${th} mc-sno`}>S. No.</th>
+                  <th rowSpan={2} className={`${th} mc-id`}>Emp ID</th>
+                  <th rowSpan={2} className={`${th} mc-name`}>Name of the Employee</th>
+                  <th rowSpan={2} className={`${th} mc-des`}>Designation</th>
+                  <th rowSpan={2} className={`${th} mc-rate`}>Basic Rate per Day (Rs.)</th>
+                  <th rowSpan={2} className={`${th} mc-rate`}>VDA per day (Rs.)</th>
+                  <th rowSpan={2} className={`${th} mc-days`}>Total Days Worked</th>
+                  <th rowSpan={2} className={`${th} mc-amt`}>Gross Wages (Rs.)</th>
+                  <th colSpan={3} className={th}>Employee Deduction</th>
+                  <th rowSpan={2} className={`${th} mc-net`}>Net Payable Amount (Rs.)</th>
+                </tr>
+                <tr>
+                  <th className={`${th} mc-ded`}>EPF deduction (if applicable) Rs.</th>
+                  <th className={`${th} mc-ded`}>ESI deduction (if applicable) Rs.</th>
+                  <th className={`${th} mc-ded`}>MAS deduction (if applicable) Rs.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {b.lines.map(l => (
+                  <tr key={`${l.epid}-${l.sno}`} style={{ pageBreakInside: "avoid" }}>
+                    <td className={td}>{l.sno}</td>
+                    <td className={`${td} whitespace-nowrap`}>{l.epid}</td>
+                    <td className={td}>
+                      {l.name}
+                      {l.missingCategory && (
+                        <div className="text-[10px] font-bold text-red-600 print:text-black">category not set</div>
+                      )}
+                    </td>
+                    <td className={td}>{l.designation}</td>
+                    <td className={`${td} mnum text-right`}>{l.missingCategory ? "" : musterRate(l.basic)}</td>
+                    <td className={`${td} mnum text-right`}>{l.missingCategory ? "" : musterRate(l.vda)}</td>
+                    <td className={`${td} mnum text-right`}>{l.days}</td>
+                    <td className={`${td} mnum text-right`}>{musterAmt(l.gross)}</td>
+                    <td className={`${td} mnum text-right`}>{musterAmt(l.epf)}</td>
+                    <td className={`${td} mnum text-right`}>{musterAmt(l.esi)}</td>
+                    <td className={`${td} mnum text-right`}>{musterAmt(l.mas)}</td>
+                    <td className={`${td} mnum text-right`}>{musterAmt(l.net)}</td>
+                  </tr>
+                ))}
+                <tr className="font-bold" style={{ pageBreakInside: "avoid" }}>
+                  <td className={td} colSpan={6}>Total</td>
+                  <td className={`${td} mnum text-right`}>{b.totals.days}</td>
+                  <td className={`${td} mnum text-right`}>{musterAmt(b.totals.gross)}</td>
+                  <td className={`${td} mnum text-right`}>{musterAmt(b.totals.epf)}</td>
+                  <td className={`${td} mnum text-right`}>{musterAmt(b.totals.esi)}</td>
+                  <td className={`${td} mnum text-right`}>{musterAmt(b.totals.mas)}</td>
+                  <td className={`${td} mnum text-right`}>{musterAmt(b.totals.net)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 flex justify-between text-sm" style={{ pageBreakInside: "avoid" }}>
+            <p>Passed for payment: ______________________</p>
+            <p>Entered at Page No. ____________</p>
+          </div>
+
+          <div className="mt-8 space-y-4 text-right certification-section" style={{ pageBreakInside: "avoid" }}>
+            <p className="text-[11px] italic -mb-3 text-left">Note: Any handwritten / manual addition, correction, remark or comment on this report shall not be considered.</p>
+            <p>Certified that the above attendance report is correct.</p>
+            {feedbackRemark && (
+              <div className="mb-2 w-full flex justify-end">
+                <span className="italic font-bold text-[11px] text-black tracking-tight mt-1 pr-1 text-right" style={{ textWrap: "balance", maxWidth: "80%" } as any}>
+                  {feedbackRemark.replace(/^(Positive:|Negative:)\s*/, "")}
+                </span>
+              </div>
+            )}
+            <div className="space-y-1">
+              <div style={{ height: "3em" }}></div>
+              <p>{report.department?.hodName}</p>
+              <p>{report.department?.hodTitle}</p>
+              <p>{report.department?.name}</p>
+              <p className="text-[10px]">Signature of HOD / Stamp</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   );
 }

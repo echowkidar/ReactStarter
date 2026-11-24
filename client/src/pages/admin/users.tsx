@@ -784,7 +784,7 @@ export default function AdminUsers() {
                             <SelectItem value="STU">Students Section</SelectItem>
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Sees only its Wages / Fund Staff employees and reports.</p>
+                        <p className="text-xs text-muted-foreground">Sees only its Revolving Funds or Other Similar Funds employees and reports.</p>
                         <FormMessage />
                       </FormItem>
                     )}

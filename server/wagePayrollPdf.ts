@@ -1,5 +1,5 @@
 // Printable wage documents: the Muster Roll for Daily Wagers (A4 landscape) and the
-// individual wage slip (A4 portrait). Standard fonts only, so every text goes through safe()
+// individual pay slip (A4 portrait, monospace text-style layout). Standard fonts only, so every text goes through safe()
 // and the rupee sign is written "Rs.".
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 
@@ -17,6 +17,8 @@ export type WageSlip = {
   basic: number; vda: number; days: number; gross: number; epf: number; esi: number; mas: number; totalDeductions: number; net: number;
   erEpf: number; erEsi: number; uanNo?: string | null; esiNo?: string | null; bankName?: string | null; bankAccountMasked?: string | null;
   ifsc?: string | null; headName?: string | null; paymentCode?: string | null; pageNo?: string | null; passedOn?: string | null; generatedAt: string;
+  dealingCode?: string | null; sectionLabel?: string | null; panNumber?: string | null; salaryRegisterNo?: string | null; payLevel?: string | null;
+  bankAccount?: string | null;
 };
 
 const BLACK = rgb(0, 0, 0);
@@ -294,115 +296,137 @@ export async function buildMusterRollPdf(roll: MusterRoll, lines: MusterLine[]):
   return pdf.save();
 }
 
-// ───────────────────────── Wage slip ─────────────────────────
+// ───────────────────────── Pay slip (text-style, like the university's payroll pay slip) ─────────────────────────
+const SLIP_COLS = 79;
+const MON3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+/** Breaks text into lines of at most `width` characters (words kept whole where possible) */
+function wrapChars(value: string, width: number): string[] {
+  const words = safe(value).split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  for (let w of words) {
+    while (w.length > width) {
+      if (line) { lines.push(line); line = ""; }
+      lines.push(w.slice(0, width));
+      w = w.slice(width);
+    }
+    if (!line) line = w;
+    else if (line.length + 1 + w.length <= width) line += " " + w;
+    else { lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+const money = (n: number) => (Number.isFinite(n) ? n : 0).toFixed(2);
+const padR = (v: string, n: number) => (v.length >= n ? v.slice(0, n) : v + " ".repeat(n - v.length));
+const padL = (v: string, n: number) => (v.length >= n ? v.slice(-n) : " ".repeat(n - v.length) + v);
+const centreIn = (v: string, n: number) => " ".repeat(Math.max(0, Math.floor((n - v.length) / 2))) + v;
+
 export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const mono = await pdf.embedFont(StandardFonts.Courier);
+  const monoBold = await pdf.embedFont(StandardFonts.CourierBold);
+  const small = await pdf.embedFont(StandardFonts.Helvetica);
   const W = 595.28, H = 841.89;
   const page = pdf.addPage([W, H]);
-  const y = (top: number) => H - top;
-  const L = 40, R = W - 40, bw = R - L;
+  const FSZ = 10.6;
+  const charW = mono.widthOfTextAtSize("M", FSZ);
+  const left = (W - charW * SLIP_COLS) / 2;
+  const LH = 12.4;
+  let top = 46;
+  const line = (text: string, bold = false) => {
+    page.drawText(safe(text), { x: left, y: H - top, size: FSZ, font: bold ? monoBold : mono, color: BLACK });
+    top += LH;
+  };
+  const DASH = "-".repeat(SLIP_COLS);
+  const EQ = "=".repeat(SLIP_COLS);
 
-  const boxTop = 40;
+  const monthName = (MONTHS[(s.month - 1 + 12) % 12] ?? String(s.month)).toUpperCase();
+  const monthTxt = `${monthName} -${s.year}`;
+  const section = (s.sectionLabel || "Accounts Section").trim();
+  const upper = (v: unknown) => safe(v).toUpperCase();
+
   // header
-  centredAt(page, "Aligarh Muslim University", W / 2, y(boxTop + 26), bold, 16);
-  centredAt(page, `Wage Slip for ${monthYear(s.month, s.year)}`, W / 2, y(boxTop + 44), bold, 11.5);
-  centredAt(page, s.departmentName, W / 2, y(boxTop + 59), regular, 10);
-  let top = boxTop + 72;
-  page.drawLine({ start: { x: L, y: y(top) }, end: { x: R, y: y(top) }, thickness: 0.8, color: BLACK });
+  line(padR(upper(s.dealingCode ?? ""), SLIP_COLS - monthTxt.length) + monthTxt, true);
+  line(centreIn("ALIGARH MUSLIM UNIVERSITY-ALIGARH, FINANCE & ACCOUNTS DEPARTMENT", SLIP_COLS), true);
+  const title = `PAY SLIP FOR THE MONTH OF ${monthTxt}`;
+  line(centreIn(title, SLIP_COLS - 8).padEnd(SLIP_COLS - 5) + "WAGES", true);
+  line(DASH);
 
-  // details grid (2 pairs per row)
-  const pass = s.passedOn ? `Passed on ${ddmmyyyy(s.passedOn)}` : "";
-  const head = [s.headName, s.paymentCode].filter(Boolean).join(" / ");
-  const details: [string, string][] = [
-    ["EPID", s.epid], ["Name", s.name],
-    ["Designation", s.designation ?? ""], ["Category", s.category],
-    ["UAN", s.uanNo ?? ""], ["ESI No.", s.esiNo ?? ""],
-    ["Bank", s.bankName ?? ""], ["A/c No.", s.bankAccountMasked ?? ""],
-    ["IFSC", s.ifsc ?? ""], ["Payment Head / Code", head],
+  // details: two label/value columns, long values wrap
+  const LV = 32;   // left value width
+  const RV = SLIP_COLS - 12 - LV - 2 - 17;   // right value width = what fits on the line (16)
+  const head = [s.headName, s.paymentCode ? `(${s.paymentCode})` : ""].filter(Boolean).join(" ");
+  const dayTxt = formatINR(s.days, Number.isInteger(s.days) ? 0 : 1);
+  const rate = Math.round((s.basic + s.vda) * 100) / 100;
+  const details: [string, string, string, string][] = [
+    ["NAME", upper(s.name), "PERMANENT ID", upper(s.epid)],
+    ["DESIGNATION", upper(s.designation ?? ""), "SALARY REGISTER", upper(s.salaryRegisterNo || "-")],
+    ["DEPARTMENT", upper(s.departmentName), "PAYMENT HEAD", upper(head)],
+    ["CATEGORY", upper(s.category), "RATE PER DAY", money(rate)],
+    ["PAY LEVEL", upper(s.payLevel || "-"), "DAYS WORKED", dayTxt],
   ];
-  if (s.pageNo || pass) details.push(["Page No.", s.pageNo ?? ""], ["Passed", pass.replace("Passed on ", "")]);
-  const colW = bw / 2;
-  const labW = 78;
-  let gy = top;
-  for (let r = 0; r < details.length; r += 2) {
-    const cells = details.slice(r, r + 2);
-    const prepared = cells.map(([lab, val], c) => {
-      const lines = wrap(val || "-", bold, 9, colW - labW - 10 + (lab.length > 14 ? 0 : 0));
-      return { lab, lines, c };
-    });
-    const nLines = Math.max(...prepared.map((p) => p.lines.length));
-    const rowH = nLines * 12 + 8;
-    for (const p of prepared) {
-      const x = L + p.c * colW;
-      const labLines = wrap(p.lab, regular, 8.5, labW - 4);
-      labLines.forEach((ln, k) => drawText(page, ln, x + 6, y(gy + 14 + k * 11), regular, 8.5, GREY));
-      p.lines.forEach((ln, k) => drawText(page, ln, x + 6 + labW, y(gy + 14 + k * 12), bold, 9));
+  for (const [l1, v1, l2, v2] of details) {
+    const a = wrapChars(v1, LV), b = wrapChars(v2, RV);
+    for (let k = 0; k < Math.max(a.length, b.length); k++) {
+      const lhs = k === 0 ? padR(l1, 11) + ":" : " ".repeat(12);
+      const rhs = k === 0 ? padR(l2, 16) + ":" : " ".repeat(17);
+      line(lhs + padR(a[k] ?? "", LV) + "  " + padR(rhs, 17).slice(0, 17) + padR(b[k] ?? "", SLIP_COLS - 12 - LV - 2 - 17));
     }
-    gy += Math.max(rowH, wrap(cells.map((c) => c[0]).sort((a, b) => b.length - a.length)[0], regular, 8.5, labW - 4).length * 11 + 8);
-    page.drawLine({ start: { x: L, y: y(gy) }, end: { x: R, y: y(gy) }, thickness: 0.3, color: GREY });
   }
-  top = gy;
+  line(DASH);
 
-  // earnings | deductions
-  const midX = L + bw / 2;
-  const hdrH = 20;
-  page.drawRectangle({ x: L, y: y(top + hdrH), width: bw, height: hdrH, color: LIGHT, borderColor: BLACK, borderWidth: LINE });
-  drawText(page, "Earnings", L + 8, y(top + 14), bold, 10);
-  drawText(page, "Amount (Rs.)", midX - 8 - bold.widthOfTextAtSize("Amount (Rs.)", 9), y(top + 14), bold, 9);
-  drawText(page, "Deductions", midX + 8, y(top + 14), bold, 10);
-  rightAt(page, "Amount (Rs.)", R - 8, y(top + 14), bold, 9);
-  top += hdrH;
-
+  // body: earnings | deductions | right-hand block
   const basicAmt = Math.round(s.basic * s.days * 100) / 100;
   const vdaAmt = Math.round(s.vda * s.days * 100) / 100;
-  const dayTxt = formatINR(s.days, Number.isInteger(s.days) ? 0 : 1);
-  const earn: [string, string, boolean][] = [
-    [`Basic (${formatINR(s.basic, 2)} x ${dayTxt} days)`, formatINR(basicAmt, 2), false],
-    [`VDA (${formatINR(s.vda, 2)} x ${dayTxt} days)`, formatINR(vdaAmt, 2), false],
+  const earn: [string, string][] = [["BASIC", money(basicAmt)], ["VDA", money(vdaAmt)]];
+  const ded: [string, string][] = [["EPF", money(s.epf)], ["ESI", money(s.esi)], ["MAS", money(s.mas)]];
+  const RW = SLIP_COLS - (8 + 1 + 9 + 1 + 20 + 1 + 10 + 1);
+  const first = (label: string, v: string | null | undefined, w = RW) => wrapChars(`${label} ${v || "-"}`, w);
+  const right: string[] = [
+    ...first("BANK     ", s.bankName ? upper(s.bankName) : ""),
+    ...first("A/c      ", s.bankAccount ?? s.bankAccountMasked ?? ""),
+    ...first("IFSC     ", s.ifsc ? upper(s.ifsc) : ""),
+    ...(s.passedOn ? [`Passed Dt ${ddmmyyyy(s.passedOn).split("-").join(".")}`] : []),
+    ...(s.pageNo ? [`Page No   ${s.pageNo}`] : []),
+    "",
+    "   Salary/Wage Period",
   ];
-  const ded: [string, string, boolean][] = [
-    ["EPF", formatINR(s.epf), false], ["ESI", formatINR(s.esi), false], ["MAS", formatINR(s.mas), false],
-  ];
-  const bodyRows = 3;
-  const rowH = 22;
-  for (let r = 0; r < bodyRows; r++) {
+  const lastDay = new Date(s.year, s.month, 0).getDate();
+  const mon = MON3[(s.month - 1 + 12) % 12] ?? "";
+  const yy = String(s.year).slice(-2);
+  right.push(`   01-${mon}-${yy}  to ${String(lastDay).padStart(2, "0")}-${mon}-${yy}`, "");
+  right.push(`   PAN_NO :  ${s.panNumber ? upper(s.panNumber) : "-"}`);
+  if (s.uanNo) right.push(`   UAN    :  ${s.uanNo}`);
+  if (s.esiNo) right.push(`   ESI No.:  ${s.esiNo}`);
+  right.push("", "   Authorised For issue", "   under code");
+  for (const l of wrapChars(section, RW - 3)) right.push("   " + l);
+
+  const rows = Math.max(right.length, ded.length, earn.length);
+  for (let r = 0; r < rows; r++) {
     const e = earn[r], d = ded[r];
-    const by = y(top + 15);
-    if (e) { drawText(page, e[0], L + 8, by, regular, 9.5); rightAt(page, e[1], midX - 8, by, regular, 9.5); }
-    if (d) { drawText(page, d[0], midX + 8, by, regular, 9.5); rightAt(page, d[1], R - 8, by, regular, 9.5); }
-    top += rowH;
+    const c1 = e ? padR(e[0], 8) : " ".repeat(8);
+    const c2 = e ? padL(e[1], 9) : " ".repeat(9);
+    const c3 = d ? padR(d[0], 20) : " ".repeat(20);
+    const c4 = d ? padL(d[1], 10) : " ".repeat(10);
+    line(`${c1}|${c2}|${c3}|${c4}|${padR(right[r] ?? "", RW)}`);
   }
-  // totals row
-  const totH = 22;
-  page.drawRectangle({ x: L, y: y(top + totH), width: bw, height: totH, color: LIGHT, borderColor: BLACK, borderWidth: LINE });
-  drawText(page, "Gross Wages", L + 8, y(top + 15), bold, 10);
-  rightAt(page, formatINR(s.gross), midX - 8, y(top + 15), bold, 10);
-  drawText(page, "Total Deductions", midX + 8, y(top + 15), bold, 10);
-  rightAt(page, formatINR(s.totalDeductions), R - 8, y(top + 15), bold, 10);
-  const tableTop = gy;
-  top += totH;
-  // outer frame lines of the table
-  page.drawLine({ start: { x: L, y: y(tableTop) }, end: { x: L, y: y(top) }, thickness: LINE, color: BLACK });
-  page.drawLine({ start: { x: R, y: y(tableTop) }, end: { x: R, y: y(top) }, thickness: LINE, color: BLACK });
-  page.drawLine({ start: { x: midX, y: y(tableTop) }, end: { x: midX, y: y(top) }, thickness: LINE, color: BLACK });
+  line(DASH);
 
-  // net payable
-  top += 18;
-  drawText(page, `Net Payable: Rs. ${formatINR(s.net)}`, L + 8, y(top), bold, 12);
-  top += 16;
-  wrap(`(${amountInWords(s.net)})`, regular, 9.5, bw - 16).forEach((ln, k) => drawText(page, ln, L + 8, y(top + k * 12), regular, 9.5));
-  top += 28;
-  drawText(page, `Employer contribution (not deducted from wages): EPF Rs. ${formatINR(s.erEpf)}, ESI Rs. ${formatINR(s.erEsi)}`, L + 8, y(top), regular, 8, GREY);
-  top += 14;
-
-  // outer box
-  page.drawRectangle({ x: L, y: y(top), width: bw, height: top - boxTop, borderColor: BLACK, borderWidth: 1 });
-
-  const note = "This is a computer generated wage slip and does not need a signature.";
-  centredAt(page, note, W / 2, y(top + 18), regular, 8, GREY);
-  centredAt(page, `Generated on ${s.generatedAt}.`, W / 2, y(top + 30), regular, 8, GREY);
+  const gross = padL(money(s.gross), 10);
+  const dedTot = padL(money(s.totalDeductions), 10);
+  const net = padL(money(s.net), 10);
+  line(`GROSS ${gross}   DEDUCTION ${dedTot}     NET WAGES ${net}`, true);
+  line(DASH);
+  for (const l of wrapChars(`Net payable in words: ${amountInWords(s.net)}`, SLIP_COLS)) line(l);
+  for (const l of wrapChars(`Employer contribution (not deducted): EPF Rs. ${money(s.erEpf)}, ESI Rs. ${money(s.erEsi)}`, SLIP_COLS)) line(l);
+  line(DASH);
+  for (const l of wrapChars(`NOTE  :Error if any, must be brought to the notice of the ${section}`, SLIP_COLS)) line(l);
+  line(EQ);
+  line("REMARK:");
+  top += 6;
+  page.drawText(safe(`Computer generated pay slip, generated on ${s.generatedAt}.`), { x: left, y: H - top, size: 8, font: small, color: GREY });
 
   return pdf.save();
 }

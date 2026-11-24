@@ -159,7 +159,7 @@ export function FundEmployeeImportDialog({
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto px-4">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">Import Wages / Fund Staff</DialogTitle>
+          <DialogTitle className="text-xl font-semibold">Import Revolving Funds or Other Similar Funds Staff</DialogTitle>
           <DialogDescription>
             {importSection ? `${sectionLabel(importSection)} (dealing assistant ${code})` : "Select a section first."}
           </DialogDescription>

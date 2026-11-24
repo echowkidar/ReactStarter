@@ -1,6 +1,6 @@
-// Wage slip — the page for wage / fund staff (no login).
+// Pay slip — the page for Revolving Funds or Other Similar Funds staff (no login).
 // The employee proves who they are with the Employee ID plus the date of joining or the bank
-// account number, then sees and prints the slips of the months the section has passed.
+// account number, then sees and prints the pay slips of the months the section has passed.
 import { retryImage } from "@/lib/retry-image";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ type Slip = {
   basic: number; vda: number; days: number; gross: number; epf: number; esi: number; mas: number; totalDeductions: number; net: number;
   erEpf: number; erEsi: number; uanNo: string | null; esiNo: string | null; bankName: string | null; bankAccountMasked: string | null; ifsc: string | null;
   headName: string | null; paymentCode: string | null; pageNo: string | null; passedOn: string | null; generatedAt: string;
+  dealingCode?: string | null; sectionLabel?: string | null; panNumber?: string | null; salaryRegisterNo?: string | null; payLevel?: string | null;
+  bankAccount?: string | null;
 };
 
 const MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -61,7 +63,7 @@ export function amountInWords(amount: number): string {
   return `Rupees ${wholeInWords(rupees)}${paise ? ` and ${below100(paise)} Paise` : ""} Only`;
 }
 
-/** Calls the wage slip API; throws an Error carrying the server's message (and its code) */
+/** Calls the pay slip API; throws an Error carrying the server's message (and its code) */
 async function api(method: string, path: string, body?: unknown): Promise<any> {
   const res = await fetch(`${API}${path}`, {
     method,
@@ -88,7 +90,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <img src="/logo_favicon/favicon-32x32.png" onError={retryImage} alt="" className="h-8 w-8" />
           <div>
-            <h1 className="text-base font-semibold leading-tight">Wage Slip — Wage / Fund Staff</h1>
+            <h1 className="text-base font-semibold leading-tight">Pay Slip — Revolving Funds or Other Similar Funds</h1>
             <p className="text-xs text-slate-500">Aligarh Muslim University</p>
           </div>
           <a href="/" className="ml-auto flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900">
@@ -150,10 +152,10 @@ export default function WageSlipPage() {
 
       {open === null ? (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Your wage slips</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Your pay slips</CardTitle></CardHeader>
           <CardContent>
             {slips.length === 0 && (
-              <p className="text-sm text-slate-600 py-2">No wage slip is available yet. Slips appear after the section has passed the month's wages.</p>
+              <p className="text-sm text-slate-600 py-2">No pay slip is available yet. Slips appear after the section has passed the month's wages.</p>
             )}
             <div className="divide-y">
               {slips.map((s) => (
@@ -233,8 +235,8 @@ function Identify({ onDone }: { onDone: () => void }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">View your wage slip</CardTitle>
-        <p className="text-sm text-slate-600">For wage / fund staff. Enter your details to see and print your wage slips.</p>
+        <CardTitle className="text-lg">View your pay slip</CardTitle>
+        <p className="text-sm text-slate-600">For Revolving Funds or Other Similar Funds staff. Enter your details to see and print your pay slips.</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4 max-w-sm">
@@ -273,14 +275,101 @@ function Identify({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ── One slip ─────────────────────────────────────────────────────────────────
+// ── One slip (text-style layout, like the university's payroll pay slip) ─────
 
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div className={`flex justify-between gap-3 py-1 ${bold ? "font-semibold border-t border-slate-300 mt-1 pt-1.5" : ""}`}>
-      <span>{label}</span><span className="tabular-nums">{value}</span>
-    </div>
-  );
+const COLS = 79;
+const MON3 = ["", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const money = (n: number) => (Number.isFinite(Number(n)) ? Number(n) : 0).toFixed(2);
+const padR = (v: string, n: number) => (v.length >= n ? v.slice(0, n) : v + " ".repeat(n - v.length));
+const padL = (v: string, n: number) => (v.length >= n ? v.slice(-n) : " ".repeat(n - v.length) + v);
+const centreIn = (v: string, n: number) => " ".repeat(Math.max(0, Math.floor((n - v.length) / 2))) + v;
+function wrapChars(value: string, width: number): string[] {
+  const words = String(value ?? "").split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  for (let w of words) {
+    while (w.length > width) { if (line) { lines.push(line); line = ""; } lines.push(w.slice(0, width)); w = w.slice(width); }
+    if (!line) line = w;
+    else if (line.length + 1 + w.length <= width) line += " " + w;
+    else { lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+/** The slip as fixed-width lines; `bold` marks the heading / total lines */
+function slipLines(slip: Slip): { text: string; bold?: boolean }[] {
+  const out: { text: string; bold?: boolean }[] = [];
+  const add = (text: string, bold = false) => out.push({ text, bold });
+  const up = (v: unknown) => String(v ?? "").toUpperCase();
+  const monthTxt = `${up(MONTHS[slip.month])} -${slip.year}`;
+  const section = (slip.sectionLabel || "Accounts Section").trim();
+  const DASH = "-".repeat(COLS);
+
+  add(padR(up(slip.dealingCode ?? ""), COLS - monthTxt.length) + monthTxt, true);
+  add(centreIn("ALIGARH MUSLIM UNIVERSITY-ALIGARH, FINANCE & ACCOUNTS DEPARTMENT", COLS), true);
+  add(centreIn(`PAY SLIP FOR THE MONTH OF ${monthTxt}`, COLS - 8).padEnd(COLS - 5) + "WAGES", true);
+  add(DASH);
+
+  const LV = 32, RV = COLS - 12 - LV - 2 - 17; // right value width = what fits on the line (16)
+  const head = [slip.headName, slip.paymentCode ? `(${slip.paymentCode})` : ""].filter(Boolean).join(" ");
+  const dayTxt = Number.isInteger(slip.days) ? String(slip.days) : slip.days.toFixed(1);
+  const rate = Math.round((slip.basic + slip.vda) * 100) / 100;
+  const details: [string, string, string, string][] = [
+    ["NAME", up(slip.name), "PERMANENT ID", up(slip.epid)],
+    ["DESIGNATION", up(slip.designation), "SALARY REGISTER", up(slip.salaryRegisterNo || "-")],
+    ["DEPARTMENT", up(slip.departmentName), "PAYMENT HEAD", up(head)],
+    ["CATEGORY", up(slip.category), "RATE PER DAY", money(rate)],
+    ["PAY LEVEL", up(slip.payLevel || "-"), "DAYS WORKED", dayTxt],
+  ];
+  for (const [l1, v1, l2, v2] of details) {
+    const a = wrapChars(v1, LV), b = wrapChars(v2, RV);
+    for (let k = 0; k < Math.max(a.length, b.length); k++) {
+      const lhs = k === 0 ? padR(l1, 11) + ":" : " ".repeat(12);
+      const rhs = k === 0 ? padR(l2, 16) + ":" : " ".repeat(17);
+      add(lhs + padR(a[k] ?? "", LV) + "  " + rhs + padR(b[k] ?? "", COLS - 12 - LV - 2 - 17));
+    }
+  }
+  add(DASH);
+
+  const earn: [string, string][] = [["BASIC", money(slip.basic * slip.days)], ["VDA", money(slip.vda * slip.days)]];
+  const ded: [string, string][] = [["EPF", money(slip.epf)], ["ESI", money(slip.esi)], ["MAS", money(slip.mas)]];
+  const RW = COLS - (8 + 1 + 9 + 1 + 20 + 1 + 10 + 1);
+  const first = (label: string, v: string | null | undefined) => wrapChars(`${label} ${v || "-"}`, RW);
+  const right: string[] = [
+    ...first("BANK     ", slip.bankName ? up(slip.bankName) : ""),
+    ...first("A/c      ", slip.bankAccount ?? slip.bankAccountMasked ?? ""),
+    ...first("IFSC     ", slip.ifsc ? up(slip.ifsc) : ""),
+    ...(slip.passedOn ? [`Passed Dt ${String(slip.passedOn).slice(0, 10).split("-").reverse().join(".")}`] : []),
+    ...(slip.pageNo ? [`Page No   ${slip.pageNo}`] : []),
+    "",
+    "   Salary/Wage Period",
+  ];
+  const lastDay = new Date(slip.year, slip.month, 0).getDate();
+  const mon = MON3[slip.month] ?? "";
+  const yy = String(slip.year).slice(-2);
+  right.push(`   01-${mon}-${yy}  to ${String(lastDay).padStart(2, "0")}-${mon}-${yy}`, "");
+  right.push(`   PAN_NO :  ${slip.panNumber ? up(slip.panNumber) : "-"}`);
+  if (slip.uanNo) right.push(`   UAN    :  ${slip.uanNo}`);
+  if (slip.esiNo) right.push(`   ESI No.:  ${slip.esiNo}`);
+  right.push("", "   Authorised For issue", "   under code");
+  for (const l of wrapChars(section, RW - 3)) right.push("   " + l);
+
+  const rows = Math.max(right.length, ded.length, earn.length);
+  for (let r = 0; r < rows; r++) {
+    const e = earn[r], d = ded[r];
+    add(`${padR(e?.[0] ?? "", 8)}|${padL(e?.[1] ?? "", 9)}|${padR(d?.[0] ?? "", 20)}|${padL(d?.[1] ?? "", 10)}|${padR(right[r] ?? "", RW)}`);
+  }
+  add(DASH);
+  add(`GROSS ${padL(money(slip.gross), 10)}   DEDUCTION ${padL(money(slip.totalDeductions), 10)}     NET WAGES ${padL(money(slip.net), 10)}`, true);
+  add(DASH);
+  for (const l of wrapChars(`Net payable in words: ${amountInWords(slip.net)}`, COLS)) add(l);
+  for (const l of wrapChars(`Employer contribution (not deducted): EPF Rs. ${money(slip.erEpf)}, ESI Rs. ${money(slip.erEsi)}`, COLS)) add(l);
+  add(DASH);
+  for (const l of wrapChars(`NOTE  :Error if any, must be brought to the notice of the ${section}`, COLS)) add(l);
+  add("=".repeat(COLS));
+  add("REMARK:");
+  return out;
 }
 
 function SlipView({ lineId, onBack, onError }: { lineId: number; onBack: () => void; onError: (e: any) => void }) {
@@ -304,53 +393,13 @@ function SlipView({ lineId, onBack, onError }: { lineId: number; onBack: () => v
         </div>
       </div>
 
-      <div id="wage-slip-print" className="rounded-lg border bg-white p-4 sm:p-6 text-sm text-slate-900 shadow-sm">
-        <div className="text-center border-b border-slate-300 pb-3 mb-3">
-          <p className="text-base font-bold">Aligarh Muslim University</p>
-          <p className="font-semibold">Wage Slip for {MONTHS[slip.month]} {slip.year}</p>
-          <p className="text-xs text-slate-600">{slip.departmentName}</p>
-        </div>
-
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">Name</dt><dd className="font-medium">{slip.name}</dd></div>
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">Employee ID</dt><dd className="font-medium">{slip.epid}</dd></div>
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">Designation</dt><dd className="font-medium">{slip.designation}</dd></div>
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">Category</dt><dd className="font-medium">{slip.category}</dd></div>
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">UAN</dt><dd className="font-medium">{slip.uanNo || "—"}</dd></div>
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">ESI No.</dt><dd className="font-medium">{slip.esiNo || "—"}</dd></div>
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">Bank</dt><dd className="font-medium">{[slip.bankName, slip.bankAccountMasked, slip.ifsc].filter(Boolean).join(" · ") || "—"}</dd></div>
-          <div className="flex gap-2"><dt className="text-slate-500 w-28 shrink-0">Days paid</dt><dd className="font-medium">{slip.days}</dd></div>
-        </dl>
-
-        <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4 mt-4">
-          <div>
-            <p className="font-semibold border-b border-slate-300 pb-1 mb-1">Earnings</p>
-            <Row label={`Basic (${inr(slip.basic)} × ${slip.days})`} value={inr(slip.basic * slip.days)} />
-            <Row label={`VDA (${inr(slip.vda)} × ${slip.days})`} value={inr(slip.vda * slip.days)} />
-            <Row label="Gross" value={inr(slip.gross)} bold />
-          </div>
-          <div>
-            <p className="font-semibold border-b border-slate-300 pb-1 mb-1">Deductions</p>
-            <Row label="EPF" value={inr(slip.epf)} />
-            <Row label="ESI" value={inr(slip.esi)} />
-            <Row label="MAS" value={inr(slip.mas)} />
-            <Row label="Total deductions" value={inr(slip.totalDeductions)} bold />
-          </div>
-        </div>
-
-        <div className="mt-4 rounded border border-slate-300 bg-slate-50 px-3 py-2">
-          <div className="flex justify-between gap-3 text-base font-bold"><span>Net payable</span><span className="tabular-nums">{inr(slip.net)}</span></div>
-          <p className="text-xs text-slate-700 mt-0.5">{amountInWords(slip.net)}</p>
-        </div>
-
-        <p className="text-xs text-slate-600 mt-3">
-          Employer contribution (not deducted from your wages): EPF {inr(slip.erEpf)}, ESI {inr(slip.erEsi)}.
-        </p>
-        <p className="text-xs text-slate-600 mt-1">
-          Payment head: {slip.headName || "—"}{slip.paymentCode ? ` (${slip.paymentCode})` : ""}
-          {slip.passedOn ? ` · Passed on ${longDate(slip.passedOn)}` : ""}{slip.pageNo ? `, Page No. ${slip.pageNo}` : ""}
-        </p>
-        <p className="text-[11px] text-slate-500 mt-2">Computer generated wage slip · {slip.generatedAt}</p>
+      <div id="wage-slip-print" className="rounded-lg border bg-white p-3 sm:p-5 text-slate-900 shadow-sm overflow-x-auto print:overflow-visible print:bg-white print:p-4">
+        <pre className="font-mono text-[11px] sm:text-xs leading-[1.35] whitespace-pre m-0 w-max print:text-[11px] print:text-black">
+          {slipLines(slip).map((l, i) => (
+            <div key={i} className={l.bold ? "font-bold" : undefined}>{l.text || " "}</div>
+          ))}
+        </pre>
+        <p className="text-[11px] text-slate-500 mt-3">Computer generated pay slip, generated on {slip.generatedAt}.</p>
       </div>
     </div>
   );

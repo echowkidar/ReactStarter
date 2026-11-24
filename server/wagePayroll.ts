@@ -14,7 +14,7 @@
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
-import { sessionAdmin } from "./auth";
+import { sessionAdmin, sessionDepartmentId } from "./auth";
 import { sectionOfAdmin, sectionCodes, sectionLabel, type SectionKey } from "../shared/sections";
 import {
   calculateLine, categoryFromDesignation, inForceOn, monthStart, sortSets,
@@ -269,8 +269,77 @@ async function rollFor(req: Request, res: Response): Promise<{ roll: any; who: A
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 
+/**
+ * Muster Roll figures of a department's Revolving Funds attendance report (report_type 'fund'),
+ * for the department's own print (Finance Officer's circular: the department submits the
+ * Muster Roll / Wages Calculation Sheet). One block per section (payment head).
+ * Same calculation as the section's payroll roll; nothing is saved.
+ */
+export async function musterOfReport(reportId: number) {
+  const rep = (await db.execute(sql`
+    SELECT ar.id, ar.department_id, ar.month, ar.year, COALESCE(ar.report_type, 'regular') AS report_type, d.name AS department_name
+    FROM attendance_reports ar LEFT JOIN departments d ON d.id = ar.department_id WHERE ar.id = ${reportId}`)).rows[0] as any;
+  if (!rep || rep.report_type !== "fund") return null;
+  const entries = (await db.execute(sql`
+    SELECT ae.employee_id, ae.periods, ae.days FROM attendance_entries ae WHERE ae.report_id = ${reportId} ORDER BY ae.id`)).rows as any[];
+  const days = new Map<number, number>();
+  for (const row of entries) {
+    let periods: any[] = [];
+    try { periods = JSON.parse(row.periods || "[]"); } catch { periods = []; }
+    const n = Array.isArray(periods) && periods.length ? periods.reduce((s, p) => s + (Number(p?.days) || 0), 0) : Number(row.days) || 0;
+    days.set(Number(row.employee_id), (days.get(Number(row.employee_id)) || 0) + n);
+  }
+  const ids = [...days.keys()];
+  const rates = await ratesFor(Number(rep.month), Number(rep.year));
+  const emps = ids.length ? (await db.execute(sql`
+    SELECT e.* FROM employees e WHERE e.id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
+    ORDER BY e.sort_order, e.epid`)).rows as any[] : [];
+  const heads = (await db.execute(sql`SELECT section, head_name, payment_code FROM fund_payment_heads WHERE department_id = ${rep.department_id}`)).rows as any[];
+  const blocks = new Map<string, any>();
+  for (const e of emps) {
+    const section = sectionOfAdmin(String(e.salary_asstt || "").trim().toUpperCase() === "OTH" ? "ACC" : e.salary_asstt);
+    const key = section === "salary" ? "unassigned" : section;
+    const category = e.wage_category || categoryFromDesignation(e.designation);
+    const rate = rateOf(category, rates);
+    const line = computeLine({
+      epid: e.epid, name: e.name, designation: e.designation, category, basic: rate.basic, vda: rate.vda,
+      days: days.get(Number(e.id)) || 0, epf_on: e.epf_applicable === true, esi_on: e.esi_applicable === true,
+      esi_covered: e.esi_covered === true, mas_on: e.mas_applicable === true,
+    }, rates);
+    const h = heads.find((x) => x.section === key);
+    const b = blocks.get(key) || {
+      section: key, sectionLabel: key === "unassigned" ? "Section not set" : sectionLabel(key as FundSection),
+      headName: h?.head_name || "", paymentCode: h?.payment_code || "", lines: [] as any[],
+    };
+    b.lines.push({
+      sno: b.lines.length + 1, epid: line.epid, name: line.name, designation: line.designation,
+      category, basic: Number(line.basic), vda: Number(line.vda), days: line.days,
+      gross: line.gross, epf: line.epf, esi: line.esi, mas: line.mas, net: line.net,
+      missingCategory: !category,
+    });
+    blocks.set(key, b);
+  }
+  const out = [...blocks.values()].map((b) => ({ ...b, totals: totalsOf(b.lines) }));
+  return {
+    reportId: rep.id, departmentId: Number(rep.department_id), departmentName: rep.department_name,
+    month: Number(rep.month), year: Number(rep.year), blocks: out,
+  };
+}
+
 export function registerWagePayrollRoutes(app: Express) {
   const base = "/api/admin/payroll";
+
+  // Muster Roll figures of a Revolving Funds attendance report: the department that owns it, or any admin
+  app.get("/api/attendance/:reportId/muster", wrap(async (req, res) => {
+    const reportId = int(req.params.reportId);
+    if (!Number.isInteger(reportId)) return res.status(400).json({ message: "Invalid report" });
+    const data = await musterOfReport(reportId);
+    if (!data) return res.status(404).json({ message: "Not a Revolving Funds attendance report" });
+    const admin = await sessionAdmin(req).catch(() => null);
+    const deptId = admin ? null : await sessionDepartmentId(req).catch(() => null);
+    if (!admin && deptId !== data.departmentId) return res.status(403).json({ message: "Not your report" });
+    res.json(data);
+  }));
 
   // Settings: wage rates + EPF / ESI / MAS. Read: any payroll user. Change: Super Admin.
   app.get(`${base}/settings`, wrap(async (req, res) => {
@@ -390,7 +459,7 @@ export function registerWagePayrollRoutes(app: Express) {
     if (exists.rows.length) return res.status(409).json({ message: "A roll for this department and month already exists.", id: Number((exists.rows[0] as any).id) });
     const rates = await ratesFor(month, year);
     const lines = await buildLines(departmentId, who.section, month, year, rates);
-    if (!lines.length) return res.status(400).json({ message: "No received Wages / Fund Staff attendance for this section's employees in this month." });
+    if (!lines.length) return res.status(400).json({ message: "No received Revolving Funds or Other Similar Funds attendance for this section's employees in this month." });
     const head = await db.execute(sql`SELECT head_name, payment_code FROM fund_payment_heads WHERE department_id = ${departmentId} AND section = ${who.section}`);
     const h: any = head.rows[0] || {};
     let id = 0;
@@ -589,7 +658,7 @@ export function registerWagePayrollRoutes(app: Express) {
     const ids = (await db.execute(sql`SELECT id FROM wage_roll_lines WHERE roll_id = ${roll.id} ORDER BY sno, id`)).rows as any[];
     const onlyLine = req.query.line ? int(req.query.line) : null;
     const lineIds = onlyLine ? ids.map((r) => Number(r.id)).filter((i) => i === onlyLine) : ids.map((r) => Number(r.id));
-    if (!lineIds.length) return res.status(404).json({ message: "No wage slips in this roll." });
+    if (!lineIds.length) return res.status(404).json({ message: "No pay slips in this roll." });
     const merged = await PDFDocument.create();
     for (const lid of lineIds) {
       const slip = await slipOfLine(lid);

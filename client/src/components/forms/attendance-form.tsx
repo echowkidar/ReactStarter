@@ -447,7 +447,7 @@ export default function AttendanceForm({ onSubmit, isLoading, reportId, initialD
       // Filter only active employees and sort by Pay Level (descending) then EPID (ascending)
       return [...list]
         .filter((employee: any) => employee.isActive === "active")
-        // Wages / Fund Staff report: letter-EPID employees only; regular report: never letter-EPID
+        // Revolving Funds or Other Similar Funds report: letter-EPID employees only; regular report: never letter-EPID
         .filter((employee: any) => isReportingMode ? true : isFundMode ? isLetterEpid(employee.epid) : !isLetterEpid(employee.epid))
         .sort((a, b) => {
           // First sort by pay level (higher levels first)

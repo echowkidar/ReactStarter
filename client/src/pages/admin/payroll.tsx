@@ -1,4 +1,4 @@
-// Wages payroll for wage / fund staff — Accounts, Bill and Students sections (and the Super Admin
+// Wages payroll for Revolving Funds or Other Similar Funds staff — Accounts, Bill and Students sections (and the Super Admin
 // looking at one of them). Month view → roll editor. Rules: shared/wagePayroll.ts.
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -501,7 +501,7 @@ function RollEditor({ id, section, onBack }: { id: number; section: string; onBa
             </>
           )}
           {lines.length > 0 && (
-            <Button variant="outline" onClick={() => window.open(slipsUrl, "_blank", "noopener")}><ReceiptText className="h-4 w-4 mr-2" /> Wage slips (PDF)</Button>
+            <Button variant="outline" onClick={() => window.open(slipsUrl, "_blank", "noopener")}><ReceiptText className="h-4 w-4 mr-2" /> Pay slips (PDF)</Button>
           )}
         </div>
 
@@ -681,12 +681,12 @@ function LineRow({ line, editable, statutory, rollId, section, slipUrl, onSaved,
         <div className="flex items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" aria-label={`Wage slip of ${line.epid}`} className="text-slate-500 hover:text-blue-700"
+              <button type="button" aria-label={`Pay slip of ${line.epid}`} className="text-slate-500 hover:text-blue-700"
                 onClick={() => window.open(slipUrl, "_blank", "noopener")}>
                 <ReceiptText className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>Wage slip (PDF)</TooltipContent>
+            <TooltipContent>Pay slip (PDF)</TooltipContent>
           </Tooltip>
           {warnings.map((w) => (
             <Tooltip key={w.code}>

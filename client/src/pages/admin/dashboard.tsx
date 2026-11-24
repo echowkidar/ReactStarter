@@ -208,7 +208,7 @@ export default function AdminDashboard() {
     [allReports, section],
   );
 
-  // Wages / Fund Staff attendance: open flag + departments with letter-EPID staff
+  // Revolving Funds or Other Similar Funds attendance: open flag + departments with letter-EPID staff
   interface FundStatus {
     open: boolean;
     departments: { id: number; name: string; fundStaffCount: number; allowFundSupplementary: boolean }[];
@@ -229,7 +229,7 @@ export default function AdminDashboard() {
     },
     onSuccess: (_, open) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fund-report-status"] });
-      toast({ title: open ? "Wages / Fund Staff attendance opened" : "Wages / Fund Staff attendance closed" });
+      toast({ title: open ? `${FUND_REPORT_LABEL} attendance opened` : `${FUND_REPORT_LABEL} attendance closed` });
     },
     onError: (error: any) => {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update" });
@@ -1847,8 +1847,8 @@ export default function AdminDashboard() {
               <p className="text-sm font-semibold">{FUND_REPORT_LABEL} attendance</p>
               <p className="text-xs text-muted-foreground">
                 {fundStatus?.open
-                  ? "Open: departments can submit attendance of their wages / fund staff."
-                  : "Closed: departments cannot submit attendance of their wages / fund staff."}
+                  ? "Open: departments can submit attendance of their Revolving Funds or Other Similar Funds staff."
+                  : "Closed: departments cannot submit attendance of their Revolving Funds or Other Similar Funds staff."}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1860,7 +1860,7 @@ export default function AdminDashboard() {
                   checked={!!fundStatus?.open}
                   disabled={!fundStatus || fundOpenMutation.isPending}
                   onCheckedChange={(open) => fundOpenMutation.mutate(open)}
-                  aria-label="Open or close Wages / Fund Staff attendance"
+                  aria-label="Open or close Revolving Funds or Other Similar Funds attendance"
                 />
               )}
             </div>

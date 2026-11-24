@@ -9,6 +9,7 @@ import { db } from "./db";
 import { regenerateKeeping, saveSession } from "./auth";
 import { rateLimit } from "./security";
 import { WAGE_CATEGORY_LABELS, type WageCategory } from "../shared/wagePayroll";
+import { sectionLabel } from "../shared/sections";
 import { buildWageSlipPdf, type WageSlip } from "./wagePayrollPdf";
 
 declare module "express-session" {
@@ -91,10 +92,12 @@ const maskAccount = (a: unknown) => { const d = digits(a); return d ? `${"X".rep
 export async function slipOfLine(lineId: number, employeeId?: number): Promise<WageSlip | null> {
   const r = await db.execute(sql`
     SELECT l.*, w.month, w.year, w.head_name, w.payment_code, w.page_no, w.passed_on::text AS passed_on, w.status,
-           d.name AS department_name
+           w.section, d.name AS department_name,
+           e.salary_asstt, e.pan_number, e.salary_register_no, e.pay_level
     FROM wage_roll_lines l
     JOIN wage_rolls w ON w.id = l.roll_id
     LEFT JOIN departments d ON d.id = w.department_id
+    LEFT JOIN employees e ON e.id = l.employee_id
     WHERE l.id = ${lineId} ${employeeId ? sql`AND l.employee_id = ${employeeId} AND w.status = 'passed'` : sql``}`);
   const l = r.rows[0] as any;
   if (!l) return null;
@@ -109,6 +112,13 @@ export async function slipOfLine(lineId: number, employeeId?: number): Promise<W
     uanNo: l.uan_no, esiNo: l.esi_no, bankName: l.bank_name, bankAccountMasked: maskAccount(l.bank_account), ifsc: l.ifsc,
     headName: l.head_name, paymentCode: l.payment_code, pageNo: l.page_no, passedOn: l.passed_on,
     generatedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+    // payroll-style slip header / right column
+    dealingCode: clean(l.salary_asstt).toUpperCase() || null,
+    sectionLabel: sectionLabel(l.section) || null,
+    panNumber: clean(l.pan_number) || null,
+    salaryRegisterNo: clean(l.salary_register_no) || null,
+    payLevel: clean(l.pay_level) || null,
+    bankAccount: digits(l.bank_account) || null,
   };
 }
 
@@ -190,14 +200,14 @@ export function registerWageSlipPublicRoutes(app: Express) {
     const e = await identified(req);
     if (!e) return res.status(401).json({ message: "Please identify yourself again.", code: "SLIP_REQUIRED" });
     const slip = await slipOfLine(Number(req.params.lineId), Number(e.id));
-    if (!slip) return res.status(404).json({ message: "Wage slip not found." });
+    if (!slip) return res.status(404).json({ message: "Pay slip not found." });
     res.json(slip);
   }));
   app.get(`${base}/slip/:lineId/pdf`, wrap(async (req, res) => {
     const e = await identified(req);
     if (!e) return res.status(401).json({ message: "Please identify yourself again.", code: "SLIP_REQUIRED" });
     const slip = await slipOfLine(Number(req.params.lineId), Number(e.id));
-    if (!slip) return res.status(404).json({ message: "Wage slip not found." });
+    if (!slip) return res.status(404).json({ message: "Pay slip not found." });
     const bytes = await buildWageSlipPdf(slip);
     sendPdf(res, bytes, `wage-slip-${slip.epid}-${slip.year}-${String(slip.month).padStart(2, "0")}.pdf`, req.query.download === "1");
   }));

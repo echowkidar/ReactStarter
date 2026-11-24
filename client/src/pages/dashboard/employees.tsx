@@ -540,13 +540,13 @@ export default function Employees() {
               <TableBody>
                 {filteredEmployees.map((employee, idx) => (
                   <Fragment key={employee.id}>
-                  {/* Heading before the first wage / fund staff row */}
+                  {/* Heading before the first Revolving Funds or Other Similar Funds staff row */}
                   {isLetterEpid(employee.epid) && (idx === 0 || !isLetterEpid(filteredEmployees[idx - 1].epid)) && (
                     <TableRow className="bg-emerald-50 hover:bg-emerald-50">
                       <TableCell colSpan={8} className="py-2 text-sm font-semibold text-emerald-800">
-                        Wages / Fund Staff
+                        Revolving Funds or Other Similar Funds
                         <span className="ml-2 font-normal text-emerald-700">
-                          ({filteredEmployees.filter((e) => isLetterEpid(e.epid)).length}) — Employee ID starting with a letter; attendance goes in the Wages / Fund Staff report
+                          ({filteredEmployees.filter((e) => isLetterEpid(e.epid)).length}) — Employee ID starting with a letter; attendance goes in the Revolving Funds or Other Similar Funds report
                         </span>
                       </TableCell>
                     </TableRow>

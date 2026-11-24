@@ -100,22 +100,22 @@ const loginSchema = z.object({
   password: z.string().min(6),
 });
 
-/** Way in for wage / fund staff to their wage slips (always shown, no login) */
+/** Way in for Revolving Funds or Other Similar Funds staff to their pay slips (always shown, no login) */
 function WageSlipLink() {
   const [, setLocation] = useLocation();
   return (
     <button
       type="button"
       onClick={() => setLocation("/wage-slip")}
-      title="View and print your wage slip. No login needed: only your Employee ID and date of joining or bank account number."
+      title="View and print your pay slip. No login needed: only your Employee ID and date of joining or bank account number."
       className="group flex w-full items-center gap-3 rounded-xl border-2 border-blue-600 bg-blue-50 px-3 py-2.5 text-left shadow-md hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-700 text-white">
         <ReceiptText className="h-5 w-5" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-bold uppercase tracking-wider text-blue-800">For wage / fund staff · no login needed</span>
-        <span className="block text-base font-bold leading-snug text-slate-900">Wage Slip (Wage / Fund Staff)</span>
+        <span className="block text-[11px] font-bold uppercase tracking-wider text-blue-800">For Revolving Funds or Other Similar Funds staff · no login needed</span>
+        <span className="block text-base font-bold leading-snug text-slate-900">Pay Slip (Revolving Funds or Other Similar Funds)</span>
         <span className="block truncate text-xs text-slate-600">View, print or download your slip</span>
       </span>
       <ChevronRight className="h-5 w-5 shrink-0 text-blue-700 transition-transform group-hover:translate-x-0.5" />

@@ -760,6 +760,7 @@ const PDFDialogContent = ({
     try {
       const formData = new FormData();
       formData.append('file', file, file.name);
+      formData.append('reportType', (report as any)?.reportType === 'fund' ? 'fund' : (report as any)?.reportType === 'reporting' ? 'reporting' : 'regular');
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 s timeout for deep OCR
@@ -2376,7 +2377,7 @@ export default function Attendance() {
   const existingReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'regular');
   // Reporting Employees report (separate report type; only for enabled departments)
   const existingReportingReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'reporting');
-  // Wages / Fund Staff report (letter-EPID employees; separate report type)
+  // Revolving Funds report (letter-EPID employees; separate report type)
   const existingFundReport = findMainReport(reports, currentMonthIdx, currentMonthYear, 'fund');
   // An open draft (Main or Supplementary) must be finalised/deleted before another report is created
   const existingDraftReport = reports?.find(r => r.year === currentMonthYear && r.month === currentMonthIdx && r.status === 'draft' && (r as any).reportType !== 'reporting' && (r as any).reportType !== 'fund');
@@ -2418,7 +2419,7 @@ export default function Attendance() {
         : (!isPastDeadline && (!existingReportingReport || attendanceStatus?.allowSupplementaryReport))
   );
 
-  // Wages / Fund Staff report: own window opened by Super Admin, not tied to the 15th-day deadline
+  // Revolving Funds report: own window opened by Super Admin, not tied to the 15th-day deadline
   const canCreateFundReport = !!attendanceStatus?.hasFundStaff && !existingDraftFundReport && (
     existingFundReport
       ? attendanceStatus?.allowFundSupplementary === true
@@ -2583,10 +2584,10 @@ export default function Attendance() {
                     title={canCreateFundReport
                       ? `Create attendance report for ${FUND_REPORT_LABEL}`
                       : existingDraftFundReport
-                        ? "A draft Wages / Fund Staff report already exists. Please finalise or delete it first."
+                        ? `A draft ${FUND_REPORT_LABEL} report already exists. Please finalise or delete it first.`
                         : existingFundReport
-                          ? `Wages / Fund Staff report for this month already exists (${existingFundReport.status})`
-                          : "Opens when the Super Admin opens Wages / Fund Staff attendance"}
+                          ? `${FUND_REPORT_LABEL} report for this month already exists (${existingFundReport.status})`
+                          : `Opens when the Super Admin opens ${FUND_REPORT_LABEL} attendance`}
                     onClick={() => {
                       setActiveReportType('fund');
                       setReportKind(existingFundReport ? 'supplementary' : 'main');
@@ -2597,11 +2598,11 @@ export default function Attendance() {
                     }}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Wages / Fund Staff Report
+                    Create {FUND_REPORT_LABEL} Report
                   </Button>
                   {!canCreateFundReport && !existingFundReport && !existingDraftFundReport && attendanceStatus?.fundReportOpen !== true && (
                     <span className="text-[11px] text-muted-foreground mt-1">
-                      Opens when the Super Admin opens Wages / Fund Staff attendance
+                      Opens when the Super Admin opens {FUND_REPORT_LABEL} attendance
                     </span>
                   )}
                 </div>
