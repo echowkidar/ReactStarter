@@ -254,6 +254,7 @@ function MonthView({ section, ym, setYm, onOpen, onFunds }: {
       </Card>
 
       <MonthlyFiles section={section} ym={ym} />
+      <ChequesAndRelease section={section} ym={ym} />
     </>
   );
 }
@@ -292,7 +293,7 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
   };
   const files = [
     { name: "bank.xlsx", label: "Bank payment sheet (branch-wise)", icon: Landmark },
-    { name: "bank-advice.pdf", label: "Bank Advice (PDF, per branch)", icon: FileText },
+    { name: "bank-advice.pdf", label: "Bank Advice (PDF, per fund + branch)", icon: FileText },
     { name: "ecr.txt", label: "EPF ECR (.txt)", icon: FileText },
     { name: "esi.xlsx", label: "ESI sheet", icon: FileSpreadsheet },
     { name: "liability.xlsx", label: "Employer liability", icon: FileSpreadsheet },
@@ -370,6 +371,145 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
         {!isLoading && passed === 0 && <p className="text-sm text-slate-500">No roll has been passed for payment this month, so there is nothing to download yet.</p>}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Cheques (one per fund + bank branch) and pay-slip release ────────────────
+type ChequeGroupRow = {
+  paymentCode: string; headName: string; bankName: string; branch: string; ifsc: string; accounts: number; amount: number;
+  missingBank: boolean; employees?: { epid: string; name: string }[];
+  chequeNo: string | null; chequeDate: string | null; chequeBy: string | null; chequeAt: string | null;
+};
+type ChequeState = {
+  groups: ChequeGroupRow[]; passedEmployees: number; pendingCheques: number; canRelease: boolean;
+  release: { released: boolean; releasedAt: string | null; releasedBy: string | null };
+};
+
+function ChequesAndRelease({ section, ym }: { section: string; ym: { month: number; year: number } }) {
+  const { toast } = useToast();
+  const key = [`${API}/exports/cheques`, section, ym.month, ym.year];
+  const { data, isLoading } = useQuery<ChequeState>({
+    queryKey: key,
+    queryFn: async () => (await apiRequest("GET", `${API}/exports/cheques?month=${ym.month}&year=${ym.year}&${sectionQuery(section)}`)).json(),
+  });
+  const [busy, setBusy] = useState("");
+  const put = (state: ChequeState) => queryClient.setQueryData(key, state);
+  const save = async (g: ChequeGroupRow, chequeNo: string, chequeDate: string) => {
+    setBusy(`${g.paymentCode}|${g.ifsc}`);
+    try {
+      const r = await apiRequest("PUT", `${API}/exports/cheques`, { section, month: ym.month, year: ym.year, paymentCode: g.paymentCode, ifsc: g.ifsc, chequeNo, chequeDate });
+      put(await r.json());
+      toast({ title: "Cheque saved", description: `${chequeNo} — ${g.bankName} ${g.branch}` });
+    } catch (e: any) { toast({ title: "Not saved", description: e.message, variant: "destructive" }); }
+    setBusy("");
+  };
+  const release = async (on: boolean) => {
+    setBusy("release");
+    try {
+      const r = await apiRequest("POST", `${API}/exports/release`, { section, month: ym.month, year: ym.year, release: on });
+      put(await r.json());
+      toast({ title: on ? "Pay slips released" : "Pay slips withdrawn", description: on ? "Employees can now see this month's pay slips." : "Employees no longer see this month's pay slips." });
+    } catch (e: any) { toast({ title: "Not done", description: e.message, variant: "destructive" }); }
+    setBusy("");
+  };
+
+  if (isLoading || !data || data.passedEmployees === 0) return null; // shown once a roll is passed
+  const rel = data.release;
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Cheques &amp; pay slip release — {MONTHS[ym.month - 1]} {ym.year}</h2>
+            <p className="text-xs text-slate-500">One cheque per fund (Payment Code) and bank branch. Enter each cheque's number and date; pay slips become visible to employees only after you release them.</p>
+          </div>
+          <div className="text-right space-y-1">
+            {rel.released ? (
+              <>
+                <Badge className="bg-green-100 text-green-800">Released</Badge>
+                <p className="text-xs text-slate-500">by {rel.releasedBy} on {rel.releasedAt ? new Date(rel.releasedAt).toLocaleString("en-IN") : ""}</p>
+                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => release(false)}>
+                  {busy === "release" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Withdraw pay slips
+                </Button>
+              </>
+            ) : (
+              <>
+                <Badge className="bg-amber-100 text-amber-800">Not released</Badge>
+                <div>
+                  <Button size="sm" disabled={!!busy || !data.canRelease} onClick={() => release(true)}
+                    title={data.canRelease ? "Make this month's pay slips visible to the employees" : "Enter every cheque number and date first"}>
+                    {busy === "release" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Release pay slips
+                  </Button>
+                </div>
+                {!data.canRelease && <p className="text-xs text-amber-700">{data.pendingCheques} cheque(s) still to enter</p>}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fund (Payment Code)</TableHead><TableHead>Bank / Branch</TableHead>
+                <TableHead className="text-right">Accounts</TableHead><TableHead className="text-right">Cheque amount</TableHead>
+                <TableHead>Cheque No.</TableHead><TableHead>Cheque Date</TableHead><TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.groups.map((g) => (
+                <ChequeRow key={`${g.paymentCode}|${g.ifsc}|${g.missingBank}`} g={g} busy={busy === `${g.paymentCode}|${g.ifsc}`} onSave={save} />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChequeRow({ g, busy, onSave }: { g: ChequeGroupRow; busy: boolean; onSave: (g: ChequeGroupRow, no: string, date: string) => void }) {
+  const [no, setNo] = useState(g.chequeNo || "");
+  const [date, setDate] = useState(g.chequeDate ? g.chequeDate.slice(0, 10) : "");
+  useEffect(() => { setNo(g.chequeNo || ""); setDate(g.chequeDate ? g.chequeDate.slice(0, 10) : ""); }, [g.chequeNo, g.chequeDate]);
+  const changed = no.trim() !== (g.chequeNo || "") || date !== (g.chequeDate ? g.chequeDate.slice(0, 10) : "");
+  return (
+    <TableRow className={g.missingBank ? "bg-amber-50" : undefined}>
+      <TableCell>
+        <div className="font-mono text-xs">{g.paymentCode || "—"}</div>
+        <div className="text-xs text-slate-500">{g.headName}</div>
+      </TableCell>
+      <TableCell>
+        {g.missingBank ? (
+          <div className="text-amber-800 text-sm">
+            <AlertTriangle className="h-4 w-4 inline mr-1" />Bank details missing — no cheque
+            <div className="text-xs">{(g.employees || []).map((e) => `${e.epid} ${e.name}`).join(", ")}</div>
+          </div>
+        ) : (
+          <>
+            <div className="text-sm">{[g.bankName, g.branch].filter(Boolean).join(", ")}</div>
+            <div className="font-mono text-xs text-slate-500">{g.ifsc}</div>
+          </>
+        )}
+      </TableCell>
+      <TableCell className="text-right">{num(g.accounts)}</TableCell>
+      <TableCell className="text-right tabular-nums">{inr(g.amount)}</TableCell>
+      <TableCell>
+        {!g.missingBank && <Input className="h-8 w-36" value={no} maxLength={20} placeholder="Cheque No." onChange={(e) => setNo(e.target.value.toUpperCase())} />}
+      </TableCell>
+      <TableCell>
+        {!g.missingBank && <Input className="h-8 w-40" type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
+      </TableCell>
+      <TableCell>
+        {!g.missingBank && (
+          <div className="space-y-1">
+            <Button size="sm" variant={changed ? "default" : "outline"} disabled={busy || !no.trim() || !date || !changed} onClick={() => onSave(g, no.trim(), date)}>
+              {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save
+            </Button>
+            {g.chequeBy && <div className="text-[11px] text-slate-500">by {g.chequeBy}</div>}
+          </div>
+        )}
+      </TableCell>
+    </TableRow>
   );
 }
 

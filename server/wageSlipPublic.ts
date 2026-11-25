@@ -93,12 +93,15 @@ export async function slipOfLine(lineId: number, employeeId?: number): Promise<W
   const r = await db.execute(sql`
     SELECT l.*, w.month, w.year, w.head_name, w.payment_code, w.page_no, w.passed_on::text AS passed_on, w.status,
            w.section, d.name AS department_name,
-           e.salary_asstt, e.pan_number, e.salary_register_no, e.pay_level
+           e.salary_asstt, e.pan_number, e.salary_register_no, e.pay_level,
+           c.cheque_no, c.cheque_date::text AS cheque_date
     FROM wage_roll_lines l
     JOIN wage_rolls w ON w.id = l.roll_id
     LEFT JOIN departments d ON d.id = w.department_id
     LEFT JOIN employees e ON e.id = l.employee_id
-    WHERE l.id = ${lineId} ${employeeId ? sql`AND l.employee_id = ${employeeId} AND w.status = 'passed'` : sql``}`);
+    LEFT JOIN wage_cheques c ON c.section = w.section AND c.month = w.month AND c.year = w.year
+      AND c.payment_code = UPPER(TRIM(COALESCE(w.payment_code, ''))) AND c.ifsc = UPPER(TRIM(COALESCE(l.ifsc, '')))
+    WHERE l.id = ${lineId} ${employeeId ? sql`AND l.employee_id = ${employeeId} AND w.status = 'passed' AND ${RELEASED}` : sql``}`);
   const l = r.rows[0] as any;
   if (!l) return null;
   return {
@@ -119,8 +122,13 @@ export async function slipOfLine(lineId: number, employeeId?: number): Promise<W
     salaryRegisterNo: clean(l.salary_register_no) || null,
     payLevel: clean(l.pay_level) || null,
     bankAccount: digits(l.bank_account) || null,
+    chequeNo: l.cheque_no || null,
+    chequeDate: l.cheque_date || null,          // YYYY-MM-DD
   };
 }
+
+/** The month's pay slips were released by the section (SQL condition on wage_rolls w) */
+const RELEASED = sql`EXISTS (SELECT 1 FROM wage_slip_release r WHERE r.section = w.section AND r.month = w.month AND r.year = w.year)`;
 
 export function sendPdf(res: Response, bytes: Uint8Array, filename: string, download = false) {
   res.setHeader("Content-Type", "application/pdf");
@@ -184,7 +192,7 @@ export function registerWageSlipPublicRoutes(app: Express) {
     const r = await db.execute(sql`
       SELECT l.id AS line_id, w.month, w.year, l.net, l.days, d.name AS department_name
       FROM wage_roll_lines l JOIN wage_rolls w ON w.id = l.roll_id LEFT JOIN departments d ON d.id = w.department_id
-      WHERE l.employee_id = ${e.id} AND w.status = 'passed'
+      WHERE l.employee_id = ${e.id} AND w.status = 'passed' AND ${RELEASED}
       ORDER BY w.year DESC, w.month DESC, l.id DESC`);
     res.json({
       employee: { epid: e.epid, name: e.name, designation: e.designation, departmentName: e.department_name },

@@ -964,6 +964,37 @@ export async function runMigrations() {
       await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_wage_rolls_main_fund ON wage_rolls (department_id, section, COALESCE(fund_code, ''), year, month) WHERE kind = 'main'`);
       await db.execute(sql`DROP INDEX IF EXISTS uq_wage_rolls_main`);
       await db.execute(sql`ALTER TABLE wage_roll_lines ADD COLUMN IF NOT EXISTS bank_branch TEXT`);
+      // Cheques: one per section + month + fund (Payment Code) + bank branch (IFSC)
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS wage_cheques (
+          id SERIAL PRIMARY KEY,
+          section TEXT NOT NULL,
+          month INTEGER NOT NULL,
+          year INTEGER NOT NULL,
+          payment_code TEXT NOT NULL DEFAULT '',
+          ifsc TEXT NOT NULL,
+          bank_name TEXT,
+          branch TEXT,
+          cheque_no TEXT NOT NULL,
+          cheque_date DATE NOT NULL,
+          amount INTEGER,                        -- cheque amount when saved
+          accounts INTEGER,
+          updated_by TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_wage_cheques ON wage_cheques (section, year, month, payment_code, ifsc)`);
+      // Pay slips of a section's month are shown to employees only after release
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS wage_slip_release (
+          section TEXT NOT NULL,
+          month INTEGER NOT NULL,
+          year INTEGER NOT NULL,
+          released_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          released_by TEXT NOT NULL,
+          PRIMARY KEY (section, year, month)
+        );
+      `);
     } catch (payErr) {
       console.error("[Migrations] wages payroll tables failed (payroll affected):", payErr);
     }

@@ -19,6 +19,7 @@ export type WageSlip = {
   ifsc?: string | null; headName?: string | null; paymentCode?: string | null; pageNo?: string | null; passedOn?: string | null; generatedAt: string;
   dealingCode?: string | null; sectionLabel?: string | null; panNumber?: string | null; salaryRegisterNo?: string | null; payLevel?: string | null;
   bankAccount?: string | null;
+  chequeNo?: string | null; chequeDate?: string | null; // YYYY-MM-DD
 };
 
 const BLACK = rgb(0, 0, 0);
@@ -388,6 +389,8 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
     ...first("BANK     ", s.bankName ? upper(s.bankName) : ""),
     ...first("A/c      ", s.bankAccount ?? s.bankAccountMasked ?? ""),
     ...first("IFSC     ", s.ifsc ? upper(s.ifsc) : ""),
+    ...(s.chequeNo ? [`Cheque No ${s.chequeNo}`] : []),
+    ...(s.chequeDate ? [`Cheque Dt ${ddmmyyyy(s.chequeDate).split("-").join(".")}`] : []),
     ...(s.passedOn ? [`Passed Dt ${ddmmyyyy(s.passedOn).split("-").join(".")}`] : []),
     ...(s.pageNo ? [`Page No   ${s.pageNo}`] : []),
     "",
@@ -433,7 +436,11 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
 
 // ───────────────────────── Bank advice (A4 portrait, one or more pages per bank branch) ─────────────────────────
 export type BankAdviceLine = { sno: number; epid: string; name: string; departmentName: string; paymentCode: string; accountNo: string; net: number };
-export type BankAdviceBranch = { bankName: string; branch: string; ifsc: string; lines: BankAdviceLine[]; total: number };
+export type BankAdviceBranch = {
+  bankName: string; branch: string; ifsc: string; lines: BankAdviceLine[]; total: number;
+  // one cheque per fund + branch: the fund it is drawn on, and the cheque once entered
+  paymentCode?: string | null; headName?: string | null; chequeNo?: string | null; chequeDate?: string | null;
+};
 
 const PT = { w: 595.28, h: 841.89 };
 const BM = 36;
@@ -517,8 +524,11 @@ export async function buildBankAdvicePdf(
       drawText(page, "The Branch Manager,", BM, y(140), regular, 10);
       drawText(page, heading, BM, y(154), bold, 10);
       drawText(page, missing ? "IFSC: -" : `IFSC: ${b.ifsc}`, BM, y(168), regular, 10);
-      rightAt(page, "Date: ____________", PT.w - BM, y(126), regular, 10);
-      rightAt(page, "Cheque No.: ____________", PT.w - BM, y(146), regular, 10);
+      rightAt(page, `Cheque Date: ${b.chequeDate ? safe(b.chequeDate) : "____________"}`, PT.w - BM, y(126), b.chequeDate ? bold : regular, 10);
+      rightAt(page, `Cheque No.: ${b.chequeNo ? safe(b.chequeNo) : "____________"}`, PT.w - BM, y(146), b.chequeNo ? bold : regular, 10);
+      if (b.paymentCode) {
+        rightAt(page, safe(`${b.headName || "Fund"} (${b.paymentCode})`).slice(0, 70), PT.w - BM, y(166), regular, 8.5);
+      }
       const msg = wrap("Please credit the following amounts to the savings accounts of the employees listed below. The total amount is covered by the cheque mentioned above.", regular, 9.5, PT.w - 2 * BM);
       msg.forEach((ln, k) => drawText(page, ln, BM, y(196 + k * 12), regular, 9.5));
       tableTop = BA_FIRST_TOP;

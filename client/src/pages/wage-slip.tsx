@@ -25,6 +25,7 @@ type Slip = {
   headName: string | null; paymentCode: string | null; pageNo: string | null; passedOn: string | null; generatedAt: string;
   dealingCode?: string | null; sectionLabel?: string | null; panNumber?: string | null; salaryRegisterNo?: string | null; payLevel?: string | null;
   bankAccount?: string | null;
+  chequeNo?: string | null; chequeDate?: string | null; // YYYY-MM-DD
 };
 
 const MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -155,7 +156,7 @@ export default function WageSlipPage() {
           <CardHeader className="pb-2"><CardTitle className="text-base">Your pay slips</CardTitle></CardHeader>
           <CardContent>
             {slips.length === 0 && (
-              <p className="text-sm text-slate-600 py-2">No pay slip is available yet. Slips appear after the section has passed the month's wages.</p>
+              <p className="text-sm text-slate-600 py-2">No pay slip is available yet. Slips appear after the section has paid the month's wages and released the pay slips.</p>
             )}
             <div className="divide-y">
               {slips.map((s) => (
@@ -340,6 +341,8 @@ function slipLines(slip: Slip): { text: string; bold?: boolean }[] {
     ...first("BANK     ", slip.bankName ? up(slip.bankName) : ""),
     ...first("A/c      ", slip.bankAccount ?? slip.bankAccountMasked ?? ""),
     ...first("IFSC     ", slip.ifsc ? up(slip.ifsc) : ""),
+    ...(slip.chequeNo ? [`Cheque No ${slip.chequeNo}`] : []),
+    ...(slip.chequeDate ? [`Cheque Dt ${String(slip.chequeDate).slice(0, 10).split("-").reverse().join(".")}`] : []),
     ...(slip.passedOn ? [`Passed Dt ${String(slip.passedOn).slice(0, 10).split("-").reverse().join(".")}`] : []),
     ...(slip.pageNo ? [`Page No   ${slip.pageNo}`] : []),
     "",

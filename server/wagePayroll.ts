@@ -45,6 +45,7 @@ function sendXlsx(res: Response, sheets: [string, Record<string, unknown>[]][], 
 
 /** ECR member name: capitals, letters / spaces / dots only, max 85 */
 const ecrName = (n: unknown) => String(n ?? "").toUpperCase().replace(/[^A-Z .]/g, " ").replace(/\s+/g, " ").trim().slice(0, 85);
+const fmtDmy = (iso: string) => String(iso).slice(0, 10).split("-").reverse().join("-");
 const isoDate = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d ?? "").slice(0, 10));
 const nowIst = () => new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -800,24 +801,52 @@ export function registerWagePayrollRoutes(app: Express) {
     WHERE w.section = ${section} AND w.month = ${month} AND w.year = ${year} AND w.status = 'passed'
     ORDER BY d.name, l.sno, l.id`)).rows as any[];
 
-  /** Passed lines grouped per bank branch (IFSC; cheques go branch-wise). Missing bank details → own group, last. */
-  const byBranch = (lines: any[]) => {
-    const groups = new Map<string, { bankName: string; branch: string; ifsc: string; lines: any[] }>();
+  type ChequeGroup = {
+    paymentCode: string; headName: string; bankName: string; branch: string; ifsc: string; lines: any[]; total: number;
+    missingBank: boolean; chequeNo: string | null; chequeDate: string | null; chequeBy: string | null; chequeAt: string | null;
+  };
+  /**
+   * Passed lines grouped per fund (Payment Code) + bank branch (IFSC): one cheque each.
+   * Employees without account / IFSC form a "bank details missing" group per fund (no cheque).
+   */
+  const byBranch = async (section: FundSection, month: number, year: number, lines: any[]): Promise<ChequeGroup[]> => {
+    const cheques = (await db.execute(sql`
+      SELECT payment_code, ifsc, cheque_no, cheque_date::text AS cheque_date, updated_by, updated_at::text AS updated_at
+      FROM wage_cheques WHERE section = ${section} AND month = ${month} AND year = ${year}`)).rows as any[];
+    const chequeOf = new Map(cheques.map((c) => [`${c.payment_code}|${c.ifsc}`, c]));
+    const groups = new Map<string, ChequeGroup>();
     for (const l of lines) {
+      const pc = String(l.payment_code || "").trim().toUpperCase();
       const ifsc = String(l.ifsc || "").trim().toUpperCase();
       const ok = !!ifsc && !!String(l.bank_account || "").trim();
-      const key = ok ? ifsc : "~missing";
-      const g = groups.get(key) || { bankName: ok ? String(l.bank_name || "").trim() : "", branch: ok ? String(l.bank_branch || "").trim() : "", ifsc: ok ? ifsc : "", lines: [] };
+      const key = `${pc}|${ok ? ifsc : "~missing"}`;
+      const g = groups.get(key) || {
+        paymentCode: pc, headName: String(l.head_name || "").trim(), bankName: ok ? String(l.bank_name || "").trim() : "",
+        branch: ok ? String(l.bank_branch || "").trim() : "", ifsc: ok ? ifsc : "", lines: [], total: 0, missingBank: !ok,
+        chequeNo: null, chequeDate: null, chequeBy: null, chequeAt: null,
+      };
       if (ok && !g.branch && l.bank_branch) g.branch = String(l.bank_branch).trim();
       if (ok && !g.bankName && l.bank_name) g.bankName = String(l.bank_name).trim();
       g.lines.push(l);
+      g.total += Number(l.net);
       groups.set(key, g);
     }
-    return [...groups.entries()].sort(([a, x], [b, y]) => (a === "~missing" ? 1 : b === "~missing" ? -1 : `${x.bankName} ${x.branch}`.localeCompare(`${y.bankName} ${y.branch}`)))
-      .map(([, g]) => ({ ...g, total: g.lines.reduce((s, l) => s + Number(l.net), 0) }));
+    for (const [key, g] of groups) {
+      const c = chequeOf.get(key);
+      if (c && !g.missingBank) { g.chequeNo = c.cheque_no; g.chequeDate = c.cheque_date; g.chequeBy = c.updated_by; g.chequeAt = c.updated_at; }
+    }
+    return [...groups.values()].sort((x, y) =>
+      x.paymentCode.localeCompare(y.paymentCode) || Number(x.missingBank) - Number(y.missingBank) || `${x.bankName} ${x.branch}`.localeCompare(`${y.bankName} ${y.branch}`));
   };
   const branchLabel = (g: { bankName: string; branch: string; ifsc: string }) =>
     g.ifsc ? [g.bankName, g.branch].filter(Boolean).join(", ") + ` (${g.ifsc})` : "Bank details missing";
+
+  /** Release state of a section's month (pay slips visible to employees) */
+  const releaseOf = async (section: FundSection, month: number, year: number) => {
+    const r = (await db.execute(sql`SELECT released_at::text AS released_at, released_by FROM wage_slip_release
+      WHERE section = ${section} AND month = ${month} AND year = ${year}`)).rows[0] as any;
+    return r ? { released: true, releasedAt: r.released_at, releasedBy: r.released_by } : { released: false, releasedAt: null, releasedBy: null };
+  };
 
   /**
    * Pay Register: every employee with all components (earnings, deductions, net, employer's
@@ -906,21 +935,23 @@ export function registerWagePayrollRoutes(app: Express) {
     if (!a) return;
     const lines = await monthLines(a.who.section, a.month, a.year);
     if (!lines.length) return res.status(404).json({ message: "No roll has been passed for payment this month." });
-    const groups = byBranch(lines);
+    const groups = await byBranch(a.who.section, a.month, a.year, lines);
     const row = (l: any, i: number) => ({
       "S.No.": i + 1, "Emp ID": l.epid, "Name": l.name, "Department": l.department_name, "Payment Code": l.payment_code,
       "Bank Name": l.bank_name || "", "Branch": l.bank_branch || "", "IFSC": l.ifsc || "", "Account No.": l.bank_account || "",
       "Net Payable (Rs.)": Number(l.net),
     });
     const withTotal = (rows: any[], total: number) => [...rows, { "Name": "TOTAL", "Net Payable (Rs.)": total }];
-    // 1. one line per branch = the cheque amount; 2. one sheet per branch; 3. everything
+    // 1. one line per fund + branch = one cheque; 2. one sheet per cheque; 3. everything
     const summary = groups.map((g, i) => ({
-      "S.No.": i + 1, "Bank / Branch": branchLabel(g), "IFSC": g.ifsc, "Accounts": g.lines.length, "Cheque amount (Rs.)": g.total,
+      "S.No.": i + 1, "Payment Code": g.paymentCode, "Payment Head": g.headName, "Bank / Branch": branchLabel(g), "IFSC": g.ifsc,
+      "Accounts": g.lines.length, "Cheque amount (Rs.)": g.total,
+      "Cheque No.": g.missingBank ? "— (bank details missing)" : g.chequeNo || "", "Cheque Date": g.chequeDate ? fmtDmy(g.chequeDate) : "",
     }));
     summary.push({ "Bank / Branch": "TOTAL", "Accounts": lines.length, "Cheque amount (Rs.)": lines.reduce((s, l) => s + Number(l.net), 0) } as any);
     const used = new Set<string>(["Branch summary", "All employees"]);
     const sheetName = (g: any) => {
-      let n = (g.ifsc ? `${g.branch || g.bankName || g.ifsc}`.replace(/[\\/?*[\]:]/g, " ").slice(0, 22) + ` ${g.ifsc.slice(-4)}` : "Bank details missing").trim();
+      let n = (g.ifsc ? `${g.paymentCode.slice(-5)} ${g.branch || g.bankName || g.ifsc}`.replace(/[\\/?*[\]:]/g, " ").slice(0, 24) + ` ${g.ifsc.slice(-4)}` : `${g.paymentCode.slice(-5)} bank missing`).trim();
       let k = 2; const base0 = n;
       while (used.has(n)) n = `${base0.slice(0, 27)} ${k++}`;
       used.add(n);
@@ -941,8 +972,10 @@ export function registerWagePayrollRoutes(app: Express) {
     if (!lines.length) return res.status(404).json({ message: "No roll has been passed for payment this month." });
     const bytes = await buildBankAdvicePdf(
       { sectionLabel: sectionLabel(a.who.section), month: a.month, year: a.year, printedAt: nowIst() },
-      byBranch(lines).map((g) => ({
+      (await byBranch(a.who.section, a.month, a.year, lines)).map((g) => ({
         bankName: g.bankName, branch: g.branch, ifsc: g.ifsc, total: g.total,
+        paymentCode: g.paymentCode, headName: g.headName,
+        chequeNo: g.chequeNo, chequeDate: g.chequeDate ? fmtDmy(g.chequeDate) : null,
         lines: g.lines.map((l, i) => ({
           sno: i + 1, epid: l.epid, name: l.name, departmentName: l.department_name || "", paymentCode: l.payment_code || "",
           accountNo: String(l.bank_account || ""), net: Number(l.net),
@@ -950,6 +983,82 @@ export function registerWagePayrollRoutes(app: Express) {
       })),
     );
     sendPdf(res, bytes, `bank-advice-${a.tag}.pdf`, true);
+  }));
+
+  // ── Cheques (one per fund + bank branch) and pay-slip release ────────────
+  const chequeState = async (section: FundSection, month: number, year: number) => {
+    const lines = await monthLines(section, month, year);
+    const groups = await byBranch(section, month, year, lines);
+    const payable = groups.filter((g) => !g.missingBank);
+    const pending = payable.filter((g) => !g.chequeNo || !g.chequeDate).length;
+    const release = await releaseOf(section, month, year);
+    return {
+      groups: groups.map((g) => ({
+        paymentCode: g.paymentCode, headName: g.headName, bankName: g.bankName, branch: g.branch, ifsc: g.ifsc,
+        accounts: g.lines.length, amount: g.total, missingBank: g.missingBank,
+        employees: g.missingBank ? g.lines.map((l) => ({ epid: l.epid, name: l.name })) : undefined,
+        chequeNo: g.chequeNo, chequeDate: g.chequeDate, chequeBy: g.chequeBy, chequeAt: g.chequeAt,
+      })),
+      passedEmployees: lines.length, pendingCheques: pending,
+      canRelease: lines.length > 0 && payable.length > 0 && pending === 0,
+      release,
+    };
+  };
+
+  app.get(`${base}/exports/cheques`, wrap(async (req, res) => {
+    const a = await monthArgs(req, res);
+    if (!a) return;
+    res.json(await chequeState(a.who.section, a.month, a.year));
+  }));
+
+  // Enter / change the cheque of one fund + branch
+  app.put(`${base}/exports/cheques`, wrap(async (req, res) => {
+    const who = await actor(req, res, req.body?.section);
+    if (!who) return;
+    const month = int(req.body?.month), year = int(req.body?.year);
+    const paymentCode = String(req.body?.paymentCode ?? "").trim().toUpperCase();
+    const ifsc = String(req.body?.ifsc ?? "").trim().toUpperCase();
+    const chequeNo = String(req.body?.chequeNo ?? "").replace(/\s+/g, "").toUpperCase();
+    const chequeDate = String(req.body?.chequeDate ?? "").trim();
+    if (!validMonth(month, year)) return res.status(400).json({ message: "Choose a month" });
+    if (!/^[A-Z0-9/-]{1,20}$/.test(chequeNo)) return res.status(400).json({ message: "Enter the cheque number (up to 20 letters / digits)." });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(chequeDate) || isNaN(Date.parse(chequeDate))) return res.status(400).json({ message: "Enter the cheque date." });
+    const groups = await byBranch(who.section, month, year, await monthLines(who.section, month, year));
+    const g = groups.find((x) => !x.missingBank && x.paymentCode === paymentCode && x.ifsc === ifsc);
+    if (!g) return res.status(404).json({ message: "No passed payment for this fund and bank branch in this month." });
+    await db.execute(sql`
+      INSERT INTO wage_cheques (section, month, year, payment_code, ifsc, bank_name, branch, cheque_no, cheque_date, amount, accounts, updated_by, updated_at)
+      VALUES (${who.section}, ${month}, ${year}, ${paymentCode}, ${ifsc}, ${g.bankName || null}, ${g.branch || null}, ${chequeNo}, ${chequeDate},
+        ${g.total}, ${g.lines.length}, ${who.name}, NOW())
+      ON CONFLICT (section, year, month, payment_code, ifsc) DO UPDATE SET cheque_no = EXCLUDED.cheque_no, cheque_date = EXCLUDED.cheque_date,
+        amount = EXCLUDED.amount, accounts = EXCLUDED.accounts, bank_name = EXCLUDED.bank_name, branch = EXCLUDED.branch,
+        updated_by = EXCLUDED.updated_by, updated_at = NOW()`);
+    console.log(`[WagePayroll] cheque ${chequeNo} (${chequeDate}) for ${paymentCode}/${ifsc} ${month}/${year} by ${who.name}`);
+    res.json(await chequeState(who.section, month, year));
+  }));
+
+  // Release (or withdraw) the month's pay slips for employees — only when every cheque is entered
+  app.post(`${base}/exports/release`, wrap(async (req, res) => {
+    const who = await actor(req, res, req.body?.section);
+    if (!who) return;
+    const month = int(req.body?.month), year = int(req.body?.year);
+    if (!validMonth(month, year)) return res.status(400).json({ message: "Choose a month" });
+    if (req.body?.release === false) {
+      await db.execute(sql`DELETE FROM wage_slip_release WHERE section = ${who.section} AND month = ${month} AND year = ${year}`);
+      console.log(`[WagePayroll] pay slips of ${who.section} ${month}/${year} withdrawn by ${who.name}`);
+      return res.json(await chequeState(who.section, month, year));
+    }
+    const state = await chequeState(who.section, month, year);
+    if (!state.canRelease) {
+      return res.status(400).json({ message: state.passedEmployees === 0
+        ? "No roll has been passed for payment this month."
+        : `Enter the cheque number and date for every fund and bank branch first (${state.pendingCheques} pending).` });
+    }
+    await db.execute(sql`
+      INSERT INTO wage_slip_release (section, month, year, released_by) VALUES (${who.section}, ${month}, ${year}, ${who.name})
+      ON CONFLICT (section, year, month) DO UPDATE SET released_by = EXCLUDED.released_by, released_at = NOW()`);
+    console.log(`[WagePayroll] pay slips of ${who.section} ${month}/${year} released by ${who.name}`);
+    res.json(await chequeState(who.section, month, year));
   }));
 
   // EPF ECR (EPFO Unified Portal text format, one member per line)
