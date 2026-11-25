@@ -24,7 +24,7 @@ import {
 
 import { createRequire } from "module";
 import { PDFDocument } from "@cantoo/pdf-lib";
-import { buildMusterRollPdf, buildWageSlipPdf } from "./wagePayrollPdf";
+import { buildMusterRollPdf, buildWageSlipPdf, buildBankAdvicePdf } from "./wagePayrollPdf";
 import { slipOfLine, sendPdf } from "./wageSlipPublic";
 
 const XLSX: any = createRequire(import.meta.url)("xlsx");
@@ -791,12 +791,33 @@ export function registerWagePayrollRoutes(app: Express) {
 
   // ── Monthly section files (passed rolls of the month) ────────────────────
   const monthLines = async (section: FundSection, month: number, year: number) => (await db.execute(sql`
-    SELECT l.*, w.head_name, w.payment_code, w.status, w.page_no, d.name AS department_name
+    SELECT l.*, COALESCE(l.bank_branch, e.bank_branch) AS bank_branch,
+           w.head_name, w.payment_code, w.status, w.page_no, d.name AS department_name
     FROM wage_roll_lines l
     JOIN wage_rolls w ON w.id = l.roll_id
     LEFT JOIN departments d ON d.id = w.department_id
+    LEFT JOIN employees e ON e.id = l.employee_id
     WHERE w.section = ${section} AND w.month = ${month} AND w.year = ${year} AND w.status = 'passed'
     ORDER BY d.name, l.sno, l.id`)).rows as any[];
+
+  /** Passed lines grouped per bank branch (IFSC; cheques go branch-wise). Missing bank details → own group, last. */
+  const byBranch = (lines: any[]) => {
+    const groups = new Map<string, { bankName: string; branch: string; ifsc: string; lines: any[] }>();
+    for (const l of lines) {
+      const ifsc = String(l.ifsc || "").trim().toUpperCase();
+      const ok = !!ifsc && !!String(l.bank_account || "").trim();
+      const key = ok ? ifsc : "~missing";
+      const g = groups.get(key) || { bankName: ok ? String(l.bank_name || "").trim() : "", branch: ok ? String(l.bank_branch || "").trim() : "", ifsc: ok ? ifsc : "", lines: [] };
+      if (ok && !g.branch && l.bank_branch) g.branch = String(l.bank_branch).trim();
+      if (ok && !g.bankName && l.bank_name) g.bankName = String(l.bank_name).trim();
+      g.lines.push(l);
+      groups.set(key, g);
+    }
+    return [...groups.entries()].sort(([a, x], [b, y]) => (a === "~missing" ? 1 : b === "~missing" ? -1 : `${x.bankName} ${x.branch}`.localeCompare(`${y.bankName} ${y.branch}`)))
+      .map(([, g]) => ({ ...g, total: g.lines.reduce((s, l) => s + Number(l.net), 0) }));
+  };
+  const branchLabel = (g: { bankName: string; branch: string; ifsc: string }) =>
+    g.ifsc ? [g.bankName, g.branch].filter(Boolean).join(", ") + ` (${g.ifsc})` : "Bank details missing";
 
   /**
    * Pay Register: every employee with all components (earnings, deductions, net, employer's
@@ -884,12 +905,51 @@ export function registerWagePayrollRoutes(app: Express) {
     const a = await monthArgs(req, res);
     if (!a) return;
     const lines = await monthLines(a.who.section, a.month, a.year);
-    const rows = lines.map((l, i) => ({
-      "S.No.": i + 1, "Department": l.department_name, "Payment Head": l.head_name, "Payment Code": l.payment_code,
-      "Emp ID": l.epid, "Name": l.name, "Bank Name": l.bank_name || "", "Account No.": l.bank_account || "",
-      "IFSC": l.ifsc || "", "Net Payable (Rs.)": Number(l.net),
+    if (!lines.length) return res.status(404).json({ message: "No roll has been passed for payment this month." });
+    const groups = byBranch(lines);
+    const row = (l: any, i: number) => ({
+      "S.No.": i + 1, "Emp ID": l.epid, "Name": l.name, "Department": l.department_name, "Payment Code": l.payment_code,
+      "Bank Name": l.bank_name || "", "Branch": l.bank_branch || "", "IFSC": l.ifsc || "", "Account No.": l.bank_account || "",
+      "Net Payable (Rs.)": Number(l.net),
+    });
+    const withTotal = (rows: any[], total: number) => [...rows, { "Name": "TOTAL", "Net Payable (Rs.)": total }];
+    // 1. one line per branch = the cheque amount; 2. one sheet per branch; 3. everything
+    const summary = groups.map((g, i) => ({
+      "S.No.": i + 1, "Bank / Branch": branchLabel(g), "IFSC": g.ifsc, "Accounts": g.lines.length, "Cheque amount (Rs.)": g.total,
     }));
-    sendXlsx(res, [["Bank payment", rows]], `bank-payment-${a.tag}.xlsx`);
+    summary.push({ "Bank / Branch": "TOTAL", "Accounts": lines.length, "Cheque amount (Rs.)": lines.reduce((s, l) => s + Number(l.net), 0) } as any);
+    const used = new Set<string>(["Branch summary", "All employees"]);
+    const sheetName = (g: any) => {
+      let n = (g.ifsc ? `${g.branch || g.bankName || g.ifsc}`.replace(/[\\/?*[\]:]/g, " ").slice(0, 22) + ` ${g.ifsc.slice(-4)}` : "Bank details missing").trim();
+      let k = 2; const base0 = n;
+      while (used.has(n)) n = `${base0.slice(0, 27)} ${k++}`;
+      used.add(n);
+      return n;
+    };
+    sendXlsx(res, [
+      ["Branch summary", summary],
+      ...groups.map((g) => [sheetName(g), withTotal(g.lines.map(row), g.total)] as [string, Record<string, unknown>[]]),
+      ["All employees", withTotal(lines.map(row), lines.reduce((s, l) => s + Number(l.net), 0))],
+    ], `bank-payment-${a.tag}.xlsx`);
+  }));
+
+  // Bank Advice (PDF): one page set per bank branch, to attach with that branch's cheque
+  app.get(`${base}/exports/bank-advice.pdf`, wrap(async (req, res) => {
+    const a = await monthArgs(req, res);
+    if (!a) return;
+    const lines = await monthLines(a.who.section, a.month, a.year);
+    if (!lines.length) return res.status(404).json({ message: "No roll has been passed for payment this month." });
+    const bytes = await buildBankAdvicePdf(
+      { sectionLabel: sectionLabel(a.who.section), month: a.month, year: a.year, printedAt: nowIst() },
+      byBranch(lines).map((g) => ({
+        bankName: g.bankName, branch: g.branch, ifsc: g.ifsc, total: g.total,
+        lines: g.lines.map((l, i) => ({
+          sno: i + 1, epid: l.epid, name: l.name, departmentName: l.department_name || "", paymentCode: l.payment_code || "",
+          accountNo: String(l.bank_account || ""), net: Number(l.net),
+        })),
+      })),
+    );
+    sendPdf(res, bytes, `bank-advice-${a.tag}.pdf`, true);
   }));
 
   // EPF ECR (EPFO Unified Portal text format, one member per line)
@@ -897,6 +957,7 @@ export function registerWagePayrollRoutes(app: Express) {
     const a = await monthArgs(req, res);
     if (!a) return;
     const lines = (await monthLines(a.who.section, a.month, a.year)).filter((l) => l.epf_on && l.epf > 0 && l.uan_no);
+    if (!lines.length) return res.status(404).json({ message: "No EPF member with a UAN in the rolls passed this month." });
     const dim = daysInMonth(a.month, a.year);
     // Several rolls of the same member in a month → one ECR line
     const byUan = new Map<string, any>();
@@ -922,6 +983,7 @@ export function registerWagePayrollRoutes(app: Express) {
     const a = await monthArgs(req, res);
     if (!a) return;
     const lines = (await monthLines(a.who.section, a.month, a.year)).filter((l) => l.esi_on && l.esi > 0);
+    if (!lines.length) return res.status(404).json({ message: "No ESI member in the rolls passed this month." });
     const rows = lines.map((l) => ({
       "IP Number": l.esi_no || "", "IP Name": l.name, "No. of Days": Number(l.days), "Total Monthly Wages": Number(l.esi_base),
       "Reason Code for Zero Working Days": Number(l.days) > 0 ? "" : 0, "Last Working Day": "",

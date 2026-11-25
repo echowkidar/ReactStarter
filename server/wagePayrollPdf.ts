@@ -430,3 +430,153 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
 
   return pdf.save();
 }
+
+// ───────────────────────── Bank advice (A4 portrait, one or more pages per bank branch) ─────────────────────────
+export type BankAdviceLine = { sno: number; epid: string; name: string; departmentName: string; paymentCode: string; accountNo: string; net: number };
+export type BankAdviceBranch = { bankName: string; branch: string; ifsc: string; lines: BankAdviceLine[]; total: number };
+
+const PT = { w: 595.28, h: 841.89 };
+const BM = 36;
+const BA_REL = [30, 52, 116, 108, 58, 84, 70];
+const BA_COLS = (() => {
+  const usable = PT.w - 2 * BM;
+  const total = BA_REL.reduce((a, b) => a + b, 0);
+  const widths = BA_REL.map((w) => (w * usable) / total);
+  const xs: number[] = [];
+  let x = BM;
+  for (const w of widths) { xs.push(x); x += w; }
+  xs.push(x);
+  return { widths, xs };
+})();
+const BA_HEADERS = ["S.No.", "Emp ID", "Name", "Department", "Payment Code", "Account No.", "Amount (Rs.)"];
+const BA_HEAD_H = 24;
+const BA_FIRST_TOP = 232;    // table top on the first page of a branch
+const BA_CONT_TOP = 78;      // table top on continuation pages
+const BA_FOOT_RESERVE = 130; // total lines + signature block under the table on the last page
+
+export async function buildBankAdvicePdf(
+  meta: { sectionLabel: string; month: number; year: number; printedAt: string },
+  branches: BankAdviceBranch[],
+): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const xs = BA_COLS.xs;
+  const bottomLimit = PT.h - 40;
+
+  type Row = { l: BankAdviceLine; nameL: string[]; desL: string[]; h: number };
+  type Pg = { b: BankAdviceBranch; rows: Row[]; first: boolean; last: boolean };
+  const pages: Pg[] = [];
+
+  for (const b of branches) {
+    const rows: Row[] = b.lines.map((l) => {
+      const nameL = wrap(l.name, regular, FS, BA_COLS.widths[2] - 6);
+      const desL = wrap(l.departmentName, regular, FS, BA_COLS.widths[3] - 6);
+      return { l, nameL, desL, h: Math.max(nameL.length, desL.length, 1) * LH + 2 * PADV };
+    });
+    let i = 0;
+    let first = true;
+    for (;;) {
+      const avail = bottomLimit - ((first ? BA_FIRST_TOP : BA_CONT_TOP) + BA_HEAD_H);
+      const rest = rows.slice(i);
+      const restH = rest.reduce((s, r) => s + r.h, 0);
+      const chunk: Row[] = [];
+      let last = false;
+      if (restH + TOTAL_H + BA_FOOT_RESERVE <= avail) {
+        chunk.push(...rest);
+        last = true;
+      } else {
+        let used = 0;
+        for (const r of rest) {
+          if (used + r.h > avail) break;
+          chunk.push(r);
+          used += r.h;
+        }
+        // everything would fit but the total and signature would not: leave one row for the next page
+        if (chunk.length === rest.length && chunk.length > 1) chunk.pop();
+        if (chunk.length === 0 && rest.length) chunk.push(rest[0]);
+      }
+      pages.push({ b, rows: chunk, first, last });
+      i += chunk.length;
+      first = false;
+      if (last) break;
+    }
+  }
+
+  const draw = (page: PDFPage, pg: Pg, idx: number) => {
+    const y = (top: number) => PT.h - top;
+    const b = pg.b;
+    const missing = !b.bankName.trim() && !b.branch.trim() && !b.ifsc.trim();
+    const heading = missing ? "Bank details missing" : [b.bankName, b.branch].filter((s) => s.trim()).join(", ");
+    let tableTop: number;
+    if (pg.first) {
+      centredAt(page, "Aligarh Muslim University", PT.w / 2, y(52), bold, 15);
+      centredAt(page, `${meta.sectionLabel}, Finance & Accounts Department`, PT.w / 2, y(70), regular, 10);
+      centredAt(page, `BANK ADVICE - Wages for ${monthYear(meta.month, meta.year)}`, PT.w / 2, y(94), bold, 12.5);
+      drawText(page, "To,", BM, y(126), regular, 10);
+      drawText(page, "The Branch Manager,", BM, y(140), regular, 10);
+      drawText(page, heading, BM, y(154), bold, 10);
+      drawText(page, missing ? "IFSC: -" : `IFSC: ${b.ifsc}`, BM, y(168), regular, 10);
+      rightAt(page, "Date: ____________", PT.w - BM, y(126), regular, 10);
+      rightAt(page, "Cheque No.: ____________", PT.w - BM, y(146), regular, 10);
+      const msg = wrap("Please credit the following amounts to the savings accounts of the employees listed below. The total amount is covered by the cheque mentioned above.", regular, 9.5, PT.w - 2 * BM);
+      msg.forEach((ln, k) => drawText(page, ln, BM, y(196 + k * 12), regular, 9.5));
+      tableTop = BA_FIRST_TOP;
+    } else {
+      drawText(page, `${heading} (continued)`, BM, y(52), bold, 10.5);
+      drawText(page, `Bank Advice - Wages for ${monthYear(meta.month, meta.year)}`, BM, y(66), regular, 8.5, GREY);
+      tableTop = BA_CONT_TOP;
+    }
+
+    page.drawRectangle({ x: xs[0], y: y(tableTop + BA_HEAD_H), width: xs[7] - xs[0], height: BA_HEAD_H, color: LIGHT, borderColor: BLACK, borderWidth: LINE });
+    for (let c = 1; c < 7; c++) page.drawLine({ start: { x: xs[c], y: y(tableTop) }, end: { x: xs[c], y: y(tableTop + BA_HEAD_H) }, thickness: LINE, color: BLACK });
+    BA_HEADERS.forEach((h, c) => {
+      const ls = wrap(h, bold, 7.5, BA_COLS.widths[c] - 4);
+      const startTop = tableTop + (BA_HEAD_H - ls.length * 9) / 2 + 7;
+      ls.forEach((ln, k) => centredAt(page, ln, (xs[c] + xs[c + 1]) / 2, y(startTop + k * 9), bold, 7.5));
+    });
+
+    let top = tableTop + BA_HEAD_H;
+    const startBody = top;
+    for (const r of pg.rows) {
+      const base = top + PADV + FS * 0.82;
+      centredAt(page, String(r.l.sno), (xs[0] + xs[1]) / 2, y(base), regular, FS);
+      drawText(page, r.l.epid, xs[1] + 3, y(base), regular, FS);
+      r.nameL.forEach((ln, k) => drawText(page, ln, xs[2] + 3, y(base + k * LH), regular, FS));
+      r.desL.forEach((ln, k) => drawText(page, ln, xs[3] + 3, y(base + k * LH), regular, FS));
+      drawText(page, r.l.paymentCode, xs[4] + 3, y(base), regular, FS);
+      drawText(page, r.l.accountNo, xs[5] + 3, y(base), regular, FS);
+      rightAt(page, formatINR(r.l.net), xs[7] - 4, y(base), regular, FS);
+      top += r.h;
+      page.drawLine({ start: { x: xs[0], y: y(top) }, end: { x: xs[7], y: y(top) }, thickness: LINE, color: BLACK });
+    }
+    for (let c = 0; c <= 7; c++) page.drawLine({ start: { x: xs[c], y: y(startBody) }, end: { x: xs[c], y: y(top) }, thickness: LINE, color: BLACK });
+
+    if (pg.last) {
+      page.drawRectangle({ x: xs[0], y: y(top + TOTAL_H), width: xs[7] - xs[0], height: TOTAL_H, color: LIGHT, borderColor: BLACK, borderWidth: LINE });
+      drawText(page, "Total", xs[2] + 3, y(top + 12.5), bold, 9);
+      rightAt(page, formatINR(b.total), xs[7] - 4, y(top + 12.5), bold, 9);
+      page.drawLine({ start: { x: xs[6], y: y(top) }, end: { x: xs[6], y: y(top + TOTAL_H) }, thickness: LINE, color: BLACK });
+      top += TOTAL_H;
+      const words = wrap(`Total amount: Rs. ${formatINR(b.total)} (${amountInWords(b.total)})`, regular, 9.5, PT.w - 2 * BM);
+      words.forEach((ln, k) => drawText(page, ln, BM, y(top + 20 + k * 12), regular, 9.5));
+      const after = top + 20 + words.length * 12;
+      drawText(page, `Number of accounts: ${b.lines.length}`, BM, y(after + 4), regular, 9.5);
+      const sy = after + 60;
+      const sigW = 170;
+      const sx = PT.w - BM - sigW;
+      page.drawLine({ start: { x: sx, y: y(sy) }, end: { x: sx + sigW, y: y(sy) }, thickness: LINE, color: BLACK });
+      centredAt(page, "Authorised Signatory", sx + sigW / 2, y(sy + 12), bold, 9.5);
+      centredAt(page, meta.sectionLabel, sx + sigW / 2, y(sy + 24), regular, 9);
+      drawText(page, `Printed: ${meta.printedAt}`, BM, y(sy + 24), regular, 7, GREY);
+    }
+    centredAt(page, `Page ${idx + 1} of ${pages.length}`, PT.w / 2, y(PT.h - 20), regular, 7.5, GREY);
+  };
+
+  if (pages.length === 0) {
+    const page = pdf.addPage([PT.w, PT.h]);
+    centredAt(page, "No bank advice to print", PT.w / 2, PT.h / 2, regular, 11, GREY);
+  }
+  pages.forEach((pg, idx) => draw(pdf.addPage([PT.w, PT.h]), pg, idx));
+  return pdf.save();
+}

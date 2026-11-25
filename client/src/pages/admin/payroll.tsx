@@ -23,6 +23,28 @@ import { calculateLine, WAGE_CATEGORY_LABELS, type StatutorySet, type WageCatego
 import { PayrollSettingsDialog, sectionQuery } from "@/components/admin/payroll-settings";
 
 const API = "/api/admin/payroll";
+
+/**
+ * Download a file in the same page (no blank tab that closes by itself) and return its name.
+ * A server error (e.g. nothing to download) is thrown with the server's own message.
+ */
+async function downloadFile(url: string): Promise<string> {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) {
+    let msg = `Download failed (${res.status})`;
+    try { msg = (await res.json()).message || msg; } catch { /* not JSON */ }
+    throw new Error(msg);
+  }
+  const cd = res.headers.get("Content-Disposition") || "";
+  const name = decodeURIComponent((cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] || url.split("/").pop()?.split("?")[0] || "download"));
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+  return name;
+}
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const inr = (n: number | string | null | undefined) => `₹${(Number(n) || 0).toLocaleString("en-IN")}`;
 const num = (n: number | string | null | undefined) => (Number(n) || 0).toLocaleString("en-IN");
@@ -260,8 +282,17 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
   const fileUrl = (name: string) => `${API}/exports/${name}?month=${ym.month}&year=${ym.year}&${sectionQuery(section)}`;
   // Rolls of any status this month (the Pay Register lists them all, with their status)
   const anyRoll = Object.values(data?.rolls || {}).reduce((s: number, n: any) => s + (Number(n) || 0), 0);
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState("");
+  const get = async (name: string) => {
+    setDownloading(name);
+    try { toast({ title: "Downloaded", description: await downloadFile(fileUrl(name)) }); }
+    catch (e: any) { toast({ title: "Not downloaded", description: e.message, variant: "destructive" }); }
+    setDownloading("");
+  };
   const files = [
-    { name: "bank.xlsx", label: "Bank payment sheet", icon: Landmark },
+    { name: "bank.xlsx", label: "Bank payment sheet (branch-wise)", icon: Landmark },
+    { name: "bank-advice.pdf", label: "Bank Advice (PDF, per branch)", icon: FileText },
     { name: "ecr.txt", label: "EPF ECR (.txt)", icon: FileText },
     { name: "esi.xlsx", label: "ESI sheet", icon: FileSpreadsheet },
     { name: "liability.xlsx", label: "Employer liability", icon: FileSpreadsheet },
@@ -325,13 +356,14 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" disabled={isLoading || anyRoll === 0}
             title="Every employee with Basic, VDA, Gross, EPF, ESI, MAS, total deductions, net payable and employer's share, with totals and a summary per fund (all rolls of the month)"
-            onClick={() => window.open(fileUrl("register.xlsx"), "_blank", "noopener")}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" /> Pay Register (deductions &amp; payments)
+            onClick={() => get("register.xlsx")}>
+            {downloading === "register.xlsx" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
+            Pay Register (deductions &amp; payments)
           </Button>
           {files.map((f) => (
-            <Button key={f.name} variant="outline" disabled={isLoading || passed === 0}
-              onClick={() => window.open(fileUrl(f.name), "_blank", "noopener")}>
-              <f.icon className="h-4 w-4 mr-2" /> {f.label}
+            <Button key={f.name} variant="outline" disabled={isLoading || passed === 0 || !!downloading}
+              onClick={() => get(f.name)}>
+              {downloading === f.name ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <f.icon className="h-4 w-4 mr-2" />} {f.label}
             </Button>
           ))}
         </div>
@@ -506,13 +538,13 @@ function RollEditor({ id, section, onBack }: { id: number; section: string; onBa
           {roll.status !== "draft" && (
             <>
               <Button variant="outline" onClick={() => window.open(musterUrl, "_blank", "noopener")}><Printer className="h-4 w-4 mr-2" /> Print Muster Roll</Button>
-              <Button variant="outline" onClick={() => window.open(`${musterUrl}&download=1`, "_blank", "noopener")}><Download className="h-4 w-4 mr-2" /> Download</Button>
+              <Button variant="outline" onClick={() => downloadFile(`${musterUrl}&download=1`).then((n) => toast({ title: "Downloaded", description: n })).catch(fail("Not downloaded"))}><Download className="h-4 w-4 mr-2" /> Download</Button>
             </>
           )}
           {lines.length > 0 && (
             <>
               <Button variant="outline" onClick={() => window.open(slipsUrl, "_blank", "noopener")}><ReceiptText className="h-4 w-4 mr-2" /> Pay slips (PDF)</Button>
-              <Button variant="outline" onClick={() => window.open(`${API}/rolls/${id}/register.xlsx?${sectionQuery(section)}`, "_blank", "noopener")}>
+              <Button variant="outline" onClick={() => downloadFile(`${API}/rolls/${id}/register.xlsx?${sectionQuery(section)}`).then((n) => toast({ title: "Downloaded", description: n })).catch(fail("Not downloaded"))}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" /> Pay Register (Excel)
               </Button>
             </>
