@@ -936,6 +936,34 @@ export async function runMigrations() {
         );
       `);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_wage_roll_log_roll ON wage_roll_log (roll_id)`);
+
+      // Revolving funds (one department can have several, each with its own Payment Code),
+      // imported from the Accounts Section's department list (DEPT / DEPT_NAME / DEPT_CODE_NO).
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS revolving_funds (
+          id SERIAL PRIMARY KEY,
+          dept_code TEXT NOT NULL,               -- department code (department_names.dept_code)
+          fund_name TEXT NOT NULL,               -- e.g. "MEDICINE (NEPHROLOGY)"
+          payment_code TEXT NOT NULL,            -- e.g. "4DE09645"
+          head_name TEXT NOT NULL,               -- printed Payment Head, e.g. "Revolving Fund of MEDICINE (NEPHROLOGY)"
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          updated_by TEXT,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_revolving_funds_code ON revolving_funds (payment_code)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_revolving_funds_dept ON revolving_funds (dept_code)`);
+      // The fund an employee is paid from, and the bank branch (wage staff)
+      await db.execute(sql`
+        ALTER TABLE employees
+          ADD COLUMN IF NOT EXISTS fund_code TEXT,
+          ADD COLUMN IF NOT EXISTS bank_branch TEXT;
+      `);
+      // A roll is per department + section + fund (Payment Code) + month
+      await db.execute(sql`ALTER TABLE wage_rolls ADD COLUMN IF NOT EXISTS fund_code TEXT`);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_wage_rolls_main_fund ON wage_rolls (department_id, section, COALESCE(fund_code, ''), year, month) WHERE kind = 'main'`);
+      await db.execute(sql`DROP INDEX IF EXISTS uq_wage_rolls_main`);
+      await db.execute(sql`ALTER TABLE wage_roll_lines ADD COLUMN IF NOT EXISTS bank_branch TEXT`);
     } catch (payErr) {
       console.error("[Migrations] wages payroll tables failed (payroll affected):", payErr);
     }

@@ -17,7 +17,7 @@ import { db } from "./db";
 import { sessionAdmin, sessionDepartmentId } from "./auth";
 import { sectionOfAdmin, sectionCodes, sectionLabel, type SectionKey } from "../shared/sections";
 import {
-  calculateLine, categoryFromDesignation, inForceOn, monthStart, sortSets,
+  calculateLine, categoryFromDesignation, inForceOn, monthStart, sortSets, defaultHeadName,
   validateStatutory, validateWageRates, DEFAULT_STATUTORY, DEFAULT_WAGE_RATES, WAGE_CATEGORIES,
   type StatutorySet, type WageCategory, type WageRateSet,
 } from "../shared/wagePayroll";
@@ -179,18 +179,46 @@ function rateOf(category: string | null, rates: RatesSnapshot) {
   return rates.wage[category as WageCategory];
 }
 
-/** Lines for a roll from the current attendance and employee records */
-async function buildLines(departmentId: number, section: FundSection, month: number, year: number, rates: RatesSnapshot) {
+// ── Revolving funds (Payment Codes) ────────────────────────────────────────
+
+export type Fund = { id: number; deptCode: string; fundName: string; paymentCode: string; headName: string };
+
+/** The department code (department list) of an app department, matched by name */
+const DEPT_CODE_OF = (deptIdSql: any) => sql`(
+  SELECT UPPER(TRIM(dn.dept_code)) FROM department_names dn, departments d
+  WHERE d.id = ${deptIdSql} AND UPPER(TRIM(dn.dept_name)) = UPPER(TRIM(d.name)) AND dn.dept_code IS NOT NULL
+  ORDER BY dn.id LIMIT 1)`;
+
+/** Active funds of a department */
+export async function fundsOfDepartment(departmentId: number): Promise<Fund[]> {
+  const r = await db.execute(sql`
+    SELECT id, dept_code, fund_name, payment_code, head_name FROM revolving_funds
+    WHERE is_active AND UPPER(TRIM(dept_code)) = ${DEPT_CODE_OF(departmentId)}
+    ORDER BY fund_name`);
+  return (r.rows as any[]).map((f) => ({ id: Number(f.id), deptCode: f.dept_code, fundName: f.fund_name, paymentCode: f.payment_code, headName: f.head_name }));
+}
+
+/** The fund an employee is paid from: their own Payment Code, or the department's only fund */
+export function effectiveFund(e: { fund_code?: string | null }, funds: Fund[]): Fund | null {
+  const own = String(e.fund_code ?? "").trim().toUpperCase();
+  if (own) return funds.find((f) => f.paymentCode.toUpperCase() === own) ?? { id: 0, deptCode: "", fundName: own, paymentCode: own, headName: `Revolving Fund (${own})` };
+  return funds.length === 1 ? funds[0] : null;
+}
+const fundKey = (f: Fund | null) => (f ? f.paymentCode : "");
+
+/** Lines for a roll from the current attendance and employee records (one fund: fundCode, "" = fund not set) */
+async function buildLines(departmentId: number, section: FundSection, fundCode: string, month: number, year: number, rates: RatesSnapshot) {
   const days = await attendanceDays(departmentId, month, year);
   const ids = [...days.keys()];
   if (!ids.length) return [];
-  const emps = await db.execute(sql`
+  const funds = await fundsOfDepartment(departmentId);
+  const emps = (await db.execute(sql`
     SELECT e.* FROM employees e
     WHERE e.id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
       AND ${LETTER}
       AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${codesSql(section)})
-    ORDER BY e.sort_order, e.epid`);
-  return (emps.rows as any[]).map((e, i) => {
+    ORDER BY e.sort_order, e.epid`)).rows as any[];
+  return emps.filter((e) => fundKey(effectiveFund(e, funds)) === fundCode).map((e, i) => {
     const category = e.wage_category || categoryFromDesignation(e.designation);
     const rate = rateOf(category, rates);
     const d = days.get(Number(e.id)) || 0;
@@ -201,6 +229,7 @@ async function buildLines(departmentId: number, section: FundSection, month: num
       mas_on: e.mas_applicable === true,
       uan_no: e.uan_no || null, esi_no: e.esi_no || null,
       bank_account: e.bank_account || null, bank_name: e.bank_name || null, ifsc: e.ifsc || null,
+      bank_branch: e.bank_branch || null,
     }, rates);
   });
 }
@@ -210,12 +239,12 @@ async function insertLines(tx: any, rollId: number, lines: LineRow[]) {
     await tx.execute(sql`
       INSERT INTO wage_roll_lines (roll_id, employee_id, sno, epid, name, designation, category, basic, vda, days,
         attendance_days, adjust_reason, epf_on, esi_on, esi_covered, mas_on, gross, epf_base, epf, esi_base, esi, mas, net,
-        er_eps, er_epf, er_edli, er_admin, er_epf_total, er_esi, uan_no, esi_no, bank_account, bank_name, ifsc)
+        er_eps, er_epf, er_edli, er_admin, er_epf_total, er_esi, uan_no, esi_no, bank_account, bank_name, ifsc, bank_branch)
       VALUES (${rollId}, ${l.employee_id}, ${l.sno}, ${l.epid}, ${l.name}, ${l.designation}, ${l.category}, ${l.basic}, ${l.vda},
         ${l.days}, ${l.attendance_days}, ${l.adjust_reason}, ${l.epf_on}, ${l.esi_on}, ${l.esi_covered}, ${l.mas_on},
         ${l.gross}, ${l.epf_base}, ${l.epf}, ${l.esi_base}, ${l.esi}, ${l.mas}, ${l.net},
         ${l.er_eps}, ${l.er_epf}, ${l.er_edli}, ${l.er_admin}, ${l.er_epf_total}, ${l.er_esi},
-        ${l.uan_no}, ${l.esi_no}, ${l.bank_account}, ${l.bank_name}, ${l.ifsc})`);
+        ${l.uan_no}, ${l.esi_no}, ${l.bank_account}, ${l.bank_name}, ${l.ifsc}, ${l.bank_branch ?? null})`);
   }
 }
 
@@ -294,11 +323,13 @@ export async function musterOfReport(reportId: number) {
   const emps = ids.length ? (await db.execute(sql`
     SELECT e.* FROM employees e WHERE e.id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
     ORDER BY e.sort_order, e.epid`)).rows as any[] : [];
-  const heads = (await db.execute(sql`SELECT section, head_name, payment_code FROM fund_payment_heads WHERE department_id = ${rep.department_id}`)).rows as any[];
+  const funds = await fundsOfDepartment(Number(rep.department_id));
   const blocks = new Map<string, any>();
   for (const e of emps) {
     const section = sectionOfAdmin(String(e.salary_asstt || "").trim().toUpperCase() === "OTH" ? "ACC" : e.salary_asstt);
-    const key = section === "salary" ? "unassigned" : section;
+    const sKey = section === "salary" ? "unassigned" : section;
+    const fund = effectiveFund(e, funds);
+    const key = `${sKey}|${fundKey(fund)}`; // one Muster Roll per section + fund (Payment Code)
     const category = e.wage_category || categoryFromDesignation(e.designation);
     const rate = rateOf(category, rates);
     const line = computeLine({
@@ -306,10 +337,9 @@ export async function musterOfReport(reportId: number) {
       days: days.get(Number(e.id)) || 0, epf_on: e.epf_applicable === true, esi_on: e.esi_applicable === true,
       esi_covered: e.esi_covered === true, mas_on: e.mas_applicable === true,
     }, rates);
-    const h = heads.find((x) => x.section === key);
     const b = blocks.get(key) || {
-      section: key, sectionLabel: key === "unassigned" ? "Section not set" : sectionLabel(key as FundSection),
-      headName: h?.head_name || "", paymentCode: h?.payment_code || "", lines: [] as any[],
+      section: sKey, sectionLabel: sKey === "unassigned" ? "Section not set" : sectionLabel(sKey as FundSection),
+      headName: fund?.headName || "", paymentCode: fund?.paymentCode || "", fundName: fund?.fundName || "", lines: [] as any[],
     };
     b.lines.push({
       sno: b.lines.length + 1, epid: line.epid, name: line.name, designation: line.designation,
@@ -328,6 +358,27 @@ export async function musterOfReport(reportId: number) {
 
 export function registerWagePayrollRoutes(app: Express) {
   const base = "/api/admin/payroll";
+
+  // Funds (Payment Codes) of a department, for the employee forms: that department or any admin
+  app.get("/api/departments/:departmentId/funds", wrap(async (req, res) => {
+    const departmentId = int(req.params.departmentId);
+    if (!Number.isInteger(departmentId)) return res.status(400).json({ message: "Invalid department" });
+    const admin = await sessionAdmin(req).catch(() => null);
+    const deptId = admin ? null : await sessionDepartmentId(req).catch(() => null);
+    if (!admin && deptId !== departmentId) return res.status(403).json({ message: "Not your department" });
+    res.json((await fundsOfDepartment(departmentId)).map((f) => ({ paymentCode: f.paymentCode, fundName: f.fundName, headName: f.headName })));
+  }));
+
+  // Funds of a department given by its department-list id (admin employee form) — any admin
+  app.get(`${base}/funds-of-department-name/:id`, wrap(async (req, res) => {
+    const id = int(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid department" });
+    const r = await db.execute(sql`
+      SELECT f.fund_name, f.payment_code, f.head_name FROM revolving_funds f
+      JOIN department_names dn ON UPPER(TRIM(dn.dept_code)) = UPPER(TRIM(f.dept_code))
+      WHERE dn.id = ${id} AND f.is_active ORDER BY f.fund_name`);
+    res.json((r.rows as any[]).map((f) => ({ paymentCode: f.payment_code, fundName: f.fund_name, headName: f.head_name })));
+  }));
 
   // Muster Roll figures of a Revolving Funds attendance report: the department that owns it, or any admin
   app.get("/api/attendance/:reportId/muster", wrap(async (req, res) => {
@@ -363,41 +414,96 @@ export function registerWagePayrollRoutes(app: Express) {
     res.json({ statutory: sortSets(sets) });
   }));
 
-  // Payment heads: departments that have this section's wage staff, with their head + code
-  app.get(`${base}/heads`, wrap(async (req, res) => {
+  // ── Revolving funds (Payment Codes) — shared by all sections ─────────────
+  // List: every fund with its department (if that department is in the app) and staff counts
+  app.get(`${base}/funds`, wrap(async (req, res) => {
     const who = await actor(req, res, req.query.section);
     if (!who) return;
     const r = await db.execute(sql`
-      SELECT d.id AS department_id, d.name AS department_name, h.head_name, h.payment_code,
-             COUNT(e.id)::int AS employees
-      FROM departments d
-      LEFT JOIN employees e ON e.department_id = d.id AND e.is_active = 'active' AND ${LETTER}
-        AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${codesSql(who.section)})
-      LEFT JOIN fund_payment_heads h ON h.department_id = d.id AND h.section = ${who.section}
-      GROUP BY d.id, d.name, h.head_name, h.payment_code
-      HAVING COUNT(e.id) > 0 OR MAX(h.id) IS NOT NULL
-      ORDER BY d.name`);
-    res.json((r.rows as any[]).map((x) => ({
-      departmentId: Number(x.department_id), departmentName: x.department_name, employees: x.employees,
-      headName: x.head_name || "", paymentCode: x.payment_code || "",
+      SELECT f.id, f.dept_code, f.fund_name, f.payment_code, f.head_name, f.is_active, f.updated_by,
+             d.id AS department_id, d.name AS department_name,
+             (SELECT COUNT(*)::int FROM employees e WHERE e.is_active = 'active' AND e.epid ~ '^[A-Za-z]'
+                AND UPPER(TRIM(COALESCE(e.fund_code, ''))) = UPPER(f.payment_code)) AS employees
+      FROM revolving_funds f
+      LEFT JOIN department_names dn ON UPPER(TRIM(dn.dept_code)) = UPPER(TRIM(f.dept_code))
+      LEFT JOIN departments d ON UPPER(TRIM(d.name)) = UPPER(TRIM(dn.dept_name))
+      ORDER BY f.fund_name`);
+    const seen = new Set<number>();
+    res.json((r.rows as any[]).filter((x) => !seen.has(Number(x.id)) && seen.add(Number(x.id))).map((x) => ({
+      id: Number(x.id), deptCode: x.dept_code, fundName: x.fund_name, paymentCode: x.payment_code, headName: x.head_name,
+      isActive: x.is_active, departmentId: x.department_id ? Number(x.department_id) : null,
+      departmentName: x.department_name || null, employees: x.employees, updatedBy: x.updated_by,
     })));
   }));
-  app.put(`${base}/heads/:departmentId`, wrap(async (req, res) => {
+
+  // Add / change one fund
+  app.put(`${base}/funds`, wrap(async (req, res) => {
     const who = await actor(req, res, req.body?.section);
     if (!who) return;
-    const departmentId = int(req.params.departmentId);
-    const headName = String(req.body?.headName ?? "").replace(/\s+/g, " ").trim();
+    const deptCode = String(req.body?.deptCode ?? "").trim().toUpperCase();
+    const fundName = String(req.body?.fundName ?? "").replace(/\s+/g, " ").trim().slice(0, 150);
     const paymentCode = String(req.body?.paymentCode ?? "").replace(/\s+/g, "").toUpperCase();
-    if (!Number.isInteger(departmentId)) return res.status(400).json({ message: "Invalid department" });
-    if (!headName || headName.length > 150) return res.status(400).json({ message: "Enter the payment head (up to 150 characters)." });
-    if (!/^[A-Z0-9/-]{1,20}$/.test(paymentCode)) return res.status(400).json({ message: "Enter the payment code (letters / digits, e.g. 4DE09665)." });
+    const headName = String(req.body?.headName ?? "").replace(/\s+/g, " ").trim().slice(0, 150) || defaultHeadName(fundName);
+    const isActive = req.body?.isActive !== false;
+    if (!/^[A-Z0-9]{2,10}$/.test(deptCode)) return res.status(400).json({ message: "Enter the department code (e.g. PAT)." });
+    if (!fundName) return res.status(400).json({ message: "Enter the fund name." });
+    if (!/^[A-Z0-9/-]{3,20}$/.test(paymentCode)) return res.status(400).json({ message: "Enter the Payment Code (e.g. 4DE09665)." });
     await db.execute(sql`
-      INSERT INTO fund_payment_heads (department_id, section, head_name, payment_code, updated_by, updated_at)
-      VALUES (${departmentId}, ${who.section}, ${headName}, ${paymentCode}, ${who.name}, NOW())
-      ON CONFLICT (department_id, section)
-      DO UPDATE SET head_name = EXCLUDED.head_name, payment_code = EXCLUDED.payment_code,
-                    updated_by = EXCLUDED.updated_by, updated_at = NOW()`);
-    res.json({ departmentId, headName, paymentCode });
+      INSERT INTO revolving_funds (dept_code, fund_name, payment_code, head_name, is_active, updated_by, updated_at)
+      VALUES (${deptCode}, ${fundName}, ${paymentCode}, ${headName}, ${isActive}, ${who.name}, NOW())
+      ON CONFLICT (payment_code) DO UPDATE SET dept_code = EXCLUDED.dept_code, fund_name = EXCLUDED.fund_name,
+        head_name = EXCLUDED.head_name, is_active = EXCLUDED.is_active, updated_by = EXCLUDED.updated_by, updated_at = NOW()`);
+    res.json({ deptCode, fundName, paymentCode, headName, isActive });
+  }));
+
+  // Import from the department list (columns DEPT, DEPT_NAME, DEPT_CODE_NO; rows without a code are skipped).
+  // dryRun → what would happen; otherwise new funds are added and changed ones updated (head name kept if edited).
+  app.post(`${base}/funds/import`, wrap(async (req, res) => {
+    const who = await actor(req, res, req.body?.section);
+    if (!who) return;
+    const rows: any[] = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, 5000) : [];
+    if (!rows.length) return res.status(400).json({ message: "The file has no rows." });
+    const dryRun = req.body?.dryRun !== false;
+    const existing = new Map(((await db.execute(sql`SELECT * FROM revolving_funds`)).rows as any[]).map((f) => [String(f.payment_code).toUpperCase(), f]));
+    const appDepts = new Map(((await db.execute(sql`
+      SELECT UPPER(TRIM(dn.dept_code)) AS code, d.name FROM department_names dn
+      JOIN departments d ON UPPER(TRIM(d.name)) = UPPER(TRIM(dn.dept_name)) WHERE dn.dept_code IS NOT NULL`)).rows as any[]).map((x) => [x.code, x.name]));
+    const seen = new Set<string>();
+    const results = rows.map((r, i) => {
+      const deptCode = String(r?.deptCode ?? "").trim().toUpperCase();
+      const fundName = String(r?.fundName ?? "").replace(/\s+/g, " ").trim().slice(0, 150);
+      const paymentCode = String(r?.paymentCode ?? "").replace(/\s+/g, "").toUpperCase();
+      const out: any = { row: i + 2, deptCode, fundName, paymentCode, departmentName: appDepts.get(deptCode) || null };
+      if (!paymentCode) return { ...out, status: "skip" };
+      if (!/^[A-Z0-9]{2,10}$/.test(deptCode)) return { ...out, status: "error", error: "Department code missing or not valid" };
+      if (!fundName) return { ...out, status: "error", error: "Department / fund name missing" };
+      if (!/^[A-Z0-9/-]{3,20}$/.test(paymentCode)) return { ...out, status: "error", error: "Payment Code not valid" };
+      if (seen.has(paymentCode)) return { ...out, status: "error", error: "Same Payment Code twice in the file" };
+      seen.add(paymentCode);
+      const ex = existing.get(paymentCode);
+      if (!ex) return { ...out, status: "new" };
+      const same = String(ex.dept_code).toUpperCase() === deptCode && String(ex.fund_name) === fundName;
+      return { ...out, status: same ? "same" : "update" };
+    });
+    if (!dryRun) {
+      await db.transaction(async (tx) => {
+        for (const r of results) {
+          if (r.status !== "new" && r.status !== "update") continue;
+          const ex = existing.get(r.paymentCode);
+          // keep a head name that was edited by hand; otherwise follow the fund name
+          const head = ex && ex.head_name !== defaultHeadName(ex.fund_name) ? ex.head_name : defaultHeadName(r.fundName);
+          await tx.execute(sql`
+            INSERT INTO revolving_funds (dept_code, fund_name, payment_code, head_name, updated_by, updated_at)
+            VALUES (${r.deptCode}, ${r.fundName}, ${r.paymentCode}, ${head}, ${who.name}, NOW())
+            ON CONFLICT (payment_code) DO UPDATE SET dept_code = EXCLUDED.dept_code, fund_name = EXCLUDED.fund_name,
+              head_name = EXCLUDED.head_name, is_active = true, updated_by = EXCLUDED.updated_by, updated_at = NOW()`);
+        }
+      });
+    }
+    const count = (s: string) => results.filter((r) => r.status === s).length;
+    res.json({ dryRun, total: results.length, new: count("new"), update: count("update"), same: count("same"), skip: count("skip"), errors: count("error"),
+      notInApp: results.filter((r) => (r.status === "new" || r.status === "update" || r.status === "same") && !r.departmentName).length,
+      results: results.filter((r) => r.status !== "skip") });
   }));
 
   // Month overview: departments with this section's wage staff or attendance, and their roll
@@ -406,13 +512,23 @@ export function registerWagePayrollRoutes(app: Express) {
     if (!who) return;
     const month = int(req.query.month), year = int(req.query.year);
     if (!validMonth(month, year)) return res.status(400).json({ message: "Choose a month" });
-    const depts = await db.execute(sql`
-      SELECT d.id, d.name, COUNT(e.id)::int AS staff, h.head_name, h.payment_code
-      FROM departments d
-      JOIN employees e ON e.department_id = d.id AND e.is_active = 'active' AND ${LETTER}
-        AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${codesSql(who.section)})
-      LEFT JOIN fund_payment_heads h ON h.department_id = d.id AND h.section = ${who.section}
-      GROUP BY d.id, d.name, h.head_name, h.payment_code`);
+    // This section's staff, grouped per department + fund (Payment Code)
+    const staff = (await db.execute(sql`
+      SELECT e.id, e.department_id, e.fund_code, d.name AS department_name
+      FROM employees e JOIN departments d ON d.id = e.department_id
+      WHERE e.is_active = 'active' AND ${LETTER}
+        AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${codesSql(who.section)})`)).rows as any[];
+    const fundsBy = new Map<number, Fund[]>();
+    for (const id of new Set(staff.map((s) => Number(s.department_id)))) fundsBy.set(id, await fundsOfDepartment(id));
+    const groups = new Map<string, { departmentId: number; departmentName: string; fund: Fund | null; staff: number }>();
+    for (const s of staff) {
+      const deptId = Number(s.department_id);
+      const fund = effectiveFund(s, fundsBy.get(deptId) || []);
+      const k = `${deptId}|${fundKey(fund)}`;
+      const g = groups.get(k) || { departmentId: deptId, departmentName: s.department_name, fund, staff: 0 };
+      g.staff++;
+      groups.set(k, g);
+    }
     const reports = await db.execute(sql`
       SELECT ar.department_id, COUNT(*)::int AS n,
              BOOL_OR(ar.status IN ('sent','cancel_requested')) AS received,
@@ -421,29 +537,30 @@ export function registerWagePayrollRoutes(app: Express) {
       WHERE COALESCE(ar.report_type, 'regular') = 'fund' AND ar.month = ${month} AND ar.year = ${year}
         AND ar.status <> 'cancelled'
       GROUP BY ar.department_id`);
-    const rolls = await db.execute(sql`
-      SELECT id, department_id, status, totals, page_no FROM wage_rolls
-      WHERE section = ${who.section} AND month = ${month} AND year = ${year} AND kind = 'main'`);
+    const rolls = (await db.execute(sql`
+      SELECT w.id, w.department_id, COALESCE(w.fund_code, '') AS fund_code, w.status, w.totals, w.page_no,
+             w.head_name, w.payment_code, d.name AS department_name
+      FROM wage_rolls w LEFT JOIN departments d ON d.id = w.department_id
+      WHERE w.section = ${who.section} AND w.month = ${month} AND w.year = ${year} AND w.kind = 'main'`)).rows as any[];
     const repBy = new Map((reports.rows as any[]).map((r) => [Number(r.department_id), r]));
-    const rollBy = new Map((rolls.rows as any[]).map((r) => [Number(r.department_id), r]));
-    const ids = new Set<number>([...(depts.rows as any[]).map((d) => Number(d.id)), ...rollBy.keys()]);
-    const names = new Map((depts.rows as any[]).map((d) => [Number(d.id), d]));
-    const missingNames = [...ids].filter((i) => !names.has(i));
-    if (missingNames.length) {
-      const extra = await db.execute(sql`SELECT id, name FROM departments WHERE id IN (${sql.join(missingNames.map((i) => sql`${i}`), sql`, `)})`);
-      for (const d of extra.rows as any[]) names.set(Number(d.id), { ...d, staff: 0 });
+    const rollBy = new Map(rolls.map((r) => [`${r.department_id}|${r.fund_code}`, r]));
+    // rolls whose group has no staff any more still show
+    for (const r of rolls) {
+      const k = `${r.department_id}|${r.fund_code}`;
+      if (!groups.has(k)) groups.set(k, { departmentId: Number(r.department_id), departmentName: r.department_name || "",
+        fund: r.fund_code ? { id: 0, deptCode: "", fundName: r.head_name || r.fund_code, paymentCode: r.fund_code, headName: r.head_name || "" } : null, staff: 0 });
     }
-    const out = [...ids].map((id) => {
-      const d: any = names.get(id) || {};
-      const rep: any = repBy.get(id);
-      const roll: any = rollBy.get(id);
+    const out = [...groups.entries()].map(([k, g]) => {
+      const rep: any = repBy.get(g.departmentId);
+      const roll: any = rollBy.get(k);
       return {
-        departmentId: id, departmentName: d.name || `Department ${id}`, staff: Number(d.staff || 0),
-        headName: d.head_name || "", paymentCode: d.payment_code || "",
+        departmentId: g.departmentId, departmentName: g.departmentName || `Department ${g.departmentId}`, staff: g.staff,
+        fundCode: g.fund?.paymentCode || "", fundName: g.fund?.fundName || "",
+        headName: g.fund?.headName || "", paymentCode: g.fund?.paymentCode || "",
         attendance: rep ? (rep.received ? "received" : rep.pending ? "pending" : "none") : "none",
         roll: roll ? { id: Number(roll.id), status: roll.status, totals: roll.totals, pageNo: roll.page_no } : null,
       };
-    }).sort((a, b) => a.departmentName.localeCompare(b.departmentName));
+    }).sort((a, b) => a.departmentName.localeCompare(b.departmentName) || a.fundName.localeCompare(b.fundName));
     res.json({ section: who.section, month, year, departments: out });
   }));
 
@@ -452,22 +569,22 @@ export function registerWagePayrollRoutes(app: Express) {
     const who = await actor(req, res, req.body?.section);
     if (!who) return;
     const departmentId = int(req.body?.departmentId), month = int(req.body?.month), year = int(req.body?.year);
+    const fundCode = String(req.body?.fundCode ?? "").replace(/\s+/g, "").toUpperCase(); // "" = fund not set
     if (!Number.isInteger(departmentId) || !validMonth(month, year)) return res.status(400).json({ message: "Choose the department and month" });
     const exists = await db.execute(sql`
       SELECT id FROM wage_rolls WHERE department_id = ${departmentId} AND section = ${who.section}
-        AND month = ${month} AND year = ${year} AND kind = 'main'`);
-    if (exists.rows.length) return res.status(409).json({ message: "A roll for this department and month already exists.", id: Number((exists.rows[0] as any).id) });
+        AND COALESCE(fund_code, '') = ${fundCode} AND month = ${month} AND year = ${year} AND kind = 'main'`);
+    if (exists.rows.length) return res.status(409).json({ message: "A roll for this fund and month already exists.", id: Number((exists.rows[0] as any).id) });
     const rates = await ratesFor(month, year);
-    const lines = await buildLines(departmentId, who.section, month, year, rates);
-    if (!lines.length) return res.status(400).json({ message: "No received Revolving Funds or Other Similar Funds attendance for this section's employees in this month." });
-    const head = await db.execute(sql`SELECT head_name, payment_code FROM fund_payment_heads WHERE department_id = ${departmentId} AND section = ${who.section}`);
-    const h: any = head.rows[0] || {};
+    const lines = await buildLines(departmentId, who.section, fundCode, month, year, rates);
+    if (!lines.length) return res.status(400).json({ message: "No received Revolving Funds or Other Similar Funds attendance for this section's employees of this fund in this month." });
+    const fund = fundCode ? (await fundsOfDepartment(departmentId)).find((f) => f.paymentCode === fundCode) : null;
     let id = 0;
     await db.transaction(async (tx) => {
       const ins = await tx.execute(sql`
-        INSERT INTO wage_rolls (department_id, section, month, year, kind, status, head_name, payment_code, rates, created_by)
-        VALUES (${departmentId}, ${who.section}, ${month}, ${year}, 'main', 'draft', ${h.head_name ?? null}, ${h.payment_code ?? null},
-          ${JSON.stringify(rates)}::jsonb, ${who.name})
+        INSERT INTO wage_rolls (department_id, section, month, year, kind, status, head_name, payment_code, fund_code, rates, created_by)
+        VALUES (${departmentId}, ${who.section}, ${month}, ${year}, 'main', 'draft', ${fund?.headName ?? null}, ${fund?.paymentCode ?? (fundCode || null)},
+          ${fundCode || null}, ${JSON.stringify(rates)}::jsonb, ${who.name})
         RETURNING id`);
       id = Number((ins.rows[0] as any).id);
       await insertLines(tx, id, lines);
@@ -568,7 +685,10 @@ export function registerWagePayrollRoutes(app: Express) {
     const { roll, who } = got;
     if (roll.status !== "draft") return res.status(409).json({ message: "Only a draft roll can be rebuilt." });
     const rates = await ratesFor(roll.month, roll.year);
-    const lines = await buildLines(roll.department_id, roll.section, roll.month, roll.year, rates);
+    const lines = await buildLines(roll.department_id, roll.section, String(roll.fund_code || ""), roll.month, roll.year, rates);
+    // the fund's current head name / code follow a rebuild
+    const fund = roll.fund_code ? (await fundsOfDepartment(roll.department_id)).find((f) => f.paymentCode === roll.fund_code) : null;
+    if (fund) await db.execute(sql`UPDATE wage_rolls SET head_name = ${fund.headName}, payment_code = ${fund.paymentCode} WHERE id = ${roll.id}`);
     await db.transaction(async (tx) => {
       await tx.execute(sql`DELETE FROM wage_roll_lines WHERE roll_id = ${roll.id}`);
       await tx.execute(sql`UPDATE wage_rolls SET rates = ${JSON.stringify(rates)}::jsonb WHERE id = ${roll.id}`);

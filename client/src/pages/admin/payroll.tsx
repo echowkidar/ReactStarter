@@ -20,7 +20,7 @@ import { AlertTriangle, ArrowLeft, ChevronDown, ChevronRight, Download, FileSpre
 import { getAdminAccess, useAdminSection } from "@/lib/admin-access";
 import { sectionLabel } from "@shared/sections";
 import { calculateLine, WAGE_CATEGORY_LABELS, type StatutorySet, type WageCategory } from "@shared/wagePayroll";
-import { HeadDialog, PayrollSettingsDialog, sectionQuery } from "@/components/admin/payroll-settings";
+import { PayrollSettingsDialog, sectionQuery } from "@/components/admin/payroll-settings";
 
 const API = "/api/admin/payroll";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -31,7 +31,7 @@ type Totals = Record<string, number>;
 type Warning = { code: string; text: string; block?: boolean };
 type Line = Record<string, any> & { id: number; warnings: Warning[] };
 type MonthDept = {
-  departmentId: number; departmentName: string; staff: number; headName: string; paymentCode: string;
+  departmentId: number; departmentName: string; staff: number; fundCode: string; fundName: string; headName: string; paymentCode: string;
   attendance: "received" | "pending" | "none";
   roll: { id: number; status: "draft" | "finalised" | "passed"; totals: Totals | null; pageNo: string | null } | null;
 };
@@ -68,6 +68,8 @@ export default function AdminPayroll() {
   });
   const [ym, setYm] = useState(defaultMonth);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"wage" | "funds">("wage");
+  const openSettings = (tab: "wage" | "funds") => { setSettingsTab(tab); setSettingsOpen(true); };
 
   const openRoll = (id: number | null) => {
     setRollId(id);
@@ -86,7 +88,7 @@ export default function AdminPayroll() {
             {section !== "salary" && <p className="text-sm text-slate-600">{sectionLabel(section)}</p>}
           </div>
           {section !== "salary" && (
-            <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}><Settings className="h-4 w-4 mr-2" /> Settings</Button>
+            <Button variant="outline" size="sm" onClick={() => openSettings("wage")}><Settings className="h-4 w-4 mr-2" /> Settings</Button>
           )}
         </div>
 
@@ -95,11 +97,11 @@ export default function AdminPayroll() {
         ) : rollId ? (
           <RollEditor key={`${section}-${rollId}`} id={rollId} section={section} onBack={() => openRoll(null)} />
         ) : (
-          <MonthView section={section} ym={ym} setYm={setYm} onOpen={openRoll} />
+          <MonthView section={section} ym={ym} setYm={setYm} onOpen={openRoll} onFunds={() => openSettings("funds")} />
         )}
       </main>
       {section !== "salary" && (
-        <PayrollSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} section={section} isSuper={isSuper} />
+        <PayrollSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} section={section} isSuper={isSuper} initialTab={settingsTab} />
       )}
     </div>
   );
@@ -107,12 +109,14 @@ export default function AdminPayroll() {
 
 // ── Month view ───────────────────────────────────────────────────────────────
 
-function MonthView({ section, ym, setYm, onOpen }: {
+const deptKey = (d: { departmentId: number; fundCode: string }) => `${d.departmentId}|${d.fundCode}`;
+
+function MonthView({ section, ym, setYm, onOpen, onFunds }: {
   section: string; ym: { month: number; year: number }; setYm: (v: { month: number; year: number }) => void; onOpen: (id: number) => void;
+  onFunds: () => void;
 }) {
   const { toast } = useToast();
-  const [headFor, setHeadFor] = useState<MonthDept | null>(null);
-  const [creating, setCreating] = useState<number | null>(null);
+  const [creating, setCreating] = useState<string | null>(null);
   const key = [`${API}/month`, section, ym.month, ym.year];
   const { data, isLoading } = useQuery<{ departments: MonthDept[] }>({
     queryKey: key,
@@ -121,9 +125,9 @@ function MonthView({ section, ym, setYm, onOpen }: {
   const depts = data?.departments || [];
 
   const prepare = async (d: MonthDept) => {
-    setCreating(d.departmentId);
+    setCreating(deptKey(d));
     try {
-      const res = await apiRequest("POST", `${API}/rolls`, { departmentId: d.departmentId, month: ym.month, year: ym.year, section });
+      const res = await apiRequest("POST", `${API}/rolls`, { departmentId: d.departmentId, fundCode: d.fundCode, month: ym.month, year: ym.year, section });
       const { id } = await res.json();
       queryClient.invalidateQueries({ queryKey: [`${API}/month`] });
       onOpen(id);
@@ -182,10 +186,9 @@ function MonthView({ section, ym, setYm, onOpen }: {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Department</TableHead>
+                <TableHead>Department / fund <button type="button" className="ml-2 text-blue-700 dark:text-blue-400 underline text-xs font-normal" onClick={onFunds}>Funds</button></TableHead>
                 <TableHead className="text-right">Staff</TableHead>
                 <TableHead>Attendance</TableHead>
-                <TableHead>Payment head / code</TableHead>
                 <TableHead>Roll</TableHead>
                 <TableHead className="text-right">Employees</TableHead>
                 <TableHead className="text-right">Gross</TableHead>
@@ -194,19 +197,20 @@ function MonthView({ section, ym, setYm, onOpen }: {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={9} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin inline text-slate-400" /></TableCell></TableRow>}
-              {!isLoading && depts.length === 0 && <TableRow><TableCell colSpan={9} className="text-center py-8 text-slate-500">No departments with wage staff in this section.</TableCell></TableRow>}
+              {isLoading && <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin inline text-slate-400" /></TableCell></TableRow>}
+              {!isLoading && depts.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-500">No departments with wage staff in this section.</TableCell></TableRow>}
               {depts.map((d) => (
-                <TableRow key={d.departmentId}>
-                  <TableCell className="font-medium">{d.departmentName}</TableCell>
+                <TableRow key={deptKey(d)}>
+                  <TableCell>
+                    <div className="font-medium">{d.departmentName}</div>
+                    {d.fundCode ? (
+                      <div className="text-xs text-slate-500">{d.fundName} <span className="font-mono">{d.paymentCode || d.fundCode}</span></div>
+                    ) : (
+                      <div className="text-xs text-amber-700 dark:text-amber-400">Fund not set <span className="text-slate-500">— set the Payment Code in the employee record</span></div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">{d.staff}</TableCell>
                   <TableCell><AttendanceBadge value={d.attendance} /></TableCell>
-                  <TableCell>
-                    {d.headName || d.paymentCode ? (
-                      <span>{d.headName} <span className="font-mono text-xs text-slate-500">{d.paymentCode}</span></span>
-                    ) : <span className="text-slate-400">Not set</span>}{" "}
-                    <button type="button" className="text-blue-700 underline text-xs ml-1" onClick={() => setHeadFor(d)}>{d.headName ? "Edit" : "Set"}</button>
-                  </TableCell>
                   <TableCell>{d.roll ? <StatusBadge status={d.roll.status} /> : <span className="text-slate-400">Not prepared</span>}</TableCell>
                   <TableCell className="text-right">{d.roll?.totals ? num(d.roll.totals.employees) : "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{d.roll?.totals ? inr(d.roll.totals.gross) : "—"}</TableCell>
@@ -215,8 +219,8 @@ function MonthView({ section, ym, setYm, onOpen }: {
                     {d.roll ? (
                       <Button size="sm" variant="outline" onClick={() => onOpen(d.roll!.id)}>Open</Button>
                     ) : d.attendance === "received" ? (
-                      <Button size="sm" disabled={creating === d.departmentId} onClick={() => prepare(d)}>
-                        {creating === d.departmentId && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Prepare roll
+                      <Button size="sm" disabled={creating === deptKey(d)} onClick={() => prepare(d)}>
+                        {creating === deptKey(d) &&<Loader2 className="h-4 w-4 mr-2 animate-spin" />} Prepare roll
                       </Button>
                     ) : null}
                   </TableCell>
@@ -228,8 +232,6 @@ function MonthView({ section, ym, setYm, onOpen }: {
       </Card>
 
       <MonthlyFiles section={section} ym={ym} />
-
-      {headFor && <HeadDialog head={headFor} section={section} onClose={() => setHeadFor(null)} />}
     </>
   );
 }
@@ -411,7 +413,7 @@ function RollEditor({ id, section, onBack }: { id: number; section: string; onBa
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-1" /> Back</Button>
-          <h2 className="text-lg font-semibold">{roll.department_name}</h2>
+          <h2 className="text-lg font-semibold">{roll.department_name}{roll.fund_code ? <span className="text-sm font-normal text-slate-600 dark:text-slate-400"> · {roll.fund_code}</span> : null}</h2>
           <span className="text-slate-600">{MONTHS[roll.month - 1]} {roll.year} · {roll.sectionLabel}</span>
           <StatusBadge status={roll.status} />
         </div>
@@ -422,7 +424,7 @@ function RollEditor({ id, section, onBack }: { id: number; section: string; onBa
             {roll.head_name ? <b>{roll.head_name}</b> : <span className="text-red-700">not set</span>}
             <span className="text-slate-500"> · Code: </span>
             {roll.payment_code ? <b className="font-mono">{roll.payment_code}</b> : <span className="text-red-700">not set</span>}
-            {draft && <button type="button" className="ml-2 text-blue-700 underline text-xs" onClick={() => setHeadOpen(true)}><Pencil className="h-3 w-3 inline mr-1" />Edit</button>}
+            {draft && <button type="button" className="ml-2 text-blue-700 underline text-xs" onClick={() => setHeadOpen(true)}><Pencil className="h-3 w-3 inline mr-1" />Edit head / code for this roll</button>}
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-1 ml-auto">
             <span>Employees <b>{lines.length}</b></span>

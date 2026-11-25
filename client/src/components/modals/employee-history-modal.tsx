@@ -36,7 +36,7 @@ const FIELD_LABELS: Record<string, string> = {
     wageCategory: "Wage Category", epfApplicable: "EPF", uanNo: "UAN", esiApplicable: "ESI", esiNo: "ESI No.", esiCovered: "ESI covered", masApplicable: "MAS",
     payLevel: "Pay Level", termExpiry: "Term Expiry", joiningDate: "Joining Date", joiningShift: "Joining Shift",
     salaryRegisterNo: "Register No", officeMemoNo: "Office Memo No", salary_asstt: "Dealing Assistant",
-    panNumber: "PAN", bankAccount: "Bank Account", aadharCard: "Aadhar", bankName: "Bank Name", ifsc: "IFSC",
+    panNumber: "PAN", bankAccount: "Bank Account", aadharCard: "Aadhar", bankName: "Bank Name", ifsc: "IFSC", fundCode: "Fund (Payment Code)", bankBranch: "Bank Branch",
     employeeCategory: "Category", isActive: "Status", disableReason: "Disable Reason", disableWefDate: "Disable w.e.f.",
     remarks: "Remarks", departmentId: "Department", transferStatus: "Transfer",
     panCardUrl: "PAN Card (file)", bankProofUrl: "Bank Proof (file)", aadharCardUrl: "Aadhar Card (file)",

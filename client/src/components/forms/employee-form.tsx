@@ -35,10 +35,18 @@ export type PayrollValue = {
   esiNo: string;
   esiCovered: boolean;
   masApplicable: boolean;
+  fundCode: string;
+  bankName: string;
+  bankBranch: string;
+  ifsc: string;
 };
+
+/** Keys that belong to the payroll block only (removed for numeric EPIDs). bankName / ifsc are normal fields too, so they are not listed. */
+export const PAYROLL_ONLY_KEYS = ["wageCategory", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode", "bankBranch"] as const;
 
 export const EMPTY_PAYROLL: PayrollValue = {
   wageCategory: "", epfApplicable: false, uanNo: "", esiApplicable: false, esiNo: "", esiCovered: false, masApplicable: false,
+  fundCode: "", bankName: "", bankBranch: "", ifsc: "",
 };
 
 /** Read the payroll values from a stored employee row (camelCase or snake_case) */
@@ -53,6 +61,10 @@ export function payrollFromEmployee(emp: any): PayrollValue {
     esiNo: String(pick("esiNo", "esi_no") ?? ""),
     esiCovered: flag(pick("esiCovered", "esi_covered")),
     masApplicable: flag(pick("masApplicable", "mas_applicable")),
+    fundCode: String(pick("fundCode", "fund_code") ?? ""),
+    bankName: String(pick("bankName", "bank_name") ?? ""),
+    bankBranch: String(pick("bankBranch", "bank_branch") ?? ""),
+    ifsc: String(pick("ifsc", "ifsc") ?? ""),
   };
 }
 
@@ -62,6 +74,8 @@ export function validatePayroll(v: PayrollValue): Partial<Record<keyof PayrollVa
   if (!v.wageCategory) e.wageCategory = "Wage Category is required";
   if (v.epfApplicable && v.uanNo.trim() && !/^\d{12}$/.test(v.uanNo.trim())) e.uanNo = "UAN must be 12 digits";
   if (v.esiApplicable && v.esiNo.trim() && !/^\d{10}$/.test(v.esiNo.trim())) e.esiNo = "ESI number must be 10 digits";
+  if (v.fundCode.trim() && !/^[A-Za-z0-9]{3,20}$/.test(v.fundCode.trim())) e.fundCode = "Payment Code must be 3-20 letters/digits";
+  if (v.ifsc.trim() && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.ifsc.trim().toUpperCase())) e.ifsc = "IFSC must look like SBIN0001234";
   return e;
 }
 
@@ -75,16 +89,36 @@ export function payrollPayload(v: PayrollValue) {
     esiNo: v.esiApplicable ? v.esiNo.trim() : "",
     esiCovered: v.esiApplicable ? v.esiCovered : false,
     masApplicable: v.masApplicable,
+    fundCode: v.fundCode.trim().toUpperCase(),
+    bankName: v.bankName.trim(),
+    bankBranch: v.bankBranch.trim(),
+    ifsc: v.ifsc.trim().toUpperCase(),
   };
 }
 
-export function WagePayrollFields({ value, onChange, errors = {}, disabled, designation }: {
+export function WagePayrollFields({ value, onChange, errors = {}, disabled, designation, departmentId, fundsUrl }: {
   value: PayrollValue;
   onChange: (patch: Partial<PayrollValue>) => void;
   errors?: Partial<Record<keyof PayrollValue, string>>;
   disabled?: boolean;
   designation?: string;
+  /** App department id (departments.id) used to load the department's funds */
+  departmentId?: number | string | null;
+  /** Admin form: its department list uses department-list ids, so funds come from this URL instead */
+  fundsUrl?: string | null;
 }) {
+  const deptId = departmentId ? Number(departmentId) : 0;
+  const url = fundsUrl ?? (deptId > 0 ? `/api/departments/${deptId}/funds` : null);
+  const { data: funds, isSuccess: fundsLoaded } = useQuery<{ paymentCode: string; fundName: string; headName?: string }[]>({
+    queryKey: [url ?? "no-funds"],
+    enabled: !!url,
+  });
+  const fundList = Array.isArray(funds) ? funds : [];
+  const onlyFund = fundList.length === 1 ? fundList[0] : null;
+  useEffect(() => {
+    if (onlyFund && !value.fundCode) onChange({ fundCode: onlyFund.paymentCode });
+  }, [onlyFund?.paymentCode, value.fundCode]);
+
   // Suggest the category from the designation while none has been picked
   useEffect(() => {
     if (!value.wageCategory) {
@@ -109,6 +143,32 @@ export function WagePayrollFields({ value, onChange, errors = {}, disabled, desi
             </SelectContent>
           </Select>
           {errors.wageCategory && <p className={errCls}>{errors.wageCategory}</p>}
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Fund (Payment Code)</label>
+          {fundList.length > 0 ? (
+            <>
+              <Select disabled={disabled} value={value.fundCode || undefined} onValueChange={(v) => onChange({ fundCode: v })}>
+                <SelectTrigger className={inputCls}><SelectValue placeholder="Select fund..." /></SelectTrigger>
+                <SelectContent>
+                  {fundList.map((f) => <SelectItem key={f.paymentCode} value={f.paymentCode}>{f.fundName} — {f.paymentCode}</SelectItem>)}
+                  {value.fundCode && !fundList.some((f) => f.paymentCode === value.fundCode) && (
+                    <SelectItem value={value.fundCode}>{value.fundCode}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {onlyFund && <p className="text-xs text-muted-foreground mt-1">Only fund of this department.</p>}
+            </>
+          ) : (
+            <>
+              <Input value={value.fundCode} maxLength={20} disabled={disabled} className={inputCls} placeholder="e.g. 4DE09665"
+                onChange={(e) => onChange({ fundCode: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase() })} />
+              {(deptId > 0 && fundsLoaded) && (
+                <p className="text-xs text-muted-foreground mt-1">No fund imported for this department yet (Payroll → Settings → Funds).</p>
+              )}
+            </>
+          )}
+          {errors.fundCode && <p className={errCls}>{errors.fundCode}</p>}
         </div>
         <div className="flex items-center gap-3 sm:pt-6">
           <Switch id="payroll-mas" checked={value.masApplicable} disabled={disabled} onCheckedChange={(v) => onChange({ masApplicable: v })} />
@@ -150,6 +210,24 @@ export function WagePayrollFields({ value, onChange, errors = {}, disabled, desi
             </div>
           )}
         </div>
+        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t dark:border-slate-700 pt-4">
+          <div>
+            <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">Bank Name</label>
+            <Input value={value.bankName} maxLength={100} disabled={disabled} className={inputCls}
+              onChange={(e) => onChange({ bankName: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">Bank Branch</label>
+            <Input value={value.bankBranch} maxLength={100} disabled={disabled} className={inputCls}
+              onChange={(e) => onChange({ bankBranch: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">IFSC</label>
+            <Input value={value.ifsc} maxLength={11} disabled={disabled} className={`${inputCls} uppercase`}
+              onChange={(e) => onChange({ ifsc: e.target.value.toUpperCase() })} />
+            {errors.ifsc && <p className={errCls}>{errors.ifsc}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -182,6 +260,8 @@ const employeeSchema = z.object({
   esiNo: z.string().optional(),
   esiCovered: z.boolean().optional(),
   masApplicable: z.boolean().optional(),
+  fundCode: z.string().optional(),
+  bankBranch: z.string().optional(),
   // Document fields
   panCardDoc: z.string().optional(),
   bankAccountDoc: z.string().optional(),
@@ -205,7 +285,7 @@ const employeeSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["salary_asstt"], message: "This Salary Assistant is not allowed for this EPID" });
   }
   if (isLetterEpid(d.epid)) {
-    const pe = validatePayroll({ ...EMPTY_PAYROLL, ...(d as any), uanNo: d.uanNo ?? "", esiNo: d.esiNo ?? "", wageCategory: d.wageCategory ?? "" });
+    const pe = validatePayroll({ ...EMPTY_PAYROLL, ...(d as any), uanNo: d.uanNo ?? "", esiNo: d.esiNo ?? "", wageCategory: d.wageCategory ?? "", fundCode: d.fundCode ?? "", bankName: d.bankName ?? "", bankBranch: d.bankBranch ?? "", ifsc: d.ifsc ?? "" });
     for (const [k, m] of Object.entries(pe)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: m as string });
   }
 });
@@ -266,6 +346,8 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       esiNo: "",
       esiCovered: false,
       masApplicable: false,
+      fundCode: "",
+      bankBranch: "",
       panCardDoc: "",
       bankAccountDoc: "",
       aadharCardDoc: "",
@@ -280,9 +362,9 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
     try {
       const out: any = { ...data };
       if (isLetterEpid(data.epid)) {
-        Object.assign(out, payrollPayload({ ...EMPTY_PAYROLL, ...(data as any), wageCategory: data.wageCategory ?? "", uanNo: data.uanNo ?? "", esiNo: data.esiNo ?? "" }));
+        Object.assign(out, payrollPayload({ ...EMPTY_PAYROLL, ...(data as any), wageCategory: data.wageCategory ?? "", uanNo: data.uanNo ?? "", esiNo: data.esiNo ?? "", fundCode: data.fundCode ?? "", bankName: data.bankName ?? "", bankBranch: data.bankBranch ?? "", ifsc: data.ifsc ?? "" }));
       } else {
-        for (const k of Object.keys(EMPTY_PAYROLL)) delete out[k]; // payroll is for letter EPIDs only
+        for (const k of PAYROLL_ONLY_KEYS) delete out[k]; // payroll is for letter EPIDs only
       }
       await onSubmit(out);
     } catch (error) {
@@ -543,6 +625,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                 esiNo: form.watch("esiNo") ?? "",
                 esiCovered: !!form.watch("esiCovered"),
                 masApplicable: !!form.watch("masApplicable"),
+                fundCode: form.watch("fundCode") ?? "",
+                bankName: form.watch("bankName") ?? "",
+                bankBranch: form.watch("bankBranch") ?? "",
+                ifsc: form.watch("ifsc") ?? "",
               }}
               onChange={(patch) => {
                 for (const [k, v] of Object.entries(patch)) form.setValue(k as any, v as any, { shouldValidate: form.formState.isSubmitted });
@@ -551,9 +637,12 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                 wageCategory: form.formState.errors.wageCategory?.message,
                 uanNo: form.formState.errors.uanNo?.message,
                 esiNo: form.formState.errors.esiNo?.message,
+                fundCode: form.formState.errors.fundCode?.message,
+                ifsc: form.formState.errors.ifsc?.message,
               }}
               disabled={isLoading}
               designation={form.watch("designation")}
+              departmentId={department?.id}
             />
           )}
 
@@ -607,7 +696,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                     )}
                   />
                 )}
-                {showBank && (
+                {showBank && !isLetterEpid(watchedEpid) && (
                   <FormField
                     control={form.control}
                     name="bankName"
@@ -622,7 +711,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                     )}
                   />
                 )}
-                {showBank && (
+                {showBank && !isLetterEpid(watchedEpid) && (
                   <FormField
                     control={form.control}
                     name="ifsc"

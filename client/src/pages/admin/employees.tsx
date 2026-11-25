@@ -1366,6 +1366,9 @@ export default function AdminEmployees() {
                               onChange={(patch) => setPayroll((p) => ({ ...p, ...patch }))}
                               errors={payrollErrors}
                               designation={selectedDesignation}
+                              departmentId={selectedDepartmentId}
+                              // this form's department list uses department-list ids
+                              fundsUrl={selectedDepartmentId ? `/api/admin/payroll/funds-of-department-name/${selectedDepartmentId}` : null}
                             />
                           )}
 
@@ -1407,7 +1410,7 @@ export default function AdminEmployees() {
                                     />
                                   </div>
                                 )}
-                                {showBank && (
+                                {showBank && !isLetterEpid(kindEpid) && (
                                   <div>
                                     <Label htmlFor="bankName">Bank Name <span className="text-xs text-muted-foreground">(optional)</span></Label>
                                     <Input
@@ -1418,7 +1421,7 @@ export default function AdminEmployees() {
                                     />
                                   </div>
                                 )}
-                                {showBank && (
+                                {showBank && !isLetterEpid(kindEpid) && (
                                   <div>
                                     <Label htmlFor="ifsc">IFSC <span className="text-xs text-muted-foreground">(optional)</span></Label>
                                     <Input

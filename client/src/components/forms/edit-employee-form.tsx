@@ -1250,6 +1250,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                 errors={payrollErrors}
                 disabled={isSubmitting}
                 designation={watch("designation")}
+                departmentId={employee.departmentId}
               />
             )}
 
@@ -1367,7 +1368,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                   </>
                 )}
 
-                {showBank && (
+                {showBank && !isLetterEpid(employee.epid) && (
                   <>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Bank Name <span className="text-xs text-slate-400">(optional)</span></label>

@@ -16,14 +16,20 @@ import { db } from "./db";
 import { sessionAdmin } from "./auth";
 import { FUND_STATUSES, canonicalStatus, employeeKindError, isLetterEpid } from "../shared/employeeKind";
 import { sectionOfAdmin, sectionLabel, type SectionKey } from "../shared/sections";
+import { IFSC_RE, yesNo, categoryFromDesignation } from "../shared/wagePayroll";
+import { fundsOfDepartment, type Fund } from "./wagePayroll";
 
 const MAX_ROWS = 2000;
 const SECTION_CODE: Record<Exclude<SectionKey, "salary">, string> = { accounts: "ACC", bill: "BIL", students: "STU" };
 
-type InRow = { epid?: any; name?: any; departmentCode?: any; designationCode?: any; employmentStatus?: any; termExpiry?: any };
+// Required: epid, name, departmentCode, designationCode, employmentStatus, termExpiry.
+// Optional: joiningDate, wageCategory, dealingAssistant, fundCode, bankAccount, bankName, bankBranch, ifsc,
+//           epf, uanNo, esi, esiNo, esiCovered, mas (Yes / No for the switches).
+type InRow = Record<string, any>;
 type OutRow = {
   row: number; epid: string; name: string; ok: boolean; error?: string;
   departmentId?: number; departmentName?: string; designation?: string; employmentStatus?: string; termExpiry?: string; created?: boolean;
+  [extra: string]: any;
 };
 
 const clean = (v: any) => String(v ?? "").replace(/\s+/g, " ").trim();
@@ -37,11 +43,11 @@ export function parseImportDate(v: any): string | null {
   else {
     r = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/);
     if (!r) return null;
-    d = +r[1]; m = +r[2]; y = +r[3]; if (y < 100) y += 2000;
+    d = +r[1]; m = +r[2]; y = +r[3]; if (y < 100) y += y > 50 ? 1900 : 2000; // 88 → 1988, 27 → 2027
   }
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
-  if (y < 2000 || y > 2100) return null;
+  if (y < 1950 || y > 2100) return null;
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -108,6 +114,7 @@ export function registerFundEmployeeImportRoutes(app: Express) {
       const existingByEpid = new Map((existing.rows as any[]).map((r) => [clean(r.epid).toUpperCase(), r]));
       const seen = new Set<string>();
       const today = new Date().toISOString().slice(0, 10);
+      const fundsCache = new Map<number, Fund[]>();
 
       const results: OutRow[] = [];
       for (let i = 0; i < rows.length; i++) {
@@ -148,8 +155,67 @@ export function registerFundEmployeeImportRoutes(app: Express) {
         if (!term) { fail("Term Expiry date is missing or not a valid date (use DD-MM-YYYY)"); continue; }
         out.termExpiry = term;
 
-        const kindErr = employeeKindError({ epid, employmentStatus: status, salary_asstt: dealingAssistant, termExpiry: term }, () => true);
+        // ── Optional columns ─────────────────────────────────────────────
+        // Dealing assistant: the section's code; Accounts may also give OTH
+        const da = clean(r.dealingAssistant).toUpperCase() || dealingAssistant;
+        if (!(section === "accounts" ? ["ACC", "OTH"] : [dealingAssistant]).includes(da)) {
+          fail(`Dealing Assistant must be ${section === "accounts" ? "ACC or OTH" : dealingAssistant}`); continue;
+        }
+        out.dealingAssistant = da;
+
+        const kindErr = employeeKindError({ epid, employmentStatus: status, salary_asstt: da, termExpiry: term }, () => true);
         if (kindErr) { fail(kindErr); continue; }
+
+        // Joining date (else the import date, with a remark)
+        if (clean(r.joiningDate)) {
+          const j = parseImportDate(r.joiningDate);
+          if (!j) { fail("Joining Date is not a valid date (use DD-MM-YYYY)"); continue; }
+          out.joiningDate = j;
+        }
+        // Wage category: given, or from the designation
+        const catText = clean(r.wageCategory);
+        const category = catText ? categoryFromDesignation(catText) : categoryFromDesignation(designation);
+        if (catText && !category) { fail("Wage Category must be Clerical/Skilled, Semi-skilled or Unskilled"); continue; }
+        out.wageCategory = category;
+        // Bank
+        out.bankAccount = clean(r.bankAccount).replace(/\D/g, "") || null;
+        out.bankName = clean(r.bankName).toUpperCase() || null;
+        out.bankBranch = clean(r.bankBranch) || null;
+        const ifsc = clean(r.ifsc).replace(/\s+/g, "").toUpperCase();
+        if (ifsc && !IFSC_RE.test(ifsc)) { fail("IFSC must be 11 characters, e.g. SBIN0001234"); continue; }
+        out.ifsc = ifsc || null;
+        // Fund (Payment Code) — must be one of the department's funds
+        const fundCode = clean(r.fundCode).replace(/\s+/g, "").toUpperCase();
+        if (!fundsCache.has(dept.id)) fundsCache.set(dept.id, await fundsOfDepartment(dept.id));
+        const funds = fundsCache.get(dept.id)!;
+        if (fundCode && !funds.some((f) => f.paymentCode === fundCode)) {
+          fail(`Payment Code ${fundCode} is not a fund of ${dept.name}${funds.length ? ` (funds: ${funds.map((f) => f.paymentCode).join(", ")})` : " (no funds imported for it)"}`); continue;
+        }
+        out.fundCode = fundCode || null;
+        // EPF / ESI / MAS: Yes / No
+        const flag = (v: unknown, label: string): boolean | null | "bad" => {
+          if (!clean(v)) return null;
+          const f = yesNo(v);
+          return f === null ? "bad" : f;
+        };
+        const epf = flag(r.epf, "EPF"), esi = flag(r.esi, "ESI"), esiCovered = flag(r.esiCovered, "ESI covered"), mas = flag(r.mas, "MAS");
+        const bad = [["EPF", epf], ["ESI", esi], ["ESI covered", esiCovered], ["MAS", mas]].find(([, v]) => v === "bad");
+        if (bad) { fail(`${bad[0]} must be Yes or No`); continue; }
+        out.epf = epf === true; out.esi = esi === true; out.esiCovered = esiCovered === true; out.mas = mas === true;
+        const uan = clean(r.uanNo).replace(/\D/g, "");
+        if (uan && uan.length !== 12) { fail("UAN must be 12 digits"); continue; }
+        const esiNo = clean(r.esiNo).replace(/\D/g, "");
+        if (esiNo && esiNo.length !== 10) { fail("ESI number must be 10 digits"); continue; }
+        out.uanNo = uan || null; out.esiNo = esiNo || null;
+        // Not blocking, shown in the preview
+        const warnings: string[] = [];
+        if (!category) warnings.push("wage category not known — set it later");
+        if (out.epf && !out.uanNo) warnings.push("EPF Yes but no UAN");
+        if (out.esi && !out.esiNo) warnings.push("ESI Yes but no ESI number");
+        if (!out.bankAccount || !out.ifsc) warnings.push("bank account / IFSC missing");
+        if (!out.fundCode && funds.length > 1) warnings.push("department has several funds — choose the Payment Code later");
+        if (!out.joiningDate) warnings.push("joining date not given — import date used");
+        out.warnings = warnings;
 
         out.ok = true;
         results.push(out);
@@ -166,9 +232,14 @@ export function registerFundEmployeeImportRoutes(app: Express) {
             const ins = await tx.execute(sql`
               INSERT INTO employees (department_id, epid, name, pan_number, bank_account, aadhar_card, designation,
                 employment_status, pay_level, term_expiry, joining_date, salary_register_no, office_memo_no,
-                joining_shift, salary_asstt, is_active, remarks)
-              SELECT ${deptId}, ${o.epid}, ${o.name}, '', '', '', ${o.designation}, ${o.employmentStatus}, 'L-0',
-                ${o.termExpiry}, ${today}, '', '', 'FN', ${dealingAssistant}, 'active', ${remark}
+                joining_shift, salary_asstt, is_active, remarks,
+                wage_category, epf_applicable, uan_no, esi_applicable, esi_no, esi_covered, mas_applicable,
+                fund_code, bank_name, bank_branch, ifsc)
+              SELECT ${deptId}, ${o.epid}, ${o.name}, '', ${o.bankAccount ?? ""}, '', ${o.designation}, ${o.employmentStatus}, 'L-0',
+                ${o.termExpiry}, ${o.joiningDate ?? today}, '', '', 'FN', ${o.dealingAssistant ?? dealingAssistant}, 'active',
+                ${o.joiningDate ? null : remark},
+                ${o.wageCategory ?? null}, ${!!o.epf}, ${o.uanNo ?? null}, ${!!o.esi}, ${o.esiNo ?? null}, ${!!o.esiCovered}, ${!!o.mas},
+                ${o.fundCode ?? null}, ${o.bankName ?? null}, ${o.bankBranch ?? null}, ${o.ifsc ?? null}
               WHERE NOT EXISTS (SELECT 1 FROM employees WHERE UPPER(TRIM(epid)) = ${o.epid})
               RETURNING id`);
             if (ins.rows.length) { o.created = true; created++; }

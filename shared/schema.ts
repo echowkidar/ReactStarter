@@ -82,6 +82,8 @@ export const employees = pgTable("employees", {
   esiNo: text("esi_no"),
   esiCovered: boolean("esi_covered"),
   masApplicable: boolean("mas_applicable"),
+  fundCode: text("fund_code"),                     // Payment Code of the revolving fund (revolving_funds.payment_code)
+  bankBranch: text("bank_branch"),
 });
 
 export const departmentNames = pgTable("department_names", {
@@ -193,6 +195,8 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     esiNo: z.string().nullable().optional().transform(v => (v ? v : null)),
     esiCovered: z.any().optional().transform(toFlag),
     masApplicable: z.any().optional().transform(toFlag),
+    fundCode: z.string().nullable().optional().transform(v => (v ? v.trim().toUpperCase() : null)),
+    bankBranch: z.string().nullable().optional().transform(v => (v ? v.trim() : null)),
   });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
   id: true,

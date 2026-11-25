@@ -221,7 +221,7 @@ export function validateStatutory(sets: unknown): string | null {
 
 // ── Employee payroll fields (forms send FormData strings) ──────────────────
 
-export const PAYROLL_EMPLOYEE_FIELDS = ["wageCategory", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable"] as const;
+export const PAYROLL_EMPLOYEE_FIELDS = ["wageCategory", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode"] as const;
 
 /** "true" / "on" / "1" → true, "false" / "0" → false, "" / null → null */
 export function toFlag(v: unknown): boolean | null {
@@ -257,8 +257,30 @@ export function normalizePayrollFields(body: Record<string, any>, letterEpid: bo
     if (e && !/^\d{10}$/.test(e)) return "ESI number (IP number) must be 10 digits";
     body.esiNo = e || null;
   }
+  if (has("fundCode")) {
+    const f = String(body.fundCode ?? "").replace(/\s+/g, "").toUpperCase();
+    if (f && !/^[A-Z0-9/-]{3,20}$/.test(f)) return "Payment Code of the fund is not valid";
+    body.fundCode = f || null;
+  }
+  if (has("bankBranch")) body.bankBranch = String(body.bankBranch ?? "").replace(/\s+/g, " ").trim().slice(0, 100) || null;
+  // IFSC: normalised only (old records may hold odd values; the forms and the import check the format)
+  if (has("ifsc")) body.ifsc = String(body.ifsc ?? "").replace(/\s+/g, "").toUpperCase() || null;
   return null;
 }
+
+export const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+/** "Yes" / "Y" / "True" / "1" → true, "No" / "N" / "False" / "0" → false, empty → null (Excel import) */
+export function yesNo(v: unknown): boolean | null {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
+  if (["yes", "y", "true", "1", "on", "haan", "ha"].includes(s)) return true;
+  if (["no", "n", "false", "0", "off", "nahi"].includes(s)) return false;
+  return null;
+}
+
+/** Default printed Payment Head of a fund */
+export const defaultHeadName = (fundName: string) => `Revolving Fund of ${String(fundName || "").trim()}`;
 
 /** Clean a list of sets, sorted by From date */
 export function sortSets<T extends { from: string }>(sets: T[]): T[] {
