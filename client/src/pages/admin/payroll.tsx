@@ -258,6 +258,8 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
   const passed = data?.rolls?.passed || 0;
   const t = data?.totals || {};
   const fileUrl = (name: string) => `${API}/exports/${name}?month=${ym.month}&year=${ym.year}&${sectionQuery(section)}`;
+  // Rolls of any status this month (the Pay Register lists them all, with their status)
+  const anyRoll = Object.values(data?.rolls || {}).reduce((s: number, n: any) => s + (Number(n) || 0), 0);
   const files = [
     { name: "bank.xlsx", label: "Bank payment sheet", icon: Landmark },
     { name: "ecr.txt", label: "EPF ECR (.txt)", icon: FileText },
@@ -275,7 +277,7 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
       <CardContent className="p-4 space-y-3">
         <div>
           <h2 className="font-semibold">Monthly files — {MONTHS[ym.month - 1]} {ym.year}</h2>
-          <p className="text-xs text-slate-500">Files include only rolls passed for payment.</p>
+          <p className="text-xs text-slate-500">The Pay Register lists every roll of the month with its status; the bank, EPF, ESI and liability files include only rolls passed for payment.</p>
         </div>
 
         {isLoading ? (
@@ -321,6 +323,11 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
         )}
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" disabled={isLoading || anyRoll === 0}
+            title="Every employee with Basic, VDA, Gross, EPF, ESI, MAS, total deductions, net payable and employer's share, with totals and a summary per fund (all rolls of the month)"
+            onClick={() => window.open(fileUrl("register.xlsx"), "_blank", "noopener")}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" /> Pay Register (deductions &amp; payments)
+          </Button>
           {files.map((f) => (
             <Button key={f.name} variant="outline" disabled={isLoading || passed === 0}
               onClick={() => window.open(fileUrl(f.name), "_blank", "noopener")}>
@@ -503,7 +510,12 @@ function RollEditor({ id, section, onBack }: { id: number; section: string; onBa
             </>
           )}
           {lines.length > 0 && (
-            <Button variant="outline" onClick={() => window.open(slipsUrl, "_blank", "noopener")}><ReceiptText className="h-4 w-4 mr-2" /> Pay slips (PDF)</Button>
+            <>
+              <Button variant="outline" onClick={() => window.open(slipsUrl, "_blank", "noopener")}><ReceiptText className="h-4 w-4 mr-2" /> Pay slips (PDF)</Button>
+              <Button variant="outline" onClick={() => window.open(`${API}/rolls/${id}/register.xlsx?${sectionQuery(section)}`, "_blank", "noopener")}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" /> Pay Register (Excel)
+              </Button>
+            </>
           )}
         </div>
 

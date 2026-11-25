@@ -798,6 +798,60 @@ export function registerWagePayrollRoutes(app: Express) {
     WHERE w.section = ${section} AND w.month = ${month} AND w.year = ${year} AND w.status = 'passed'
     ORDER BY d.name, l.sno, l.id`)).rows as any[];
 
+  /**
+   * Pay Register: every employee with all components (earnings, deductions, net, employer's
+   * share), a Total row, and a summary per fund (Payment Code).
+   */
+  const registerSheets = (lines: any[]): [string, Record<string, unknown>[]][] => {
+    const STATUS: Record<string, string> = { draft: "Draft", finalised: "Finalised", passed: "Passed" };
+    const rows = lines.map((l, i) => {
+      const days = Number(l.days) || 0;
+      const basicAmt = Math.round(Number(l.basic) * days);
+      return {
+        "S.No.": i + 1, "Department": l.department_name, "Payment Code": l.payment_code || "", "Payment Head": l.head_name || "",
+        "Roll status": STATUS[l.status] || l.status || "",
+        "Emp ID": l.epid, "Name": l.name, "Designation": l.designation || "", "Category": l.category || "",
+        "Basic / day": Number(l.basic), "VDA / day": Number(l.vda), "Days": days,
+        "Basic": basicAmt, "VDA": Number(l.gross) - basicAmt, "Gross Wages": Number(l.gross),
+        "EPF (12%)": Number(l.epf), "ESI (0.75%)": Number(l.esi), "MAS": Number(l.mas),
+        "Total Deductions": Number(l.epf) + Number(l.esi) + Number(l.mas), "Net Payable": Number(l.net),
+        "Employer EPS 8.33%": Number(l.er_eps), "Employer EPF 3.67%": Number(l.er_epf), "EDLI 0.5%": Number(l.er_edli),
+        "EPF Admin 0.5%": Number(l.er_admin), "Employer EPF Total": Number(l.er_epf_total), "Employer ESI 3.25%": Number(l.er_esi),
+        "Total Cost (Gross + Employer share)": Number(l.gross) + Number(l.er_epf_total) + Number(l.er_esi),
+        "UAN": l.uan_no || "", "ESI No.": l.esi_no || "",
+        "Bank": l.bank_name || "", "Branch": l.bank_branch || "", "A/c No.": l.bank_account || "", "IFSC": l.ifsc || "",
+      };
+    });
+    const SUM = ["Days", "Basic", "VDA", "Gross Wages", "EPF (12%)", "ESI (0.75%)", "MAS", "Total Deductions", "Net Payable",
+      "Employer EPS 8.33%", "Employer EPF 3.67%", "EDLI 0.5%", "EPF Admin 0.5%", "Employer EPF Total", "Employer ESI 3.25%",
+      "Total Cost (Gross + Employer share)"];
+    const total = (list: any[]) => Object.fromEntries(SUM.map((k) => [k, list.reduce((s, r) => s + (Number(r[k]) || 0), 0)]));
+    const register = rows.length ? [...rows, { "Name": "TOTAL", ...total(rows) }] : [];
+    const byFund = new Map<string, any[]>();
+    for (const r of rows) {
+      const k = `${r["Department"]}|${r["Payment Code"]}`;
+      byFund.set(k, [...(byFund.get(k) || []), r]);
+    }
+    const summary = [...byFund.values()].map((list) => ({
+      "Department": list[0]["Department"], "Payment Code": list[0]["Payment Code"], "Payment Head": list[0]["Payment Head"],
+      "Roll status": list[0]["Roll status"], "Employees": list.length, ...total(list),
+    }));
+    if (summary.length) summary.push({ "Department": "TOTAL", "Employees": rows.length, ...total(rows) } as any);
+    return [["Pay Register", register], ["Summary by fund", summary]];
+  };
+
+  // Pay Register of one roll (any status)
+  app.get(`${base}/rolls/:id/register.xlsx`, wrap(async (req, res) => {
+    const got = await rollFor(req, res);
+    if (!got) return;
+    const { roll } = got;
+    const lines = (await db.execute(sql`
+      SELECT l.*, ${roll.head_name} AS head_name, ${roll.payment_code} AS payment_code, ${roll.status} AS status,
+             ${roll.department_name} AS department_name
+      FROM wage_roll_lines l WHERE l.roll_id = ${roll.id} ORDER BY l.sno, l.id`)).rows as any[];
+    sendXlsx(res, registerSheets(lines), `pay-register-${roll.payment_code || roll.id}-${roll.year}-${String(roll.month).padStart(2, "0")}.xlsx`);
+  }));
+
   const monthArgs = async (req: Request, res: Response) => {
     const who = await actor(req, res, req.query.section);
     if (!who) return null;
@@ -875,6 +929,20 @@ export function registerWagePayrollRoutes(app: Express) {
       "Emp ID": l.epid, "Department": l.department_name,
     }));
     sendXlsx(res, [["ESI contribution", rows]], `esi-${a.tag}.xlsx`);
+  }));
+
+  // Pay Register of the month: all rolls of this section (with their status), all components
+  app.get(`${base}/exports/register.xlsx`, wrap(async (req, res) => {
+    const a = await monthArgs(req, res);
+    if (!a) return;
+    const lines = (await db.execute(sql`
+      SELECT l.*, w.head_name, w.payment_code, w.status, d.name AS department_name
+      FROM wage_roll_lines l
+      JOIN wage_rolls w ON w.id = l.roll_id
+      LEFT JOIN departments d ON d.id = w.department_id
+      WHERE w.section = ${a.who.section} AND w.month = ${a.month} AND w.year = ${a.year}
+      ORDER BY d.name, w.payment_code NULLS LAST, l.sno, l.id`)).rows as any[];
+    sendXlsx(res, registerSheets(lines), `pay-register-${a.tag}.xlsx`);
   }));
 
   // Employer's liability per payment head (what each fund must hold) + member detail
