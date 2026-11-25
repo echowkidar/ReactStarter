@@ -1144,6 +1144,7 @@ const musterAmt = (n: number | null | undefined) => Math.round(Number(n || 0)).t
 
 const MUSTER_PRINT_CSS = `
   .muster-block + .muster-block { page-break-before: always; break-before: page; }
+  .print-content .muster-section { font-size: 12pt !important; font-weight: 700 !important; }
   .print-content table.muster-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
   .print-content table.muster-table th, .print-content table.muster-table td {
     padding: 3px 3px !important; border: 1px solid #000; font-size: 8pt;
@@ -1196,7 +1197,7 @@ function MusterRoll({ report, muster, isLoading, error, feedbackRemark }: {
             <p className="text-sm font-semibold">
               Payment Head: {b.headName || "________"} &nbsp;|&nbsp; Payment Code: {b.paymentCode || "________"}
             </p>
-            {b.sectionLabel && <p className="text-[10px]">{b.sectionLabel}</p>}
+            {b.sectionLabel && <p className="muster-section text-base font-bold">{b.sectionLabel}</p>}
           </div>
           <div className="overflow-x-auto">
             <table className="muster-table w-full border-collapse text-xs">

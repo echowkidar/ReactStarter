@@ -69,6 +69,9 @@ const PAGE_RULES: Array<{ prefix: string; allowed: (a: AdminAccess) => boolean }
   { prefix: "/admin/tickets", allowed: (a) => a.tickets },
   { prefix: "/admin/notices", allowed: (a) => a.notices },
   { prefix: "/admin/payroll", allowed: (a) => a.payroll },
+  // Salary Section work — not for the Accounts / Bill / Students section logins
+  { prefix: "/admin/lpc", allowed: () => !isSectionLogin() },
+  { prefix: "/admin/claim-forms", allowed: () => !isSectionLogin() },
 ];
 
 export function canOpenAdminPage(path: string, access: AdminAccess = getAdminAccess()): boolean {

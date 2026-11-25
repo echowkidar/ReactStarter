@@ -117,9 +117,10 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
     ...(access.employees ? [{ href: "/admin/employees", label: "Employees", icon: Users, primary: true }] : []),
     { href: "/admin/mailbox", label: "Email", icon: Mail, badge: "email" as const, match: ["/admin/email"] },
     { href: "/admin/documents", label: "Documents", icon: FileImage },
-    { href: "/admin/lpc", label: "LPC", icon: ScrollText },
+    // LPC and Claim Forms belong to the Salary Section: not for Accounts / Bill / Students
+    ...(section === "salary" ? [{ href: "/admin/lpc", label: "LPC", icon: ScrollText }] : []),
     { href: "/admin/dispatch", label: "Dak", icon: Send },
-    { href: "/admin/claim-forms", label: "Claim Forms", icon: FileSignature },
+    ...(section === "salary" ? [{ href: "/admin/claim-forms", label: "Claim Forms", icon: FileSignature }] : []),
     ...(sectionLogin || (canPickSection && section !== "salary") ? [{ href: "/admin/payroll", label: "Payroll", icon: Wallet }] : []),
     ...(access.tickets ? [{ href: "/admin/tickets", label: "Tickets", icon: Ticket, badge: "tickets" as const }] : []),
     ...(access.notices ? [{ href: "/admin/notices", label: "Notices", icon: Megaphone }] : []),

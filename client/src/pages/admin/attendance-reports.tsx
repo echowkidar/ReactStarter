@@ -369,6 +369,17 @@ export default function AttendanceReports() {
     const current = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     return [current];
   });
+  // Opened with no month chosen (e.g. cleared earlier in this tab): nothing would load at all,
+  // so pick the latest month that has reports — once, on opening the page.
+  const autoMonthPicked = useRef(false);
+  useEffect(() => {
+    if (autoMonthPicked.current || availableMonthStrings.length === 0) return;
+    autoMonthPicked.current = true;
+    if (monthFilter.length === 0) {
+      const latest = [...availableMonthStrings].sort((a, b) => monthLabelValue(b) - monthLabelValue(a))[0];
+      if (latest) setMonthFilter([latest]);
+    }
+  }, [availableMonthStrings]); // eslint-disable-line react-hooks/exhaustive-deps
   const [salaryRegisterFilter, setSalaryRegisterFilter] = useTabState<string[]>("register", []);
 
   // Dealing assistant's own salary-register order (saved per admin login)
@@ -2502,9 +2513,11 @@ export default function AttendanceReports() {
                       {paginatedEntries.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={isMultiMonth ? 13 : 12} className="text-center py-8">
-                            {searchTerm || departmentFilter.length > 0 || monthFilter.length > 0 || salaryRegisterFilter.length > 0
-                              ? "No attendance entries found matching your search criteria."
-                              : "No attendance entries found."}
+                            {monthFilter.length === 0
+                              ? "Choose a month in “Filter by month” to see the attendance entries."
+                              : searchTerm || departmentFilter.length > 0 || salaryRegisterFilter.length > 0
+                                ? "No attendance entries found matching your search criteria."
+                                : "No attendance entries found."}
                           </TableCell>
                         </TableRow>
                       ) : (

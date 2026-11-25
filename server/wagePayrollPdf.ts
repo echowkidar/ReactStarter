@@ -218,7 +218,7 @@ export async function buildMusterRollPdf(roll: MusterRoll, lines: MusterLine[]):
         size, font: bold, color: rgb(0.9, 0.9, 0.9), rotate: degrees(32),
       });
     }
-    drawText(page, roll.sectionLabel, MARGIN, y(MARGIN - 8), regular, 7, GREY);
+    drawText(page, roll.sectionLabel, MARGIN, y(MARGIN - 6), bold, 11);
     centredAt(page, "Muster Roll for Daily Wagers", LS.w / 2, y(42), bold, 14);
     centredAt(page, `Name of the Department: ${roll.departmentName} | Wage Month: ${monthYear(roll.month, roll.year)}`, LS.w / 2, y(60), regular, 9.5);
     centredAt(page, `Payment Head: ${roll.headName} | Payment Code: ${roll.paymentCode}`, LS.w / 2, y(74), regular, 9.5);

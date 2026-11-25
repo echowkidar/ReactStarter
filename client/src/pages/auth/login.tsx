@@ -321,7 +321,7 @@ export default function Login() {
               </div>
               <h1 className="text-2xl font-bold tracking-tight">Department Login</h1>
               <p className="text-sm text-muted-foreground mt-0">
-                Welcome to AMU Salary Section
+                Welcome to AMU
               </p>
             </CardHeader>
             <CardContent className="pb-3">
