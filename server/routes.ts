@@ -1901,7 +1901,9 @@ export async function registerRoutes(app: Express) {
         // Only override if this is a document-type error (not an image quality error)
         const hasImageQualityError = (
           msg.includes('blurry') || msg.includes('dark') || msg.includes('blank') ||
-          msg.includes('low resolution') || msg.includes('landscape') ||
+          msg.includes('low resolution') ||
+          // the Muster Roll is meant to be landscape
+          (msg.includes('landscape') && !isMusterRoll) ||
           msg.includes('धुंधल') || msg.includes('खाली')
         );
         const hasValidTxId = data.transaction_id_extracted || data.transaction_id || data.content_checks?.transaction_id;

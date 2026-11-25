@@ -1183,10 +1183,16 @@ function MusterRoll({ report, muster, isLoading, error, feedbackRemark }: {
       {muster.blocks.map((b, bi) => (
         <div key={`${b.section}-${bi}`} className="muster-block mt-4">
           <div className="space-y-1 mb-2">
-            <p className="font-bold text-sm text-center">Muster Roll for Daily Wagers</p>
-            <p className="text-sm font-semibold">
-              Name of the Department: {muster.departmentName || report.department?.name} &nbsp;|&nbsp; Wage Month: {musterMonthLabel(muster)}
-            </p>
+            {/* The first block sits under the report header (title, department, month) — no repeat.
+                Later blocks start on a new page, so they carry the title and department again. */}
+            {bi > 0 && (
+              <>
+                <p className="font-bold text-sm text-center">Muster Roll for Daily Wagers</p>
+                <p className="text-sm font-semibold">
+                  Name of the Department: {muster.departmentName || report.department?.name} &nbsp;|&nbsp; Wage Month: {musterMonthLabel(muster)}
+                </p>
+              </>
+            )}
             <p className="text-sm font-semibold">
               Payment Head: {b.headName || "________"} &nbsp;|&nbsp; Payment Code: {b.paymentCode || "________"}
             </p>
