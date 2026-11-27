@@ -622,13 +622,20 @@ export function registerWagePayrollRoutes(app: Express) {
     const lines = (await db.execute(sql`SELECT * FROM wage_roll_lines WHERE roll_id = ${roll.id} ORDER BY sno, id`)).rows as any[];
     const history = (await db.execute(sql`SELECT action, detail, by_user, at FROM wage_roll_log WHERE roll_id = ${roll.id} ORDER BY id`)).rows;
     const rates: RatesSnapshot = roll.rates;
-    // Section staff of the department with no attendance this month (information only)
-    const noAttendance = await db.execute(sql`
-      SELECT e.epid, e.name FROM employees e
+    // Section staff of this roll's fund with no attendance this month (information only);
+    // staff paid from the department's other funds belong to those rolls, not this one
+    const candidates = (await db.execute(sql`
+      SELECT e.id, e.epid, e.name, e.fund_code FROM employees e
       WHERE e.department_id = ${roll.department_id} AND e.is_active = 'active' AND ${LETTER}
         AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${codesSql(roll.section)})
         AND e.id NOT IN (SELECT employee_id FROM wage_roll_lines WHERE roll_id = ${roll.id})
-      ORDER BY e.epid`);
+      ORDER BY e.epid`)).rows as any[];
+    const deptFunds = await fundsOfDepartment(Number(roll.department_id));
+    const withAttendance = await attendanceDays(Number(roll.department_id), Number(roll.month), Number(roll.year));
+    const noAttendance = { rows: candidates
+      .filter((e) => fundKey(effectiveFund(e, deptFunds)) === String(roll.fund_code ?? ""))
+      .filter((e) => !withAttendance.has(Number(e.id)))
+      .map((e) => ({ epid: e.epid, name: e.name })) };
     const withChecks = lines.map((l) => ({ ...l, warnings: lineWarnings(l, roll.month, roll.year, rates) }));
     res.json({
       roll: { ...roll, sectionLabel: sectionLabel(roll.section) },

@@ -320,7 +320,7 @@ function AmountTable({ title, rows, totalLabel, total, accent }: {
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t border-slate-200 bg-slate-50/70">
+          <tr className="border-t border-slate-200 bg-slate-50">
             <td className="px-4 py-2.5 font-semibold text-slate-900">{totalLabel}</td>
             <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">{amt(total)}</td>
           </tr>
@@ -378,7 +378,7 @@ function SlipDocument({ slip }: { slip: Slip }) {
         </section>
 
         {/* Employee details */}
-        <dl className="ws-keep grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-4 sm:p-5">
+        <dl className="ws-keep grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-4 sm:p-5">
           <Field label="Employee ID" value={slip.epid} />
           <div className="col-span-2">
             <Field label="Pay Period" value={
@@ -408,7 +408,7 @@ function SlipDocument({ slip }: { slip: Slip }) {
         </section>
 
         {/* Net pay */}
-        <section className="ws-keep relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white">
+        <section className="ws-keep relative overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50">
           <span className="absolute inset-y-0 left-0 w-1.5 bg-emerald-600" />
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 py-4 pl-6 pr-5">
             <div className="flex-1 min-w-[200px]">
@@ -443,7 +443,7 @@ function SlipDocument({ slip }: { slip: Slip }) {
       </div>
 
       {/* Footer */}
-      <footer className="flex flex-wrap items-end gap-x-6 gap-y-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4 text-[12px] text-slate-600 sm:px-8">
+      <footer className="flex flex-wrap items-end gap-x-6 gap-y-2 border-t border-slate-200 bg-slate-50 px-5 py-4 text-[12px] text-slate-600 sm:px-8">
         <div className="flex-1 min-w-[220px] space-y-0.5">
           <p>Authorised for issue by the <span className="font-semibold text-slate-800">{section}</span>.</p>
           <p>Any error must be brought to the notice of the {section}.</p>

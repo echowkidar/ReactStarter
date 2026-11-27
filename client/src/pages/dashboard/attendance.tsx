@@ -1791,7 +1791,7 @@ export default function Attendance() {
 
 
   // Check attendance status for deadline alert (MOVED FROM BELOW)
-  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean; allowReportingEmployees?: boolean; hasFundStaff?: boolean; fundReportOpen?: boolean; allowFundSupplementary?: boolean }>({
+  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; allowSupplementaryReport: boolean; daysRemaining: number; isPastDeadline: boolean; allowReportingEmployees?: boolean; hasFundStaff?: boolean; hasRegularStaff?: boolean; fundReportOpen?: boolean; allowFundSupplementary?: boolean }>({
     queryKey: [`/api/departments/${department?.id}/attendance-status`],
     enabled: !!department?.id,
   });
@@ -2365,6 +2365,8 @@ export default function Attendance() {
   const currentDay = today.getDate();
   const daysRemaining = deadlineDay - currentDay;
   const isPastDeadline = currentDay > deadlineDay;
+  // A department with only Revolving Funds staff has no regular report and no 15th-day deadline
+  const hasRegularStaff = attendanceStatus?.hasRegularStaff !== false;
 
 
   // Check attendance status for department
@@ -2448,8 +2450,20 @@ export default function Attendance() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 p-6">
-          {/* Countdown Banner - show when permitted OR when deadline has passed */}
-          {(attendanceStatus?.permitted !== false || isPastDeadline) && (
+          {/* Department with only Revolving Funds staff: their own due date, not the 15th */}
+          {!hasRegularStaff && (
+            <div className="mb-4 p-3 rounded-lg flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-900">
+              <span className="text-xl">📅</span>
+              <span className="font-medium">
+                {FUND_REPORT_LABEL} attendance of {new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })} is due by the last day of the month
+                ({new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()} {new Date().toLocaleString('en-IN', { month: 'long' })}).
+                {attendanceStatus?.fundReportOpen ? " The report is open." : " The report opens when the Accounts / Bill / Students Section opens it."}
+              </span>
+            </div>
+          )}
+
+          {/* Countdown Banner (regular staff, 15th) - show when permitted OR when deadline has passed */}
+          {hasRegularStaff && (attendanceStatus?.permitted !== false || isPastDeadline) && (
             <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${isPastDeadline
               ? (attendanceStatus?.permitted === true
                 ? 'bg-green-100 border border-green-300 text-green-800'  // Permitted after deadline - show green
@@ -2527,7 +2541,7 @@ export default function Attendance() {
               <div className="flex flex-wrap items-center gap-2">
               <DialogTrigger asChild>
                 <Button
-                  className="bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
+                  className={`bg-gradient-to-r from-primary to-primary/90 hover:to-primary ${hasRegularStaff ? "" : "hidden"}`}
                   disabled={!canCreateReport}
                   onClick={() => {
                     if (!editingReportId) {
