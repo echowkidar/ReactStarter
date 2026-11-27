@@ -205,6 +205,10 @@ export default function AdminDashboard() {
       if (monthFilter.length === 1) {
         const [y, mIdx] = monthFilter[0].split('-').map(Number);
         url = `/api/admin/attendance?month=${mIdx + 1}&year=${y}`;
+      } else if (monthFilter.length > 1) {
+        // Several months: ask only for those (loading every report of all years is too heavy)
+        const periods = monthFilter.map((k) => { const [y, mIdx] = k.split('-').map(Number); return `${y}-${mIdx + 1}`; });
+        url = `/api/admin/attendance?periods=${encodeURIComponent(periods.join(','))}`;
       }
       const response = await apiRequest("GET", url);
       return response.json();

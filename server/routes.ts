@@ -3729,14 +3729,21 @@ export async function registerRoutes(app: Express) {
   // Admin reports route â€” OPTIMIZED: batch-load departments & employees
   app.get("/api/admin/attendance", async (req, res) => {
     try {
-      const { month, year, months } = req.query;
+      const { month, year, months, periods } = req.query;
 
       const reports = await storage.getAllAttendanceReports();
 
       // Filter reports by month/year BEFORE doing any heavy work
       let filteredReports = reports;
 
-      if (months) {
+      // Several months at once: periods=2026-11,2026-10 (year-month, month 1-12)
+      const periodList = typeof periods === "string"
+        ? periods.split(",").map((p) => p.trim().match(/^(\d{4})-(\d{1,2})$/)).filter(Boolean).map((m) => `${Number(m![1])}-${Number(m![2])}`)
+        : [];
+      if (periodList.length) {
+        const wanted = new Set(periodList);
+        filteredReports = reports.filter(r => wanted.has(`${r.year}-${r.month}`));
+      } else if (months) {
         const monthsList = (months as string).split(',').map(m => m.trim());
         filteredReports = reports.filter(r => {
           const date = new Date(r.year, r.month - 1);
