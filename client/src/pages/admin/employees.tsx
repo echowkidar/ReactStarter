@@ -908,6 +908,13 @@ export default function AdminEmployees() {
         title: "Success",
         description: "Employee deleted successfully"
       });
+    },
+    onError: (error: any) => {
+      // e.g. 409: the employee has attendance / payroll records → disable instead
+      const raw = String(error?.message || "");
+      let message = raw.replace(/^\d{3}:\s*/, "");
+      try { message = JSON.parse(message).message || message; } catch { /* plain text */ }
+      toast({ variant: "destructive", title: "Employee not deleted", description: message || "Failed to delete employee" });
     }
   });
 

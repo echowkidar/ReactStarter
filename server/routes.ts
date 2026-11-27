@@ -2619,8 +2619,26 @@ export async function registerRoutes(app: Express) {
   // === End: New Endpoint ===
 
   app.delete("/api/employees/:id", verifyAdminSession, async (req, res) => {
-    await storage.deleteEmployee(Number(req.params.id));
-    res.status(204).send();
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid employee" });
+    // An employee with any attendance or payroll record is never deleted (deleting would erase
+    // that attendance from the departments' reports for good) — disable instead.
+    try {
+      const used = (await db.execute(sql`
+        SELECT (SELECT COUNT(*)::int FROM attendance_entries WHERE employee_id = ${id}) AS attendance,
+               (SELECT COUNT(*)::int FROM wage_roll_lines WHERE employee_id = ${id}) AS payroll`)).rows[0] as any;
+      if (Number(used?.attendance) > 0 || Number(used?.payroll) > 0) {
+        const what = [Number(used.attendance) > 0 && "attendance", Number(used.payroll) > 0 && "payroll"].filter(Boolean).join(" and ");
+        return res.status(409).json({
+          message: `This employee has ${what} records, so the employee cannot be deleted. Disable the employee instead (with the reason and date); the old records stay safe.`,
+        });
+      }
+      await storage.deleteEmployee(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error(`[DELETE /api/employees/${id}]`, error);
+      res.status(500).json({ message: "Failed to delete employee" });
+    }
   });
 
   // Attendance routes
