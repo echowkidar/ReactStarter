@@ -16,7 +16,7 @@ const MAX_ROWS = 2000;
 const REQUIRED = ["epid", "name", "departmentCode", "designationCode", "employmentStatus", "termExpiry"] as const;
 const OPTIONAL = [
   "joiningDate", "wageCategory", "dealingAssistant", "fundCode", "bankAccount", "bankName", "bankBranch", "ifsc",
-  "epf", "uanNo", "esi", "esiNo", "esiCovered", "mas",
+  "epf", "uanNo", "esi", "esiNo", "esiCovered", "mas", "monthlyFixed",
 ] as const;
 type Key = (typeof REQUIRED)[number] | (typeof OPTIONAL)[number];
 type InRow = Record<Key, string>;
@@ -33,14 +33,14 @@ const COLUMN_LABEL: Record<Key, string> = {
   employmentStatus: "Employment Status", termExpiry: "Term Expiry",
   joiningDate: "Joining Date", wageCategory: "Wage Category", dealingAssistant: "Dealing Assistant", fundCode: "Payment Code",
   bankAccount: "Bank Account No.", bankName: "Bank Name", bankBranch: "Bank Branch", ifsc: "IFSC",
-  epf: "EPF", uanNo: "UAN", esi: "ESI", esiNo: "ESI No.", esiCovered: "ESI Covered", mas: "MAS",
+  epf: "EPF", uanNo: "UAN", esi: "ESI", esiNo: "ESI No.", esiCovered: "ESI Covered", mas: "MAS", monthlyFixed: "Monthly Fixed Wages",
 };
 const ALL_KEYS: Key[] = [...REQUIRED, ...OPTIONAL];
 const HEADERS = ALL_KEYS.map((k) => COLUMN_LABEL[k]);
 const EXAMPLE: Record<Key, string> = {
   epid: "R0001", name: "EXAMPLE NAME", departmentCode: "", designationCode: "ODW", employmentStatus: "Revolving Fund", termExpiry: "31-03-2027",
   joiningDate: "01-04-2024", wageCategory: "Unskilled", dealingAssistant: "", fundCode: "", bankAccount: "123456789012", bankName: "SBI",
-  bankBranch: "Main Branch", ifsc: "SBIN0001234", epf: "Yes", uanNo: "", esi: "No", esiNo: "", esiCovered: "No", mas: "Yes",
+  bankBranch: "Main Branch", ifsc: "SBIN0001234", epf: "Yes", uanNo: "", esi: "No", esiNo: "", esiCovered: "No", mas: "Yes", monthlyFixed: "",
 };
 
 const norm = (s: any) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -65,6 +65,7 @@ const COLUMN_ALIASES: Record<Key, string[]> = {
   esiNo: ["esino", "esinumber", "esicno", "esic"],
   esiCovered: ["esicovered", "esicoverage"],
   mas: ["mas", "masyesno", "masapplicable"],
+  monthlyFixed: ["monthlyfixed", "monthlyfixedwages", "fixedmonthlywages", "fixedmonthly", "fixedwages", "monthlywages"],
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");

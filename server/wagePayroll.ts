@@ -166,6 +166,7 @@ type LineRow = Record<string, any>;
 function computeLine(line: LineRow, rates: RatesSnapshot): LineRow {
   const r = calculateLine({
     basic: Number(line.basic), vda: Number(line.vda), days: Number(line.days),
+    monthlyFixed: line.monthly_fixed == null ? null : Number(line.monthly_fixed), daysInMonth: Number(line.days_in_month) || undefined,
     epf: !!line.epf_on, esi: !!line.esi_on, esiCovered: !!line.esi_covered, mas: !!line.mas_on,
   }, rates.statutory);
   return {
@@ -173,6 +174,15 @@ function computeLine(line: LineRow, rates: RatesSnapshot): LineRow {
     gross: r.gross, epf_base: r.epfBase, epf: r.epf, esi_base: r.esiBase, esi: r.esi, mas: r.mas, net: r.net,
     er_eps: r.erEps, er_epf: r.erEpf, er_edli: r.erEdli, er_admin: r.erAdmin, er_epf_total: r.erEpfTotal, er_esi: r.erEsi,
   };
+}
+
+/** Rate columns of a new line: the employee's fixed monthly wages, else the category's day rate */
+function rateColumns(e: any, rates: RatesSnapshot, month: number, year: number) {
+  const fixed = Number(e.wage_monthly_fixed) || 0;
+  const category = e.wage_category || categoryFromDesignation(e.designation);
+  if (fixed > 0) return { category, basic: 0, vda: 0, monthly_fixed: fixed, days_in_month: daysInMonth(month, year) };
+  const rate = rateOf(category, rates);
+  return { category, basic: rate.basic, vda: rate.vda, monthly_fixed: null, days_in_month: daysInMonth(month, year) };
 }
 
 function rateOf(category: string | null, rates: RatesSnapshot) {
@@ -220,12 +230,10 @@ async function buildLines(departmentId: number, section: FundSection, fundCode: 
       AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${codesSql(section)})
     ORDER BY e.sort_order, e.epid`)).rows as any[];
   return emps.filter((e) => fundKey(effectiveFund(e, funds)) === fundCode).map((e, i) => {
-    const category = e.wage_category || categoryFromDesignation(e.designation);
-    const rate = rateOf(category, rates);
     const d = days.get(Number(e.id)) || 0;
     return computeLine({
       employee_id: Number(e.id), sno: i + 1, epid: e.epid, name: e.name, designation: e.designation,
-      category, basic: rate.basic, vda: rate.vda, days: d, attendance_days: d, adjust_reason: null,
+      ...rateColumns(e, rates, month, year), days: d, attendance_days: d, adjust_reason: null,
       epf_on: e.epf_applicable === true, esi_on: e.esi_applicable === true, esi_covered: e.esi_covered === true,
       mas_on: e.mas_applicable === true,
       uan_no: e.uan_no || null, esi_no: e.esi_no || null,
@@ -240,12 +248,14 @@ async function insertLines(tx: any, rollId: number, lines: LineRow[]) {
     await tx.execute(sql`
       INSERT INTO wage_roll_lines (roll_id, employee_id, sno, epid, name, designation, category, basic, vda, days,
         attendance_days, adjust_reason, epf_on, esi_on, esi_covered, mas_on, gross, epf_base, epf, esi_base, esi, mas, net,
-        er_eps, er_epf, er_edli, er_admin, er_epf_total, er_esi, uan_no, esi_no, bank_account, bank_name, ifsc, bank_branch)
+        er_eps, er_epf, er_edli, er_admin, er_epf_total, er_esi, uan_no, esi_no, bank_account, bank_name, ifsc, bank_branch,
+        monthly_fixed, days_in_month)
       VALUES (${rollId}, ${l.employee_id}, ${l.sno}, ${l.epid}, ${l.name}, ${l.designation}, ${l.category}, ${l.basic}, ${l.vda},
         ${l.days}, ${l.attendance_days}, ${l.adjust_reason}, ${l.epf_on}, ${l.esi_on}, ${l.esi_covered}, ${l.mas_on},
         ${l.gross}, ${l.epf_base}, ${l.epf}, ${l.esi_base}, ${l.esi}, ${l.mas}, ${l.net},
         ${l.er_eps}, ${l.er_epf}, ${l.er_edli}, ${l.er_admin}, ${l.er_epf_total}, ${l.er_esi},
-        ${l.uan_no}, ${l.esi_no}, ${l.bank_account}, ${l.bank_name}, ${l.ifsc}, ${l.bank_branch ?? null})`);
+        ${l.uan_no}, ${l.esi_no}, ${l.bank_account}, ${l.bank_name}, ${l.ifsc}, ${l.bank_branch ?? null},
+        ${l.monthly_fixed ?? null}, ${l.days_in_month ?? null})`);
   }
 }
 
@@ -266,7 +276,7 @@ async function log(tx: any, rollId: number, action: string, by: string, detail?:
 /** Checks shown on the roll. `block` ones stop Finalise. */
 function lineWarnings(l: LineRow, month: number, year: number, rates: RatesSnapshot) {
   const w: { code: string; text: string; block?: boolean }[] = [];
-  if (!l.category) w.push({ code: "no_category", text: "Wage category missing — set it in the employee record", block: true });
+  if (!l.category && !(Number(l.monthly_fixed) > 0)) w.push({ code: "no_category", text: "Wage category missing — set it in the employee record", block: true });
   if (Number(l.days) > daysInMonth(month, year)) w.push({ code: "too_many_days", text: "More days than the month has", block: true });
   if (Number(l.days) !== Number(l.attendance_days ?? l.days) && !String(l.adjust_reason || "").trim())
     w.push({ code: "no_reason", text: "Days differ from the attendance — give a reason", block: true });
@@ -331,10 +341,8 @@ export async function musterOfReport(reportId: number) {
     const sKey = section === "salary" ? "unassigned" : section;
     const fund = effectiveFund(e, funds);
     const key = `${sKey}|${fundKey(fund)}`; // one Muster Roll per section + fund (Payment Code)
-    const category = e.wage_category || categoryFromDesignation(e.designation);
-    const rate = rateOf(category, rates);
     const line = computeLine({
-      epid: e.epid, name: e.name, designation: e.designation, category, basic: rate.basic, vda: rate.vda,
+      epid: e.epid, name: e.name, designation: e.designation, ...rateColumns(e, rates, Number(rep.month), Number(rep.year)),
       days: days.get(Number(e.id)) || 0, epf_on: e.epf_applicable === true, esi_on: e.esi_applicable === true,
       esi_covered: e.esi_covered === true, mas_on: e.mas_applicable === true,
     }, rates);
@@ -344,9 +352,10 @@ export async function musterOfReport(reportId: number) {
     };
     b.lines.push({
       sno: b.lines.length + 1, epid: line.epid, name: line.name, designation: line.designation,
-      category, basic: Number(line.basic), vda: Number(line.vda), days: line.days,
+      category: line.category, basic: Number(line.basic), vda: Number(line.vda), days: line.days,
+      monthlyFixed: line.monthly_fixed ?? null,
       gross: line.gross, epf: line.epf, esi: line.esi, mas: line.mas, net: line.net,
-      missingCategory: !category,
+      missingCategory: !line.category && !line.monthly_fixed,
     });
     blocks.set(key, b);
   }
@@ -766,6 +775,7 @@ export function registerWagePayrollRoutes(app: Express) {
       printedAt: nowIst(), totals: { ...totalsOf(lines) } as any,
     }, lines.map((l) => ({
       sno: l.sno, epid: l.epid, name: l.name, designation: l.designation, basic: Number(l.basic), vda: Number(l.vda),
+      monthlyFixed: l.monthly_fixed == null ? null : Number(l.monthly_fixed),
       days: Number(l.days), gross: l.gross, epf: l.epf, esi: l.esi, mas: l.mas, net: l.net,
     })));
     sendPdf(res, bytes, `muster-roll-${roll.payment_code || roll.id}-${roll.year}-${String(roll.month).padStart(2, "0")}.pdf`, req.query.download === "1");
@@ -856,11 +866,13 @@ export function registerWagePayrollRoutes(app: Express) {
     const STATUS: Record<string, string> = { draft: "Draft", finalised: "Finalised", passed: "Passed" };
     const rows = lines.map((l, i) => {
       const days = Number(l.days) || 0;
-      const basicAmt = Math.round(Number(l.basic) * days);
+      const fixed = Number(l.monthly_fixed) || 0;
+      const basicAmt = fixed > 0 ? Number(l.gross) : Math.round(Number(l.basic) * days);
       return {
         "S.No.": i + 1, "Department": l.department_name, "Payment Code": l.payment_code || "", "Payment Head": l.head_name || "",
         "Roll status": STATUS[l.status] || l.status || "",
         "Emp ID": l.epid, "Name": l.name, "Designation": l.designation || "", "Category": l.category || "",
+        "Monthly Fixed": fixed > 0 ? fixed : "",
         "Basic / day": Number(l.basic), "VDA / day": Number(l.vda), "Days": days,
         "Basic": basicAmt, "VDA": Number(l.gross) - basicAmt, "Gross Wages": Number(l.gross),
         "EPF (12%)": Number(l.epf), "ESI (0.75%)": Number(l.esi), "MAS": Number(l.mas),
@@ -1177,7 +1189,7 @@ export function registerWagePayrollRoutes(app: Express) {
   };
   const historySelect = (where: any, limit: number, offset: number) => sql`
     SELECT l.id AS line_id, w.id AS roll_id, w.month, w.year, w.status, w.page_no, w.passed_on, w.head_name, w.payment_code,
-           d.name AS department_name, l.epid, l.name, l.designation, l.category, l.days, l.basic, l.vda,
+           d.name AS department_name, l.epid, l.name, l.designation, l.category, l.days, l.basic, l.vda, l.monthly_fixed,
            l.gross, l.epf, l.esi, l.mas, l.net, l.er_epf_total, l.er_esi, l.uan_no, l.esi_no,
            l.bank_account, l.bank_name, l.ifsc, c.cheque_no, c.cheque_date,
            EXISTS (SELECT 1 FROM wage_slip_release r WHERE r.section = w.section AND r.month = w.month AND r.year = w.year) AS released
@@ -1241,7 +1253,7 @@ export function registerWagePayrollRoutes(app: Express) {
     const data = rows.map((l) => ({
       "Month": `${MON[l.month]} ${l.year}`, "Emp ID": l.epid, "Name": l.name, "Designation": l.designation || "",
       "Department": l.department_name || "", "Payment Code": l.payment_code || "", "Payment Head": l.head_name || "",
-      "Days": +l.days, "Rate/day": +l.basic + +l.vda, "Gross": +l.gross, "EPF": +l.epf, "ESI": +l.esi, "MAS": +l.mas,
+      "Days": +l.days, "Rate": Number(l.monthly_fixed) > 0 ? `${Number(l.monthly_fixed)} per month` : +l.basic + +l.vda, "Gross": +l.gross, "EPF": +l.epf, "ESI": +l.esi, "MAS": +l.mas,
       "Total Deductions": +l.epf + +l.esi + +l.mas, "Net": +l.net, "Employer EPF": +l.er_epf_total, "Employer ESI": +l.er_esi,
       "UAN": l.uan_no || "", "ESI No.": l.esi_no || "", "Bank": l.bank_name || "", "Account No.": l.bank_account || "", "IFSC": l.ifsc || "",
       "Cheque No.": l.cheque_no || "", "Cheque Date": l.cheque_date ? fmtDmy(isoDate(l.cheque_date)) : "",

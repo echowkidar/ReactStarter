@@ -108,3 +108,17 @@ test("settings validation", () => {
   assert.match(validateWageRates([{ from: "x" }])!, /From date/);
   assert.match(validateStatutory([{ ...S, rounding: "down" }])!, /Rounding/);
 });
+
+test("fixed monthly wages: full month pays the full amount, fewer days pro rata", () => {
+  const base = { basic: 0, vda: 0, epf: true, esi: false, mas: false, monthlyFixed: 18000, daysInMonth: 30 };
+  const full = calculateLine({ ...base, days: 30 }, S);
+  assert.equal(full.gross, 18000);
+  assert.equal(full.epf, 2160); // 12% of 18,000
+  assert.equal(full.ratePerDay, 600);
+  const part = calculateLine({ ...base, days: 28 }, S);
+  assert.equal(part.gross, 16800); // 18,000 × 28 / 30
+  // 31-day month, 30 days worked: 18,000 × 30 / 31 = 17,419.35 → rounded up
+  assert.equal(calculateLine({ ...base, days: 30, daysInMonth: 31 }, S).gross, 17420);
+  // no fixed amount → day rate as before
+  assert.equal(calculateLine({ ...base, monthlyFixed: null, basic: 437, vda: 267, days: 10 }, S).gross, 7040);
+});

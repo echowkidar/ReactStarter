@@ -122,6 +122,8 @@ export type LineInput = {
   esi: boolean;               // ESI applies
   esiCovered?: boolean;       // already covered in the current ESI contribution period
   mas: boolean;               // MAS member
+  monthlyFixed?: number | null; // fixed wages per month: replaces basic + VDA per day
+  daysInMonth?: number;       // needed with monthlyFixed (pro rata for fewer days)
 };
 
 export type LineResult = {
@@ -146,8 +148,12 @@ export type LineResult = {
 
 export function calculateLine(input: LineInput, s: StatutorySet): LineResult {
   const days = Math.max(0, Number(input.days) || 0);
-  const ratePaise = toPaise(input.basic) + toPaise(input.vda);
-  const grossPaise = ratePaise * days;
+  const fixed = Number(input.monthlyFixed) || 0;
+  const dim = Math.max(1, Number(input.daysInMonth) || 30);
+  const fixedPaise = toPaise(fixed);
+  // Fixed monthly wages: the full amount for the full month, pro rata for fewer days
+  const ratePaise = fixed > 0 ? Math.round(fixedPaise / dim) : toPaise(input.basic) + toPaise(input.vda);
+  const grossPaise = fixed > 0 ? (days >= dim ? fixedPaise : Math.round((fixedPaise * days) / dim)) : ratePaise * days;
   const gross = rupees(grossPaise, s.rounding);
   const grossP = gross * 100;
 
@@ -221,7 +227,7 @@ export function validateStatutory(sets: unknown): string | null {
 
 // ── Employee payroll fields (forms send FormData strings) ──────────────────
 
-export const PAYROLL_EMPLOYEE_FIELDS = ["wageCategory", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode"] as const;
+export const PAYROLL_EMPLOYEE_FIELDS = ["wageCategory", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode", "wageMonthlyFixed"] as const;
 
 /** "true" / "on" / "1" → true, "false" / "0" → false, "" / null → null */
 export function toFlag(v: unknown): boolean | null {
@@ -261,6 +267,14 @@ export function normalizePayrollFields(body: Record<string, any>, letterEpid: bo
     const f = String(body.fundCode ?? "").replace(/\s+/g, "").toUpperCase();
     if (f && !/^[A-Z0-9/-]{3,20}$/.test(f)) return "Payment Code of the fund is not valid";
     body.fundCode = f || null;
+  }
+  if (has("wageMonthlyFixed")) {
+    const raw = String(body.wageMonthlyFixed ?? "").replace(/[,\s₹]/g, "");
+    if (raw) {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 1 || n > 1000000) return "Monthly fixed wages must be an amount from 1 to 10,00,000";
+      body.wageMonthlyFixed = String(Math.round(n * 100) / 100);
+    } else body.wageMonthlyFixed = null;
   }
   if (has("bankBranch")) body.bankBranch = String(body.bankBranch ?? "").replace(/\s+/g, " ").trim().slice(0, 100) || null;
   // IFSC: normalised only (old records may hold odd values; the forms and the import check the format)

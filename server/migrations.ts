@@ -883,7 +883,8 @@ export async function runMigrations() {
           passed_at TIMESTAMPTZ
         );
       `);
-      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_wage_rolls_main ON wage_rolls (department_id, section, year, month) WHERE kind = 'main'`);
+      // (the first unique index per department + section + month was replaced by uq_wage_rolls_main_fund below;
+      // it must not be re-created on start-up, as one department can now have a roll per fund)
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS wage_roll_lines (
           id SERIAL PRIMARY KEY,
@@ -964,6 +965,13 @@ export async function runMigrations() {
       await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_wage_rolls_main_fund ON wage_rolls (department_id, section, COALESCE(fund_code, ''), year, month) WHERE kind = 'main'`);
       await db.execute(sql`DROP INDEX IF EXISTS uq_wage_rolls_main`);
       await db.execute(sql`ALTER TABLE wage_roll_lines ADD COLUMN IF NOT EXISTS bank_branch TEXT`);
+      // Staff on fixed monthly wages (instead of the category's day rate); snapshot on the roll line
+      await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS wage_monthly_fixed NUMERIC(12,2)`);
+      await db.execute(sql`
+        ALTER TABLE wage_roll_lines
+          ADD COLUMN IF NOT EXISTS monthly_fixed NUMERIC(12,2),
+          ADD COLUMN IF NOT EXISTS days_in_month INTEGER;
+      `);
       // Cheques: one per section + month + fund (Payment Code) + bank branch (IFSC)
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS wage_cheques (

@@ -10,6 +10,7 @@ export type MusterRoll = {
 };
 export type MusterLine = {
   sno: number; epid: string; name: string; designation: string | null; basic: number; vda: number; days: number;
+  monthlyFixed?: number | null; // fixed wages per month (Basic column shows it "p.m.", VDA "-")
   gross: number; epf: number; esi: number; mas: number; net: number;
 };
 export type WageSlip = {
@@ -21,6 +22,7 @@ export type WageSlip = {
   bankAccount?: string | null;
   chequeNo?: string | null; chequeDate?: string | null; // YYYY-MM-DD
   periods?: { from: string; to: string; days: number }[]; // attendance periods, DD-MM-YYYY
+  monthlyFixed?: number | null; daysInMonth?: number | null; // fixed monthly wages (instead of a day rate)
 };
 
 const BLACK = rgb(0, 0, 0);
@@ -259,7 +261,8 @@ export async function buildMusterRollPdf(roll: MusterRoll, lines: MusterLine[]):
       drawText(page, l.epid, xs[1] + 3, y(base), regular, FS);
       r.nameL.forEach((ln, k) => drawText(page, ln, xs[2] + 3, y(base + k * LH), regular, FS));
       r.desL.forEach((ln, k) => drawText(page, ln, xs[3] + 3, y(base + k * LH), regular, FS));
-      const nums = [formatINR(l.basic, 2), formatINR(l.vda, 2), formatINR(l.days, Number.isInteger(l.days) ? 0 : 1), formatINR(l.gross), formatINR(l.epf), formatINR(l.esi), formatINR(l.mas), formatINR(l.net)];
+      const fixedPm = Number(l.monthlyFixed) > 0;
+      const nums = [fixedPm ? `${formatINR(Number(l.monthlyFixed))} p.m.` : formatINR(l.basic, 2), fixedPm ? "-" : formatINR(l.vda, 2), formatINR(l.days, Number.isInteger(l.days) ? 0 : 1), formatINR(l.gross), formatINR(l.epf), formatINR(l.esi), formatINR(l.mas), formatINR(l.net)];
       nums.forEach((v, k) => rightAt(page, v, xs[4 + k + 1] - 4, y(base), regular, FS));
       top += r.h;
       page.drawLine({ start: { x: xs[0], y: y(top) }, end: { x: xs[12], y: y(top) }, thickness: LINE, color: BLACK });
@@ -400,7 +403,9 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   if (periods.length > 1) periodLines.push(`Total: ${dayTxt(s.days)} days`);
   const rows: { label: string; lines: string[]; span: number }[][] = [
     [{ label: "Employee ID", lines: [s.epid], span: 1 }, { label: "Pay Period", lines: periodLines, span: 2 }],
-    [{ label: "Rate per Day (Rs.)", lines: [amt(rate)], span: 1 }, { label: "Salary Register", lines: [s.salaryRegisterNo || "-"], span: 1 },
+    [Number(s.monthlyFixed) > 0
+      ? { label: "Monthly Rate (Rs.)", lines: [amt(Number(s.monthlyFixed))], span: 1 }
+      : { label: "Rate per Day (Rs.)", lines: [amt(rate)], span: 1 }, { label: "Salary Register", lines: [s.salaryRegisterNo || "-"], span: 1 },
      { label: "PAN", lines: [s.panNumber || "-"], span: 1 }],
     [{ label: "UAN", lines: [s.uanNo || "-"], span: 1 }, { label: "ESI No.", lines: [s.esiNo || "-"], span: 1 }],
   ];
@@ -425,9 +430,10 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   const tGap = 16, tW = (CW - tGap) / 2;
   const basicAmt = Math.round(s.basic * s.days * 100) / 100;
   const vdaAmt = Math.round(s.vda * s.days * 100) / 100;
-  const earn: [string, string][] = [
-    [`Basic (${amt(s.basic)} x ${dayTxt(s.days)} days)`, amt(basicAmt)], [`VDA (${amt(s.vda)} x ${dayTxt(s.days)} days)`, amt(vdaAmt)],
-  ];
+  const dimTxt = Number(s.daysInMonth) || lastDay;
+  const earn: [string, string][] = Number(s.monthlyFixed) > 0
+    ? [[`Fixed Wages (${dayTxt(s.days)} of ${dimTxt} days)`, amt(s.gross)]]
+    : [[`Basic (${amt(s.basic)} x ${dayTxt(s.days)} days)`, amt(basicAmt)], [`VDA (${amt(s.vda)} x ${dayTxt(s.days)} days)`, amt(vdaAmt)]];
   const ded: [string, string][] = [["EPF", amt(s.epf)], ["ESI", amt(s.esi)], ["MAS", amt(s.mas)]];
   const nRows = Math.max(earn.length, ded.length);
   const th = drawTable(c, M, top, tW, "EARNINGS", earn, nRows, "Gross Earnings", amt(s.gross));

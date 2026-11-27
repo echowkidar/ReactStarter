@@ -29,6 +29,7 @@ const salaryAssistantOptions: ComboboxOption[] = salaryAssistantsData as Combobo
 // ── Wages payroll fields (letter EPIDs only) — shared with the Edit and Admin forms ──
 export type PayrollValue = {
   wageCategory: string;
+  wageMonthlyFixed: string;
   epfApplicable: boolean;
   uanNo: string;
   esiApplicable: boolean;
@@ -42,10 +43,10 @@ export type PayrollValue = {
 };
 
 /** Keys that belong to the payroll block only (removed for numeric EPIDs). bankName / ifsc are normal fields too, so they are not listed. */
-export const PAYROLL_ONLY_KEYS = ["wageCategory", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode", "bankBranch"] as const;
+export const PAYROLL_ONLY_KEYS = ["wageCategory", "wageMonthlyFixed", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode", "bankBranch"] as const;
 
 export const EMPTY_PAYROLL: PayrollValue = {
-  wageCategory: "", epfApplicable: false, uanNo: "", esiApplicable: false, esiNo: "", esiCovered: false, masApplicable: false,
+  wageCategory: "", wageMonthlyFixed: "", epfApplicable: false, uanNo: "", esiApplicable: false, esiNo: "", esiCovered: false, masApplicable: false,
   fundCode: "", bankName: "", bankBranch: "", ifsc: "",
 };
 
@@ -55,6 +56,7 @@ export function payrollFromEmployee(emp: any): PayrollValue {
   const flag = (v: any) => v === true || v === "true" || v === 1 || v === "1";
   return {
     wageCategory: String(pick("wageCategory", "wage_category") ?? ""),
+    wageMonthlyFixed: (() => { const n = Number(pick("wageMonthlyFixed", "wage_monthly_fixed")); return Number.isFinite(n) && n > 0 ? String(n) : ""; })(),
     epfApplicable: flag(pick("epfApplicable", "epf_applicable")),
     uanNo: String(pick("uanNo", "uan_no") ?? ""),
     esiApplicable: flag(pick("esiApplicable", "esi_applicable")),
@@ -72,6 +74,7 @@ export function payrollFromEmployee(emp: any): PayrollValue {
 export function validatePayroll(v: PayrollValue): Partial<Record<keyof PayrollValue, string>> {
   const e: Partial<Record<keyof PayrollValue, string>> = {};
   if (!v.wageCategory) e.wageCategory = "Wage Category is required";
+  if (v.wageMonthlyFixed.trim() && !(Number(v.wageMonthlyFixed) >= 1 && Number(v.wageMonthlyFixed) <= 1000000)) e.wageMonthlyFixed = "Monthly fixed wages must be an amount from 1 to 10,00,000";
   if (v.epfApplicable && v.uanNo.trim() && !/^\d{12}$/.test(v.uanNo.trim())) e.uanNo = "UAN must be 12 digits";
   if (v.esiApplicable && v.esiNo.trim() && !/^\d{10}$/.test(v.esiNo.trim())) e.esiNo = "ESI number must be 10 digits";
   if (v.fundCode.trim() && !/^[A-Za-z0-9]{3,20}$/.test(v.fundCode.trim())) e.fundCode = "Payment Code must be 3-20 letters/digits";
@@ -83,6 +86,7 @@ export function validatePayroll(v: PayrollValue): Partial<Record<keyof PayrollVa
 export function payrollPayload(v: PayrollValue) {
   return {
     wageCategory: v.wageCategory,
+    wageMonthlyFixed: v.wageMonthlyFixed.trim(),
     epfApplicable: v.epfApplicable,
     uanNo: v.epfApplicable ? v.uanNo.trim() : "",
     esiApplicable: v.esiApplicable,
@@ -143,6 +147,14 @@ export function WagePayrollFields({ value, onChange, errors = {}, disabled, desi
             </SelectContent>
           </Select>
           {errors.wageCategory && <p className={errCls}>{errors.wageCategory}</p>}
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Monthly fixed wages (₹)</label>
+          <Input type="number" min={0} step={1} value={value.wageMonthlyFixed} disabled={disabled} className={inputCls}
+            placeholder="Leave empty for daily rate" data-testid="input-wage-monthly-fixed"
+            onChange={(e) => onChange({ wageMonthlyFixed: e.target.value })} />
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Only for staff on a fixed monthly amount. Full month = full amount; fewer days are paid pro rata.</p>
+          {errors.wageMonthlyFixed && <p className={errCls}>{errors.wageMonthlyFixed}</p>}
         </div>
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Fund (Payment Code)</label>
@@ -254,6 +266,7 @@ const employeeSchema = z.object({
   salary_asstt: z.string().min(1, "Salary Assistant is required"),
   // Wages payroll (letter EPIDs only)
   wageCategory: z.string().optional(),
+  wageMonthlyFixed: z.string().optional(),
   epfApplicable: z.boolean().optional(),
   uanNo: z.string().optional(),
   esiApplicable: z.boolean().optional(),
@@ -285,7 +298,7 @@ const employeeSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["salary_asstt"], message: "This Salary Assistant is not allowed for this EPID" });
   }
   if (isLetterEpid(d.epid)) {
-    const pe = validatePayroll({ ...EMPTY_PAYROLL, ...(d as any), uanNo: d.uanNo ?? "", esiNo: d.esiNo ?? "", wageCategory: d.wageCategory ?? "", fundCode: d.fundCode ?? "", bankName: d.bankName ?? "", bankBranch: d.bankBranch ?? "", ifsc: d.ifsc ?? "" });
+    const pe = validatePayroll({ ...EMPTY_PAYROLL, ...(d as any), uanNo: d.uanNo ?? "", esiNo: d.esiNo ?? "", wageCategory: d.wageCategory ?? "", wageMonthlyFixed: d.wageMonthlyFixed ?? "", fundCode: d.fundCode ?? "", bankName: d.bankName ?? "", bankBranch: d.bankBranch ?? "", ifsc: d.ifsc ?? "" });
     for (const [k, m] of Object.entries(pe)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: m as string });
   }
 });
@@ -340,6 +353,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       salaryRegisterNo: "",
       salary_asstt: "",
       wageCategory: "",
+      wageMonthlyFixed: "",
       epfApplicable: false,
       uanNo: "",
       esiApplicable: false,
@@ -362,7 +376,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
     try {
       const out: any = { ...data };
       if (isLetterEpid(data.epid)) {
-        Object.assign(out, payrollPayload({ ...EMPTY_PAYROLL, ...(data as any), wageCategory: data.wageCategory ?? "", uanNo: data.uanNo ?? "", esiNo: data.esiNo ?? "", fundCode: data.fundCode ?? "", bankName: data.bankName ?? "", bankBranch: data.bankBranch ?? "", ifsc: data.ifsc ?? "" }));
+        Object.assign(out, payrollPayload({ ...EMPTY_PAYROLL, ...(data as any), wageCategory: data.wageCategory ?? "", wageMonthlyFixed: data.wageMonthlyFixed ?? "", uanNo: data.uanNo ?? "", esiNo: data.esiNo ?? "", fundCode: data.fundCode ?? "", bankName: data.bankName ?? "", bankBranch: data.bankBranch ?? "", ifsc: data.ifsc ?? "" }));
       } else {
         for (const k of PAYROLL_ONLY_KEYS) delete out[k]; // payroll is for letter EPIDs only
       }
@@ -619,6 +633,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
             <WagePayrollFields
               value={{
                 wageCategory: form.watch("wageCategory") ?? "",
+                wageMonthlyFixed: form.watch("wageMonthlyFixed") ?? "",
                 epfApplicable: !!form.watch("epfApplicable"),
                 uanNo: form.watch("uanNo") ?? "",
                 esiApplicable: !!form.watch("esiApplicable"),
@@ -635,6 +650,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
               }}
               errors={{
                 wageCategory: form.formState.errors.wageCategory?.message,
+                wageMonthlyFixed: form.formState.errors.wageMonthlyFixed?.message,
                 uanNo: form.formState.errors.uanNo?.message,
                 esiNo: form.formState.errors.esiNo?.message,
                 fundCode: form.formState.errors.fundCode?.message,

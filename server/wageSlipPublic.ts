@@ -167,6 +167,8 @@ export async function slipOfLine(lineId: number, employeeId?: number): Promise<W
     chequeNo: l.cheque_no || null,
     chequeDate: l.cheque_date || null,          // YYYY-MM-DD
     periods,                                     // [{ from: DD-MM-YYYY, to, days }]
+    monthlyFixed: l.monthly_fixed == null ? null : Number(l.monthly_fixed),
+    daysInMonth: Number(l.days_in_month) || new Date(Number(l.year), Number(l.month), 0).getDate(),
   };
 }
 

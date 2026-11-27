@@ -511,7 +511,8 @@ export function ReportDetailsView({ reportId, onClose, extraActions }: {
         const headerRow = rows.length - 2;
         b.lines.forEach(l => rows.push([
           l.sno, l.epid, l.name, l.designation || '',
-          l.missingCategory ? '' : musterRate(l.basic), l.missingCategory ? '' : musterRate(l.vda),
+          l.missingCategory ? '' : Number(l.monthlyFixed) > 0 ? `${musterRate(Number(l.monthlyFixed))} p.m.` : musterRate(l.basic),
+          l.missingCategory ? '' : Number(l.monthlyFixed) > 0 ? '-' : musterRate(l.vda),
           l.days, Math.round(l.gross || 0), Math.round(l.epf || 0), Math.round(l.esi || 0), Math.round(l.mas || 0), Math.round(l.net || 0),
         ]));
         rows.push(['', '', 'Total', '', '', '', b.totals.days, Math.round(b.totals.gross || 0), Math.round(b.totals.epf || 0), Math.round(b.totals.esi || 0), Math.round(b.totals.mas || 0), Math.round(b.totals.net || 0)]);
@@ -1126,6 +1127,7 @@ interface MusterLine {
   sno: number; epid: string; name: string; designation?: string; category?: string;
   basic: number; vda: number; days: number; gross: number; epf: number; esi: number; mas: number; net: number;
   missingCategory?: boolean;
+  monthlyFixed?: number | null; // fixed wages per month
 }
 interface MusterBlock {
   section: string; sectionLabel: string; headName: string; paymentCode: string;
@@ -1232,8 +1234,8 @@ function MusterRoll({ report, muster, isLoading, error, feedbackRemark }: {
                       )}
                     </td>
                     <td className={td}>{l.designation}</td>
-                    <td className={`${td} mnum text-right`}>{l.missingCategory ? "" : musterRate(l.basic)}</td>
-                    <td className={`${td} mnum text-right`}>{l.missingCategory ? "" : musterRate(l.vda)}</td>
+                    <td className={`${td} mnum text-right`}>{l.missingCategory ? "" : Number(l.monthlyFixed) > 0 ? `${musterRate(Number(l.monthlyFixed))} p.m.` : musterRate(l.basic)}</td>
+                    <td className={`${td} mnum text-right`}>{l.missingCategory ? "" : Number(l.monthlyFixed) > 0 ? "-" : musterRate(l.vda)}</td>
                     <td className={`${td} mnum text-right`}>{l.days}</td>
                     <td className={`${td} mnum text-right`}>{musterAmt(l.gross)}</td>
                     <td className={`${td} mnum text-right`}>{musterAmt(l.epf)}</td>

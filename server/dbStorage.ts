@@ -986,7 +986,7 @@ export class DbStorage implements IStorage {
       'salary_asstt', 'isActive', 'disableReason', 'disableWefDate', 'remarks',
       'departmentId', // Added departmentId to tracking
       // Wages payroll fields (letter-EPID staff)
-      'wageCategory', 'epfApplicable', 'uanNo', 'esiApplicable', 'esiNo', 'esiCovered', 'masApplicable', 'fundCode', 'bankBranch'
+      'wageCategory', 'epfApplicable', 'uanNo', 'esiApplicable', 'esiNo', 'esiCovered', 'masApplicable', 'fundCode', 'bankBranch', 'wageMonthlyFixed'
     ];
 
     // Helper to normalize values for comparison

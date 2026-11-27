@@ -24,7 +24,8 @@ const SECTION_CODE: Record<Exclude<SectionKey, "salary">, string> = { accounts: 
 
 // Required: epid, name, departmentCode, designationCode, employmentStatus, termExpiry.
 // Optional: joiningDate, wageCategory, dealingAssistant, fundCode, bankAccount, bankName, bankBranch, ifsc,
-//           epf, uanNo, esi, esiNo, esiCovered, mas (Yes / No for the switches).
+//           epf, uanNo, esi, esiNo, esiCovered, mas (Yes / No for the switches),
+//           monthlyFixed (fixed monthly wages in rupees, 1 to 10,00,000; empty = paid at the category daily rate).
 type InRow = Record<string, any>;
 type OutRow = {
   row: number; epid: string; name: string; ok: boolean; error?: string;
@@ -177,6 +178,13 @@ export function registerFundEmployeeImportRoutes(app: Express) {
         const category = catText ? categoryFromDesignation(catText) : categoryFromDesignation(designation);
         if (catText && !category) { fail("Wage Category must be Clerical/Skilled, Semi-skilled or Unskilled"); continue; }
         out.wageCategory = category;
+        // Monthly fixed wages (optional)
+        const fixedText = clean(r.monthlyFixed).replace(/[,₹\s]/g, "");
+        if (fixedText) {
+          const fixed = Number(fixedText);
+          if (!Number.isFinite(fixed) || fixed < 1 || fixed > 1000000) { fail("Monthly fixed wages must be an amount from 1 to 10,00,000"); continue; }
+          out.monthlyFixed = fixed.toFixed(2);
+        }
         // Bank
         out.bankAccount = clean(r.bankAccount).replace(/\D/g, "") || null;
         out.bankName = clean(r.bankName).toUpperCase() || null;
@@ -234,12 +242,12 @@ export function registerFundEmployeeImportRoutes(app: Express) {
                 employment_status, pay_level, term_expiry, joining_date, salary_register_no, office_memo_no,
                 joining_shift, salary_asstt, is_active, remarks,
                 wage_category, epf_applicable, uan_no, esi_applicable, esi_no, esi_covered, mas_applicable,
-                fund_code, bank_name, bank_branch, ifsc)
+                fund_code, bank_name, bank_branch, ifsc, wage_monthly_fixed)
               SELECT ${deptId}, ${o.epid}, ${o.name}, '', ${o.bankAccount ?? ""}, '', ${o.designation}, ${o.employmentStatus}, 'L-0',
                 ${o.termExpiry}, ${o.joiningDate ?? today}, '', '', 'FN', ${o.dealingAssistant ?? dealingAssistant}, 'active',
                 ${o.joiningDate ? null : remark},
                 ${o.wageCategory ?? null}, ${!!o.epf}, ${o.uanNo ?? null}, ${!!o.esi}, ${o.esiNo ?? null}, ${!!o.esiCovered}, ${!!o.mas},
-                ${o.fundCode ?? null}, ${o.bankName ?? null}, ${o.bankBranch ?? null}, ${o.ifsc ?? null}
+                ${o.fundCode ?? null}, ${o.bankName ?? null}, ${o.bankBranch ?? null}, ${o.ifsc ?? null}, ${o.monthlyFixed ?? null}::numeric
               WHERE NOT EXISTS (SELECT 1 FROM employees WHERE UPPER(TRIM(epid)) = ${o.epid})
               RETURNING id`);
             if (ins.rows.length) { o.created = true; created++; }

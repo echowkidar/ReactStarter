@@ -647,7 +647,7 @@ function RollEditor({ id, section, onBack }: { id: number; section: string; onBa
             <TableHeader>
               <TableRow>
                 <TableHead>S.No.</TableHead><TableHead>EPID</TableHead><TableHead>Name</TableHead><TableHead>Designation</TableHead>
-                <TableHead>Category</TableHead><TableHead className="text-right">Rate / day</TableHead><TableHead>Days</TableHead>
+                <TableHead>Category</TableHead><TableHead className="text-right">Rate</TableHead><TableHead>Days</TableHead>
                 <TableHead className="text-right">Gross</TableHead><TableHead>EPF</TableHead><TableHead>ESI</TableHead><TableHead>MAS</TableHead>
                 <TableHead className="text-right">Net</TableHead><TableHead>Checks</TableHead>
               </TableRow>
@@ -792,9 +792,11 @@ function LineRow({ line, editable, statutory, rollId, section, slipUrl, onSaved,
   useEffect(() => { setDays(String(line.days)); setReason(line.adjust_reason || ""); }, [line.days, line.adjust_reason]);
 
   // Instant preview from the inputs while the save is in flight
+  const fixedPm = Number(line.monthly_fixed) || 0;
+  const rateIn = { basic: Number(line.basic), vda: Number(line.vda), monthlyFixed: fixedPm || null, daysInMonth: Number(line.days_in_month) || undefined };
   const flags = { epf: !!line.epf_on, esi: !!line.esi_on, esiCovered: !!line.esi_covered, mas: !!line.mas_on };
   const preview = (over: Partial<typeof flags> & { days?: number } = {}) =>
-    calculateLine({ basic: Number(line.basic), vda: Number(line.vda), days: over.days ?? (Number(days) || 0), ...flags, ...over }, statutory);
+    calculateLine({ ...rateIn, days: over.days ?? (Number(days) || 0), ...flags, ...over }, statutory);
   const shown = saving || Number(days) !== Number(line.days) ? preview() : null;
   const gross = shown ? shown.gross : Number(line.gross);
   const epf = shown ? shown.epf : Number(line.epf);
@@ -824,12 +826,12 @@ function LineRow({ line, editable, statutory, rollId, section, slipUrl, onSaved,
     const d = Math.round(Number(days));
     if (!Number.isFinite(d) || d < 0) { setDays(String(line.days)); return; }
     if (d === Number(line.days) && reason.trim() === String(line.adjust_reason || "").trim()) return;
-    const p = calculateLine({ basic: Number(line.basic), vda: Number(line.vda), days: d, ...flags }, statutory);
+    const p = calculateLine({ ...rateIn, days: d, ...flags }, statutory);
     patch({ days: d, adjustReason: reason }, { days: d, adjust_reason: reason, gross: p.gross, epf: p.epf, esi: p.esi, mas: p.mas, net: p.net });
   };
   const toggle = (field: "epfOn" | "esiOn" | "esiCovered" | "masOn", col: string, v: boolean) => {
     const f = { ...flags, epf: field === "epfOn" ? v : flags.epf, esi: field === "esiOn" ? v : flags.esi, esiCovered: field === "esiCovered" ? v : flags.esiCovered, mas: field === "masOn" ? v : flags.mas };
-    const p = calculateLine({ basic: Number(line.basic), vda: Number(line.vda), days: Number(line.days), ...f }, statutory);
+    const p = calculateLine({ ...rateIn, days: Number(line.days), ...f }, statutory);
     patch({ [field]: v }, { [col]: v, gross: p.gross, epf: p.epf, esi: p.esi, mas: p.mas, net: p.net });
   };
 
@@ -842,8 +844,10 @@ function LineRow({ line, editable, statutory, rollId, section, slipUrl, onSaved,
       <TableCell className="font-mono">{line.epid}</TableCell>
       <TableCell className="whitespace-nowrap">{line.name}</TableCell>
       <TableCell className="text-xs">{line.designation}</TableCell>
-      <TableCell className="text-xs">{line.category ? WAGE_CATEGORY_LABELS[line.category as WageCategory] || line.category : <span className="text-red-700">Missing</span>}</TableCell>
-      <TableCell className="text-right tabular-nums">{inr(rate)}</TableCell>
+      <TableCell className="text-xs">{line.category ? WAGE_CATEGORY_LABELS[line.category as WageCategory] || line.category : fixedPm > 0 ? "Fixed monthly" : <span className="text-red-700">Missing</span>}</TableCell>
+      <TableCell className="text-right tabular-nums">
+        {fixedPm > 0 ? <span title="Fixed monthly wages, paid pro rata for fewer days">{inr(fixedPm)}<span className="block text-[11px] text-slate-500">per month</span></span> : inr(rate)}
+      </TableCell>
       <TableCell className="min-w-[110px]">
         {editable ? (
           <div className="space-y-1">

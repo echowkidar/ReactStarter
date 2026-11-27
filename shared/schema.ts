@@ -84,6 +84,7 @@ export const employees = pgTable("employees", {
   masApplicable: boolean("mas_applicable"),
   fundCode: text("fund_code"),                     // Payment Code of the revolving fund (revolving_funds.payment_code)
   bankBranch: text("bank_branch"),
+  wageMonthlyFixed: numeric("wage_monthly_fixed", { precision: 12, scale: 2 }), // fixed wages per month (else category day rate)
 });
 
 export const departmentNames = pgTable("department_names", {
@@ -197,6 +198,7 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     masApplicable: z.any().optional().transform(toFlag),
     fundCode: z.string().nullable().optional().transform(v => (v ? v.trim().toUpperCase() : null)),
     bankBranch: z.string().nullable().optional().transform(v => (v ? v.trim() : null)),
+    wageMonthlyFixed: z.any().optional().transform(v => (v === undefined ? undefined : v === null || String(v).trim() === "" ? null : String(v).trim())),
   });
 export const insertAttendanceReportSchema = createInsertSchema(attendanceReports).omit({
   id: true,

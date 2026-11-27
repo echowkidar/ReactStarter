@@ -27,6 +27,7 @@ type Slip = {
   bankAccount?: string | null;
   chequeNo?: string | null; chequeDate?: string | null; // YYYY-MM-DD
   periods?: { from: string; to: string; days: number }[]; // attendance periods, DD-MM-YYYY
+  monthlyFixed?: number | null; daysInMonth?: number | null; // fixed monthly wages
 };
 
 const MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -387,7 +388,9 @@ function SlipDocument({ slip }: { slip: Slip }) {
               </span>
             } />
           </div>
-          <Field label="Rate per Day" value={`₹${amt(rate)}`} mono />
+          {Number(slip.monthlyFixed) > 0
+            ? <Field label="Monthly Rate" value={`₹${amt(slip.monthlyFixed)}`} mono />
+            : <Field label="Rate per Day" value={`₹${amt(rate)}`} mono />}
           <Field label="Salary Register" value={dash(slip.salaryRegisterNo)} />
           <Field label="PAN" value={dash(slip.panNumber)} />
           <Field label="UAN" value={dash(slip.uanNo)} mono />
@@ -397,7 +400,9 @@ function SlipDocument({ slip }: { slip: Slip }) {
         {/* Earnings and deductions */}
         <section className="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
           <AmountTable title="Earnings" accent="blue" totalLabel="Gross Earnings" total={slip.gross}
-            rows={[[`Basic Wages (₹${amt(slip.basic)} × ${days} days)`, slip.basic * slip.days], [`VDA (₹${amt(slip.vda)} × ${days} days)`, slip.vda * slip.days]]} />
+            rows={Number(slip.monthlyFixed) > 0
+              ? [[`Fixed Wages (₹${amt(slip.monthlyFixed)} p.m., ${days} of ${slip.daysInMonth || lastDay} days)`, slip.gross]]
+              : [[`Basic Wages (₹${amt(slip.basic)} × ${days} days)`, slip.basic * slip.days], [`VDA (₹${amt(slip.vda)} × ${days} days)`, slip.vda * slip.days]]} />
           <AmountTable title="Deductions" accent="rose" totalLabel="Total Deductions" total={slip.totalDeductions}
             rows={[["EPF (Employee)", slip.epf], ["ESI (Employee)", slip.esi], ["MAS", slip.mas]]} />
         </section>
