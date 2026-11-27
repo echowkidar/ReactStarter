@@ -1142,6 +1142,115 @@ export function registerWagePayrollRoutes(app: Express) {
     sendXlsx(res, [["By payment head", [...heads.values()]], ["Employees", detail]], `employer-liability-${a.tag}.xlsx`);
   }));
 
+  // ── Employee history / search across all months of the section ──────────
+  // Filters: q + field (all | epid | name | account | uan | esi), departmentId, paymentCode,
+  // status (draft | finalised | passed), from / to (YYYY-MM).
+  const historyFilter = async (req: Request, res: Response) => {
+    const who = await actor(req, res, req.query.section);
+    if (!who) return null;
+    const conds = [sql`w.section = ${who.section}`];
+    const q = String(req.query.q ?? "").trim().slice(0, 60);
+    const field = String(req.query.field ?? "all");
+    if (q) {
+      const like = `%${q.replace(/[\\%_]/g, (m) => "\\" + m)}%`;
+      const digits = q.replace(/\D/g, "");
+      const byEpid = sql`l.epid ILIKE ${like}`;
+      const byName = sql`l.name ILIKE ${like}`;
+      const byAcct = digits ? sql`l.bank_account LIKE ${"%" + digits + "%"}` : sql`false`;
+      const byUan = digits ? sql`l.uan_no LIKE ${"%" + digits + "%"}` : sql`false`;
+      const byEsi = digits ? sql`l.esi_no LIKE ${"%" + digits + "%"}` : sql`false`;
+      const pick: Record<string, any> = { epid: byEpid, name: byName, account: byAcct, uan: byUan, esi: byEsi };
+      conds.push(pick[field] ?? sql`(${byEpid} OR ${byName} OR ${byAcct} OR ${byUan} OR ${byEsi})`);
+    }
+    const dept = int(req.query.departmentId);
+    if (Number.isInteger(dept) && dept > 0) conds.push(sql`w.department_id = ${dept}`);
+    const code = String(req.query.paymentCode ?? "").trim();
+    if (code === "-") conds.push(sql`COALESCE(w.payment_code, '') = ''`);
+    else if (code) conds.push(sql`w.payment_code = ${code}`);
+    const status = String(req.query.status ?? "");
+    if (["draft", "finalised", "passed"].includes(status)) conds.push(sql`w.status = ${status}`);
+    const ym = (v: unknown) => { const m = /^(\d{4})-(\d{2})$/.exec(String(v ?? "")); return m ? +m[1] * 12 + +m[2] : null; };
+    const from = ym(req.query.from), to = ym(req.query.to);
+    if (from) conds.push(sql`(w.year * 12 + w.month) >= ${from}`);
+    if (to) conds.push(sql`(w.year * 12 + w.month) <= ${to}`);
+    return { who, where: sql.join(conds, sql` AND `) };
+  };
+  const historySelect = (where: any, limit: number, offset: number) => sql`
+    SELECT l.id AS line_id, w.id AS roll_id, w.month, w.year, w.status, w.page_no, w.passed_on, w.head_name, w.payment_code,
+           d.name AS department_name, l.epid, l.name, l.designation, l.category, l.days, l.basic, l.vda,
+           l.gross, l.epf, l.esi, l.mas, l.net, l.er_epf_total, l.er_esi, l.uan_no, l.esi_no,
+           l.bank_account, l.bank_name, l.ifsc, c.cheque_no, c.cheque_date,
+           EXISTS (SELECT 1 FROM wage_slip_release r WHERE r.section = w.section AND r.month = w.month AND r.year = w.year) AS released
+    FROM wage_roll_lines l
+    JOIN wage_rolls w ON w.id = l.roll_id
+    LEFT JOIN departments d ON d.id = w.department_id
+    LEFT JOIN wage_cheques c ON c.section = w.section AND c.month = w.month AND c.year = w.year
+      AND c.payment_code = UPPER(TRIM(COALESCE(w.payment_code, ''))) AND c.ifsc = UPPER(TRIM(COALESCE(l.ifsc, '')))
+    WHERE ${where}
+    ORDER BY w.year DESC, w.month DESC, d.name, w.payment_code NULLS LAST, l.sno, l.id
+    LIMIT ${limit} OFFSET ${offset}`;
+
+  // Filter choices: departments and payment heads that have rolls in this section
+  app.get(`${base}/history/options`, wrap(async (req, res) => {
+    const who = await actor(req, res, req.query.section);
+    if (!who) return;
+    const depts = (await db.execute(sql`
+      SELECT DISTINCT d.id, d.name FROM wage_rolls w JOIN departments d ON d.id = w.department_id
+      WHERE w.section = ${who.section} ORDER BY d.name`)).rows;
+    const heads = (await db.execute(sql`
+      SELECT DISTINCT COALESCE(w.payment_code, '') AS payment_code, w.head_name, w.department_id
+      FROM wage_rolls w WHERE w.section = ${who.section} ORDER BY 1`)).rows;
+    res.json({
+      departments: depts.map((d: any) => ({ id: d.id, name: d.name })),
+      heads: heads.map((h: any) => ({ paymentCode: h.payment_code, headName: h.head_name, departmentId: h.department_id })),
+    });
+  }));
+
+  app.get(`${base}/history`, wrap(async (req, res) => {
+    const f = await historyFilter(req, res);
+    if (!f) return;
+    const pageSize = 50;
+    const page = Math.max(1, int(req.query.page) || 1);
+    const rows = (await db.execute(historySelect(f.where, pageSize, (page - 1) * pageSize))).rows as any[];
+    const t = (await db.execute(sql`
+      SELECT COUNT(*)::int AS lines, COUNT(DISTINCT l.employee_id)::int AS employees,
+             COALESCE(SUM(l.gross), 0)::bigint AS gross, COALESCE(SUM(l.epf + l.esi + l.mas), 0)::bigint AS deductions,
+             COALESCE(SUM(l.net), 0)::bigint AS net, COALESCE(SUM(l.er_epf_total + l.er_esi), 0)::bigint AS employer
+      FROM wage_roll_lines l JOIN wage_rolls w ON w.id = l.roll_id WHERE ${f.where}`)).rows[0] as any;
+    res.json({
+      page, pageSize,
+      totals: { lines: +t.lines, employees: +t.employees, gross: +t.gross, deductions: +t.deductions, net: +t.net, employer: +t.employer },
+      rows: rows.map((l) => ({
+        lineId: l.line_id, rollId: l.roll_id, month: l.month, year: l.year, status: l.status, released: !!l.released,
+        pageNo: l.page_no, passedOn: l.passed_on ? isoDate(l.passed_on) : null,
+        departmentName: l.department_name, paymentCode: l.payment_code, headName: l.head_name,
+        epid: l.epid, name: l.name, designation: l.designation, category: l.category, days: +l.days,
+        gross: +l.gross, epf: +l.epf, esi: +l.esi, mas: +l.mas, deductions: +l.epf + +l.esi + +l.mas, net: +l.net,
+        employerEpf: +l.er_epf_total, employerEsi: +l.er_esi, uanNo: l.uan_no, esiNo: l.esi_no,
+        bankAccount: l.bank_account, bankName: l.bank_name, ifsc: l.ifsc,
+        chequeNo: l.cheque_no, chequeDate: l.cheque_date ? isoDate(l.cheque_date) : null,
+      })),
+    });
+  }));
+
+  app.get(`${base}/history.xlsx`, wrap(async (req, res) => {
+    const f = await historyFilter(req, res);
+    if (!f) return;
+    const rows = (await db.execute(historySelect(f.where, 20000, 0))).rows as any[];
+    const MON = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const data = rows.map((l) => ({
+      "Month": `${MON[l.month]} ${l.year}`, "Emp ID": l.epid, "Name": l.name, "Designation": l.designation || "",
+      "Department": l.department_name || "", "Payment Code": l.payment_code || "", "Payment Head": l.head_name || "",
+      "Days": +l.days, "Rate/day": +l.basic + +l.vda, "Gross": +l.gross, "EPF": +l.epf, "ESI": +l.esi, "MAS": +l.mas,
+      "Total Deductions": +l.epf + +l.esi + +l.mas, "Net": +l.net, "Employer EPF": +l.er_epf_total, "Employer ESI": +l.er_esi,
+      "UAN": l.uan_no || "", "ESI No.": l.esi_no || "", "Bank": l.bank_name || "", "Account No.": l.bank_account || "", "IFSC": l.ifsc || "",
+      "Cheque No.": l.cheque_no || "", "Cheque Date": l.cheque_date ? fmtDmy(isoDate(l.cheque_date)) : "",
+      "Status": l.status, "Pay slip released": l.released ? "Yes" : "No", "Page No.": l.page_no || "",
+      "Passed On": l.passed_on ? fmtDmy(isoDate(l.passed_on)) : "",
+    }));
+    sendXlsx(res, [["Payroll history", data]], `payroll-history-${sectionLabel(f.who.section).split(" ")[0].toLowerCase()}.xlsx`);
+  }));
+
   // Delete a draft roll
   app.delete(`${base}/rolls/:id`, wrap(async (req, res) => {
     const got = await rollFor(req, res);

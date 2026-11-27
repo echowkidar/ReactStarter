@@ -21,6 +21,7 @@ import { getAdminAccess, useAdminSection } from "@/lib/admin-access";
 import { sectionLabel } from "@shared/sections";
 import { calculateLine, WAGE_CATEGORY_LABELS, type StatutorySet, type WageCategory } from "@shared/wagePayroll";
 import { PayrollSettingsDialog, sectionQuery } from "@/components/admin/payroll-settings";
+import { PayrollHistory } from "@/components/admin/payroll-history";
 
 const API = "/api/admin/payroll";
 
@@ -89,6 +90,14 @@ export default function AdminPayroll() {
     return Number.isInteger(v) && v > 0 ? v : null;
   });
   const [ym, setYm] = useState(defaultMonth);
+  const [view, setView] = useState<"month" | "history">(() =>
+    new URLSearchParams(window.location.search).get("view") === "history" ? "history" : "month");
+  const changeView = (v: "month" | "history") => {
+    setView(v);
+    const url = new URL(window.location.href);
+    if (v === "history") url.searchParams.set("view", "history"); else url.searchParams.delete("view");
+    window.history.replaceState(null, "", url.toString());
+  };
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"wage" | "funds">("wage");
   const openSettings = (tab: "wage" | "funds") => { setSettingsTab(tab); setSettingsOpen(true); };
@@ -110,7 +119,19 @@ export default function AdminPayroll() {
             {section !== "salary" && <p className="text-sm text-slate-600">{sectionLabel(section)}</p>}
           </div>
           {section !== "salary" && (
-            <Button variant="outline" size="sm" onClick={() => openSettings("wage")}><Settings className="h-4 w-4 mr-2" /> Settings</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {!rollId && (
+                <div className="inline-flex rounded-md border bg-white p-0.5" role="tablist" aria-label="Payroll view">
+                  {([["month", "Monthly payroll"], ["history", "Employee history"]] as const).map(([v, label]) => (
+                    <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => changeView(v)}
+                      className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${view === v ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={() => openSettings("wage")}><Settings className="h-4 w-4 mr-2" /> Settings</Button>
+            </div>
           )}
         </div>
 
@@ -118,6 +139,8 @@ export default function AdminPayroll() {
           <Card><CardContent className="py-8 text-center text-slate-600">Choose Accounts, Bill or Students section from the header.</CardContent></Card>
         ) : rollId ? (
           <RollEditor key={`${section}-${rollId}`} id={rollId} section={section} onBack={() => openRoll(null)} />
+        ) : view === "history" ? (
+          <PayrollHistory section={section} onOpenRoll={(id) => openRoll(id)} />
         ) : (
           <MonthView section={section} ym={ym} setYm={setYm} onOpen={openRoll} onFunds={() => openSettings("funds")} />
         )}
