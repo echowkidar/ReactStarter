@@ -399,12 +399,12 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   // 3. details panel (3 columns)
   const lastDay = new Date(s.year, s.month, 0).getDate();
   const mon = monthName.slice(0, 3);
-  const period = `01-${mon}-${s.year} to ${String(lastDay).padStart(2, "0")}-${mon}-${s.year}`;
+  const period = `01-${String(lastDay).padStart(2, "0")} ${mon} ${s.year}`;
   const rate = Math.round((s.basic + s.vda) * 100) / 100;
   const dayTxt = formatINR(s.days, Number.isInteger(s.days) ? 0 : 1);
   const cells: [string, string][] = [
     ["Employee ID", s.epid], ["Category", s.category], ["Pay Level", s.payLevel || "-"],
-    ["Rate per Day (Rs.)", amt(rate)], ["Days Worked", dayTxt], ["Pay Period", period],
+    ["Rate per Day (Rs.)", amt(rate)], ["Days Worked", dayTxt], ["Pay Period", `${period} (${dayTxt} days)`],
     ["Salary Register", s.salaryRegisterNo || "-"], ["PAN", s.panNumber || "-"], ["UAN", s.uanNo || "-"],
     ["ESI No.", s.esiNo || "-"], ["Days in Month", String(lastDay)], ["Wage Type", "Daily Wages"],
   ];

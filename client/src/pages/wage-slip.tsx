@@ -384,7 +384,7 @@ function SlipDocument({ slip }: { slip: Slip }) {
           <Field label="Pay Level" value={dash(slip.payLevel)} />
           <Field label="Rate per Day" value={`₹${amt(rate)}`} mono />
           <Field label="Days Worked" value={days} mono />
-          <Field label="Pay Period" value={period} />
+          <Field label="Pay Period" value={`${period} (${days} days)`} />
           <Field label="Salary Register" value={dash(slip.salaryRegisterNo)} />
           <Field label="PAN" value={dash(slip.panNumber)} />
           <Field label="UAN" value={dash(slip.uanNo)} mono />
