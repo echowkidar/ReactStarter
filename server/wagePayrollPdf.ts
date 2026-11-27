@@ -370,20 +370,14 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   // 1. header band
   slipRect(c, M, top, CW, 70, SL.navy);
   slipText(c, "ALIGARH MUSLIM UNIVERSITY", M + 16, top + 29, 15, true, SL.white);
-  slipText(c, "Finance & Accounts Department, Aligarh", M + 16, top + 46, 10, false, SL.white);
-  slipText(c, "PAY SLIP", R - 16, top + 27, 15, true, SL.white, true);
-  const monthTxt = `${monthName} ${s.year}`;
-  slipText(c, monthTxt, R - 16, top + 43, 10, false, SL.white, true);
-  if (s.dealingCode) {
-    slipText(c, safe(s.dealingCode).toUpperCase(), R - 16 - reg.widthOfTextAtSize(monthTxt, 10) - 8, top + 43, 8, true, SL.white, true);
-  }
-  const pillW = 46;
-  page.drawRectangle({ x: R - 16 - pillW, y: H - top - 62, width: pillW, height: 13, borderColor: SL.white, borderWidth: 0.8 });
-  slipText(c, "WAGES", R - 16 - pillW / 2 - bold.widthOfTextAtSize("WAGES", 7.5) / 2, top + 58.2, 7.5, true, SL.white);
+  slipText(c, "Finance & Accounts Department, Aligarh", M + 16, top + 45, 10, false, SL.white);
+  slipText(c, `(${section})`, M + 16, top + 59, 9.5, true, SL.white);
+  slipText(c, "PAY SLIP", R - 16, top + 29, 15, true, SL.white, true);
+  slipText(c, `${monthName} ${s.year}`, R - 16, top + 46, 10, false, SL.white, true);
   top += 70 + 14;
 
   // 2. employee strip
-  const boxW = 150, boxH = 58, textW = CW - boxW - 16;
+  const boxW = 150, boxH = 46, textW = CW - boxW - 16;
   const nameLines = wrap(s.name, bold, 14, textW);
   const subLines = wrap([s.designation, s.departmentName].filter(Boolean).join(" - "), reg, 9, textW);
   let ty = top + 12;
@@ -393,7 +387,6 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   slipRect(c, R - boxW, top, boxW, boxH, SL.white, SL.s200);
   slipText(c, "NET PAY", R - boxW + 12, top + 15, 7, true, SL.s500);
   slipText(c, `Rs. ${amt(s.net)}`, R - boxW + 12, top + 35, 16, true, SL.green);
-  slipText(c, `for ${formatINR(s.days, Number.isInteger(s.days) ? 0 : 1)} days worked`, R - boxW + 12, top + 49, 8, false, SL.s600);
   top += Math.max(boxH, ty - top + 2) + GAP;
 
   // 3. details panel (3 columns)
@@ -403,10 +396,9 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   const rate = Math.round((s.basic + s.vda) * 100) / 100;
   const dayTxt = formatINR(s.days, Number.isInteger(s.days) ? 0 : 1);
   const cells: [string, string][] = [
-    ["Employee ID", s.epid], ["Category", s.category], ["Pay Level", s.payLevel || "-"],
-    ["Rate per Day (Rs.)", amt(rate)], ["Days Worked", dayTxt], ["Pay Period", `${period} (${dayTxt} days)`],
+    ["Employee ID", s.epid], ["Pay Period", `${period} (${dayTxt} days)`], ["Rate per Day (Rs.)", amt(rate)],
     ["Salary Register", s.salaryRegisterNo || "-"], ["PAN", s.panNumber || "-"], ["UAN", s.uanNo || "-"],
-    ["ESI No.", s.esiNo || "-"], ["Days in Month", String(lastDay)], ["Wage Type", "Daily Wages"],
+    ["ESI No.", s.esiNo || "-"],
   ];
   const PAD = 14, CELL_H = 32, colW = (CW - 2 * PAD) / 3;
   const panelH = Math.ceil(cells.length / 3) * CELL_H + 12;

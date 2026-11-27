@@ -350,14 +350,11 @@ function SlipDocument({ slip }: { slip: Slip }) {
           <div className="min-w-0 flex-1">
             <p className="text-[17px] font-bold leading-tight tracking-wide sm:text-lg">Aligarh Muslim University</p>
             <p className="text-[12.5px] text-blue-100">Finance &amp; Accounts Department, Aligarh</p>
+            <p className="text-[12.5px] font-semibold text-white">({section})</p>
           </div>
           <div className="text-right">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-200">Pay Slip</p>
             <p className="text-lg font-bold leading-tight">{monthName}</p>
-            <div className="mt-1 flex justify-end gap-1.5">
-              {slip.dealingCode && <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10.5px] font-semibold tracking-wider">{slip.dealingCode}</span>}
-              <span className="rounded-full border border-white/40 px-2 py-0.5 text-[10.5px] font-semibold tracking-wider">WAGES</span>
-            </div>
           </div>
         </div>
       </header>
@@ -373,24 +370,18 @@ function SlipDocument({ slip }: { slip: Slip }) {
           <div className="ws-keep rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-right">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Net Pay</p>
             <p className="text-2xl font-bold tabular-nums text-emerald-700">₹{amt(slip.net)}</p>
-            <p className="text-[11.5px] font-medium text-emerald-800/80">for {days} days worked</p>
           </div>
         </section>
 
         {/* Employee details */}
         <dl className="ws-keep grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-4 sm:p-5">
           <Field label="Employee ID" value={slip.epid} />
-          <Field label="Category" value={dash(slip.category)} />
-          <Field label="Pay Level" value={dash(slip.payLevel)} />
-          <Field label="Rate per Day" value={`₹${amt(rate)}`} mono />
-          <Field label="Days Worked" value={days} mono />
           <Field label="Pay Period" value={`${period} (${days} days)`} />
+          <Field label="Rate per Day" value={`₹${amt(rate)}`} mono />
           <Field label="Salary Register" value={dash(slip.salaryRegisterNo)} />
           <Field label="PAN" value={dash(slip.panNumber)} />
           <Field label="UAN" value={dash(slip.uanNo)} mono />
           <Field label="ESI No." value={dash(slip.esiNo)} mono />
-          <Field label="Days in Month" value={lastDay} mono />
-          <Field label="Wage Type" value="Daily Wages" />
         </dl>
 
         {/* Earnings and deductions */}
