@@ -373,6 +373,7 @@ function SlipDocument({ slip }: { slip: Slip }) {
           <div className="ws-keep rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-right">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Net Pay</p>
             <p className="text-2xl font-bold tabular-nums text-emerald-700">₹{amt(slip.net)}</p>
+            <p className="text-[11.5px] font-medium text-emerald-800/80">for {days} days worked</p>
           </div>
         </section>
 
@@ -388,12 +389,14 @@ function SlipDocument({ slip }: { slip: Slip }) {
           <Field label="PAN" value={dash(slip.panNumber)} />
           <Field label="UAN" value={dash(slip.uanNo)} mono />
           <Field label="ESI No." value={dash(slip.esiNo)} mono />
+          <Field label="Days in Month" value={lastDay} mono />
+          <Field label="Wage Type" value="Daily Wages" />
         </dl>
 
         {/* Earnings and deductions */}
         <section className="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
           <AmountTable title="Earnings" accent="blue" totalLabel="Gross Earnings" total={slip.gross}
-            rows={[["Basic Wages", slip.basic * slip.days], ["VDA", slip.vda * slip.days]]} />
+            rows={[[`Basic Wages (₹${amt(slip.basic)} × ${days} days)`, slip.basic * slip.days], [`VDA (₹${amt(slip.vda)} × ${days} days)`, slip.vda * slip.days]]} />
           <AmountTable title="Deductions" accent="rose" totalLabel="Total Deductions" total={slip.totalDeductions}
             rows={[["EPF (Employee)", slip.epf], ["ESI (Employee)", slip.esi], ["MAS", slip.mas]]} />
         </section>

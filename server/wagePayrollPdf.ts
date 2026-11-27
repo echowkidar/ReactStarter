@@ -383,7 +383,7 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   top += 70 + 14;
 
   // 2. employee strip
-  const boxW = 150, boxH = 46, textW = CW - boxW - 16;
+  const boxW = 150, boxH = 58, textW = CW - boxW - 16;
   const nameLines = wrap(s.name, bold, 14, textW);
   const subLines = wrap([s.designation, s.departmentName].filter(Boolean).join(" - "), reg, 9, textW);
   let ty = top + 12;
@@ -393,6 +393,7 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   slipRect(c, R - boxW, top, boxW, boxH, SL.white, SL.s200);
   slipText(c, "NET PAY", R - boxW + 12, top + 15, 7, true, SL.s500);
   slipText(c, `Rs. ${amt(s.net)}`, R - boxW + 12, top + 35, 16, true, SL.green);
+  slipText(c, `for ${formatINR(s.days, Number.isInteger(s.days) ? 0 : 1)} days worked`, R - boxW + 12, top + 49, 8, false, SL.s600);
   top += Math.max(boxH, ty - top + 2) + GAP;
 
   // 3. details panel (3 columns)
@@ -405,7 +406,7 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
     ["Employee ID", s.epid], ["Category", s.category], ["Pay Level", s.payLevel || "-"],
     ["Rate per Day (Rs.)", amt(rate)], ["Days Worked", dayTxt], ["Pay Period", period],
     ["Salary Register", s.salaryRegisterNo || "-"], ["PAN", s.panNumber || "-"], ["UAN", s.uanNo || "-"],
-    ["ESI No.", s.esiNo || "-"],
+    ["ESI No.", s.esiNo || "-"], ["Days in Month", String(lastDay)], ["Wage Type", "Daily Wages"],
   ];
   const PAD = 14, CELL_H = 32, colW = (CW - 2 * PAD) / 3;
   const panelH = Math.ceil(cells.length / 3) * CELL_H + 12;
@@ -419,7 +420,9 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   const tGap = 16, tW = (CW - tGap) / 2;
   const basicAmt = Math.round(s.basic * s.days * 100) / 100;
   const vdaAmt = Math.round(s.vda * s.days * 100) / 100;
-  const earn: [string, string][] = [["Basic", amt(basicAmt)], ["VDA", amt(vdaAmt)]];
+  const earn: [string, string][] = [
+    [`Basic (${amt(s.basic)} x ${dayTxt} days)`, amt(basicAmt)], [`VDA (${amt(s.vda)} x ${dayTxt} days)`, amt(vdaAmt)],
+  ];
   const ded: [string, string][] = [["EPF", amt(s.epf)], ["ESI", amt(s.esi)], ["MAS", amt(s.mas)]];
   const nRows = Math.max(earn.length, ded.length);
   const th = drawTable(c, M, top, tW, "EARNINGS", earn, nRows, "Gross Earnings", amt(s.gross));
