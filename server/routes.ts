@@ -1507,7 +1507,7 @@ export async function registerRoutes(app: Express) {
       }
 
       // Hidden fields reach the form blank — never let that blank overwrite the stored value
-      const safeUpdates = stripHiddenUpdates(updates, await getFieldVisibility());
+      const safeUpdates = stripHiddenUpdates(updates, await getFieldVisibility(), updates.epid ?? (currentEmployee as any)?.epid);
       if (Object.keys(safeUpdates).length === 0) return res.json(currentEmployee); // nothing left to change
 
       // EPID kind rules (letter EPID → fund statuses, ACC/BIL/STU/OTH, term expiry required).
@@ -1635,7 +1635,7 @@ export async function registerRoutes(app: Express) {
       };
 
       // Hidden fields reach the form blank — never let that blank overwrite the stored value
-      updates = stripHiddenUpdates(updates, await getFieldVisibility());
+      updates = stripHiddenUpdates(updates, await getFieldVisibility(), updates.epid ?? (employee as any)?.epid);
       if (Object.keys(updates).length === 0) return res.json(employee); // nothing left to change
 
       // EPID kind rules + payroll fields (same checks as the admin update route)

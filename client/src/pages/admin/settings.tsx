@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UsefulDownloadsManager } from "@/components/admin/useful-downloads-manager";
 import { SalaryRegisterManager } from "@/components/admin/salary-register-manager";
 import { SettingsPinGate } from "@/components/admin/settings-pin-gate";
+import { fieldShown, FUND_KEY, type VisField } from "@shared/fieldVisibility";
 
 type Settings = Record<string, string>;
 
@@ -74,6 +75,13 @@ export default function AdminSettings() {
             icon: GraduationCap,
             color: "text-amber-600",
         },
+    ];
+
+    // Revolving Funds staff (letter Employee ID): their own switches
+    const fundFieldConfig: Array<{ key: string; field: VisField; label: string; description: string; icon: any; color: string }> = [
+        { key: FUND_KEY.bank, field: "bank", label: "Bank Account", description: "Bank Account and Bank Account Proof upload for Revolving Funds staff (bank name, branch and IFSC are in the Wages payroll part)", icon: Building2, color: "text-green-600" },
+        { key: FUND_KEY.pan, field: "pan", label: "PAN Number", description: "PAN Number and PAN Card upload for Revolving Funds staff", icon: CreditCard, color: "text-blue-600" },
+        { key: FUND_KEY.aadhar, field: "aadhar", label: "Aadhar Number", description: "Aadhar Number and Aadhar Card upload for Revolving Funds staff", icon: Fingerprint, color: "text-purple-600" },
     ];
 
     return (
@@ -158,7 +166,44 @@ export default function AdminSettings() {
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
                             <strong>Note:</strong> Changes take effect immediately on all employee forms.
                             When a field is hidden, any existing data for that field will be preserved in the database.
+                            These switches are for Salary Section staff; Revolving Funds staff have their own switches below.
                         </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="max-w-2xl mt-6">
+                    <CardHeader>
+                        <CardTitle className="text-lg">Field Visibility — Revolving Funds or Other Similar Funds staff</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                            For employees whose Employee ID starts with a letter (wages paid by the Accounts / Bill / Students Section).
+                            Salary Section staff keep the switches above. The bank account is shown for these staff unless switched off,
+                            because their wages are paid into it.
+                        </p>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        {fundFieldConfig.map((field) => {
+                            const Icon = field.icon;
+                            const on = fieldShown(settings, field.field, "R");
+                            return (
+                                <div key={field.key} className="flex items-center justify-between p-4 border rounded-lg">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-2 rounded-full bg-slate-100 ${field.color}`}>
+                                            <Icon className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <Label className="text-base font-medium">{field.label}</Label>
+                                            <p className="text-sm text-muted-foreground">{field.description}</p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={on}
+                                        onCheckedChange={(v) => updateSetting.mutate({ key: field.key, value: v ? "true" : "false" })}
+                                        disabled={updateSetting.isPending}
+                                        aria-label={`${field.label} for Revolving Funds staff`}
+                                    />
+                                </div>
+                            );
+                        })}
                     </CardContent>
                 </Card>
 

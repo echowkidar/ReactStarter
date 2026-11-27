@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
 import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
+import { fieldShown } from "@shared/fieldVisibility";
 import { ALL_STATUSES, statusesForEpid, isValidEpid, isLetterEpid, EPID_FORMAT_MESSAGE, showsTermExpiry, requiresTermExpiry, dealingAssistantAllowed, dealingAssistantOptionsFor } from "@shared/employeeKind";
 import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Loader2, AlertCircle } from "lucide-react";
@@ -327,9 +328,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
   const registerNoOptions: ComboboxOption[] = registers 
     ? registers.map(r => ({ value: r.value, label: r.label }))
     : [];
-  const showPan = fieldSettings?.show_pan_field !== "false";
-  const showBank = fieldSettings?.show_bank_field !== "false";
-  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
   const showCategory = fieldSettings?.show_employee_category_field === "true";
 
   const form = useForm<z.infer<typeof employeeSchema>>({
@@ -427,6 +425,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
 
   // Duplicate EPID Check
   const watchedEpid = form.watch("epid");
+  // Salary Section staff and Revolving Funds staff (letter Employee ID) have their own switches
+  const showPan = fieldShown(fieldSettings, "pan", watchedEpid);
+  const showBank = fieldShown(fieldSettings, "bank", watchedEpid);
+  const showAadhar = fieldShown(fieldSettings, "aadhar", watchedEpid);
   const watchedStatus = form.watch("employmentStatus");
   const statusOptions = statusesForEpid(watchedEpid);
   const assistantOptions: ComboboxOption[] = dealingAssistantOptionsFor(watchedEpid, salaryAssistantOptions);

@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { fieldShown } from "@shared/fieldVisibility";
 import { ALL_STATUSES, statusesForEpid, isLetterEpid, showsTermExpiry, requiresTermExpiry, dealingAssistantAllowed, dealingAssistantOptionsFor } from "@shared/employeeKind";
 import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Employee, InsertEmployee, insertEmployeeSchema } from "@shared/schema";
@@ -117,9 +118,10 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
   const { data: fieldSettings } = useQuery<Record<string, string>>({
     queryKey: ["/api/admin/settings"],
   });
-  const showPan = fieldSettings?.show_pan_field !== "false";
-  const showBank = fieldSettings?.show_bank_field !== "false";
-  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+  // Salary Section staff and Revolving Funds staff (letter Employee ID) have their own switches
+  const showPan = fieldShown(fieldSettings, "pan", employee.epid);
+  const showBank = fieldShown(fieldSettings, "bank", employee.epid);
+  const showAadhar = fieldShown(fieldSettings, "aadhar", employee.epid);
   const showCategory = fieldSettings?.show_employee_category_field === "true";
 
   // Disable modal state

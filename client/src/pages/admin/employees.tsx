@@ -17,6 +17,7 @@ import { Plus, Pencil, Trash2, LogOut, X, Upload, ArrowLeft, ChevronLeft, Chevro
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Employee, Department, InsertEmployee } from "@shared/schema";
+import { fieldShown } from "@shared/fieldVisibility";
 import { statusesForEpid, isLetterEpid, isValidEpid, EPID_FORMAT_MESSAGE, showsTermExpiry, dealingAssistantAllowed, dealingAssistantOptionsFor } from "@shared/employeeKind";
 import AdminHeader from "@/components/layout/admin-header";
 import { format } from "date-fns";
@@ -66,9 +67,10 @@ export default function AdminEmployees() {
   const { data: fieldSettings } = useQuery<Record<string, string>>({
     queryKey: ["/api/admin/settings"],
   });
-  const showPan = fieldSettings?.show_pan_field !== "false";
-  const showBank = fieldSettings?.show_bank_field !== "false";
-  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+  // Excel export: a column is included when it is shown for either kind of staff
+  // (the server already blanks values hidden for an employee's own kind)
+  const anyShown = (f: "pan" | "bank" | "aadhar") => fieldShown(fieldSettings, f) || fieldShown(fieldSettings, f, "R");
+  const exportPan = anyShown("pan"), exportBank = anyShown("bank"), exportAadhar = anyShown("aadhar");
   const showCategory = fieldSettings?.show_employee_category_field === "true";
 
   // Fetch all salary registers dynamically
@@ -104,6 +106,10 @@ export default function AdminEmployees() {
   const [watchedEpid, setWatchedEpid] = useState("");
   // EPID that decides the employee kind (locked EPID when editing, typed EPID when adding)
   const kindEpid = selectedEmployee?.epid || watchedEpid;
+  // Add / Edit dialog: Salary Section staff and Revolving Funds staff have their own switches
+  const showPan = fieldShown(fieldSettings, "pan", kindEpid);
+  const showBank = fieldShown(fieldSettings, "bank", kindEpid);
+  const showAadhar = fieldShown(fieldSettings, "aadhar", kindEpid);
   const statusOptions = statusesForEpid(kindEpid);
   const assistantOptions = dealingAssistantOptionsFor(kindEpid, salaryAssistantOptions);
   const [duplicateEmployee, setDuplicateEmployee] = useState<{ name: string; departmentName: string } | null>(null);
@@ -1080,9 +1086,9 @@ export default function AdminEmployees() {
           'Office Memo No': emp.officeMemoNo || ''
         };
 
-        if (showBank) data['Bank Account'] = emp.bankAccount || '';
-        if (showPan) data['PAN Number'] = emp.panNumber || '';
-        if (showAadhar) data['Aadhar Number'] = emp.aadharCard || '';
+        if (exportBank) data['Bank Account'] = emp.bankAccount || '';
+        if (exportPan) data['PAN Number'] = emp.panNumber || '';
+        if (exportAadhar) data['Aadhar Number'] = emp.aadharCard || '';
 
         return data;
       });
@@ -1103,9 +1109,9 @@ export default function AdminEmployees() {
         { wch: 20 }  // Office Memo No
       ];
 
-      if (showBank) colWidths.push({ wch: 20 }); // Bank Account
-      if (showPan) colWidths.push({ wch: 15 }); // PAN Number
-      if (showAadhar) colWidths.push({ wch: 15 }); // Aadhar Number
+      if (exportBank) colWidths.push({ wch: 20 }); // Bank Account
+      if (exportPan) colWidths.push({ wch: 15 }); // PAN Number
+      if (exportAadhar) colWidths.push({ wch: 15 }); // Aadhar Number
       ws['!cols'] = colWidths;
 
       // Add the worksheet to the workbook

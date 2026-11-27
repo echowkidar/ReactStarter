@@ -19,12 +19,14 @@ import { getPayLevelOrder, PAY_LEVELS } from "@/lib/pay-levels";
 import { EmployeeHistoryModal } from "@/components/modals/employee-history-modal";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { showsTermExpiry, isLetterEpid } from "@shared/employeeKind";
+import { fieldShown } from "@shared/fieldVisibility";
 import { ReportingEmployeesPanel } from "@/components/reporting-employees-panel";
 
 const EmployeeDetails = ({ employee, fieldSettings }: { employee: Employee; fieldSettings?: Record<string, string> }) => {
-  const showPan = fieldSettings?.show_pan_field !== "false";
-  const showBank = fieldSettings?.show_bank_field !== "false";
-  const showAadhar = fieldSettings?.show_aadhar_field !== "false";
+  // Salary Section staff and Revolving Funds staff (letter Employee ID) have their own switches
+  const showPan = fieldShown(fieldSettings, "pan", employee.epid);
+  const showBank = fieldShown(fieldSettings, "bank", employee.epid);
+  const showAadhar = fieldShown(fieldSettings, "aadhar", employee.epid);
 
   return (
     <div className="space-y-6">

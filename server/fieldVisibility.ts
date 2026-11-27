@@ -7,16 +7,26 @@
 //     this an edit would wipe the real value (for example data synced from Oracle).
 import { sql } from "drizzle-orm";
 import { db } from "./db";
+import { fieldShown } from "../shared/fieldVisibility";
 
 export type FieldVisibility = {
   pan: boolean;
   bank: boolean;      // bank account + bank name + IFSC + bank proof
   aadhar: boolean;
   category: boolean;  // Teaching / Non-Teaching
+  // Revolving Funds staff (Employee ID starting with a letter) have their own switches
+  fund?: { pan: boolean; bank: boolean; aadhar: boolean; category: boolean };
 };
 
+const letterEpid = (epid: unknown) => /^[A-Za-z]/.test(String(epid ?? "").trim());
+/** The switches that apply to this employee */
+export function visibilityFor(vis: FieldVisibility, epid: unknown): FieldVisibility {
+  return letterEpid(epid) && vis.fund ? { ...vis, ...vis.fund } : vis;
+}
+
 // Fields that belong to each setting. `blank` is what users get when hidden.
-const GROUPS: Record<keyof FieldVisibility, Array<{ field: string; blank: "" | null }>> = {
+type BaseKey = "pan" | "bank" | "aadhar" | "category";
+const GROUPS: Record<BaseKey, Array<{ field: string; blank: "" | null }>> = {
   pan: [{ field: "panNumber", blank: "" }, { field: "panCardUrl", blank: null }],
   bank: [
     { field: "bankAccount", blank: "" },
@@ -35,19 +45,21 @@ export async function getFieldVisibility(): Promise<FieldVisibility> {
   const r = await db.execute(sql`SELECT key, value FROM app_settings`);
   const s: Record<string, string> = {};
   for (const row of r.rows as any[]) s[row.key] = row.value;
+  const category = s.show_employee_category_field === "true"; // new field: hidden unless switched on
   return {
-    pan: s.show_pan_field !== "false",
-    bank: s.show_bank_field !== "false",
-    aadhar: s.show_aadhar_field !== "false",
-    // new field: hidden unless switched on
-    category: s.show_employee_category_field === "true",
+    pan: fieldShown(s, "pan"),
+    bank: fieldShown(s, "bank"),
+    aadhar: fieldShown(s, "aadhar"),
+    category,
+    fund: { pan: fieldShown(s, "pan", "R"), bank: fieldShown(s, "bank", "R"), aadhar: fieldShown(s, "aadhar", "R"), category },
   };
 }
 
 /** Blank the hidden fields of one employee before it is sent to a user */
-export function maskEmployee<T extends Record<string, any>>(emp: T, vis: FieldVisibility): T {
+export function maskEmployee<T extends Record<string, any>>(emp: T, visAll: FieldVisibility): T {
+  const vis = visibilityFor(visAll, emp?.epid);
   const out: Record<string, any> = { ...emp };
-  for (const key of Object.keys(GROUPS) as Array<keyof FieldVisibility>) {
+  for (const key of Object.keys(GROUPS) as BaseKey[]) {
     if (vis[key]) continue;
     for (const { field, blank } of GROUPS[key]) out[field] = blank;
   }
@@ -59,9 +71,10 @@ export function maskEmployee<T extends Record<string, any>>(emp: T, vis: FieldVi
  * Also tidies the optional Oracle-backed fields: blank → null, IFSC upper case,
  * and an unknown employee category is not saved.
  */
-export function stripHiddenUpdates<T extends Record<string, any>>(updates: T, vis: FieldVisibility): T {
+export function stripHiddenUpdates<T extends Record<string, any>>(updates: T, visAll: FieldVisibility, epid?: unknown): T {
+  const vis = visibilityFor(visAll, epid ?? updates?.epid);
   const out: Record<string, any> = { ...updates };
-  for (const key of Object.keys(GROUPS) as Array<keyof FieldVisibility>) {
+  for (const key of Object.keys(GROUPS) as BaseKey[]) {
     if (vis[key]) continue;
     for (const { field } of GROUPS[key]) delete out[field];
   }
