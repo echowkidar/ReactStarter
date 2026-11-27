@@ -26,6 +26,7 @@ type Slip = {
   dealingCode?: string | null; sectionLabel?: string | null; panNumber?: string | null; salaryRegisterNo?: string | null; payLevel?: string | null;
   bankAccount?: string | null;
   chequeNo?: string | null; chequeDate?: string | null; // YYYY-MM-DD
+  periods?: { from: string; to: string; days: number }[]; // attendance periods, DD-MM-YYYY
 };
 
 const MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -332,7 +333,9 @@ function SlipDocument({ slip }: { slip: Slip }) {
   const section = (slip.sectionLabel || "Accounts Section").trim();
   const monthName = `${MONTHS[slip.month]} ${slip.year}`;
   const lastDay = new Date(slip.year, slip.month, 0).getDate();
-  const period = `01–${String(lastDay).padStart(2, "0")} ${MON3[slip.month]} ${slip.year}`;
+  const mm = String(slip.month).padStart(2, "0");
+  const fmtDays = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const periods = slip.periods?.length ? slip.periods : [{ from: `01-${mm}-${slip.year}`, to: `${lastDay}-${mm}-${slip.year}`, days: slip.days }];
   const days = Number.isInteger(slip.days) ? String(slip.days) : slip.days.toFixed(1);
   const rate = Math.round((slip.basic + slip.vda) * 100) / 100;
   const head = [slip.headName, slip.paymentCode ? `(${slip.paymentCode})` : ""].filter(Boolean).join(" ");
@@ -376,7 +379,14 @@ function SlipDocument({ slip }: { slip: Slip }) {
         {/* Employee details */}
         <dl className="ws-keep grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-4 sm:p-5">
           <Field label="Employee ID" value={slip.epid} />
-          <Field label="Pay Period" value={`${period} (${days} days)`} />
+          <div className="col-span-2">
+            <Field label="Pay Period" value={
+              <span className="block space-y-0.5 tabular-nums">
+                {periods.map((p, i) => <span key={i} className="block">{p.from} to {p.to} ({fmtDays(p.days)} days)</span>)}
+                {periods.length > 1 && <span className="block text-[12.5px] font-medium text-slate-600">Total: {days} days</span>}
+              </span>
+            } />
+          </div>
           <Field label="Rate per Day" value={`₹${amt(rate)}`} mono />
           <Field label="Salary Register" value={dash(slip.salaryRegisterNo)} />
           <Field label="PAN" value={dash(slip.panNumber)} />

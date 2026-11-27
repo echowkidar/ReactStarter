@@ -88,11 +88,52 @@ async function identified(req: Request): Promise<any | null> {
 
 const maskAccount = (a: unknown) => { const d = digits(a); return d ? `${"X".repeat(Math.max(0, d.length - 4))}${d.slice(-4)}` : null; };
 
+/** "DD-MM-YY" / "DD-MM-YYYY" / "YYYY-MM-DD" → [day, month, year] */
+function dmyParts(v: unknown): [number, number, number] | null {
+  const t = String(v ?? "").trim();
+  let m = t.match(/^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/);
+  if (m) { const y = +m[3]; return [+m[1], +m[2], y < 100 ? 2000 + y : y]; }
+  m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return [+m[3], +m[2], +m[1]];
+  return null;
+}
+const ddmmyyyy = ([d, m, y]: [number, number, number]) => `${String(d).padStart(2, "0")}-${String(m).padStart(2, "0")}-${y}`;
+
+/**
+ * The attendance periods of the wage month (from the department's received Wages / Fund Staff
+ * report). When they do not add up to the roll's days (days adjusted on the roll), the whole
+ * month is shown with the roll's days instead.
+ */
+async function slipPeriods(employeeId: number, departmentId: number, month: number, year: number, days: number) {
+  const r = await db.execute(sql`
+    SELECT ae.periods, ae.days, ae.from_date, ae.to_date
+    FROM attendance_entries ae JOIN attendance_reports ar ON ar.id = ae.report_id
+    WHERE ae.employee_id = ${employeeId} AND ar.department_id = ${departmentId}
+      AND COALESCE(ar.report_type, 'regular') = 'fund' AND ar.status IN ('sent', 'cancel_requested')`);
+  const out: { from: string; to: string; days: number; sort: number }[] = [];
+  for (const row of r.rows as any[]) {
+    let periods: any[] = [];
+    try { periods = JSON.parse(row.periods || "[]"); } catch { periods = []; }
+    if (!Array.isArray(periods) || periods.length === 0) periods = [{ fromDate: row.from_date, toDate: row.to_date, days: row.days }];
+    for (const p of periods) {
+      const f = dmyParts(p?.fromDate), t = dmyParts(p?.toDate) ?? f;
+      const n = Number(p?.days) || 0;
+      if (!f || !t || f[1] !== month || f[2] !== year || n <= 0) continue;
+      out.push({ from: ddmmyyyy(f), to: ddmmyyyy(t), days: n, sort: f[0] });
+    }
+  }
+  out.sort((a, b) => a.sort - b.sort);
+  const sum = out.reduce((n, p) => n + p.days, 0);
+  if (out.length && Math.abs(sum - days) < 0.001) return out.map(({ from, to, days }) => ({ from, to, days }));
+  const last = new Date(year, month, 0).getDate();
+  return [{ from: ddmmyyyy([1, month, year]), to: ddmmyyyy([last, month, year]), days }];
+}
+
 /** Slip data of one line of a PASSED roll (also used by the admin side) */
 export async function slipOfLine(lineId: number, employeeId?: number): Promise<WageSlip | null> {
   const r = await db.execute(sql`
     SELECT l.*, w.month, w.year, w.head_name, w.payment_code, w.page_no, w.passed_on::text AS passed_on, w.status,
-           w.section, d.name AS department_name,
+           w.section, w.department_id AS roll_department_id, d.name AS department_name,
            e.salary_asstt, e.pan_number, e.salary_register_no, e.pay_level,
            c.cheque_no, c.cheque_date::text AS cheque_date
     FROM wage_roll_lines l
@@ -104,6 +145,7 @@ export async function slipOfLine(lineId: number, employeeId?: number): Promise<W
     WHERE l.id = ${lineId} ${employeeId ? sql`AND l.employee_id = ${employeeId} AND w.status = 'passed' AND ${RELEASED}` : sql``}`);
   const l = r.rows[0] as any;
   if (!l) return null;
+  const periods = await slipPeriods(Number(l.employee_id), Number(l.roll_department_id), Number(l.month), Number(l.year), Number(l.days));
   return {
     epid: l.epid, name: l.name, designation: l.designation, departmentName: l.department_name || "",
     month: Number(l.month), year: Number(l.year),
@@ -124,6 +166,7 @@ export async function slipOfLine(lineId: number, employeeId?: number): Promise<W
     bankAccount: digits(l.bank_account) || null,
     chequeNo: l.cheque_no || null,
     chequeDate: l.cheque_date || null,          // YYYY-MM-DD
+    periods,                                     // [{ from: DD-MM-YYYY, to, days }]
   };
 }
 

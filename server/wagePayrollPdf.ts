@@ -20,6 +20,7 @@ export type WageSlip = {
   dealingCode?: string | null; sectionLabel?: string | null; panNumber?: string | null; salaryRegisterNo?: string | null; payLevel?: string | null;
   bankAccount?: string | null;
   chequeNo?: string | null; chequeDate?: string | null; // YYYY-MM-DD
+  periods?: { from: string; to: string; days: number }[]; // attendance periods, DD-MM-YYYY
 };
 
 const BLACK = rgb(0, 0, 0);
@@ -389,22 +390,34 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   slipText(c, `Rs. ${amt(s.net)}`, R - boxW + 12, top + 35, 16, true, SL.green);
   top += Math.max(boxH, ty - top + 2) + GAP;
 
-  // 3. details panel (3 columns)
+  // 3. details panel (3 columns; the pay period spans two and lists every attendance period)
   const lastDay = new Date(s.year, s.month, 0).getDate();
-  const mon = monthName.slice(0, 3);
-  const period = `01-${String(lastDay).padStart(2, "0")} ${mon} ${s.year}`;
+  const mm = String(s.month).padStart(2, "0");
   const rate = Math.round((s.basic + s.vda) * 100) / 100;
-  const dayTxt = formatINR(s.days, Number.isInteger(s.days) ? 0 : 1);
-  const cells: [string, string][] = [
-    ["Employee ID", s.epid], ["Pay Period", `${period} (${dayTxt} days)`], ["Rate per Day (Rs.)", amt(rate)],
-    ["Salary Register", s.salaryRegisterNo || "-"], ["PAN", s.panNumber || "-"], ["UAN", s.uanNo || "-"],
-    ["ESI No.", s.esiNo || "-"],
+  const dayTxt = (n: number) => formatINR(n, Number.isInteger(n) ? 0 : 1);
+  const periods = s.periods?.length ? s.periods : [{ from: `01-${mm}-${s.year}`, to: `${lastDay}-${mm}-${s.year}`, days: s.days }];
+  const periodLines = periods.map((p) => `${p.from} to ${p.to} (${dayTxt(p.days)} days)`);
+  if (periods.length > 1) periodLines.push(`Total: ${dayTxt(s.days)} days`);
+  const rows: { label: string; lines: string[]; span: number }[][] = [
+    [{ label: "Employee ID", lines: [s.epid], span: 1 }, { label: "Pay Period", lines: periodLines, span: 2 }],
+    [{ label: "Rate per Day (Rs.)", lines: [amt(rate)], span: 1 }, { label: "Salary Register", lines: [s.salaryRegisterNo || "-"], span: 1 },
+     { label: "PAN", lines: [s.panNumber || "-"], span: 1 }],
+    [{ label: "UAN", lines: [s.uanNo || "-"], span: 1 }, { label: "ESI No.", lines: [s.esiNo || "-"], span: 1 }],
   ];
-  const PAD = 14, CELL_H = 32, colW = (CW - 2 * PAD) / 3;
-  const panelH = Math.ceil(cells.length / 3) * CELL_H + 12;
+  const PAD = 14, CELL_H = 32, LINE_H = 12.5, colW = (CW - 2 * PAD) / 3;
+  const rowH = rows.map((r) => CELL_H + (Math.max(...r.map((x) => x.lines.length)) - 1) * LINE_H);
+  const panelH = rowH.reduce((a, b) => a + b, 0) + 12;
   slipRect(c, M, top, CW, panelH, SL.s50, SL.s200);
-  cells.forEach(([l, v], i) => {
-    drawLabelValue(c, l, v, M + PAD + (i % 3) * colW, top + 10 + Math.floor(i / 3) * CELL_H, colW - 10);
+  let ry = top + 10;
+  rows.forEach((r, ri) => {
+    let col = 0;
+    for (const cell of r) {
+      const x = M + PAD + col * colW, w = colW * cell.span - 10;
+      drawLabelValue(c, cell.label, cell.lines[0], x, ry, w);
+      cell.lines.slice(1).forEach((ln, k) => drawLabelValue(c, "", ln, x, ry + (k + 1) * LINE_H, w));
+      col += cell.span;
+    }
+    ry += rowH[ri];
   });
   top += panelH + GAP;
 
@@ -413,7 +426,7 @@ export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   const basicAmt = Math.round(s.basic * s.days * 100) / 100;
   const vdaAmt = Math.round(s.vda * s.days * 100) / 100;
   const earn: [string, string][] = [
-    [`Basic (${amt(s.basic)} x ${dayTxt} days)`, amt(basicAmt)], [`VDA (${amt(s.vda)} x ${dayTxt} days)`, amt(vdaAmt)],
+    [`Basic (${amt(s.basic)} x ${dayTxt(s.days)} days)`, amt(basicAmt)], [`VDA (${amt(s.vda)} x ${dayTxt(s.days)} days)`, amt(vdaAmt)],
   ];
   const ded: [string, string][] = [["EPF", amt(s.epf)], ["ESI", amt(s.esi)], ["MAS", amt(s.mas)]];
   const nRows = Math.max(earn.length, ded.length);
