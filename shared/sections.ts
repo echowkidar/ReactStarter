@@ -58,6 +58,33 @@ export function reportInSection(reportType: string | null | undefined, section: 
   return section === "salary" ? !isFundReport(reportType) : isFundReport(reportType);
 }
 
+/**
+ * The month a fund section (Accounts / Bill / Students) is working on. Wages of month M are due
+ * with the attendance by the last day of M and paid by the 7th of M+1, so the sections work on
+ * the PREVIOUS month after the month changes; the new month is shown from its last
+ * FUND_NEW_MONTH_FROM_LAST days, when its attendance starts arriving.
+ */
+export const FUND_NEW_MONTH_FROM_LAST = 5;
+export function fundWorkMonth(today: Date = new Date()): { month: number; year: number } {
+  const last = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const d = today.getDate() > last - FUND_NEW_MONTH_FROM_LAST
+    ? new Date(today.getFullYear(), today.getMonth(), 1)
+    : new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  return { month: d.getMonth() + 1, year: d.getFullYear() };
+}
+
+/** Default month of a section's screens: Salary = the current month, fund sections = fundWorkMonth() */
+export function defaultMonthOfSection(section: SectionKey, today: Date = new Date()): { month: number; year: number } {
+  return section === "salary" ? { month: today.getMonth() + 1, year: today.getFullYear() } : fundWorkMonth(today);
+}
+
+/** Pages that belong to one side only: Payroll = fund sections, LPC / Claim Forms = Salary Section */
+export function pageFitsSection(path: string, section: SectionKey): boolean {
+  if (path.startsWith("/admin/payroll")) return section !== "salary";
+  if (path.startsWith("/admin/lpc") || path.startsWith("/admin/claim-forms")) return section === "salary";
+  return true;
+}
+
 export function sectionLabel(section: SectionKey): string {
   return SECTIONS.find((s) => s.key === section)?.label ?? "Salary Section";
 }

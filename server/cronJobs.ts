@@ -41,10 +41,17 @@ export function setupCronJobs() {
                 )
             });
 
+            // Salary Section reminders (10th / 14th) only for departments with regular (numeric EPID) staff;
+            // a department with only wage / fund staff gets the fund reminders instead
+            const withRegular = new Set((await db.execute(sql`
+                SELECT DISTINCT department_id FROM employees
+                WHERE is_active = 'active' AND epid !~ '^[A-Za-z]'`)).rows.map((r: any) => Number(r.department_id)));
+            const regularDepts = permittedDepts.filter(d => withRegular.has(d.id));
+
             // 1. Not Created by 10th (Runs exactly on the 10th)
             if (today.getDate() === 10) {
                 console.log('Running 10th day reminders...');
-                for (const dept of permittedDepts) {
+                for (const dept of regularDepts) {
                     const reports = await db.query.attendanceReports.findMany({
                         where: and(
                             eq(attendanceReports.departmentId, dept.id),
@@ -74,7 +81,7 @@ export function setupCronJobs() {
             // 4. Day before deadline (14th of the month)
             if (today.getDate() === 14) {
                 console.log('Running 14th day deadline warnings...');
-                for (const dept of permittedDepts) {
+                for (const dept of regularDepts) {
                     const reports = await db.query.attendanceReports.findMany({
                         where: and(
                             eq(attendanceReports.departmentId, dept.id),
@@ -136,13 +143,16 @@ export function setupCronJobs() {
             for (const report of draftReports) {
                 const dept = permittedDepts.find(d => d.id === report.departmentId);
                 if (dept?.email) {
-                    // Check if department already has a 'sent' report for this month/year
+                    // Check if department already has a 'sent' report of the same kind (regular / wages-fund) for this month/year
                     const alreadySent = await db.query.attendanceReports.findFirst({
                         where: and(
                             eq(attendanceReports.departmentId, report.departmentId),
                             eq(attendanceReports.month, report.month),
                             eq(attendanceReports.year, report.year),
-                            eq(attendanceReports.status, 'sent')
+                            eq(attendanceReports.status, 'sent'),
+                            report.reportType === 'fund'
+                                ? eq(attendanceReports.reportType, 'fund')
+                                : sql`${attendanceReports.reportType} <> 'fund'`
                         )
                     });
                     if (alreadySent) {
@@ -152,7 +162,8 @@ export function setupCronJobs() {
                     try {
                         await sendAttendanceReminder(dept.email, dept.name, 'not_finalized', {
                             monthName: monthNames[report.month],
-                            year: report.year
+                            year: report.year,
+                            fund: report.reportType === 'fund'
                         });
                     } catch (e) {
                         console.error(`Cron error sending not_finalized to ${dept.email}:`, e);
@@ -173,13 +184,16 @@ export function setupCronJobs() {
             for (const report of submittedReports) {
                 const dept = permittedDepts.find(d => d.id === report.departmentId);
                 if (dept?.email) {
-                    // Check if department already has a 'sent' report for this month/year
+                    // Check if department already has a 'sent' report of the same kind (regular / wages-fund) for this month/year
                     const alreadySent = await db.query.attendanceReports.findFirst({
                         where: and(
                             eq(attendanceReports.departmentId, report.departmentId),
                             eq(attendanceReports.month, report.month),
                             eq(attendanceReports.year, report.year),
-                            eq(attendanceReports.status, 'sent')
+                            eq(attendanceReports.status, 'sent'),
+                            report.reportType === 'fund'
+                                ? eq(attendanceReports.reportType, 'fund')
+                                : sql`${attendanceReports.reportType} <> 'fund'`
                         )
                     });
                     if (alreadySent) {
@@ -189,13 +203,22 @@ export function setupCronJobs() {
                     try {
                         await sendAttendanceReminder(dept.email, dept.name, 'not_sent', {
                             monthName: monthNames[report.month],
-                            year: report.year
+                            year: report.year,
+                            fund: report.reportType === 'fund'
                         });
                     } catch (e) {
                         console.error(`Cron error sending not_sent to ${dept.email}:`, e);
                     }
                     await delay(2000); // Wait 2 seconds
                 }
+            }
+
+            // 5. Wages / Fund Staff (letter EPID) attendance: own due date (last day of the month)
+            try {
+                const { runFundReminders } = await import('./fundReminders');
+                await runFundReminders(today);
+            } catch (e) {
+                console.error('Cron error in fund reminders:', e);
             }
 
             console.log('Daily attendance reminders completed.');

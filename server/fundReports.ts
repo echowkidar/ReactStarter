@@ -10,7 +10,7 @@ import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { sessionAdmin } from "./auth";
-import { isSectionLoginCode } from "../shared/sections";
+import { isSectionLoginCode, sectionOfAdmin, sectionLabel } from "../shared/sections";
 
 const OPEN_KEY = "fund_report_open";
 const LETTER_EPID_SQL = sql`e.epid ~ '^[A-Za-z]'`;
@@ -25,6 +25,23 @@ export async function fundStaffCount(departmentId: number): Promise<number> {
     SELECT COUNT(*)::int AS n FROM employees e
     WHERE e.department_id = ${departmentId} AND e.is_active = 'active' AND ${LETTER_EPID_SQL}`);
   return Number((r.rows[0] as any)?.n ?? 0);
+}
+
+/**
+ * For e-mails about a report: null when it is not a Wages / Fund Staff report, else the sections
+ * that receive it ("Accounts Section and Bill Section"), from its employees' dealing assistants.
+ */
+export async function fundReportRecipients(reportId: number | string | undefined): Promise<string | null> {
+  const id = Number(reportId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const r = (await db.execute(sql`SELECT COALESCE(report_type, 'regular') AS t FROM attendance_reports WHERE id = ${id}`)).rows[0] as any;
+  if (!r || r.t !== "fund") return null;
+  const codes = (await db.execute(sql`
+    SELECT DISTINCT UPPER(TRIM(COALESCE(e.salary_asstt, ''))) AS c
+    FROM attendance_entries ae JOIN employees e ON e.id = ae.employee_id WHERE ae.report_id = ${id}`)).rows.map((x: any) => x.c);
+  const labels = [...new Set(codes.map((c: string) => sectionOfAdmin(c === "OTH" ? "ACC" : c)).filter((s) => s !== "salary"))]
+    .map((s) => sectionLabel(s));
+  return labels.length ? labels.join(" and ") : "Accounts / Bill / Students Section";
 }
 
 export async function fundSupplementaryAllowed(departmentId: number): Promise<boolean> {

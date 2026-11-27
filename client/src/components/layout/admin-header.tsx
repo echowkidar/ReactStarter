@@ -21,7 +21,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { getAdminAccess, useAdminSection, setAdminSectionView, isSectionLogin } from "@/lib/admin-access";
-import { SECTIONS, sectionLabel } from "@shared/sections";
+import { SECTIONS, sectionLabel, pageFitsSection, type SectionKey } from "@shared/sections";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
 
@@ -77,6 +77,12 @@ export function logoutAdmin(navigate: (to: string) => void) {
 
 export default function AdminHeader({ className }: AdminHeaderProps) {
   const [location, setLocation] = useLocation();
+  // Super Admin switches the section: a page that belongs to the other side (Payroll ↔ LPC /
+  // Claim Forms) cannot stay open, so go to the Dashboard of the chosen section
+  const switchSection = (key: SectionKey) => {
+    setAdminSectionView(key);
+    if (!pageFitsSection(location, key)) setLocation("/admin/dashboard");
+  };
   const [menuOpen, setMenuOpen] = useState(false);
   const adminInfo = readAdmin();
   const access = getAdminAccess();
@@ -208,7 +214,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {SECTIONS.map((s) => (
-                  <DropdownMenuItem key={s.key} onSelect={() => setAdminSectionView(s.key)} className={cn(s.key === section && "font-semibold")}>
+                  <DropdownMenuItem key={s.key} onSelect={() => switchSection(s.key)} className={cn(s.key === section && "font-semibold")}>
                     {s.label}
                   </DropdownMenuItem>
                 ))}
@@ -285,7 +291,7 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
                   <div className="px-2 pb-1 text-xs font-medium text-slate-500">Section</div>
                   <select
                     value={section}
-                    onChange={(e) => setAdminSectionView(e.target.value as any)}
+                    onChange={(e) => { switchSection(e.target.value as SectionKey); setMenuOpen(false); }}
                     className="h-10 w-full rounded-md border bg-white px-2 text-sm"
                   >
                     {SECTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}

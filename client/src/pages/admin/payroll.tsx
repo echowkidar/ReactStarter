@@ -1,6 +1,6 @@
 // Wages payroll for Revolving Funds or Other Similar Funds staff — Accounts, Bill and Students sections (and the Super Admin
 // looking at one of them). Month view → roll editor. Rules: shared/wagePayroll.ts.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import AdminHeader from "@/components/layout/admin-header";
@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, ArrowLeft, ChevronDown, ChevronRight, Download, FileSpreadsheet, FileText, Info, Landmark, Loader2, Pencil, Printer, ReceiptText, Settings } from "lucide-react";
 import { getAdminAccess, useAdminSection } from "@/lib/admin-access";
-import { sectionLabel } from "@shared/sections";
+import { sectionLabel, fundWorkMonth } from "@shared/sections";
 import { calculateLine, WAGE_CATEGORY_LABELS, type StatutorySet, type WageCategory } from "@shared/wagePayroll";
 import { PayrollSettingsDialog, sectionQuery } from "@/components/admin/payroll-settings";
 import { PayrollHistory } from "@/components/admin/payroll-history";
@@ -69,11 +69,8 @@ type RollDetail = {
   history: Array<{ action: string; detail: string | null; by_user: string; at: string }>;
 };
 
-function defaultMonth() {
-  const t = new Date();
-  if (t.getDate() <= 10) t.setMonth(t.getMonth() - 1, 1);
-  return { month: t.getMonth() + 1, year: t.getFullYear() };
-}
+/** The month being paid: previous month until the last days of the month (see fundWorkMonth) */
+const defaultMonth = () => fundWorkMonth();
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -111,6 +108,14 @@ export default function AdminPayroll() {
     if (id) url.searchParams.set("roll", String(id)); else url.searchParams.delete("roll");
     window.history.replaceState(null, "", url.toString());
   };
+  // Super Admin switched to another section: an open roll belongs to the old one → back to the month list
+  const lastSection = useRef(section);
+  useEffect(() => {
+    if (lastSection.current === section) return;
+    lastSection.current = section;
+    if (rollId) openRoll(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
 
   return (
     <div className="min-h-screen bg-slate-50">

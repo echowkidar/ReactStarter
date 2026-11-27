@@ -294,6 +294,19 @@ export async function sendAttendanceNotification(
         break;
     }
 
+    // Wages / Fund Staff (letter EPID) report: it goes to the Accounts / Bill / Students Section, not the Salary Section
+    try {
+      const { fundReportRecipients } = await import('./fundReports');
+      const to = await fundReportRecipients(reportDetails.reportId);
+      if (to) {
+        const FUND = 'Revolving Funds or Other Similar Funds';
+        subject = subject.replace('Attendance Report', `${FUND} Attendance Report`).replace('Salary Section', to);
+        htmlContent = htmlContent.replace(/the Salary Section/g, `the ${to}`)
+          .replace(/your attendance report/gi, `your ${FUND} attendance report`)
+          .replace(/the attendance report/g, `the ${FUND} attendance report`);
+      }
+    } catch { /* keep the general wording */ }
+
     const mailOptions = {
       from: process.env.SMTP_FROM || '"AMU Salary Section" <noreply@amu.ac.in>',
       to: email,
@@ -333,6 +346,7 @@ export async function sendAttendanceReminder(
     monthName?: string;
     year?: number;
     currentStatus?: string;
+    fund?: boolean; // Wages / Fund Staff report (goes to the Accounts / Bill / Students Section)
   }
 ) {
   try {
@@ -390,6 +404,16 @@ export async function sendAttendanceReminder(
           <p style="font-weight: bold;">Please log in to the Attendance Portal immediately and complete the submission process to avoid any administrative delays.</p>
         `;
         break;
+    }
+
+    if (reportDetails.fund) {
+      const FUND = 'Revolving Funds or Other Similar Funds';
+      subject = subject.replace('Attendance Report', `${FUND} Attendance Report`)
+        .replace('to Salary Section', 'to the Accounts / Bill / Students Section');
+      htmlContent = htmlContent.replace(/the attendance report/g, `the ${FUND} attendance report`)
+        .replace(/Your attendance report/g, `Your ${FUND} attendance report`)
+        .replace(/the Salary Section/g, 'the Accounts / Bill / Students Section')
+        .replace(/Forward to Salary Section/g, 'Send');
     }
 
     const mailOptions = {

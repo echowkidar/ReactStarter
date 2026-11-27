@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/select";
 import Loading from "@/components/layout/loading";
 import AdminHeader from "@/components/layout/admin-header";
-import { getAdminAccess, useAdminSection, isSectionLogin } from "@/lib/admin-access";
-import { reportInSection, isFundReport, isSectionLoginCode, FUND_REPORT_LABEL, sectionLabel, sectionCodes } from "@shared/sections";
+import { getAdminAccess, useAdminSection, isSectionLogin, getAdminSection } from "@/lib/admin-access";
+import { reportInSection, isFundReport, isSectionLoginCode, FUND_REPORT_LABEL, sectionLabel, sectionCodes, defaultMonthOfSection, type SectionKey } from "@shared/sections";
 import { Switch } from "@/components/ui/switch";
 import { getReportPrefix } from "@shared/reportKind";
 import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send, Lock, Unlock, ShieldAlert, ShieldCheck } from "lucide-react";
@@ -35,7 +35,7 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { ReportingEmployeesDialog, useAdminReportingEmployees } from "@/components/admin/reporting-employees-dialog";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Label, BarChart, Bar, Legend } from 'recharts';
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -140,8 +140,10 @@ export default function AdminDashboard() {
     }
   }, []);
 
-  // Default to current month
-  const defaultMonthVal = `${new Date().getFullYear()}-${new Date().getMonth()}`;
+  // Default month: Salary = current month; Accounts / Bill / Students = the month they are paying
+  // (previous month until the last days of the month, see fundWorkMonth)
+  const monthKeyOf = (s: SectionKey) => { const d = defaultMonthOfSection(s); return `${d.year}-${d.month - 1}`; };
+  const defaultMonthVal = monthKeyOf(getAdminSection());
   const [monthFilter, setMonthFilter] = useState<string[]>([defaultMonthVal]);
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "receiptNo", direction: "desc" });
@@ -188,6 +190,14 @@ export default function AdminDashboard() {
 
   const section = useAdminSection();
   const sectionLogin = isSectionLogin();
+  // Super Admin switched the section: show that section's own default month
+  const lastSection = useRef(section);
+  useEffect(() => {
+    if (lastSection.current === section) return;
+    lastSection.current = section;
+    setMonthFilter([monthKeyOf(section)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
   const { data: allReports = [], isLoading } = useQuery<ReportWithDepartment[]>({
     queryKey: ["/api/admin/attendance", monthFilter],
     queryFn: async () => {
