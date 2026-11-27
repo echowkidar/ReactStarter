@@ -49,9 +49,9 @@ const fmtDmy = (iso: string) => String(iso).slice(0, 10).split("-").reverse().jo
 const isoDate = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d ?? "").slice(0, 10));
 const nowIst = () => new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-type FundSection = Exclude<SectionKey, "salary">;
+export type FundSection = Exclude<SectionKey, "salary">;
 const FUND_SECTIONS: FundSection[] = ["accounts", "bill", "students"];
-const LETTER = sql`e.epid ~ '^[A-Za-z]'`;
+export const LETTER = sql`e.epid ~ '^[A-Za-z]'`;
 
 // ── Settings (app_settings) ────────────────────────────────────────────────
 
@@ -71,11 +71,11 @@ export const statutoryRates = () => readSetting<StatutorySet[]>("wage_statutory"
 
 // ── Who is asking ──────────────────────────────────────────────────────────
 
-type Actor = { section: FundSection; name: string; isSuper: boolean };
+export type Actor = { section: FundSection; name: string; isSuper: boolean };
 const isSuperRole = (a: any) => ["super", "super_admin", "superadmin"].includes(a?.role) && String(a?.userCode ?? "").toUpperCase() !== "VEW";
 
 /** The acting admin and the section they work on, or null after sending 403 */
-async function actor(req: Request, res: Response, wanted?: unknown): Promise<Actor | null> {
+export async function actor(req: Request, res: Response, wanted?: unknown): Promise<Actor | null> {
   const a = await sessionAdmin(req).catch(() => null);
   const name = String(a?.name || a?.email || "admin");
   if (a && ["salary", "salary_admin"].includes(a.role)) {
@@ -106,7 +106,7 @@ const wrap = (fn: (req: Request, res: Response) => Promise<any>) => (req: Reques
 const int = (v: unknown) => { const n = Number(v); return Number.isInteger(n) ? n : NaN; };
 const validMonth = (m: number, y: number) => m >= 1 && m <= 12 && y >= 2020 && y <= 2100;
 const daysInMonth = (m: number, y: number) => new Date(y, m, 0).getDate();
-const codesSql = (s: FundSection) => sql.join(sectionCodes(s).map((c) => sql`${c}`), sql`, `);
+export const codesSql = (s: FundSection) => sql.join(sectionCodes(s).map((c) => sql`${c}`), sql`, `);
 
 // ── Attendance → days per employee for a wage month ───────────────────────
 
@@ -539,10 +539,17 @@ export function registerWagePayrollRoutes(app: Express) {
       g.staff++;
       groups.set(k, g);
     }
+    // Received = a sent report holds this section's staff (another section's paper entry does not count);
+    // paper = this section's own paper entry of the month (with or without the scanned copy)
     const reports = await db.execute(sql`
       SELECT ar.department_id, COUNT(*)::int AS n,
-             BOOL_OR(ar.status IN ('sent','cancel_requested')) AS received,
-             BOOL_OR(ar.status IN ('draft','submitted')) AS pending
+             BOOL_OR(ar.status IN ('sent','cancel_requested') AND (COALESCE(ar.entry_source, '') <> 'paper' OR ar.entered_section = ${who.section})
+               AND EXISTS (SELECT 1 FROM attendance_entries ae JOIN employees e ON e.id = ae.employee_id
+                           WHERE ae.report_id = ar.id AND UPPER(TRIM(COALESCE(e.salary_asstt, ''))) IN (${codesSql(who.section)}))) AS received,
+             BOOL_OR(ar.status IN ('draft','submitted')) AS pending,
+             MAX(CASE WHEN ar.entry_source = 'paper' AND ar.entered_section = ${who.section} THEN ar.id END) AS paper_id,
+             BOOL_OR(ar.entry_source = 'paper' AND ar.entered_section = ${who.section} AND COALESCE(ar.file_url, '') <> '') AS paper_scan,
+             BOOL_OR(COALESCE(ar.entry_source, '') <> 'paper') AS online
       FROM attendance_reports ar
       WHERE COALESCE(ar.report_type, 'regular') = 'fund' AND ar.month = ${month} AND ar.year = ${year}
         AND ar.status <> 'cancelled'
@@ -568,6 +575,9 @@ export function registerWagePayrollRoutes(app: Express) {
         fundCode: g.fund?.paymentCode || "", fundName: g.fund?.fundName || "",
         headName: g.fund?.headName || "", paymentCode: g.fund?.paymentCode || "",
         attendance: rep ? (rep.received ? "received" : rep.pending ? "pending" : "none") : "none",
+        // attendance entered by this section from the paper copy (null = none); online = the department's own report exists
+        paper: rep?.paper_id ? { id: Number(rep.paper_id), scan: !!rep.paper_scan } : null,
+        online: !!rep?.online,
         roll: roll ? { id: Number(roll.id), status: roll.status, totals: roll.totals, pageNo: roll.page_no } : null,
       };
     }).sort((a, b) => a.departmentName.localeCompare(b.departmentName) || a.fundName.localeCompare(b.fundName));
@@ -752,6 +762,12 @@ export function registerWagePayrollRoutes(app: Express) {
     const passedOn = String(req.body?.passedOn ?? "").trim();
     if (!pageNo) return res.status(400).json({ message: "Enter the page number." });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(passedOn)) return res.status(400).json({ message: "Enter the date of passing." });
+    // Attendance entered from paper: its scanned copy must be on record before payment
+    const noScan = (await db.execute(sql`
+      SELECT 1 FROM attendance_reports WHERE department_id = ${roll.department_id} AND month = ${roll.month} AND year = ${roll.year}
+        AND entry_source = 'paper' AND entered_section = ${roll.section} AND status <> 'cancelled'
+        AND COALESCE(file_url, '') = '' LIMIT 1`)).rows[0];
+    if (noScan) return res.status(409).json({ message: "Upload the scanned copy of this department's paper attendance before passing the roll." });
     await db.transaction(async (tx) => {
       await tx.execute(sql`
         UPDATE wage_rolls SET status = 'passed', page_no = ${pageNo}, passed_on = ${passedOn}, passed_by = ${who.name}, passed_at = NOW()

@@ -965,6 +965,13 @@ export async function runMigrations() {
       await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_wage_rolls_main_fund ON wage_rolls (department_id, section, COALESCE(fund_code, ''), year, month) WHERE kind = 'main'`);
       await db.execute(sql`DROP INDEX IF EXISTS uq_wage_rolls_main`);
       await db.execute(sql`ALTER TABLE wage_roll_lines ADD COLUMN IF NOT EXISTS bank_branch TEXT`);
+      // Fund staff attendance received on paper and entered by a section (with the scanned copy)
+      await db.execute(sql`
+        ALTER TABLE attendance_reports
+          ADD COLUMN IF NOT EXISTS entry_source TEXT,
+          ADD COLUMN IF NOT EXISTS entered_by TEXT,
+          ADD COLUMN IF NOT EXISTS entered_section TEXT;
+      `);
       // Staff on fixed monthly wages (instead of the category's day rate); snapshot on the roll line
       await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS wage_monthly_fixed NUMERIC(12,2)`);
       await db.execute(sql`

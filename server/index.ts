@@ -106,6 +106,8 @@ export async function initApp() {
     // Wages payroll (Accounts / Bill / Students sections): rates, payment heads, muster rolls
     const { registerWagePayrollRoutes } = await import("./wagePayroll");
     registerWagePayrollRoutes(app);
+    const { registerPaperAttendanceRoutes } = await import("./paperAttendance");
+    registerPaperAttendanceRoutes(app);
     // Public wage slips (no login; EPID + date of joining / bank account)
     const { registerWageSlipPublicRoutes } = await import("./wageSlipPublic");
     registerWageSlipPublicRoutes(app);

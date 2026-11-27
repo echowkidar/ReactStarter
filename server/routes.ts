@@ -3092,6 +3092,14 @@ export async function registerRoutes(app: Express) {
           if (!fundReport && letter) {
             return res.status(400).json({ message: `${empForKind.name} (${empForKind.epid}) is Revolving Funds or Other Similar Funds staff — add the attendance in the Revolving Funds or Other Similar Funds report.` });
           }
+          // Already entered by a section from the paper attendance of the month
+          if (fundReport && (report as any).entrySource !== 'paper') {
+            const { paperEntryOf } = await import("./paperAttendance");
+            const by = await paperEntryOf(empForKind.id, report.month, report.year);
+            if (by) {
+              return res.status(409).json({ message: `${empForKind.name} (${empForKind.epid}): the attendance of this month was already entered by the ${by} from the paper copy you sent.` });
+            }
+          }
         }
 
         const guard = await checkReportingGuard({

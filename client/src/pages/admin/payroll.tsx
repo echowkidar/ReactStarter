@@ -22,6 +22,7 @@ import { sectionLabel } from "@shared/sections";
 import { calculateLine, WAGE_CATEGORY_LABELS, type StatutorySet, type WageCategory } from "@shared/wagePayroll";
 import { PayrollSettingsDialog, sectionQuery } from "@/components/admin/payroll-settings";
 import { PayrollHistory } from "@/components/admin/payroll-history";
+import { PaperActions, PaperBadges, PaperImportDialog, usePaperList } from "@/components/admin/paper-attendance";
 
 const API = "/api/admin/payroll";
 
@@ -57,6 +58,8 @@ type MonthDept = {
   departmentId: number; departmentName: string; staff: number; fundCode: string; fundName: string; headName: string; paymentCode: string;
   attendance: "received" | "pending" | "none";
   roll: { id: number; status: "draft" | "finalised" | "passed"; totals: Totals | null; pageNo: string | null } | null;
+  paper?: { id: number; scan: boolean } | null;
+  online?: boolean;
 };
 type RollDetail = {
   roll: Record<string, any>;
@@ -168,6 +171,9 @@ function MonthView({ section, ym, setYm, onOpen, onFunds }: {
     queryFn: async () => (await apiRequest("GET", `${API}/month?month=${ym.month}&year=${ym.year}&${sectionQuery(section)}`)).json(),
   });
   const depts = data?.departments || [];
+  const [importOpen, setImportOpen] = useState(false);
+  const { data: paperData } = usePaperList(section, ym);
+  const paperByDept = useMemo(() => new Map((paperData?.reports || []).map((r) => [r.departmentId, r])), [paperData]);
 
   const prepare = async (d: MonthDept) => {
     setCreating(deptKey(d));
@@ -214,7 +220,13 @@ function MonthView({ section, ym, setYm, onOpen, onFunds }: {
             <SelectContent>{years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+        <div className="ml-auto">
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" /> Import paper attendance (Excel)
+          </Button>
+        </div>
       </div>
+      {importOpen && <PaperImportDialog open={importOpen} onOpenChange={setImportOpen} section={section} ym={ym} />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <Stat label="Passed" value={summary.passed} />
@@ -255,19 +267,26 @@ function MonthView({ section, ym, setYm, onOpen, onFunds }: {
                     )}
                   </TableCell>
                   <TableCell className="text-right">{d.staff}</TableCell>
-                  <TableCell><AttendanceBadge value={d.attendance} /></TableCell>
+                  <TableCell>
+                    <AttendanceBadge value={d.attendance} />
+                    <PaperBadges paper={d.paper || null} report={paperByDept.get(d.departmentId)} />
+                  </TableCell>
                   <TableCell>{d.roll ? <StatusBadge status={d.roll.status} /> : <span className="text-slate-400">Not prepared</span>}</TableCell>
                   <TableCell className="text-right">{d.roll?.totals ? num(d.roll.totals.employees) : "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{d.roll?.totals ? inr(d.roll.totals.gross) : "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{d.roll?.totals ? inr(d.roll.totals.net) : "—"}</TableCell>
                   <TableCell className="text-right">
-                    {d.roll ? (
-                      <Button size="sm" variant="outline" onClick={() => onOpen(d.roll!.id)}>Open</Button>
-                    ) : d.attendance === "received" ? (
-                      <Button size="sm" disabled={creating === deptKey(d)} onClick={() => prepare(d)}>
-                        {creating === deptKey(d) &&<Loader2 className="h-4 w-4 mr-2 animate-spin" />} Prepare roll
-                      </Button>
-                    ) : null}
+                    <div className="flex flex-wrap items-center justify-end gap-1">
+                      <PaperActions section={section} ym={ym} departmentId={d.departmentId} departmentName={d.departmentName}
+                        attendance={d.attendance} online={!!d.online} hasRoll={!!d.roll} paper={d.paper || null} />
+                      {d.roll ? (
+                        <Button size="sm" variant="outline" onClick={() => onOpen(d.roll!.id)}>Open</Button>
+                      ) : d.attendance === "received" ? (
+                        <Button size="sm" disabled={creating === deptKey(d)} onClick={() => prepare(d)}>
+                          {creating === deptKey(d) &&<Loader2 className="h-4 w-4 mr-2 animate-spin" />} Prepare roll
+                        </Button>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

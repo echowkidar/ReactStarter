@@ -116,6 +116,11 @@ export const attendanceReports = pgTable("attendance_reports", {
   // 'main' | 'supplementary' — NULL for reports created before this field existed
   // (their label is derived as before; see shared/reportKind.ts)
   reportKind: text("report_kind"),
+  // Wages / Fund Staff attendance received on paper and entered by a section (Accounts / Bill /
+  // Students): entry_source 'paper', who entered it and for which section. NULL = sent online.
+  entrySource: text("entry_source"),
+  enteredBy: text("entered_by"),
+  enteredSection: text("entered_section"),
 });
 
 
