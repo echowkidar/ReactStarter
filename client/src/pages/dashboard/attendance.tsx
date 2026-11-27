@@ -2590,7 +2590,7 @@ export default function Attendance() {
                         ? `A draft ${FUND_REPORT_LABEL} report already exists. Please finalise or delete it first.`
                         : existingFundReport
                           ? `${FUND_REPORT_LABEL} report for this month already exists (${existingFundReport.status})`
-                          : `Opens when the Super Admin opens ${FUND_REPORT_LABEL} attendance`}
+                          : `Opens when the Accounts / Bill / Students Section opens ${FUND_REPORT_LABEL} attendance`}
                     onClick={() => {
                       setActiveReportType('fund');
                       setReportKind(existingFundReport ? 'supplementary' : 'main');
@@ -2605,7 +2605,7 @@ export default function Attendance() {
                   </Button>
                   {!canCreateFundReport && !existingFundReport && !existingDraftFundReport && attendanceStatus?.fundReportOpen !== true && (
                     <span className="text-[11px] text-muted-foreground mt-1">
-                      Opens when the Super Admin opens {FUND_REPORT_LABEL} attendance
+                      Opens when the Accounts / Bill / Students Section opens {FUND_REPORT_LABEL} attendance
                     </span>
                   )}
                 </div>

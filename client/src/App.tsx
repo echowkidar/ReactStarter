@@ -52,6 +52,7 @@ import WageSlipPage from "@/pages/wage-slip";
 import DepartmentClaimForms from "@/pages/dashboard/claim-forms";
 import AdminClaimForms from "@/pages/admin/claim-forms";
 import AdminPayroll from "@/pages/admin/payroll";
+import AdminHelp from "@/pages/admin/help";
 
 function AppRouter() {
   return (
@@ -102,6 +103,7 @@ function AppRouter() {
       <ProtectedRoute path="/dashboard/forms" component={DepartmentClaimForms} />
       <ProtectedAdminRoute path="/admin/claim-forms" component={AdminClaimForms} />
       <ProtectedAdminRoute path="/admin/payroll" component={AdminPayroll} />
+      <ProtectedAdminRoute path="/admin/help" component={AdminHelp} />
       <Route path="/lpc/verify/:id" component={LpcVerify} />
       <Route path="/dak/verify/:token" component={DakVerify} />
       <Route component={NotFound} />

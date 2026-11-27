@@ -1,7 +1,7 @@
 import { isTermedStatus } from "@shared/employeeKind";
 import { serverLogout } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import {
   Table,
   TableBody,
@@ -27,7 +27,7 @@ import { getAdminAccess, useAdminSection, isSectionLogin, getAdminSection } from
 import { reportInSection, isFundReport, isSectionLoginCode, FUND_REPORT_LABEL, sectionLabel, sectionCodes, defaultMonthOfSection, type SectionKey } from "@shared/sections";
 import { Switch } from "@/components/ui/switch";
 import { getReportPrefix } from "@shared/reportKind";
-import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send, Lock, Unlock, ShieldAlert, ShieldCheck } from "lucide-react";
+import { FileCheck, LogOut, Eye, Download, Search, Users, Loader2, CheckCircle, XCircle, Trash2, RotateCcw, FileImage, Ticket, Megaphone, ArrowRightLeft, Settings, Phone, AlertCircle, ScrollText, Mail, Inbox, Send, Lock, Unlock, ShieldAlert, ShieldCheck, BookOpen } from "lucide-react";
 import { AttendanceReport, Department } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1199,6 +1199,10 @@ export default function AdminDashboard() {
               <FileCheck className="h-4 w-4 mr-2" />
               {sectionLabel(section)}
             </Badge>
+            <Link href="/admin/help" title="User guide for this section (English / हिंदी)"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition-colors hover:border-blue-400 hover:bg-blue-100">
+              <BookOpen className="h-4 w-4" /> Help &amp; Guide
+            </Link>
           </div>
           <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
             {/* Global Attendance Indicator */}

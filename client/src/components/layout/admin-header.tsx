@@ -45,6 +45,7 @@ const EXTRA_TITLES: Array<{ prefix: string; title: string; parent?: string }> = 
   { prefix: "/admin/reports/", title: "Report Details", parent: "/admin/attendance-reports" },
   { prefix: "/admin/missing-employees", title: "Missing Employees", parent: "/admin/attendance-reports" },
   { prefix: "/admin/transfer-requests", title: "Transfer Requests" },
+  { prefix: "/admin/help", title: "Help & Guide" },
   { prefix: "/admin/email", title: "Email Settings", parent: "/admin/mailbox" },
   { prefix: "/admin/settings/oracle-sync/paybill", title: "Sync · Paybill History", parent: "/admin/settings" },
   { prefix: "/admin/settings/oracle-sync", title: "Sync", parent: "/admin/settings" },
