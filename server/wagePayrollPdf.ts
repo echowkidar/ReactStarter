@@ -297,139 +297,184 @@ export async function buildMusterRollPdf(roll: MusterRoll, lines: MusterLine[]):
   return pdf.save();
 }
 
-// ───────────────────────── Pay slip (text-style, like the university's payroll pay slip) ─────────────────────────
-const SLIP_COLS = 79;
-const MON3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+// ───────────────────────── Pay slip (modern single-page layout) ─────────────────────────
+// ── Pay slip palette and small drawing helpers ──
+const SL = {
+  navy: rgb(30 / 255, 58 / 255, 138 / 255), ink: rgb(15 / 255, 23 / 255, 42 / 255), s500: rgb(100 / 255, 116 / 255, 139 / 255),
+  s600: rgb(71 / 255, 85 / 255, 105 / 255), s200: rgb(226 / 255, 232 / 255, 240 / 255), s100: rgb(241 / 255, 245 / 255, 249 / 255),
+  s50: rgb(248 / 255, 250 / 255, 252 / 255), green: rgb(4 / 255, 120 / 255, 87 / 255), green50: rgb(236 / 255, 253 / 255, 245 / 255),
+  white: rgb(1, 1, 1),
+};
+type SlipColor = ReturnType<typeof rgb>;
+type SlipCtx = { page: PDFPage; H: number; reg: PDFFont; bold: PDFFont };
 
-/** Breaks text into lines of at most `width` characters (words kept whole where possible) */
-function wrapChars(value: string, width: number): string[] {
-  const words = safe(value).split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-  for (let w of words) {
-    while (w.length > width) {
-      if (line) { lines.push(line); line = ""; }
-      lines.push(w.slice(0, width));
-      w = w.slice(width);
-    }
-    if (!line) line = w;
-    else if (line.length + 1 + w.length <= width) line += " " + w;
-    else { lines.push(line); line = w; }
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : [""];
+/** Rectangle positioned by its top edge (distance from the top of the page) */
+function slipRect(c: SlipCtx, x: number, top: number, w: number, h: number, fill?: SlipColor, border?: SlipColor) {
+  c.page.drawRectangle({ x, y: c.H - top - h, width: w, height: h, color: fill, borderColor: border, borderWidth: border ? 0.6 : undefined });
 }
-const money = (n: number) => (Number.isFinite(n) ? n : 0).toFixed(2);
-const padR = (v: string, n: number) => (v.length >= n ? v.slice(0, n) : v + " ".repeat(n - v.length));
-const padL = (v: string, n: number) => (v.length >= n ? v.slice(-n) : " ".repeat(n - v.length) + v);
-const centreIn = (v: string, n: number) => " ".repeat(Math.max(0, Math.floor((n - v.length) / 2))) + v;
+function slipHair(c: SlipCtx, x1: number, x2: number, top: number, color: SlipColor = SL.s200, thickness = 0.6) {
+  c.page.drawLine({ start: { x: x1, y: c.H - top }, end: { x: x2, y: c.H - top }, thickness, color });
+}
+/** Text by baseline (distance from the top of the page); right-aligned at x when `right` */
+function slipText(c: SlipCtx, v: string, x: number, baseline: number, size: number, bold = false, color: SlipColor = SL.ink, right = false) {
+  const font = bold ? c.bold : c.reg;
+  const s = safe(v);
+  c.page.drawText(s, { x: right ? x - font.widthOfTextAtSize(s, size) : x, y: c.H - baseline, size, font, color });
+}
+/** Small uppercase grey label over a bold value; the value is cut with ".." if too wide */
+function drawLabelValue(c: SlipCtx, label: string, value: string, x: number, top: number, maxW: number) {
+  slipText(c, label.toUpperCase(), x, top + 7, 6.8, true, SL.s500);
+  let v = safe(value || "-");
+  if (c.bold.widthOfTextAtSize(v, 9.5) > maxW) {
+    while (v.length > 1 && c.bold.widthOfTextAtSize(v + "..", 9.5) > maxW) v = v.slice(0, -1);
+    v += "..";
+  }
+  slipText(c, v, x, top + 19, 9.5, true);
+}
+/** One earnings/deductions table; returns its height */
+function drawTable(c: SlipCtx, x: number, top: number, w: number, title: string, rows: [string, string][], rowCount: number, footLabel: string, footVal: string): number {
+  const HEAD = 20, ROW = 20, FOOT = 23;
+  const h = HEAD + ROW * rowCount + FOOT;
+  slipRect(c, x, top, w, h, SL.white, SL.s200);
+  slipRect(c, x, top, w, HEAD, SL.s100, SL.s200);
+  slipText(c, title, x + 10, top + 13, 7.8, true, SL.s600);
+  slipText(c, "AMOUNT (Rs.)", x + w - 10, top + 13, 7.8, true, SL.s600, true);
+  for (let i = 0; i < rowCount; i++) {
+    const t = top + HEAD + ROW * i;
+    if (rows[i]) {
+      slipText(c, rows[i][0], x + 10, t + 13.5, 9.5);
+      slipText(c, rows[i][1], x + w - 10, t + 13.5, 9.5, false, SL.ink, true);
+    }
+    if (i < rowCount - 1) slipHair(c, x + 1, x + w - 1, t + ROW, SL.s100);
+  }
+  const ft = top + HEAD + ROW * rowCount;
+  slipHair(c, x, x + w, ft, SL.s500, 0.8);
+  slipText(c, footLabel, x + 10, ft + 15, 9.5, true);
+  slipText(c, footVal, x + w - 10, ft + 15, 9.5, true, SL.ink, true);
+  return h;
+}
 
 export async function buildWageSlipPdf(s: WageSlip): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  const mono = await pdf.embedFont(StandardFonts.Courier);
-  const monoBold = await pdf.embedFont(StandardFonts.CourierBold);
-  const small = await pdf.embedFont(StandardFonts.Helvetica);
-  const W = 595.28, H = 841.89;
+  const reg = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const W = 595.28, H = 841.89, M = 36, CW = W - 2 * M, R = W - M;
   const page = pdf.addPage([W, H]);
-  const FSZ = 10.6;
-  const charW = mono.widthOfTextAtSize("M", FSZ);
-  const left = (W - charW * SLIP_COLS) / 2;
-  const LH = 12.4;
-  let top = 46;
-  const line = (text: string, bold = false) => {
-    page.drawText(safe(text), { x: left, y: H - top, size: FSZ, font: bold ? monoBold : mono, color: BLACK });
-    top += LH;
-  };
-  const DASH = "-".repeat(SLIP_COLS);
-  const EQ = "=".repeat(SLIP_COLS);
-
-  const monthName = (MONTHS[(s.month - 1 + 12) % 12] ?? String(s.month)).toUpperCase();
-  const monthTxt = `${monthName} -${s.year}`;
+  const c: SlipCtx = { page, H, reg, bold };
+  const GAP = 14;
   const section = (s.sectionLabel || "Accounts Section").trim();
-  const upper = (v: unknown) => safe(v).toUpperCase();
+  const monthName = MONTHS[(s.month - 1 + 12) % 12] ?? String(s.month);
+  const amt = (n: number) => formatINR(n, 2);
+  let top = 30;
 
-  // header
-  line(padR(upper(s.dealingCode ?? ""), SLIP_COLS - monthTxt.length) + monthTxt, true);
-  line(centreIn("ALIGARH MUSLIM UNIVERSITY-ALIGARH, FINANCE & ACCOUNTS DEPARTMENT", SLIP_COLS), true);
-  const title = `PAY SLIP FOR THE MONTH OF ${monthTxt}`;
-  line(centreIn(title, SLIP_COLS - 8).padEnd(SLIP_COLS - 5) + "WAGES", true);
-  line(DASH);
-
-  // details: two label/value columns, long values wrap
-  const LV = 32;   // left value width
-  const RV = SLIP_COLS - 12 - LV - 2 - 17;   // right value width = what fits on the line (16)
-  const head = [s.headName, s.paymentCode ? `(${s.paymentCode})` : ""].filter(Boolean).join(" ");
-  const dayTxt = formatINR(s.days, Number.isInteger(s.days) ? 0 : 1);
-  const rate = Math.round((s.basic + s.vda) * 100) / 100;
-  const details: [string, string, string, string][] = [
-    ["NAME", upper(s.name), "PERMANENT ID", upper(s.epid)],
-    ["DESIGNATION", upper(s.designation ?? ""), "SALARY REGISTER", upper(s.salaryRegisterNo || "-")],
-    ["DEPARTMENT", upper(s.departmentName), "PAYMENT HEAD", upper(head)],
-    ["CATEGORY", upper(s.category), "RATE PER DAY", money(rate)],
-    ["PAY LEVEL", upper(s.payLevel || "-"), "DAYS WORKED", dayTxt],
-  ];
-  for (const [l1, v1, l2, v2] of details) {
-    const a = wrapChars(v1, LV), b = wrapChars(v2, RV);
-    for (let k = 0; k < Math.max(a.length, b.length); k++) {
-      const lhs = k === 0 ? padR(l1, 11) + ":" : " ".repeat(12);
-      const rhs = k === 0 ? padR(l2, 16) + ":" : " ".repeat(17);
-      line(lhs + padR(a[k] ?? "", LV) + "  " + padR(rhs, 17).slice(0, 17) + padR(b[k] ?? "", SLIP_COLS - 12 - LV - 2 - 17));
-    }
+  // 1. header band
+  slipRect(c, M, top, CW, 70, SL.navy);
+  slipText(c, "ALIGARH MUSLIM UNIVERSITY", M + 16, top + 29, 15, true, SL.white);
+  slipText(c, "Finance & Accounts Department, Aligarh", M + 16, top + 46, 10, false, SL.white);
+  slipText(c, "PAY SLIP", R - 16, top + 27, 15, true, SL.white, true);
+  const monthTxt = `${monthName} ${s.year}`;
+  slipText(c, monthTxt, R - 16, top + 43, 10, false, SL.white, true);
+  if (s.dealingCode) {
+    slipText(c, safe(s.dealingCode).toUpperCase(), R - 16 - reg.widthOfTextAtSize(monthTxt, 10) - 8, top + 43, 8, true, SL.white, true);
   }
-  line(DASH);
+  const pillW = 46;
+  page.drawRectangle({ x: R - 16 - pillW, y: H - top - 62, width: pillW, height: 13, borderColor: SL.white, borderWidth: 0.8 });
+  slipText(c, "WAGES", R - 16 - pillW / 2 - bold.widthOfTextAtSize("WAGES", 7.5) / 2, top + 58.2, 7.5, true, SL.white);
+  top += 70 + 14;
 
-  // body: earnings | deductions | right-hand block
+  // 2. employee strip
+  const boxW = 150, boxH = 46, textW = CW - boxW - 16;
+  const nameLines = wrap(s.name, bold, 14, textW);
+  const subLines = wrap([s.designation, s.departmentName].filter(Boolean).join(" - "), reg, 9, textW);
+  let ty = top + 12;
+  for (const l of nameLines) { slipText(c, l, M, ty, 14, true); ty += 17; }
+  ty -= 3;
+  for (const l of subLines) { slipText(c, l, M, ty + 9, 9, false, SL.s600); ty += 12; }
+  slipRect(c, R - boxW, top, boxW, boxH, SL.white, SL.s200);
+  slipText(c, "NET PAY", R - boxW + 12, top + 15, 7, true, SL.s500);
+  slipText(c, `Rs. ${amt(s.net)}`, R - boxW + 12, top + 35, 16, true, SL.green);
+  top += Math.max(boxH, ty - top + 2) + GAP;
+
+  // 3. details panel (3 columns)
+  const lastDay = new Date(s.year, s.month, 0).getDate();
+  const mon = monthName.slice(0, 3);
+  const period = `01-${mon}-${s.year} to ${String(lastDay).padStart(2, "0")}-${mon}-${s.year}`;
+  const rate = Math.round((s.basic + s.vda) * 100) / 100;
+  const dayTxt = formatINR(s.days, Number.isInteger(s.days) ? 0 : 1);
+  const cells: [string, string][] = [
+    ["Employee ID", s.epid], ["Category", s.category], ["Pay Level", s.payLevel || "-"],
+    ["Rate per Day (Rs.)", amt(rate)], ["Days Worked", dayTxt], ["Pay Period", period],
+    ["Salary Register", s.salaryRegisterNo || "-"], ["PAN", s.panNumber || "-"], ["UAN", s.uanNo || "-"],
+    ["ESI No.", s.esiNo || "-"],
+  ];
+  const PAD = 14, CELL_H = 32, colW = (CW - 2 * PAD) / 3;
+  const panelH = Math.ceil(cells.length / 3) * CELL_H + 12;
+  slipRect(c, M, top, CW, panelH, SL.s50, SL.s200);
+  cells.forEach(([l, v], i) => {
+    drawLabelValue(c, l, v, M + PAD + (i % 3) * colW, top + 10 + Math.floor(i / 3) * CELL_H, colW - 10);
+  });
+  top += panelH + GAP;
+
+  // 4. earnings | deductions
+  const tGap = 16, tW = (CW - tGap) / 2;
   const basicAmt = Math.round(s.basic * s.days * 100) / 100;
   const vdaAmt = Math.round(s.vda * s.days * 100) / 100;
-  const earn: [string, string][] = [["BASIC", money(basicAmt)], ["VDA", money(vdaAmt)]];
-  const ded: [string, string][] = [["EPF", money(s.epf)], ["ESI", money(s.esi)], ["MAS", money(s.mas)]];
-  const RW = SLIP_COLS - (8 + 1 + 9 + 1 + 20 + 1 + 10 + 1);
-  const first = (label: string, v: string | null | undefined, w = RW) => wrapChars(`${label} ${v || "-"}`, w);
-  const right: string[] = [
-    ...first("BANK     ", s.bankName ? upper(s.bankName) : ""),
-    ...first("A/c      ", s.bankAccount ?? s.bankAccountMasked ?? ""),
-    ...first("IFSC     ", s.ifsc ? upper(s.ifsc) : ""),
-    ...(s.chequeNo ? [`Cheque No ${s.chequeNo}`] : []),
-    ...(s.chequeDate ? [`Cheque Dt ${ddmmyyyy(s.chequeDate).split("-").join(".")}`] : []),
-    ...(s.passedOn ? [`Passed Dt ${ddmmyyyy(s.passedOn).split("-").join(".")}`] : []),
-    ...(s.pageNo ? [`Page No   ${s.pageNo}`] : []),
-    "",
-    "   Salary/Wage Period",
+  const earn: [string, string][] = [["Basic", amt(basicAmt)], ["VDA", amt(vdaAmt)]];
+  const ded: [string, string][] = [["EPF", amt(s.epf)], ["ESI", amt(s.esi)], ["MAS", amt(s.mas)]];
+  const nRows = Math.max(earn.length, ded.length);
+  const th = drawTable(c, M, top, tW, "EARNINGS", earn, nRows, "Gross Earnings", amt(s.gross));
+  drawTable(c, M + tW + tGap, top, tW, "DEDUCTIONS", ded, nRows, "Total Deductions", amt(s.totalDeductions));
+  top += th + GAP;
+
+  // 5. net pay bar
+  const wordLines = wrap(`Amount in words: ${amountInWords(s.net)}`, reg, 9, CW - 32);
+  const barH = 34 + wordLines.length * 12;
+  slipRect(c, M, top, CW, barH, SL.green50);
+  slipRect(c, M, top, 4, barH, SL.green);
+  slipText(c, "NET PAY", M + 16, top + 21, 10, true, SL.green);
+  slipText(c, `Rs. ${amt(s.net)}`, R - 16, top + 22, 14, true, SL.green, true);
+  wordLines.forEach((l, i) => slipText(c, l, M + 16, top + 38 + i * 12, 9, false, SL.ink));
+  top += barH + GAP;
+
+  // 6. payment details panel (2 columns of label: value)
+  const head = [s.headName, s.paymentCode ? `(${s.paymentCode})` : ""].filter(Boolean).join(" ") || "-";
+  const pay: [string, string][] = [
+    ["Bank", s.bankName || "-"], ["Cheque Date", s.chequeDate ? ddmmyyyy(s.chequeDate) : "-"],
+    ["Account No.", s.bankAccount ?? s.bankAccountMasked ?? "-"], ["Payment Head", head],
+    ["IFSC", s.ifsc || "-"], ["Passed On", s.passedOn ? ddmmyyyy(s.passedOn) : "-"],
+    ["Cheque No.", s.chequeNo || "-"], ["Page No.", s.pageNo || "-"],
   ];
-  const lastDay = new Date(s.year, s.month, 0).getDate();
-  const mon = MON3[(s.month - 1 + 12) % 12] ?? "";
-  const yy = String(s.year).slice(-2);
-  right.push(`   01-${mon}-${yy}  to ${String(lastDay).padStart(2, "0")}-${mon}-${yy}`, "");
-  right.push(`   PAN_NO :  ${s.panNumber ? upper(s.panNumber) : "-"}`);
-  if (s.uanNo) right.push(`   UAN    :  ${s.uanNo}`);
-  if (s.esiNo) right.push(`   ESI No.:  ${s.esiNo}`);
-  right.push("", "   Authorised For issue", "   under code");
-  for (const l of wrapChars(section, RW - 3)) right.push("   " + l);
-
-  const rows = Math.max(right.length, ded.length, earn.length);
-  for (let r = 0; r < rows; r++) {
-    const e = earn[r], d = ded[r];
-    const c1 = e ? padR(e[0], 8) : " ".repeat(8);
-    const c2 = e ? padL(e[1], 9) : " ".repeat(9);
-    const c3 = d ? padR(d[0], 20) : " ".repeat(20);
-    const c4 = d ? padL(d[1], 10) : " ".repeat(10);
-    line(`${c1}|${c2}|${c3}|${c4}|${padR(right[r] ?? "", RW)}`);
+  const pc = (CW - 2 * PAD - 16) / 2, LBL = 74, vW = pc - LBL;
+  const prow: { cols: [string, string[]][]; h: number }[] = [];
+  for (let i = 0; i < pay.length; i += 2) {
+    const cols: [string, string[]][] = [pay[i], pay[i + 1]].map(([l, v]) => [l, wrap(v || "-", bold, 9, vW)] as [string, string[]]);
+    prow.push({ cols, h: Math.max(cols[0][1].length, cols[1][1].length) * 11.5 + 6 });
   }
-  line(DASH);
+  const payH = 30 + prow.reduce((t, r) => t + r.h, 0) + 4;
+  slipRect(c, M, top, CW, payH, SL.s50, SL.s200);
+  slipText(c, "PAYMENT DETAILS", M + PAD, top + 16, 7.5, true, SL.s500);
+  slipHair(c, M + PAD, R - PAD, top + 23);
+  let py = top + 30;
+  for (const r of prow) {
+    r.cols.forEach(([lab, lines], k) => {
+      const x = M + PAD + k * (pc + 16);
+      slipText(c, lab, x, py + 8, 8, false, SL.s500);
+      lines.forEach((ln, j) => slipText(c, ln, x + LBL, py + 8 + j * 11.5, 9, true));
+    });
+    py += r.h;
+  }
+  top += payH + 12;
 
-  const gross = padL(money(s.gross), 10);
-  const dedTot = padL(money(s.totalDeductions), 10);
-  const net = padL(money(s.net), 10);
-  line(`GROSS ${gross}   DEDUCTION ${dedTot}     NET WAGES ${net}`, true);
-  line(DASH);
-  for (const l of wrapChars(`Net payable in words: ${amountInWords(s.net)}`, SLIP_COLS)) line(l);
-  for (const l of wrapChars(`Employer contribution (not deducted): EPF Rs. ${money(s.erEpf)}, ESI Rs. ${money(s.erEsi)}`, SLIP_COLS)) line(l);
-  line(DASH);
-  for (const l of wrapChars(`NOTE  :Error if any, must be brought to the notice of the ${section}`, SLIP_COLS)) line(l);
-  line(EQ);
-  line("REMARK:");
-  top += 6;
-  page.drawText(safe(`Computer generated pay slip, generated on ${s.generatedAt}.`), { x: left, y: H - top, size: 8, font: small, color: GREY });
+  // 7. employer contribution
+  slipText(c, `Employer contribution (not deducted from wages): EPF Rs. ${amt(s.erEpf)}, ESI Rs. ${amt(s.erEsi)}`, M, top + 8, 8.5, false, SL.s600);
+
+  // 8. footer
+  const ft = H - 98;
+  slipHair(c, M, R, ft);
+  slipText(c, `Authorised for issue by ${section}`, M, ft + 16, 9, true);
+  wrap(`Any error must be brought to the notice of the ${section}.`, reg, 8.5, CW).forEach((l, i) => slipText(c, l, M, ft + 30 + i * 11, 8.5, false, SL.s600));
+  const gen = `This is a computer generated pay slip and does not need a signature. Generated on ${s.generatedAt}.`;
+  wrap(gen, reg, 7.5, CW).forEach((l, i) => slipText(c, l, M, H - 36 + i * 10, 7.5, false, SL.s500));
 
   return pdf.save();
 }

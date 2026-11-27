@@ -293,7 +293,7 @@ function MonthlyFiles({ section, ym }: { section: string; ym: { month: number; y
   };
   const files = [
     { name: "bank.xlsx", label: "Bank payment sheet (branch-wise)", icon: Landmark },
-    { name: "bank-advice.pdf", label: "Bank Advice (PDF, per fund + branch)", icon: FileText },
+    { name: "bank-advice.pdf", label: "Bank Advice (per fund + branch)", icon: FileText },
     { name: "ecr.txt", label: "EPF ECR (.txt)", icon: FileText },
     { name: "esi.xlsx", label: "ESI sheet", icon: FileSpreadsheet },
     { name: "liability.xlsx", label: "Employer liability", icon: FileSpreadsheet },

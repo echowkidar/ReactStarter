@@ -84,7 +84,10 @@ function Shell({ children }: { children: React.ReactNode }) {
         @media print {
           body * { visibility: hidden !important; }
           #wage-slip-print, #wage-slip-print * { visibility: visible !important; }
-          #wage-slip-print { position: absolute; left: 0; top: 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+          #wage-slip-print { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; border-radius: 0 !important; }
+          #wage-slip-print, #wage-slip-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .ws-keep { break-inside: avoid; }
+          @page { size: A4 portrait; margin: 10mm; }
         }
       `}</style>
       <header className="bg-white border-b print:hidden">
@@ -276,103 +279,170 @@ function Identify({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ── One slip (text-style layout, like the university's payroll pay slip) ─────
 
-const COLS = 79;
-const MON3 = ["", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-const money = (n: number) => (Number.isFinite(Number(n)) ? Number(n) : 0).toFixed(2);
-const padR = (v: string, n: number) => (v.length >= n ? v.slice(0, n) : v + " ".repeat(n - v.length));
-const padL = (v: string, n: number) => (v.length >= n ? v.slice(-n) : " ".repeat(n - v.length) + v);
-const centreIn = (v: string, n: number) => " ".repeat(Math.max(0, Math.floor((n - v.length) / 2))) + v;
-function wrapChars(value: string, width: number): string[] {
-  const words = String(value ?? "").split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-  for (let w of words) {
-    while (w.length > width) { if (line) { lines.push(line); line = ""; } lines.push(w.slice(0, width)); w = w.slice(width); }
-    if (!line) line = w;
-    else if (line.length + 1 + w.length <= width) line += " " + w;
-    else { lines.push(line); line = w; }
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : [""];
+// ── One slip ─────────────────────────────────────────────────────────────────
+
+const MON3 = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const amt = (n: number | null | undefined) =>
+  (Number.isFinite(Number(n)) ? Number(n) : 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dmy = (iso: string | null | undefined) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("-") : "");
+const dash = (v: unknown) => (v === null || v === undefined || String(v).trim() === "" ? "—" : String(v));
+
+function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-slate-500">{label}</dt>
+      <dd className={`mt-0.5 text-[13.5px] font-semibold text-slate-900 break-words ${mono ? "tabular-nums" : ""}`}>{value}</dd>
+    </div>
+  );
 }
 
-/** The slip as fixed-width lines; `bold` marks the heading / total lines */
-function slipLines(slip: Slip): { text: string; bold?: boolean }[] {
-  const out: { text: string; bold?: boolean }[] = [];
-  const add = (text: string, bold = false) => out.push({ text, bold });
-  const up = (v: unknown) => String(v ?? "").toUpperCase();
-  const monthTxt = `${up(MONTHS[slip.month])} -${slip.year}`;
+function AmountTable({ title, rows, totalLabel, total, accent }: {
+  title: string; rows: [string, number][]; totalLabel: string; total: number; accent: "blue" | "rose";
+}) {
+  const bar = accent === "blue" ? "bg-blue-600" : "bg-rose-500";
+  return (
+    <div className="ws-keep overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+        <span className={`h-3.5 w-1 rounded-full ${bar}`} />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">{title}</span>
+        <span className="ml-auto text-[11px] font-medium uppercase tracking-[0.1em] text-slate-400">Amount (₹)</span>
+      </div>
+      <table className="w-full text-[13.5px]">
+        <tbody>
+          {rows.map(([label, value]) => (
+            <tr key={label} className="border-b border-slate-100 last:border-0">
+              <td className="px-4 py-2.5 text-slate-700">{label}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-slate-900">{amt(value)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-slate-200 bg-slate-50/70">
+            <td className="px-4 py-2.5 font-semibold text-slate-900">{totalLabel}</td>
+            <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">{amt(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function SlipDocument({ slip }: { slip: Slip }) {
   const section = (slip.sectionLabel || "Accounts Section").trim();
-  const DASH = "-".repeat(COLS);
-
-  add(padR(up(slip.dealingCode ?? ""), COLS - monthTxt.length) + monthTxt, true);
-  add(centreIn("ALIGARH MUSLIM UNIVERSITY-ALIGARH, FINANCE & ACCOUNTS DEPARTMENT", COLS), true);
-  add(centreIn(`PAY SLIP FOR THE MONTH OF ${monthTxt}`, COLS - 8).padEnd(COLS - 5) + "WAGES", true);
-  add(DASH);
-
-  const LV = 32, RV = COLS - 12 - LV - 2 - 17; // right value width = what fits on the line (16)
-  const head = [slip.headName, slip.paymentCode ? `(${slip.paymentCode})` : ""].filter(Boolean).join(" ");
-  const dayTxt = Number.isInteger(slip.days) ? String(slip.days) : slip.days.toFixed(1);
-  const rate = Math.round((slip.basic + slip.vda) * 100) / 100;
-  const details: [string, string, string, string][] = [
-    ["NAME", up(slip.name), "PERMANENT ID", up(slip.epid)],
-    ["DESIGNATION", up(slip.designation), "SALARY REGISTER", up(slip.salaryRegisterNo || "-")],
-    ["DEPARTMENT", up(slip.departmentName), "PAYMENT HEAD", up(head)],
-    ["CATEGORY", up(slip.category), "RATE PER DAY", money(rate)],
-    ["PAY LEVEL", up(slip.payLevel || "-"), "DAYS WORKED", dayTxt],
-  ];
-  for (const [l1, v1, l2, v2] of details) {
-    const a = wrapChars(v1, LV), b = wrapChars(v2, RV);
-    for (let k = 0; k < Math.max(a.length, b.length); k++) {
-      const lhs = k === 0 ? padR(l1, 11) + ":" : " ".repeat(12);
-      const rhs = k === 0 ? padR(l2, 16) + ":" : " ".repeat(17);
-      add(lhs + padR(a[k] ?? "", LV) + "  " + rhs + padR(b[k] ?? "", COLS - 12 - LV - 2 - 17));
-    }
-  }
-  add(DASH);
-
-  const earn: [string, string][] = [["BASIC", money(slip.basic * slip.days)], ["VDA", money(slip.vda * slip.days)]];
-  const ded: [string, string][] = [["EPF", money(slip.epf)], ["ESI", money(slip.esi)], ["MAS", money(slip.mas)]];
-  const RW = COLS - (8 + 1 + 9 + 1 + 20 + 1 + 10 + 1);
-  const first = (label: string, v: string | null | undefined) => wrapChars(`${label} ${v || "-"}`, RW);
-  const right: string[] = [
-    ...first("BANK     ", slip.bankName ? up(slip.bankName) : ""),
-    ...first("A/c      ", slip.bankAccount ?? slip.bankAccountMasked ?? ""),
-    ...first("IFSC     ", slip.ifsc ? up(slip.ifsc) : ""),
-    ...(slip.chequeNo ? [`Cheque No ${slip.chequeNo}`] : []),
-    ...(slip.chequeDate ? [`Cheque Dt ${String(slip.chequeDate).slice(0, 10).split("-").reverse().join(".")}`] : []),
-    ...(slip.passedOn ? [`Passed Dt ${String(slip.passedOn).slice(0, 10).split("-").reverse().join(".")}`] : []),
-    ...(slip.pageNo ? [`Page No   ${slip.pageNo}`] : []),
-    "",
-    "   Salary/Wage Period",
-  ];
+  const monthName = `${MONTHS[slip.month]} ${slip.year}`;
   const lastDay = new Date(slip.year, slip.month, 0).getDate();
-  const mon = MON3[slip.month] ?? "";
-  const yy = String(slip.year).slice(-2);
-  right.push(`   01-${mon}-${yy}  to ${String(lastDay).padStart(2, "0")}-${mon}-${yy}`, "");
-  right.push(`   PAN_NO :  ${slip.panNumber ? up(slip.panNumber) : "-"}`);
-  if (slip.uanNo) right.push(`   UAN    :  ${slip.uanNo}`);
-  if (slip.esiNo) right.push(`   ESI No.:  ${slip.esiNo}`);
-  right.push("", "   Authorised For issue", "   under code");
-  for (const l of wrapChars(section, RW - 3)) right.push("   " + l);
+  const period = `01–${String(lastDay).padStart(2, "0")} ${MON3[slip.month]} ${slip.year}`;
+  const days = Number.isInteger(slip.days) ? String(slip.days) : slip.days.toFixed(1);
+  const rate = Math.round((slip.basic + slip.vda) * 100) / 100;
+  const head = [slip.headName, slip.paymentCode ? `(${slip.paymentCode})` : ""].filter(Boolean).join(" ");
+  const account = slip.bankAccount ?? slip.bankAccountMasked;
 
-  const rows = Math.max(right.length, ded.length, earn.length);
-  for (let r = 0; r < rows; r++) {
-    const e = earn[r], d = ded[r];
-    add(`${padR(e?.[0] ?? "", 8)}|${padL(e?.[1] ?? "", 9)}|${padR(d?.[0] ?? "", 20)}|${padL(d?.[1] ?? "", 10)}|${padR(right[r] ?? "", RW)}`);
-  }
-  add(DASH);
-  add(`GROSS ${padL(money(slip.gross), 10)}   DEDUCTION ${padL(money(slip.totalDeductions), 10)}     NET WAGES ${padL(money(slip.net), 10)}`, true);
-  add(DASH);
-  for (const l of wrapChars(`Net payable in words: ${amountInWords(slip.net)}`, COLS)) add(l);
-  for (const l of wrapChars(`Employer contribution (not deducted): EPF Rs. ${money(slip.erEpf)}, ESI Rs. ${money(slip.erEsi)}`, COLS)) add(l);
-  add(DASH);
-  for (const l of wrapChars(`NOTE  :Error if any, must be brought to the notice of the ${section}`, COLS)) add(l);
-  add("=".repeat(COLS));
-  add("REMARK:");
-  return out;
+  return (
+    <article id="wage-slip-print" className="ws-doc overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_12px_32px_-12px_rgba(15,23,42,0.18)]">
+      {/* Letterhead */}
+      <header className="relative bg-gradient-to-br from-[#0f2a5f] via-[#1e3a8a] to-[#1d4ed8] px-5 py-5 text-white sm:px-8">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(circle_at_85%_-20%,#fff_0,transparent_45%)]" />
+        <div className="relative flex flex-wrap items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/95 p-1.5 shadow-sm">
+            <img src="/logo_favicon/favicon-32x32.png" onError={retryImage} alt="" className="h-full w-full object-contain" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[17px] font-bold leading-tight tracking-wide sm:text-lg">Aligarh Muslim University</p>
+            <p className="text-[12.5px] text-blue-100">Finance &amp; Accounts Department, Aligarh</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-200">Pay Slip</p>
+            <p className="text-lg font-bold leading-tight">{monthName}</p>
+            <div className="mt-1 flex justify-end gap-1.5">
+              {slip.dealingCode && <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10.5px] font-semibold tracking-wider">{slip.dealingCode}</span>}
+              <span className="rounded-full border border-white/40 px-2 py-0.5 text-[10.5px] font-semibold tracking-wider">WAGES</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="space-y-5 px-5 py-6 sm:px-8">
+        {/* Employee + net pay */}
+        <section className="flex flex-wrap items-start gap-4">
+          <div className="min-w-[220px] flex-1">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">{slip.name}</h2>
+            <p className="mt-0.5 text-[13.5px] text-slate-600">{slip.designation}</p>
+            <p className="text-[13.5px] text-slate-600">{slip.departmentName}</p>
+          </div>
+          <div className="ws-keep rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-right">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Net Pay</p>
+            <p className="text-2xl font-bold tabular-nums text-emerald-700">₹{amt(slip.net)}</p>
+          </div>
+        </section>
+
+        {/* Employee details */}
+        <dl className="ws-keep grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-4 sm:p-5">
+          <Field label="Employee ID" value={slip.epid} />
+          <Field label="Category" value={dash(slip.category)} />
+          <Field label="Pay Level" value={dash(slip.payLevel)} />
+          <Field label="Rate per Day" value={`₹${amt(rate)}`} mono />
+          <Field label="Days Worked" value={days} mono />
+          <Field label="Pay Period" value={period} />
+          <Field label="Salary Register" value={dash(slip.salaryRegisterNo)} />
+          <Field label="PAN" value={dash(slip.panNumber)} />
+          <Field label="UAN" value={dash(slip.uanNo)} mono />
+          <Field label="ESI No." value={dash(slip.esiNo)} mono />
+        </dl>
+
+        {/* Earnings and deductions */}
+        <section className="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
+          <AmountTable title="Earnings" accent="blue" totalLabel="Gross Earnings" total={slip.gross}
+            rows={[["Basic Wages", slip.basic * slip.days], ["VDA", slip.vda * slip.days]]} />
+          <AmountTable title="Deductions" accent="rose" totalLabel="Total Deductions" total={slip.totalDeductions}
+            rows={[["EPF (Employee)", slip.epf], ["ESI (Employee)", slip.esi], ["MAS", slip.mas]]} />
+        </section>
+
+        {/* Net pay */}
+        <section className="ws-keep relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white">
+          <span className="absolute inset-y-0 left-0 w-1.5 bg-emerald-600" />
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 py-4 pl-6 pr-5">
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Net Pay (Gross − Deductions)</p>
+              <p className="mt-0.5 text-[13px] text-slate-600">{amountInWords(slip.net)}</p>
+            </div>
+            <p className="text-2xl font-bold tabular-nums text-emerald-700">₹{amt(slip.net)}</p>
+          </div>
+        </section>
+
+        {/* Payment details */}
+        <section className="ws-keep rounded-xl border border-slate-200">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">Payment Details</span>
+          </div>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 p-4 sm:grid-cols-4 sm:p-5">
+            <Field label="Bank" value={dash(slip.bankName)} />
+            <Field label="Account No." value={dash(account)} mono />
+            <Field label="IFSC" value={dash(slip.ifsc)} mono />
+            <Field label="Payment Head" value={dash(head)} />
+            <Field label="Cheque No." value={dash(slip.chequeNo)} mono />
+            <Field label="Cheque Date" value={dash(dmy(slip.chequeDate))} mono />
+            <Field label="Passed On" value={dash(dmy(slip.passedOn))} mono />
+            <Field label="Page No." value={dash(slip.pageNo)} mono />
+          </dl>
+        </section>
+
+        <p className="text-[12.5px] text-slate-600">
+          <span className="font-medium text-slate-700">Employer contribution</span> (paid by the fund, not deducted from wages):
+          EPF ₹{amt(slip.erEpf)} · ESI ₹{amt(slip.erEsi)}
+        </p>
+      </div>
+
+      {/* Footer */}
+      <footer className="flex flex-wrap items-end gap-x-6 gap-y-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4 text-[12px] text-slate-600 sm:px-8">
+        <div className="flex-1 min-w-[220px] space-y-0.5">
+          <p>Authorised for issue by the <span className="font-semibold text-slate-800">{section}</span>.</p>
+          <p>Any error must be brought to the notice of the {section}.</p>
+        </div>
+        <p className="text-[11px] text-slate-500">Computer generated pay slip; no signature required. Generated on {slip.generatedAt}.</p>
+      </footer>
+    </article>
+  );
 }
 
 function SlipView({ lineId, onBack, onError }: { lineId: number; onBack: () => void; onError: (e: any) => void }) {
@@ -395,15 +465,7 @@ function SlipView({ lineId, onBack, onError }: { lineId: number; onBack: () => v
           </Button>
         </div>
       </div>
-
-      <div id="wage-slip-print" className="rounded-lg border bg-white p-3 sm:p-5 text-slate-900 shadow-sm overflow-x-auto print:overflow-visible print:bg-white print:p-4">
-        <pre className="font-mono text-[11px] sm:text-xs leading-[1.35] whitespace-pre m-0 w-max print:text-[11px] print:text-black">
-          {slipLines(slip).map((l, i) => (
-            <div key={i} className={l.bold ? "font-bold" : undefined}>{l.text || " "}</div>
-          ))}
-        </pre>
-        <p className="text-[11px] text-slate-500 mt-3">Computer generated pay slip, generated on {slip.generatedAt}.</p>
-      </div>
+      <SlipDocument slip={slip} />
     </div>
   );
 }
