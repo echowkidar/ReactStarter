@@ -932,6 +932,32 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
     }
   };
 
+  // Bank Account + its proof (proof optional); shown with the other bank details
+  const bankAccountFields = (
+    <>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Bank Account</label>
+        <input
+          {...register("bankAccount")}
+          className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+        />
+        {errors.bankAccount && <p className="text-red-500 text-xs mt-1">{errors.bankAccount.message}</p>}
+      </div>
+      <div className="border-l pl-4">
+        <FileUpload
+          label="Bank Account Proof (optional)"
+          name="bankAccountDoc"
+          value={fileUrls.bankProofUrl}
+          onChange={(file) => handleFileChange(file, "bankAccountDoc")}
+          onRemove={() => handleRemoveFile("bankAccountDoc")}
+          disabled={isSubmitting}
+          onlyImages={true}
+          errorMessage={fileErrors.bankAccountDoc}
+        />
+      </div>
+    </>
+  );
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => {
@@ -1253,6 +1279,7 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                 disabled={isSubmitting}
                 designation={watch("designation")}
                 departmentId={employee.departmentId}
+                bankAccountSlot={showBank ? bankAccountFields : undefined}
               />
             )}
 
@@ -1318,28 +1345,25 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                   </>
                 )}
 
-                {showBank && (
+                {/* Regular staff: all bank details together here (wage staff have them under Wages payroll) */}
+                {showBank && !isLetterEpid(employee.epid) && (
                   <>
+                    {bankAccountFields}
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Bank Account</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Bank Name <span className="text-xs text-slate-400">(optional)</span></label>
                       <input
-                        {...register("bankAccount")}
+                        {...register("bankName")}
                         className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                       />
-                      {errors.bankAccount && <p className="text-red-500 text-xs mt-1">{errors.bankAccount.message}</p>}
                     </div>
-
-                    <div className="border-l pl-4">
-                      <FileUpload
-                        label="Bank Account Proof"
-                        name="bankAccountDoc"
-                        value={fileUrls.bankProofUrl}
-                        onChange={(file) => handleFileChange(file, "bankAccountDoc")}
-                        onRemove={() => handleRemoveFile("bankAccountDoc")}
-                        disabled={isSubmitting}
-                        onlyImages={true}
-                        errorMessage={fileErrors.bankAccountDoc}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">IFSC <span className="text-xs text-slate-400">(optional)</span></label>
+                      <input
+                        {...register("ifsc")}
+                        maxLength={11}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all uppercase"
                       />
+                      {errors.ifsc && <p className="text-red-500 text-xs mt-1">{String(errors.ifsc.message)}</p>}
                     </div>
                   </>
                 )}
@@ -1366,27 +1390,6 @@ export function EditEmployeeForm({ employee, isOpen, onClose, onSuccess, liveUpd
                         onlyImages={true}
                         errorMessage={fileErrors.aadharCardDoc}
                       />
-                    </div>
-                  </>
-                )}
-
-                {showBank && !isLetterEpid(employee.epid) && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Bank Name <span className="text-xs text-slate-400">(optional)</span></label>
-                      <input
-                        {...register("bankName")}
-                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">IFSC <span className="text-xs text-slate-400">(optional)</span></label>
-                      <input
-                        {...register("ifsc")}
-                        maxLength={11}
-                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all uppercase"
-                      />
-                      {errors.ifsc && <p className="text-red-500 text-xs mt-1">{String(errors.ifsc.message)}</p>}
                     </div>
                   </>
                 )}

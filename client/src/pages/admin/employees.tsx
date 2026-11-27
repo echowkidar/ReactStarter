@@ -110,6 +110,18 @@ export default function AdminEmployees() {
   const showPan = fieldShown(fieldSettings, "pan", kindEpid);
   const showBank = fieldShown(fieldSettings, "bank", kindEpid);
   const showAadhar = fieldShown(fieldSettings, "aadhar", kindEpid);
+  // Bank Account input — shown together with the proof, bank name, branch and IFSC
+  const bankAccountInput = (
+    <div>
+      <Label htmlFor="bankAccount">Bank Account</Label>
+      <Input
+        id="bankAccount"
+        name="bankAccount"
+        defaultValue={selectedEmployee?.bankAccount}
+        className="bg-white dark:bg-slate-800"
+      />
+    </div>
+  );
   const statusOptions = statusesForEpid(kindEpid);
   const assistantOptions = dealingAssistantOptionsFor(kindEpid, salaryAssistantOptions);
   const [duplicateEmployee, setDuplicateEmployee] = useState<{ name: string; departmentName: string } | null>(null);
@@ -1382,10 +1394,11 @@ export default function AdminEmployees() {
                               departmentId={selectedDepartmentId}
                               // this form's department list uses department-list ids
                               fundsUrl={selectedDepartmentId ? `/api/admin/payroll/funds-of-department-name/${selectedDepartmentId}` : null}
+                              bankAccountSlot={showBank ? <>{bankAccountInput}{renderUploadPreview('bankProof', 'Bank Account Proof (optional)')}</> : undefined}
                             />
                           )}
 
-                          {(showPan || showBank || showAadhar || showCategory) && (
+                          {(showPan || (showBank && !isLetterEpid(kindEpid)) || showAadhar || showCategory) && (
                             <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
                               <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -1400,29 +1413,8 @@ export default function AdminEmployees() {
                                     />
                                   </div>
                                 )}
-                                {showBank && (
-                                  <div>
-                                    <Label htmlFor="bankAccount">Bank Account</Label>
-                                    <Input
-                                      id="bankAccount"
-                                      name="bankAccount"
-                                      defaultValue={selectedEmployee?.bankAccount}
-                                      className="bg-white dark:bg-slate-800"
-                                    />
-                                  </div>
-                                )}
-                                {showAadhar && (
-                                  <div>
-                                    <Label htmlFor="aadharCard">Adhar Number</Label>
-                                    <Input
-                                      id="aadharCard"
-                                      name="aadharCard"
-                                      defaultValue={selectedEmployee?.aadharCard || ""}
-                                      className="bg-white dark:bg-slate-800"
-                                      onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
-                                    />
-                                  </div>
-                                )}
+                                {/* Regular staff: all bank details together (wage staff have them under Wages payroll) */}
+                                {showBank && !isLetterEpid(kindEpid) && <>{bankAccountInput}{renderUploadPreview('bankProof', 'Bank Account Proof (optional)')}</>}
                                 {showBank && !isLetterEpid(kindEpid) && (
                                   <div>
                                     <Label htmlFor="bankName">Bank Name <span className="text-xs text-muted-foreground">(optional)</span></Label>
@@ -1443,6 +1435,18 @@ export default function AdminEmployees() {
                                       maxLength={11}
                                       defaultValue={selectedEmployee?.ifsc || ""}
                                       className="bg-white dark:bg-slate-800 uppercase"
+                                    />
+                                  </div>
+                                )}
+                                {showAadhar && (
+                                  <div>
+                                    <Label htmlFor="aadharCard">Adhar Number</Label>
+                                    <Input
+                                      id="aadharCard"
+                                      name="aadharCard"
+                                      defaultValue={selectedEmployee?.aadharCard || ""}
+                                      className="bg-white dark:bg-slate-800"
+                                      onChange={(e) => console.log("Aadhar input changed:", e.target.value)}
                                     />
                                   </div>
                                 )}
@@ -1577,7 +1581,6 @@ export default function AdminEmployees() {
                             <h3 className="text-lg font-semibold mb-6 text-primary">Document Upload</h3>
                             <div className="grid grid-cols-1 gap-6">
                               {showPan && renderUploadPreview('panCard', 'PAN Card')}
-                              {showBank && renderUploadPreview('bankProof', 'Bank Account Proof')}
                               {showAadhar && renderUploadPreview('aadharCard', 'Adhar Number')}
                               {renderUploadPreview('officeMemo', 'Office Memo')}
                               {renderUploadPreview('joiningReport', 'Joining Report')}

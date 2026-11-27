@@ -13,7 +13,7 @@ import { ALL_STATUSES, statusesForEpid, isValidEpid, isLetterEpid, EPID_FORMAT_M
 import { PAY_LEVELS } from "@/lib/pay-levels";
 import { Loader2, AlertCircle } from "lucide-react";
 import { compressImageToWebP, isImageFile } from "@/lib/image-utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { WAGE_CATEGORIES, WAGE_CATEGORY_LABELS, categoryFromDesignation } from "@shared/wagePayroll";
@@ -101,7 +101,9 @@ export function payrollPayload(v: PayrollValue) {
   };
 }
 
-export function WagePayrollFields({ value, onChange, errors = {}, disabled, designation, departmentId, fundsUrl }: {
+export function WagePayrollFields({ value, onChange, errors = {}, disabled, designation, departmentId, fundsUrl, bankAccountSlot }: {
+  /** The form's own Bank Account input + Bank Account Proof upload, shown with the other bank details */
+  bankAccountSlot?: ReactNode;
   value: PayrollValue;
   onChange: (patch: Partial<PayrollValue>) => void;
   errors?: Partial<Record<keyof PayrollValue, string>>;
@@ -224,6 +226,8 @@ export function WagePayrollFields({ value, onChange, errors = {}, disabled, desi
           )}
         </div>
         <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t dark:border-slate-700 pt-4">
+          <p className="sm:col-span-3 -mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Bank details (wages are paid into this account)</p>
+          {bankAccountSlot && <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">{bankAccountSlot}</div>}
           <div>
             <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">Bank Name</label>
             <Input value={value.bankName} maxLength={100} disabled={disabled} className={inputCls}
@@ -468,6 +472,43 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
     return () => clearTimeout(timer);
   }, [watchedEpid]);
 
+  // Bank Account + its proof (proof optional) — shown together with the other bank details
+  const bankAccountInput = (
+    <FormField
+      control={form.control}
+      name="bankAccount"
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>Bank Account</FormLabel>
+          <FormControl>
+            <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+  const bankProofUpload = (
+    <FormField
+      control={form.control}
+      name="bankAccountDoc"
+      render={({ field }) => (
+        <FormItem>
+          <FileUpload
+            label="Bank Account Proof (optional)"
+            name="bankAccountDoc"
+            value={field.value}
+            onChange={(file) => handleFileChange(file, "bankAccountDoc")}
+            disabled={isLoading}
+            onlyImages={true}
+            errorMessage={fileErrors.bankAccountDoc}
+          />
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto px-1">
@@ -661,11 +702,12 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
               disabled={isLoading}
               designation={form.watch("designation")}
               departmentId={department?.id}
+              bankAccountSlot={showBank ? <>{bankAccountInput}{bankProofUpload}</> : undefined}
             />
           )}
 
           {/* Identification Details Section */}
-          {(showPan || showBank || showAadhar || showCategory) && (
+          {(showPan || (showBank && !isLetterEpid(watchedEpid)) || showAadhar || showCategory) && (
             <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
               <h3 className="text-lg font-semibold mb-6 text-primary">Identification Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -684,36 +726,8 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                     )}
                   />
                 )}
-                {showBank && (
-                  <FormField
-                    control={form.control}
-                    name="bankAccount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Bank Account</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-                {showAadhar && (
-                  <FormField
-                    control={form.control}
-                    name="aadharCard"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Adhar Number</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                {/* Regular staff: all bank details together (wage staff have them under Wages payroll) */}
+                {showBank && !isLetterEpid(watchedEpid) && <>{bankAccountInput}{bankProofUpload}</>}
                 {showBank && !isLetterEpid(watchedEpid) && (
                   <FormField
                     control={form.control}
@@ -739,6 +753,21 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                         <FormControl>
                           <Input {...field} maxLength={11} onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                             disabled={isLoading} className="bg-white dark:bg-slate-800" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {showAadhar && (
+                  <FormField
+                    control={form.control}
+                    name="aadharCard"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Adhar Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} disabled={isLoading} className="bg-white dark:bg-slate-800" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -894,26 +923,6 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                         disabled={isLoading}
                         onlyImages={true}
                         errorMessage={fileErrors.panCardDoc}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              {showBank && (
-                <FormField
-                  control={form.control}
-                  name="bankAccountDoc"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FileUpload
-                        label="Bank Account Proof"
-                        name="bankAccountDoc"
-                        value={field.value}
-                        onChange={(file) => handleFileChange(file, "bankAccountDoc")}
-                        disabled={isLoading}
-                        onlyImages={true}
-                        errorMessage={fileErrors.bankAccountDoc}
                       />
                       <FormMessage />
                     </FormItem>
