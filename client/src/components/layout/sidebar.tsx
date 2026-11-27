@@ -254,14 +254,14 @@ export default function Sidebar({ className }: SidebarProps) {
       <N8nChatScript />
       <NeuralNetworkOverlay />
       <div className="px-3 py-1">
-        <div className={cn("mb-2 px-4 flex items-center gap-2", isMobile && "pr-10")}>
+        <div className={cn("mb-1 px-4 flex items-center gap-2", isMobile && "pr-10")}>
           <img src="/logo_favicon/favicon-32x32.png" onError={retryImage} alt="AMU Logo" className="h-8 w-auto" />
           <h2 className="text-base font-semibold leading-tight flex-1">
             {department?.name}
           </h2>
           <NotificationBell />
         </div>
-        <p className="mb-2 px-4 text-xs text-gray-500">
+        <p className="mb-1 px-4 text-xs text-gray-500">
           {department?.email ? `${department.email}` : ""}
         </p>
         {staffPerson && (
@@ -278,7 +278,7 @@ export default function Sidebar({ className }: SidebarProps) {
                 variant="ghost"
                 aria-current={isNavActive(location, item.href) ? "page" : undefined}
                 className={cn(
-                  "w-full justify-start h-8 text-sm relative border-l-2",
+                  "w-full justify-start h-7 text-sm relative border-l-2",
                   isNavActive(location, item.href)
                     ? "border-blue-600 bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100 hover:text-blue-800"
                     : "border-transparent",
@@ -309,7 +309,7 @@ export default function Sidebar({ className }: SidebarProps) {
           {/* AMU AI Chat Button — Help ke neeche */}
           <div className="pt-1 pb-0.5">
             <button
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-blue-50 transition-colors group"
+              className="w-full flex items-center gap-3 px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors group"
               onClick={() => {
                 const toggleBtn = document.querySelector('.chat-window-toggle') as HTMLElement | null;
                 if (toggleBtn) toggleBtn.click();
@@ -325,7 +325,7 @@ export default function Sidebar({ className }: SidebarProps) {
                 <img
                   src="/logo_favicon/amuai_logo.webp"
                   alt="AMU AI"
-                  className="h-10 w-10 rounded-full object-cover ring-2 ring-blue-200 group-hover:ring-blue-400 transition-all"
+                  className="h-8 w-8 rounded-full object-cover ring-2 ring-blue-200 group-hover:ring-blue-400 transition-all"
                 />
                 <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: '#f59e0b' }}></span>
@@ -348,7 +348,7 @@ export default function Sidebar({ className }: SidebarProps) {
             <Megaphone className="h-4 w-4 text-blue-600" />
             <span className="text-xs font-semibold text-gray-700">Notices</span>
           </div>
-          <div className="space-y-0.5 max-h-32 overflow-y-auto">
+          <div className="space-y-0.5 max-h-20 overflow-y-auto">
             {notices.slice(0, 5).map((notice) => (
               <Button
                 key={notice.id}
@@ -364,7 +364,8 @@ export default function Sidebar({ className }: SidebarProps) {
         </div>
       )}
 
-      <div className="mt-auto px-3 py-1">
+      {/* Logout: always visible at the bottom, even when the menu is taller than the screen */}
+      <div className="mt-auto sticky bottom-0 z-10 border-t bg-white px-3 py-1">
         <Button
           variant="ghost"
           className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 h-8 text-sm"

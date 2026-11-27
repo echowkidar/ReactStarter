@@ -283,14 +283,12 @@ function salaryTopics(isSuper: boolean): HelpTopic[] {
       {
         id: "settings", icon: Settings, group: G_ADMIN,
         title: t("Settings", "Settings (सेटिंग)"),
-        summary: t("App-wide switches and the payroll database sync.", "पूरे ऐप की सेटिंग और पेरोल डेटाबेस सिंक।"),
+        summary: t("App-wide switches.", "पूरे ऐप की सेटिंग।"),
         blocks: [
           { kind: "list", items: [
             t("**Attendance Term Check**: when a department makes a report, warn about temporary or probation staff whose term ends before the period.", "**Attendance Term Check**: विभाग रिपोर्ट बनाते समय उन अस्थायी या परिवीक्षा वाले कर्मचारियों की चेतावनी, जिनकी अवधि पहले खत्म हो रही हो।"),
             t("**Employee Form Field Visibility**: choose which fields (PAN, Bank Account, Aadhar, Employee Category) show in the employee form.", "**Employee Form Field Visibility**: कर्मचारी फ़ॉर्म में कौन-से खाने दिखें (PAN, Bank Account, Aadhar, Employee Category)।"),
-            t("A card with **Open** goes to the payroll database sync pages (tabs **Employees** and **Paybill History**).", "**Open** वाला कार्ड पेरोल डेटाबेस सिंक के पेज (टैब **Employees** और **Paybill History**) पर ले जाता है।"),
           ] },
-          { kind: "para", text: t("In plain words, the sync pages compare the employee list of this app with the payroll database. They only READ the payroll database and never change it. The tabs show: differences, empty fields that can be filled, people who should be disabled, people who should be active, new employees, and people not found there.", "आसान शब्दों में, सिंक पेज इस ऐप की कर्मचारी सूची को पेरोल डेटाबेस से मिलाते हैं। ये पेरोल डेटाबेस को सिर्फ़ पढ़ते हैं, कभी बदलते नहीं। टैब में दिखता है: अंतर, भरे जा सकने वाले खाली खाने, जिन्हें disable करना चाहिए, जिन्हें active होना चाहिए, नए कर्मचारी और जो वहाँ नहीं मिले।") },
           { kind: "warn", text: t("Settings change the whole app for everybody. Change them only when you are sure. Some pages may ask for a PIN.", "सेटिंग पूरे ऐप को सबके लिए बदल देती हैं। पक्का होने पर ही बदलें। कुछ पेज PIN माँग सकते हैं।") },
         ],
       },
