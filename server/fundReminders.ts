@@ -92,5 +92,14 @@ export async function runFundReminders(today: Date = new Date()): Promise<number
     await new Promise((ok) => setTimeout(ok, 2000));
   }
   if (due.length) console.log(`[FundReminders] ${sent}/${due.length} ${due[0].kind} reminder(s) for ${MONTHS[due[0].month]} ${due[0].year}`);
+
+  // The sections get the list of their departments still pending (day before the due date / overdue)
+  const last = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const overdue = today.getDate() === 3;
+  if ((today.getDate() === last - 1 || overdue) && (await isFundReportOpen())) {
+    const ref = overdue ? new Date(today.getFullYear(), today.getMonth() - 1, 1) : new Date(today.getFullYear(), today.getMonth(), 1);
+    const { sendSectionPendingLists } = await import("./sectionMail");
+    await sendSectionPendingLists(ref.getMonth() + 1, ref.getFullYear(), overdue);
+  }
   return sent;
 }

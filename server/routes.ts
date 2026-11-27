@@ -2983,6 +2983,11 @@ export async function registerRoutes(app: Express) {
 
       const report = await storage.updateAttendanceReport(Number(req.params.id), updates);
 
+      // Wages / Fund Staff report received: tell the Accounts / Bill / Students Section(s) (in the background)
+      if (updates.status === 'sent') {
+        import("./sectionMail").then(m => m.notifySectionsOfFundReport(report.id, 'sent')).catch(() => { });
+      }
+
       try {
         if (updates.status === 'submitted' || updates.status === 'sent') {
           const department = await storage.getDepartment(report.departmentId);
@@ -4256,6 +4261,7 @@ export async function registerRoutes(app: Express) {
         status: 'cancel_requested',
         cancelRequestedAt: new Date()
       });
+      import("./sectionMail").then(m => m.notifySectionsOfFundReport(reportId, 'cancel_requested', req.body.reason || null)).catch(() => { });
 
       try {
         const department = await storage.getDepartment(report.departmentId);
@@ -4308,6 +4314,10 @@ export async function registerRoutes(app: Express) {
         return res.status(403).json({ message: supplementaryBlock });
       }
 
+      // Wages / Fund Staff report: who was in it, for the sections' e-mail (before the entries go)
+      const sectionMail = await import("./sectionMail");
+      const fundStaffBefore = await sectionMail.fundReportStaff(reportId);
+
       // Delete all attendance entries (keep PDF and receipt info intact)
       await storage.deleteEntriesForReport(reportId);
 
@@ -4316,6 +4326,7 @@ export async function registerRoutes(app: Express) {
         status: 'cancelled',
         cancelledAt: new Date()
       });
+      if (fundStaffBefore) sectionMail.notifySectionsOfFundReport(reportId, 'cancelled', req.body.remarks || null, fundStaffBefore).catch(() => { });
 
       try {
         const department = await storage.getDepartment(report.departmentId);
@@ -4461,6 +4472,10 @@ export async function registerRoutes(app: Express) {
         });
       }
 
+      // Wages / Fund Staff report: who was in it, for the sections' e-mail (before the entries go)
+      const sectionMail = await import("./sectionMail");
+      const fundStaffBefore = await sectionMail.fundReportStaff(reportId);
+
       // Delete all entries for this report (keep PDF and receipt info)
       await storage.deleteEntriesForReport(reportId);
 
@@ -4469,6 +4484,7 @@ export async function registerRoutes(app: Express) {
         status: 'cancelled',
         cancelledAt: new Date()
       });
+      if (fundStaffBefore) sectionMail.notifySectionsOfFundReport(reportId, 'cancelled', req.body.remarks || null, fundStaffBefore).catch(() => { });
 
       try {
         const department = await storage.getDepartment(report.departmentId);
