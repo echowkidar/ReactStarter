@@ -194,7 +194,10 @@ export default function Dashboard() {
   });
 
   // Check attendance status for deadline alert
-  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{ permitted: boolean; isPastDeadline: boolean; allowReportingEmployees?: boolean }>({
+  const { data: attendanceStatus, isLoading: loadingStatus } = useQuery<{
+    permitted: boolean; isPastDeadline: boolean; allowReportingEmployees?: boolean;
+    hasFundStaff?: boolean; hasRegularStaff?: boolean; fundReportOpen?: boolean;
+  }>({
     queryKey: [`/api/departments/${department?.id}/attendance-status`],
     enabled: !!department?.id,
   });
@@ -210,8 +213,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (attendanceStatus && !loadingStatus) {
-      // Show alert ONLY if deadline passed AND NOT permitted (disabled by admin)
-      if (attendanceStatus.isPastDeadline && attendanceStatus.permitted === false) {
+      // Show alert ONLY if deadline passed AND NOT permitted (disabled by admin).
+      // The 15th-day deadline is the Salary Section's (regular staff): a department with only
+      // Revolving Funds / similar funds staff (letter EPID) does not get it.
+      if (attendanceStatus.isPastDeadline && attendanceStatus.permitted === false && attendanceStatus.hasRegularStaff !== false) {
         setShowDeadlineAlert(true);
       } else {
         setShowDeadlineAlert(false);
@@ -222,6 +227,7 @@ export default function Dashboard() {
   const currentDate = new Date();
   const currentMonthName = currentDate.toLocaleString('default', { month: 'long' });
   const currentYear = currentDate.getFullYear();
+  const lastDayOfMonth = new Date(currentYear, currentDate.getMonth() + 1, 0).getDate();
 
 
   if (loadingEmployees || loadingReports) return <Loading />;
@@ -622,7 +628,7 @@ export default function Dashboard() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Salary Section – Attendance Alert</p>
 
               <p className="mx-auto text-gray-700">
-                Attendance submission deadline for <span className="font-bold">{currentMonthName} {currentYear}</span> was <span className="font-bold text-red-600">15 {currentMonthName}</span>. The deadline has now passed.
+                Attendance submission deadline{attendanceStatus?.hasFundStaff ? <> of <span className="font-bold">regular staff</span></> : null} for <span className="font-bold">{currentMonthName} {currentYear}</span> was <span className="font-bold text-red-600">15 {currentMonthName}</span>. The deadline has now passed.
               </p>
             </div>
 
@@ -631,6 +637,21 @@ export default function Dashboard() {
                 Attendance portal will be reopened on <strong>20th of this month</strong> (or the next working day if 20th is a Sunday or Holiday) for a few hours. Departments who have not created their attendance can submit their attendance during this available time window.
               </p>
             </div>
+
+            {attendanceStatus?.hasFundStaff && (
+              <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 text-sm text-emerald-900">
+                <p className="font-semibold">Revolving Funds or Other Similar Funds staff (Employee ID starting with a letter)</p>
+                <p className="mt-1">
+                  This deadline does <strong>not</strong> apply to them. Their attendance goes in the separate
+                  {" "}<strong>Revolving Funds or Other Similar Funds</strong> report to the Accounts / Bill / Students Section,
+                  due by the <strong>last day of the month</strong> ({lastDayOfMonth} {currentMonthName} {currentYear}).
+                </p>
+                <p className="mt-1">
+                  That report is now <strong>{attendanceStatus.fundReportOpen ? "open" : "closed"}</strong>
+                  {attendanceStatus.fundReportOpen ? " — you can submit it from Attendance." : " — it opens towards the end of the month."}
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-center mt-6">
               <Button

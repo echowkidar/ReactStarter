@@ -161,7 +161,9 @@ export default function AdminHeader({ className }: AdminHeaderProps) {
     const name = adminInfo.name && adminInfo.name !== "Admin"
       ? adminInfo.name
       : email ? email.split("@")[0].charAt(0).toUpperCase() + email.split("@")[0].slice(1) : "";
-    const role = (adminInfo.role === "superadmin" || adminInfo.role === "super" || adminInfo.role === "super_admin") ? "Super Admin" : "Salary Admin";
+    // Accounts / Bill / Students Section logins are not Salary Section staff: plain "Admin"
+    const role = (adminInfo.role === "superadmin" || adminInfo.role === "super" || adminInfo.role === "super_admin")
+      ? "Super Admin" : sectionLogin ? "Admin" : "Salary Admin";
     return { name, role, Icon: User, color: "text-blue-600", bg: "bg-blue-50" };
   })();
   const AdminIcon = display.Icon;

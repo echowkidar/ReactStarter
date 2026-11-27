@@ -81,14 +81,18 @@ export function registerFundReportRoutes(app: Express) {
     });
   }));
 
-  // Open / close the Wages / Fund Staff report for all departments — Super Admin only
+  // Open / close the Wages / Fund Staff report for all departments — Super Admin or a section login
+  // (one switch for all departments and all three sections; who changed it is logged)
   app.patch("/api/admin/fund-report-open", wrap(async (req, res) => {
     const admin = await sessionAdmin(req);
-    if (!isSuperAdmin(admin)) return res.status(403).json({ message: "Only the Super Admin can open or close this report." });
+    if (!isSuperAdmin(admin) && !isSectionAdmin(admin)) {
+      return res.status(403).json({ message: "Only the Super Admin or the Accounts / Bill / Students Section can open or close this report." });
+    }
     const open = req.body?.open === true;
     await db.execute(sql`
       INSERT INTO app_settings (key, value) VALUES (${OPEN_KEY}, ${String(open)})
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+    console.log(`[FundReports] ${open ? "opened" : "closed"} by ${admin?.name || admin?.email || "admin"} (${admin?.userCode || admin?.role})`);
     res.json({ open });
   }));
 

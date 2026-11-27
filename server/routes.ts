@@ -5091,6 +5091,10 @@ export async function registerRoutes(app: Express) {
         allowReportingEmployees: !!(department as any).allowReportingEmployees,
         // Wages / Fund Staff report (letter-EPID staff)
         hasFundStaff: (await fundStaffCount(deptId)) > 0,
+        // Regular (numeric EPID) staff — a department with only wage / fund staff has no 15th-day deadline
+        hasRegularStaff: Number(((await db.execute(sql`
+          SELECT COUNT(*)::int AS n FROM employees
+          WHERE department_id = ${deptId} AND is_active = 'active' AND epid !~ '^[A-Za-z]'`)).rows[0] as any)?.n ?? 0) > 0,
         fundReportOpen: await isFundReportOpen(),
         allowFundSupplementary: await fundSupplementaryAllowedFor(deptId),
         deadlineDay,

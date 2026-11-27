@@ -1798,8 +1798,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Attendance Control Panel - Super Admin Only */}
-        {isSuperAdmin && (
+        {/* Attendance Control Panel - Super Admin Only, Salary Section view (regular staff attendance) */}
+        {isSuperAdmin && section === "salary" && (
           <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1851,7 +1851,7 @@ export default function AdminDashboard() {
 
 
 
-        {(isSuperAdmin || sectionLogin) && (
+        {((isSuperAdmin && section !== "salary") || sectionLogin) && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
             <div>
               <p className="text-sm font-semibold">{FUND_REPORT_LABEL} attendance</p>
@@ -1865,11 +1865,16 @@ export default function AdminDashboard() {
               <span className={`text-sm font-medium ${fundStatus?.open ? "text-green-600" : "text-red-600"}`}>
                 {fundStatus ? (fundStatus.open ? "Open" : "Closed") : "..."}
               </span>
-              {isSuperAdmin && adminInfo.userCode !== 'VEW' && (
+              {((isSuperAdmin && adminInfo.userCode !== 'VEW') || sectionLogin) && (
                 <Switch
                   checked={!!fundStatus?.open}
                   disabled={!fundStatus || fundOpenMutation.isPending}
-                  onCheckedChange={(open) => fundOpenMutation.mutate(open)}
+                  onCheckedChange={(open) => {
+                    // One switch for all departments and all three sections
+                    if (window.confirm(`${open ? "Open" : "Close"} the ${FUND_REPORT_LABEL} attendance for ALL departments?\n\nThis applies to the Accounts, Bill and Students Sections together.`)) {
+                      fundOpenMutation.mutate(open);
+                    }
+                  }}
                   aria-label="Open or close Revolving Funds or Other Similar Funds attendance"
                 />
               )}
