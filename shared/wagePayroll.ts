@@ -81,6 +81,10 @@ export function monthStart(month: number, year: number): string {
 export function categoryFromDesignation(designation: string | null | undefined): WageCategory | null {
   const d = String(designation ?? "").toUpperCase().replace(/[\s\-_]+/g, "");
   if (!d) return null;
+  // Daily-wager designation codes: ODW unskilled, SDW semi-skilled, CDW clerical / skilled
+  if (d === "ODW") return "unskilled";
+  if (d === "SDW") return "semi_skilled";
+  if (d === "CDW") return "clerical_skilled";
   if (d.includes("UNSKILLED")) return "unskilled";
   if (d.includes("SEMISKILLED")) return "semi_skilled";
   if (d.includes("SKILLED") || d.includes("CLERICAL")) return "clerical_skilled";

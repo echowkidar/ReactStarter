@@ -1,6 +1,6 @@
 // Import of wage / fund staff (letter EPIDs, e.g. R0001) from an Excel sheet by the
 // Accounts, Bill or Students section (or the Super Admin choosing a section).
-// Columns (the browser reads the sheet and sends the rows): EPID, Name, Department code,
+// Columns (the browser reads the sheet and sends the rows): EPID, Name, Department code or name,
 // Designation code, Employment Status, Term Expiry.
 //  • Dealing assistant comes from the section: Accounts → ACC, Bill → BIL, Students → STU.
 //  • An EPID already in the app is skipped (reported), never changed.
@@ -70,7 +70,10 @@ async function designationLookup(): Promise<{ byCode: Map<string, string>; names
   return { byCode, names };
 }
 
-async function departmentLookup(): Promise<Map<string, { id: number; name: string }>> {
+/** Department name key: upper case, letters and digits only ("Dept. of Commerce" → "DEPTOFCOMMERCE") */
+export const deptNameKey = (v: any) => clean(v).toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+async function departmentLookup(): Promise<{ byCode: Map<string, { id: number; name: string }>; byName: Map<string, { id: number; name: string }> }> {
   // department code list → the department registered in the app (same name)
   const r = await db.execute(sql`
     SELECT UPPER(TRIM(dn.dept_code)) AS code, d.id, d.name
@@ -78,10 +81,22 @@ async function departmentLookup(): Promise<Map<string, { id: number; name: strin
     JOIN departments d ON UPPER(TRIM(d.name)) = UPPER(TRIM(dn.dept_name))
     WHERE dn.dept_code IS NOT NULL
     ORDER BY d.id`);
-  const map = new Map<string, { id: number; name: string }>();
-  for (const row of r.rows as any[]) if (!map.has(row.code)) map.set(row.code, { id: Number(row.id), name: row.name });
-  return map;
+  const byCode = new Map<string, { id: number; name: string }>();
+  for (const row of r.rows as any[]) if (!byCode.has(row.code)) byCode.set(row.code, { id: Number(row.id), name: row.name });
+  // A department may also be given by its name, as registered in the app
+  const all = await db.execute(sql`SELECT id, name FROM departments ORDER BY id`);
+  const byName = new Map<string, { id: number; name: string }>();
+  for (const row of all.rows as any[]) {
+    const k = deptNameKey(row.name);
+    if (k && !byName.has(k)) byName.set(k, { id: Number(row.id), name: row.name });
+  }
+  return { byCode, byName };
 }
+
+// Daily-wager designation codes, accepted even when no payroll snapshot lists them
+const WAGER_DESIGNATIONS = new Set(["ODW", "SDW", "CDW"]);
+const PAN_RE = /^[A-Z]{5}\d{4}[A-Z]$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function fmt(d: string) { return d.split("-").reverse().join("-"); }
 
@@ -134,15 +149,20 @@ export function registerFundEmployeeImportRoutes(app: Express) {
         if (!name) { fail("Name is empty"); continue; }
 
         const dCode = clean(r.departmentCode).toUpperCase();
-        const dept = depts.get(dCode);
-        if (!dCode) { fail("Department code is empty"); continue; }
-        if (!dept) { fail(`Department code ${dCode} is not a registered department in the app`); continue; }
+        const dName = clean(r.departmentName);
+        if (!dCode && !dName) { fail("Department code (or Department name) is empty"); continue; }
+        const dept = dCode ? depts.byCode.get(dCode) : depts.byName.get(deptNameKey(dName));
+        if (!dept) {
+          fail(dCode ? `Department code ${dCode} is not a registered department in the app`
+                     : `Department "${dName}" is not a registered department in the app — write its name as in the app, or give the Department code`);
+          continue;
+        }
         out.departmentId = dept.id;
         out.departmentName = dept.name;
 
         const gCode = clean(r.designationCode).toUpperCase();
         if (!gCode) { fail("Designation code is empty"); continue; }
-        const designation = desig.byCode.get(gCode) ?? (desig.names.has(gCode) ? gCode : null);
+        const designation = desig.byCode.get(gCode) ?? (desig.names.has(gCode) || WAGER_DESIGNATIONS.has(gCode) ? gCode : null);
         if (!designation) { fail(`Designation code ${gCode} not found`); continue; }
         out.designation = designation;
 
@@ -196,10 +216,29 @@ export function registerFundEmployeeImportRoutes(app: Express) {
         const fundCode = clean(r.fundCode).replace(/\s+/g, "").toUpperCase();
         if (!fundsCache.has(dept.id)) fundsCache.set(dept.id, await fundsOfDepartment(dept.id));
         const funds = fundsCache.get(dept.id)!;
-        if (fundCode && !funds.some((f) => f.paymentCode === fundCode)) {
-          fail(`Payment Code ${fundCode} is not a fund of ${dept.name}${funds.length ? ` (funds: ${funds.map((f) => f.paymentCode).join(", ")})` : " (no funds imported for it)"}`); continue;
+        // A department without any registered fund accepts the code (with a warning below)
+        if (fundCode && funds.length && !funds.some((f) => f.paymentCode === fundCode)) {
+          fail(`Payment Code ${fundCode} is not a fund of ${dept.name} (funds: ${funds.map((f) => f.paymentCode).join(", ")})`); continue;
         }
         out.fundCode = fundCode || null;
+        // Personal details (optional; a value in the wrong form is left out with a warning)
+        const warnings: string[] = [];
+        const pan = clean(r.panNumber).replace(/\s+/g, "").toUpperCase();
+        out.panNumber = PAN_RE.test(pan) ? pan : "";
+        if (pan && !out.panNumber) warnings.push(`PAN "${pan}" is not valid — left empty`);
+        const aadhar = clean(r.aadharCard).replace(/\D/g, "");
+        out.aadharCard = aadhar.length === 12 ? aadhar : "";
+        if (aadhar && !out.aadharCard) warnings.push("Aadhaar is not 12 digits — left empty");
+        out.fatherName = clean(r.fatherName).toUpperCase() || null;
+        out.address = clean(r.address).slice(0, 500) || null;
+        let mobile = clean(r.mobileNo).replace(/\D/g, "");
+        if (mobile.length === 12 && mobile.startsWith("91")) mobile = mobile.slice(2);
+        if (mobile.length === 11 && mobile.startsWith("0")) mobile = mobile.slice(1);
+        out.mobileNo = /^[6-9]\d{9}$/.test(mobile) ? mobile : null;
+        if (mobile && !out.mobileNo) warnings.push("Mobile number is not a valid 10-digit number — left empty");
+        const email = clean(r.personalEmail).toLowerCase();
+        out.personalEmail = EMAIL_RE.test(email) ? email : null;
+        if (email && !out.personalEmail) warnings.push("E-mail is not valid — left empty");
         // EPF / ESI / MAS: Yes / No
         const flag = (v: unknown, label: string): boolean | null | "bad" => {
           if (!clean(v)) return null;
@@ -216,7 +255,7 @@ export function registerFundEmployeeImportRoutes(app: Express) {
         if (esiNo && esiNo.length !== 10) { fail("ESI number must be 10 digits"); continue; }
         out.uanNo = uan || null; out.esiNo = esiNo || null;
         // Not blocking, shown in the preview
-        const warnings: string[] = [];
+        if (out.fundCode && !funds.length) warnings.push(`Payment Code ${out.fundCode} kept — no funds registered for ${dept.name} yet (add them in Payroll → Settings → Funds)`);
         if (!category) warnings.push("wage category not known — set it later");
         if (out.epf && !out.uanNo) warnings.push("EPF Yes but no UAN");
         if (out.esi && !out.esiNo) warnings.push("ESI Yes but no ESI number");
@@ -242,12 +281,14 @@ export function registerFundEmployeeImportRoutes(app: Express) {
                 employment_status, pay_level, term_expiry, joining_date, salary_register_no, office_memo_no,
                 joining_shift, salary_asstt, is_active, remarks,
                 wage_category, epf_applicable, uan_no, esi_applicable, esi_no, esi_covered, mas_applicable,
-                fund_code, bank_name, bank_branch, ifsc, wage_monthly_fixed)
-              SELECT ${deptId}, ${o.epid}, ${o.name}, '', ${o.bankAccount ?? ""}, '', ${o.designation}, ${o.employmentStatus}, 'L-0',
+                fund_code, bank_name, bank_branch, ifsc, wage_monthly_fixed,
+                father_name, address, mobile_no, personal_email)
+              SELECT ${deptId}, ${o.epid}, ${o.name}, ${o.panNumber ?? ""}, ${o.bankAccount ?? ""}, ${o.aadharCard ?? ""}, ${o.designation}, ${o.employmentStatus}, 'L-0',
                 ${o.termExpiry}, ${o.joiningDate ?? today}, '', '', 'FN', ${o.dealingAssistant ?? dealingAssistant}, 'active',
                 ${o.joiningDate ? null : remark},
                 ${o.wageCategory ?? null}, ${!!o.epf}, ${o.uanNo ?? null}, ${!!o.esi}, ${o.esiNo ?? null}, ${!!o.esiCovered}, ${!!o.mas},
-                ${o.fundCode ?? null}, ${o.bankName ?? null}, ${o.bankBranch ?? null}, ${o.ifsc ?? null}, ${o.monthlyFixed ?? null}::numeric
+                ${o.fundCode ?? null}, ${o.bankName ?? null}, ${o.bankBranch ?? null}, ${o.ifsc ?? null}, ${o.monthlyFixed ?? null}::numeric,
+                ${o.fatherName ?? null}, ${o.address ?? null}, ${o.mobileNo ?? null}, ${o.personalEmail ?? null}
               WHERE NOT EXISTS (SELECT 1 FROM employees WHERE UPPER(TRIM(epid)) = ${o.epid})
               RETURNING id`);
             if (ins.rows.length) { o.created = true; created++; }

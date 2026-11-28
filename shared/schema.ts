@@ -85,6 +85,11 @@ export const employees = pgTable("employees", {
   fundCode: text("fund_code"),                     // Payment Code of the revolving fund (revolving_funds.payment_code)
   bankBranch: text("bank_branch"),
   wageMonthlyFixed: numeric("wage_monthly_fixed", { precision: 12, scale: 2 }), // fixed wages per month (else category day rate)
+  // Personal details (fund staff data sheets); optional
+  fatherName: text("father_name"),
+  address: text("address"),
+  mobileNo: text("mobile_no"),
+  personalEmail: text("personal_email"),
 });
 
 export const departmentNames = pgTable("department_names", {

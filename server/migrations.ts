@@ -974,6 +974,14 @@ export async function runMigrations() {
       `);
       // Staff on fixed monthly wages (instead of the category's day rate); snapshot on the roll line
       await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS wage_monthly_fixed NUMERIC(12,2)`);
+      // Personal details of fund staff (from the sections' data sheets); all optional
+      await db.execute(sql`
+        ALTER TABLE employees
+          ADD COLUMN IF NOT EXISTS father_name TEXT,
+          ADD COLUMN IF NOT EXISTS address TEXT,
+          ADD COLUMN IF NOT EXISTS mobile_no TEXT,
+          ADD COLUMN IF NOT EXISTS personal_email TEXT;
+      `);
       await db.execute(sql`
         ALTER TABLE wage_roll_lines
           ADD COLUMN IF NOT EXISTS monthly_fixed NUMERIC(12,2),

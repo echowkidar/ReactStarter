@@ -13,10 +13,12 @@ type ImportSection = Exclude<SectionKey, "salary">;
 const SECTION_CODE: Record<ImportSection, string> = { accounts: "ACC", bill: "BIL", students: "STU" };
 const MAX_ROWS = 2000;
 
-const REQUIRED = ["epid", "name", "departmentCode", "designationCode", "employmentStatus", "termExpiry"] as const;
+// Department: "Department Code" or "Department Name" (as registered in the app) — one of the two is needed
+const REQUIRED = ["epid", "name", "designationCode", "employmentStatus", "termExpiry"] as const;
 const OPTIONAL = [
-  "joiningDate", "wageCategory", "dealingAssistant", "fundCode", "bankAccount", "bankName", "bankBranch", "ifsc",
+  "departmentCode", "departmentName", "joiningDate", "wageCategory", "dealingAssistant", "fundCode", "bankAccount", "bankName", "bankBranch", "ifsc",
   "epf", "uanNo", "esi", "esiNo", "esiCovered", "mas", "monthlyFixed",
+  "panNumber", "aadharCard", "fatherName", "address", "mobileNo", "personalEmail",
 ] as const;
 type Key = (typeof REQUIRED)[number] | (typeof OPTIONAL)[number];
 type InRow = Record<Key, string>;
@@ -29,18 +31,23 @@ type ResultRow = {
 type ApiResponse = { total: number; valid: number; created: number; dryRun: boolean; results: ResultRow[] };
 
 const COLUMN_LABEL: Record<Key, string> = {
-  epid: "EPID", name: "Name", departmentCode: "Department Code", designationCode: "Designation Code",
+  epid: "EPID", name: "Name", departmentCode: "Department Code", departmentName: "Department Name", designationCode: "Designation Code",
   employmentStatus: "Employment Status", termExpiry: "Term Expiry",
   joiningDate: "Joining Date", wageCategory: "Wage Category", dealingAssistant: "Dealing Assistant", fundCode: "Payment Code",
   bankAccount: "Bank Account No.", bankName: "Bank Name", bankBranch: "Bank Branch", ifsc: "IFSC",
   epf: "EPF", uanNo: "UAN", esi: "ESI", esiNo: "ESI No.", esiCovered: "ESI Covered", mas: "MAS", monthlyFixed: "Monthly Fixed Wages",
+  panNumber: "PAN", aadharCard: "Aadhaar No.", fatherName: "Father's Name", address: "Address", mobileNo: "Mobile No.", personalEmail: "E-mail",
 };
-const ALL_KEYS: Key[] = [...REQUIRED, ...OPTIONAL];
+const ALL_KEYS: Key[] = [
+  "epid", "name", "departmentCode", "departmentName", "designationCode", "employmentStatus", "termExpiry",
+  ...OPTIONAL.filter((k) => k !== "departmentCode" && k !== "departmentName"),
+];
 const HEADERS = ALL_KEYS.map((k) => COLUMN_LABEL[k]);
 const EXAMPLE: Record<Key, string> = {
-  epid: "R0001", name: "EXAMPLE NAME", departmentCode: "", designationCode: "ODW", employmentStatus: "Revolving Fund", termExpiry: "31-03-2027",
+  epid: "R0001", name: "EXAMPLE NAME", departmentCode: "", departmentName: "", designationCode: "ODW", employmentStatus: "Revolving Fund", termExpiry: "31-03-2027",
   joiningDate: "01-04-2024", wageCategory: "Unskilled", dealingAssistant: "", fundCode: "", bankAccount: "123456789012", bankName: "SBI",
   bankBranch: "Main Branch", ifsc: "SBIN0001234", epf: "Yes", uanNo: "", esi: "No", esiNo: "", esiCovered: "No", mas: "Yes", monthlyFixed: "",
+  panNumber: "", aadharCard: "", fatherName: "", address: "", mobileNo: "", personalEmail: "",
 };
 
 const norm = (s: any) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -48,6 +55,7 @@ const COLUMN_ALIASES: Record<Key, string[]> = {
   epid: ["epid", "empid", "employeeid"],
   name: ["name", "employeename", "empname"],
   departmentCode: ["departmentcode", "deptcode", "departmentcd", "deptcd"],
+  departmentName: ["departmentname", "deptname", "department", "nameofdepartment"],
   designationCode: ["designationcode", "desigcode", "designationcd", "desigcd"],
   employmentStatus: ["employmentstatus", "status", "employeestatus", "empstatus"],
   termExpiry: ["termexpiry", "termexpirydate", "expiry", "expirydate", "termexpiredate", "termend", "termenddate"],
@@ -65,6 +73,12 @@ const COLUMN_ALIASES: Record<Key, string[]> = {
   esiNo: ["esino", "esinumber", "esicno", "esic"],
   esiCovered: ["esicovered", "esicoverage"],
   mas: ["mas", "masyesno", "masapplicable"],
+  panNumber: ["pan", "panno", "pannumber", "pancard"],
+  aadharCard: ["aadhaar", "aadhaarno", "aadhar", "aadharno", "aadhaarnumber", "aadharnumber", "aadharcard", "aadhaarcard"],
+  fatherName: ["fathername", "fathersname", "nameoffather"],
+  address: ["address", "residentialaddress", "permanentaddress"],
+  mobileNo: ["mobileno", "mobile", "mobilenumber", "phone", "phoneno", "contactno"],
+  personalEmail: ["email", "emailaddress", "emailid", "mail"],
   monthlyFixed: ["monthlyfixed", "monthlyfixedwages", "fixedmonthlywages", "fixedmonthly", "fixedwages", "monthlywages"],
 };
 
@@ -138,6 +152,7 @@ export function FundEmployeeImportDialog({
         if (i >= 0) idx[k] = i;
         else if ((REQUIRED as readonly string[]).includes(k)) missing.push(COLUMN_LABEL[k]);
       });
+      if (idx.departmentCode === undefined && idx.departmentName === undefined) missing.push("Department Code or Department Name");
       if (missing.length) {
         toast({ title: "Column missing", description: `Missing column(s): ${missing.join(", ")}`, variant: "destructive" });
         return;
@@ -207,12 +222,12 @@ export function FundEmployeeImportDialog({
         </DialogHeader>
 
         <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-4 text-sm space-y-1">
-          <p>Required columns: <b>{REQUIRED.map((k) => COLUMN_LABEL[k]).join(", ")}</b> (dates as DD-MM-YYYY).</p>
-          <p>Optional columns: <b>{OPTIONAL.map((k) => COLUMN_LABEL[k]).join(", ")}</b>. EPF, ESI, ESI Covered and MAS take <b>Yes</b> or <b>No</b>.</p>
+          <p>Required columns: <b>{REQUIRED.map((k) => COLUMN_LABEL[k]).join(", ")}</b>, and <b>Department Code</b> or <b>Department Name</b> (name as registered in the app). Dates as DD-MM-YYYY.</p>
+          <p>Optional columns: <b>{OPTIONAL.filter((k) => k !== "departmentCode" && k !== "departmentName").map((k) => COLUMN_LABEL[k]).join(", ")}</b>. EPF, ESI, ESI Covered and MAS take <b>Yes</b> or <b>No</b>.</p>
           <p>Allowed Employment Status: {FUND_STATUSES.join(", ")}.</p>
           <p>
             Dealing Assistant: if left empty it is set to <b>{code || "the section's code"}</b> (Accounts: ACC, Bill: BIL, Students: STU); Accounts may also use OTH.
-            Payment Code must be one of the fund codes of the department.
+            Payment Code must be one of the fund codes of the department (if the department has no funds registered yet, the code is kept with a warning).
           </p>
           <p>EPIDs already in the app are skipped. If the Joining Date is empty, the import date is used and the department should correct it later.</p>
         </div>

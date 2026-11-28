@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
 import { SearchableSelect, ComboboxOption } from "@/components/ui/searchable-select";
@@ -41,14 +42,19 @@ export type PayrollValue = {
   bankName: string;
   bankBranch: string;
   ifsc: string;
+  fatherName: string;
+  address: string;
+  mobileNo: string;
+  personalEmail: string;
 };
 
 /** Keys that belong to the payroll block only (removed for numeric EPIDs). bankName / ifsc are normal fields too, so they are not listed. */
-export const PAYROLL_ONLY_KEYS = ["wageCategory", "wageMonthlyFixed", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode", "bankBranch"] as const;
+export const PAYROLL_ONLY_KEYS = ["wageCategory", "wageMonthlyFixed", "epfApplicable", "uanNo", "esiApplicable", "esiNo", "esiCovered", "masApplicable", "fundCode", "bankBranch", "fatherName", "address", "mobileNo", "personalEmail"] as const;
 
 export const EMPTY_PAYROLL: PayrollValue = {
   wageCategory: "", wageMonthlyFixed: "", epfApplicable: false, uanNo: "", esiApplicable: false, esiNo: "", esiCovered: false, masApplicable: false,
   fundCode: "", bankName: "", bankBranch: "", ifsc: "",
+  fatherName: "", address: "", mobileNo: "", personalEmail: "",
 };
 
 /** Read the payroll values from a stored employee row (camelCase or snake_case) */
@@ -68,6 +74,10 @@ export function payrollFromEmployee(emp: any): PayrollValue {
     bankName: String(pick("bankName", "bank_name") ?? ""),
     bankBranch: String(pick("bankBranch", "bank_branch") ?? ""),
     ifsc: String(pick("ifsc", "ifsc") ?? ""),
+    fatherName: String(pick("fatherName", "father_name") ?? ""),
+    address: String(pick("address", "address") ?? ""),
+    mobileNo: String(pick("mobileNo", "mobile_no") ?? ""),
+    personalEmail: String(pick("personalEmail", "personal_email") ?? ""),
   };
 }
 
@@ -80,6 +90,8 @@ export function validatePayroll(v: PayrollValue): Partial<Record<keyof PayrollVa
   if (v.esiApplicable && v.esiNo.trim() && !/^\d{10}$/.test(v.esiNo.trim())) e.esiNo = "ESI number must be 10 digits";
   if (v.fundCode.trim() && !/^[A-Za-z0-9]{3,20}$/.test(v.fundCode.trim())) e.fundCode = "Payment Code must be 3-20 letters/digits";
   if (v.ifsc.trim() && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.ifsc.trim().toUpperCase())) e.ifsc = "IFSC must look like SBIN0001234";
+  if (v.mobileNo.trim() && !/^[6-9]\d{9}$/.test(v.mobileNo.trim())) e.mobileNo = "Mobile No. must be 10 digits starting with 6-9";
+  if (v.personalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.personalEmail.trim())) e.personalEmail = "Enter a valid e-mail address";
   return e;
 }
 
@@ -98,6 +110,10 @@ export function payrollPayload(v: PayrollValue) {
     bankName: v.bankName.trim(),
     bankBranch: v.bankBranch.trim(),
     ifsc: v.ifsc.trim().toUpperCase(),
+    fatherName: v.fatherName.trim().toUpperCase() || null,
+    address: v.address.trim() || null,
+    mobileNo: v.mobileNo.trim() || null,
+    personalEmail: v.personalEmail.trim().toLowerCase() || null,
   };
 }
 
@@ -245,6 +261,31 @@ export function WagePayrollFields({ value, onChange, errors = {}, disabled, desi
             {errors.ifsc && <p className={errCls}>{errors.ifsc}</p>}
           </div>
         </div>
+        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t dark:border-slate-700 pt-4" data-testid="wage-personal-details">
+          <p className="sm:col-span-2 -mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Personal details</p>
+          <div>
+            <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">Father's Name</label>
+            <Input value={value.fatherName} maxLength={100} disabled={disabled} className={`${inputCls} uppercase`}
+              onChange={(e) => onChange({ fatherName: e.target.value.toUpperCase() })} />
+          </div>
+          <div>
+            <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">Mobile No.</label>
+            <Input value={value.mobileNo} inputMode="numeric" maxLength={10} disabled={disabled} className={inputCls}
+              onChange={(e) => onChange({ mobileNo: digits(e.target.value, 10) })} />
+            {errors.mobileNo && <p className={errCls}>{errors.mobileNo}</p>}
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">Address</label>
+            <Textarea value={value.address} maxLength={500} rows={2} disabled={disabled} className={inputCls}
+              onChange={(e) => onChange({ address: e.target.value })} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm mb-1 text-slate-700 dark:text-slate-200">E-mail</label>
+            <Input type="email" value={value.personalEmail} maxLength={150} disabled={disabled} className={inputCls}
+              onChange={(e) => onChange({ personalEmail: e.target.value })} />
+            {errors.personalEmail && <p className={errCls}>{errors.personalEmail}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -280,6 +321,10 @@ const employeeSchema = z.object({
   masApplicable: z.boolean().optional(),
   fundCode: z.string().optional(),
   bankBranch: z.string().optional(),
+  fatherName: z.string().max(100).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  mobileNo: z.string().optional().nullable(),
+  personalEmail: z.string().optional().nullable(),
   // Document fields
   panCardDoc: z.string().optional(),
   bankAccountDoc: z.string().optional(),
@@ -303,7 +348,7 @@ const employeeSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["salary_asstt"], message: "This Salary Assistant is not allowed for this EPID" });
   }
   if (isLetterEpid(d.epid)) {
-    const pe = validatePayroll({ ...EMPTY_PAYROLL, ...(d as any), uanNo: d.uanNo ?? "", esiNo: d.esiNo ?? "", wageCategory: d.wageCategory ?? "", wageMonthlyFixed: d.wageMonthlyFixed ?? "", fundCode: d.fundCode ?? "", bankName: d.bankName ?? "", bankBranch: d.bankBranch ?? "", ifsc: d.ifsc ?? "" });
+    const pe = validatePayroll({ ...EMPTY_PAYROLL, ...(d as any), uanNo: d.uanNo ?? "", esiNo: d.esiNo ?? "", wageCategory: d.wageCategory ?? "", wageMonthlyFixed: d.wageMonthlyFixed ?? "", fundCode: d.fundCode ?? "", bankName: d.bankName ?? "", bankBranch: d.bankBranch ?? "", ifsc: d.ifsc ?? "", fatherName: d.fatherName ?? "", address: d.address ?? "", mobileNo: d.mobileNo ?? "", personalEmail: d.personalEmail ?? "" });
     for (const [k, m] of Object.entries(pe)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: m as string });
   }
 });
@@ -364,6 +409,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
       masApplicable: false,
       fundCode: "",
       bankBranch: "",
+      fatherName: "",
+      address: "",
+      mobileNo: "",
+      personalEmail: "",
       panCardDoc: "",
       bankAccountDoc: "",
       aadharCardDoc: "",
@@ -378,7 +427,7 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
     try {
       const out: any = { ...data };
       if (isLetterEpid(data.epid)) {
-        Object.assign(out, payrollPayload({ ...EMPTY_PAYROLL, ...(data as any), wageCategory: data.wageCategory ?? "", wageMonthlyFixed: data.wageMonthlyFixed ?? "", uanNo: data.uanNo ?? "", esiNo: data.esiNo ?? "", fundCode: data.fundCode ?? "", bankName: data.bankName ?? "", bankBranch: data.bankBranch ?? "", ifsc: data.ifsc ?? "" }));
+        Object.assign(out, payrollPayload({ ...EMPTY_PAYROLL, ...(data as any), wageCategory: data.wageCategory ?? "", wageMonthlyFixed: data.wageMonthlyFixed ?? "", uanNo: data.uanNo ?? "", esiNo: data.esiNo ?? "", fundCode: data.fundCode ?? "", bankName: data.bankName ?? "", bankBranch: data.bankBranch ?? "", ifsc: data.ifsc ?? "", fatherName: data.fatherName ?? "", address: data.address ?? "", mobileNo: data.mobileNo ?? "", personalEmail: data.personalEmail ?? "" }));
       } else {
         for (const k of PAYROLL_ONLY_KEYS) delete out[k]; // payroll is for letter EPIDs only
       }
@@ -687,6 +736,10 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                 bankName: form.watch("bankName") ?? "",
                 bankBranch: form.watch("bankBranch") ?? "",
                 ifsc: form.watch("ifsc") ?? "",
+                fatherName: form.watch("fatherName") ?? "",
+                address: form.watch("address") ?? "",
+                mobileNo: form.watch("mobileNo") ?? "",
+                personalEmail: form.watch("personalEmail") ?? "",
               }}
               onChange={(patch) => {
                 for (const [k, v] of Object.entries(patch)) form.setValue(k as any, v as any, { shouldValidate: form.formState.isSubmitted });
@@ -698,6 +751,8 @@ export default function EmployeeForm({ onSubmit, isLoading }: EmployeeFormProps)
                 esiNo: form.formState.errors.esiNo?.message,
                 fundCode: form.formState.errors.fundCode?.message,
                 ifsc: form.formState.errors.ifsc?.message,
+                mobileNo: form.formState.errors.mobileNo?.message,
+                personalEmail: form.formState.errors.personalEmail?.message,
               }}
               disabled={isLoading}
               designation={form.watch("designation")}
